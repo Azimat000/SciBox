@@ -1,0 +1,164 @@
+.auth-body {
+  margin-top: var(--s-6);
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.auth-body-wide {
+  max-width: 34rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.auth-form .btn {
+  align-self: stretch;
+}
+
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  font-size: var(--text-sm);
+}
+
+.auth-alt {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.auth-note {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  max-width: var(--measure);
+}
+
+.auth-section-title {
+  font-family: var(--font-text);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.auth-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.auth-status .btn {
+  align-self: flex-start;
+}
+
+/* Вход через другие сервисы: ниже формы, отделён линией */
+.social {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+}
+
+.social-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.social-button {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.social-button .btn-label {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+@media (max-width: 24rem) {
+  .social-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Настройки: разделы отделены линиями, без карточек */
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+}
+
+/* В настройках кнопки по ширине текста, у левого края: «Сохранить» не должна быть главной кнопкой страницы */
+.account-section .auth-form {
+  max-width: 26rem;
+}
+
+.account-section .auth-form .btn {
+  align-self: flex-start;
+}
+
+.account-section > .btn {
+  align-self: flex-start;
+}
+
+/* У блока входа через сервисы своя линия сверху; внутри раздела она была бы второй подряд */
+.account-section .social {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.account-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.account-email {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  overflow-wrap: anywhere;
+}
+
+.account-email-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  width: 100%;
+}
+
+/* Политика конфиденциальности: читаемая колонка */
+.policy {
+  margin-top: var(--s-6);
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.policy section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.policy h2 {
+  font-size: var(--text-xl);
+}
+
+.policy p {
+  color: var(--ink-body);
+}

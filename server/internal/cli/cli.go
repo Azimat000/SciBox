@@ -14,10 +14,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
+	"scibox/server/internal/auth"
 	"scibox/server/internal/config"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
+	"scibox/server/internal/mail"
 	"scibox/server/internal/migrate"
 )
 
@@ -108,11 +110,19 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	}
 
+	mailer := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom}
+	accounts := auth.NewService(pool, mailer, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	cleanupCtx, stopCleanup := context.WithCancel(ctx)
+	defer stopCleanup()
+	go accounts.RunCleanup(cleanupCtx, time.Hour)
+	defer accounts.Flush()
+
 	handler := httpapi.NewRouter(httpapi.Deps{
 		ProductName: cfg.Product.Name,
 		Version:     Version,
 		Health:      health.Checker{Queries: dbgen.New(pool), Migrations: migrations},
 		Logger:      logger,
+		Auth:        auth.NewHandler(accounts, logger),
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

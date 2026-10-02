@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
 )
 
@@ -24,6 +25,8 @@ type Deps struct {
 	Version     string
 	Health      HealthChecker
 	Logger      *slog.Logger
+	// Auth подключает аккаунты (/api/auth, /api/account); без него этих адресов нет.
+	Auth *auth.Handler
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
@@ -44,6 +47,11 @@ func NewRouter(d Deps) http.Handler {
 	})
 
 	r.Route("/api", func(r chi.Router) {
+		r.Use(noStore)
+		if d.Auth != nil {
+			r.Use(d.Auth.SameOrigin, d.Auth.Authenticate)
+			d.Auth.Mount(r)
+		}
 		r.Get("/health", healthHandler(d))
 	})
 	return r
@@ -74,6 +82,14 @@ func healthHandler(d Deps) http.HandlerFunc {
 			Database: db,
 		})
 	}
+}
+
+// noStore запрещает браузеру и посредникам кешировать ответы API: в них личные данные.
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {

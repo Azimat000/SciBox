@@ -1,7 +1,8 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { jsonResponse, renderApp } from '../../test/render'
+import { apiError, reply, stubApi } from '../../test/api'
+import { renderApp } from '../../test/render'
 
 const healthy = {
   status: 'ok',
@@ -26,7 +27,7 @@ describe('StatusPage', () => {
   })
 
   it('reports a healthy server and database', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, healthy)))
+    stubApi({ 'GET /api/health': reply(200, healthy) })
     renderApp('/')
     expect(await screen.findByText('Работает, схема версии 1')).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'ok')
@@ -35,10 +36,7 @@ describe('StatusPage', () => {
   })
 
   it('separates "database down" from "server down"', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => jsonResponse(503, { error: { code: 'database_unavailable', message: 'База данных недоступна' } })),
-    )
+    stubApi({ 'GET /api/health': apiError(503, 'database_unavailable', 'База данных недоступна') })
     renderApp('/')
     expect(await screen.findByText('Недоступна')).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'ok')
@@ -47,11 +45,8 @@ describe('StatusPage', () => {
   })
 
   it('explains how to start a server that does not answer, and recovers on retry', async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('', { status: 500 }))
-      .mockResolvedValueOnce(jsonResponse(200, healthy))
-    vi.stubGlobal('fetch', fetch)
+    let answered = 0
+    const api = stubApi({ 'GET /api/health': () => (answered++ === 0 ? reply(500) : reply(200, healthy)) })
     renderApp('/')
 
     expect(await screen.findByText('Не отвечает')).toBeInTheDocument()
@@ -60,14 +55,11 @@ describe('StatusPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Проверить ещё раз' }))
     expect(await screen.findByText('Работает, схема версии 1')).toBeInTheDocument()
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(api.called('GET', '/api/health')).toHaveLength(2)
   })
 
   it('shows the server message for an unexpected API error', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => jsonResponse(500, { error: { code: 'internal', message: 'Что-то сломалось на сервере' } })),
-    )
+    stubApi({ 'GET /api/health': apiError(500, 'internal', 'Что-то сломалось на сервере') })
     renderApp('/')
     expect(await screen.findByText('Что-то сломалось на сервере')).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'fail')

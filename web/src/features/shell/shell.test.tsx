@@ -1,7 +1,8 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { jsonResponse, renderApp } from '../../test/render'
+import { reply, stubApi } from '../../test/api'
+import { renderApp } from '../../test/render'
 import { navFor } from './nav'
 import { parseRole, ROLE_STORAGE_KEY } from './role-context'
 
@@ -9,7 +10,7 @@ const healthy = { status: 'ok', product: 'SciBox', version: 'dev', database: { s
 
 beforeEach(() => {
   window.localStorage.clear()
-  vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, healthy)))
+  stubApi({ 'GET /api/health': reply(200, healthy) })
 })
 
 const desktopNav = () => screen.getAllByRole('navigation', { name: 'Основное меню' })[0]
@@ -29,14 +30,15 @@ describe('parseRole and navFor', () => {
 })
 
 describe('site shell', () => {
-  it('renders header, main area, skip link and footer', () => {
+  it('renders header, main area, skip link and footer', async () => {
     renderApp('/')
     expect(screen.getByRole('link', { name: 'К содержимому' })).toHaveAttribute('href', '#main')
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('main')).toBeInTheDocument()
     expect(screen.getByRole('contentinfo')).toHaveTextContent('Сервис бесплатный')
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Политика конфиденциальности' })).toHaveAttribute('href', '/privacy')
-    expect(screen.getAllByRole('link', { name: 'Войти', hidden: true })[0]).toHaveAttribute('href', '/login')
+    expect((await screen.findAllByRole('link', { name: 'Войти', hidden: true }))[0]).toHaveAttribute('href', '/login')
+    expect(screen.getAllByRole('link', { name: 'Зарегистрироваться', hidden: true })[0]).toHaveAttribute('href', '/register')
   })
 
   it('shows the seeker menu and marks the current page', async () => {
@@ -112,7 +114,7 @@ describe('site shell', () => {
 })
 
 describe('placeholder pages', () => {
-  it.each(['/vacancies', '/scientists', '/organizations', '/favorites', '/my-vacancies', '/applications', '/candidates', '/my-organization', '/login', '/privacy'])(
+  it.each(['/vacancies', '/scientists', '/organizations', '/favorites', '/my-vacancies', '/applications', '/candidates', '/my-organization'])(
     '%s says the section is coming',
     async (path) => {
       renderApp(path)

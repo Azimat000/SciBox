@@ -3,3 +3,49 @@
 //   sqlc v1.31.1
 
 package dbgen
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type AuthToken struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Purpose   string
+	TokenHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+type RateEvent struct {
+	ID   int64
+	Kind string
+	Key  string
+	At   time.Time
+}
+
+type Session struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TokenHash  []byte
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	UserAgent  string
+	Ip         string
+}
+
+type User struct {
+	ID                   uuid.UUID
+	Email                string
+	DisplayName          string
+	PasswordHash         string
+	EmailConfirmedAt     *time.Time
+	PrivacyConsentAt     time.Time
+	PrivacyPolicyVersion string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}

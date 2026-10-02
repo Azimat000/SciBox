@@ -21,7 +21,7 @@ export function navFor(role: Role): NavItem[] {
   ]
 }
 
-/** Адреса разделов-заглушек (то же, что в navFor, плюс вход и политика). */
+/** Адреса разделов-заглушек (то же, что в navFor). */
 export const comingSoonPaths = [
   '/vacancies',
   '/scientists',
@@ -31,6 +31,4 @@ export const comingSoonPaths = [
   '/applications',
   '/candidates',
   '/my-organization',
-  '/login',
-  '/privacy',
 ] as const

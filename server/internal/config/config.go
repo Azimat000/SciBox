@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"os"
 	"strings"
 )
@@ -15,6 +16,9 @@ const (
 	DefaultHTTPAddr      = "127.0.0.1:8080"
 	DefaultDatabaseURL   = "postgres://scibox:scibox@localhost:5433/scibox?sslmode=disable"
 	DefaultProductConfig = "../config/product.json"
+	DefaultSMTPAddr      = "localhost:1025" // Mailpit из docker-compose.yml
+	DefaultPublicURL     = "http://localhost:5173"
+	defaultMailAddress   = "no-reply@scibox.local"
 )
 
 // Product описывает продукт; файл общий для сервера и сайта.
@@ -27,6 +31,11 @@ type Config struct {
 	HTTPAddr    string
 	DatabaseURL string
 	Product     Product
+	// SMTPAddr — почтовый сервер (локально Mailpit), MailFrom — отправитель писем целиком.
+	SMTPAddr string
+	MailFrom string
+	// PublicURL — адрес, по которому человек открывает сайт: из него строятся ссылки в письмах.
+	PublicURL string
 }
 
 // Load читает настройки. getenv обычно os.Getenv; в тестах подставляется своя функция.
@@ -34,12 +43,15 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		HTTPAddr:    envOr(getenv, "SCIBOX_HTTP_ADDR", DefaultHTTPAddr),
 		DatabaseURL: envOr(getenv, "DATABASE_URL", DefaultDatabaseURL),
+		SMTPAddr:    envOr(getenv, "SCIBOX_SMTP_ADDR", DefaultSMTPAddr),
+		PublicURL:   strings.TrimRight(envOr(getenv, "SCIBOX_PUBLIC_URL", DefaultPublicURL), "/"),
 	}
 	product, err := LoadProduct(envOr(getenv, "SCIBOX_PRODUCT_CONFIG", DefaultProductConfig))
 	if err != nil {
 		return Config{}, err
 	}
 	cfg.Product = product
+	cfg.MailFrom = envOr(getenv, "SCIBOX_MAIL_FROM", (&mail.Address{Name: product.Name, Address: defaultMailAddress}).String())
 	return cfg, nil
 }
 

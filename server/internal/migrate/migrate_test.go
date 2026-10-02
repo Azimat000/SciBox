@@ -36,26 +36,50 @@ func extensions(t *testing.T, dbURL string) []string {
 	return names
 }
 
+// appTables возвращает таблицы приложения (без служебной таблицы goose).
+func appTables(t *testing.T, dbURL string) []string {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	rows, err := conn.Query(ctx, `SELECT table_name FROM information_schema.tables
+		WHERE table_schema = 'public' AND table_name <> 'goose_db_version' ORDER BY table_name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return names
+}
+
 // Правило docs/TESTING.md: накатить на пустую базу → откатить → накатить снова.
 func TestUpDownUp(t *testing.T) {
 	ctx := context.Background()
 	dbURL := testdb.Create(t, false)
 	var out bytes.Buffer
 
+	accountTables := []string{"auth_tokens", "rate_events", "sessions", "users"}
 	steps := []struct {
-		cmd      string
-		wantOut  string
-		wantExts int
+		cmd        string
+		wantOut    string
+		wantExts   int
+		wantTables []string
 	}{
-		{"status", "pending", 0},
-		{"up", "00001_extensions.sql", 2},
-		{"up", "no migrations to apply", 2},
-		{"status", "applied", 2},
-		{"down", "00001_extensions.sql", 0},
-		{"up", "00001_extensions.sql", 2},
-		{"reset", "00001_extensions.sql", 0},
-		{"reset", "no migrations to apply", 0},
-		{"up", "00001_extensions.sql", 2},
+		{"status", "pending", 0, nil},
+		{"up", "00002_accounts.sql", 2, accountTables},
+		{"up", "no migrations to apply", 2, accountTables},
+		{"status", "applied", 2, accountTables},
+		{"down", "00002_accounts.sql", 2, nil},
+		{"down", "00001_extensions.sql", 0, nil},
+		{"up", "00002_accounts.sql", 2, accountTables},
+		{"reset", "00001_extensions.sql", 0, nil},
+		{"reset", "no migrations to apply", 0, nil},
+		{"up", "00001_extensions.sql", 2, accountTables},
 	}
 	for i, s := range steps {
 		out.Reset()
@@ -67,6 +91,9 @@ func TestUpDownUp(t *testing.T) {
 		}
 		if got := len(extensions(t, dbURL)); got != s.wantExts {
 			t.Fatalf("step %d %s: %d extensions, want %d", i, s.cmd, got, s.wantExts)
+		}
+		if got := appTables(t, dbURL); strings.Join(got, ",") != strings.Join(s.wantTables, ",") {
+			t.Fatalf("step %d %s: tables %v, want %v", i, s.cmd, got, s.wantTables)
 		}
 	}
 }

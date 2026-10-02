@@ -4,6 +4,9 @@ import { productName } from '../../config/product'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
 import { CloseIcon, MenuIcon } from '../../ui/icons'
+import { useMe } from '../auth/api'
+import { AccountBlock, UserMenu } from '../auth/UserMenu'
+import { useSignOut } from '../auth/useSignOut'
 import { navFor } from './nav'
 import { RoleSwitch } from './RoleSwitch'
 import { useRole } from './useRole'
@@ -11,6 +14,8 @@ import './SiteHeader.css'
 
 export function SiteHeader() {
   const { role } = useRole()
+  const { user, isLoading } = useMe()
+  const signOut = useSignOut()
   const items = navFor(role)
   const { pathname } = useLocation()
   // Меню открыто «на этой странице»: перешли на другую, и оно закрылось само
@@ -48,9 +53,23 @@ export function SiteHeader() {
           <div className="header-role">
             <RoleSwitch />
           </div>
-          <ButtonLink to="/login" variant="secondary" size="sm" className="header-signin">
-            {t.shell.signIn}
-          </ButtonLink>
+          {/* Пока неизвестно, вошёл ли человек, держим место, чтобы шапка не прыгала */}
+          {isLoading ? (
+            <span className="header-auth-placeholder" aria-hidden="true" />
+          ) : user ? (
+            <div className="header-signin">
+              <UserMenu user={user} />
+            </div>
+          ) : (
+            <div className="header-auth header-signin">
+              <ButtonLink to="/login" variant="secondary" size="sm">
+                {t.shell.signIn}
+              </ButtonLink>
+              <ButtonLink to="/register" size="sm">
+                {t.shell.register}
+              </ButtonLink>
+            </div>
+          )}
           <button
             type="button"
             className="menu-button"
@@ -69,9 +88,18 @@ export function SiteHeader() {
         <div className="mobile-menu-role">
           <RoleSwitch />
         </div>
-        <ButtonLink to="/login" variant="secondary">
-          {t.shell.signIn}
-        </ButtonLink>
+        {user ? (
+          <AccountBlock user={user} signOut={() => signOut.mutate()} signingOut={signOut.isPending} />
+        ) : (
+          !isLoading && (
+            <div className="mobile-menu-auth">
+              <ButtonLink to="/login" variant="secondary">
+                {t.shell.signIn}
+              </ButtonLink>
+              <ButtonLink to="/register">{t.shell.register}</ButtonLink>
+            </div>
+          )
+        )}
       </div>
     </header>
   )

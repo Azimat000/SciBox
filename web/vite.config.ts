@@ -40,8 +40,9 @@ export default defineConfig({
         functions: 90,
         branches: 85,
         // Критичные зоны (≥ 97% строк, ≥ 95% ветвлений) добавляются сюда
-        // по мере появления папок: auth, access, privacy, references,
+        // по мере появления папок: access, privacy, references,
         // applications, files, matching.
+        'src/features/auth/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
       },
     },
   },

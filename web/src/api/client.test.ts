@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { jsonResponse } from '../test/render'
-import { ApiError, BAD_RESPONSE, UNREACHABLE, apiGet } from './client'
+import { ApiError, BAD_RESPONSE, UNREACHABLE, apiGet, apiSend } from './client'
 
 function stubFetch(impl: typeof fetch) {
   const fn = vi.fn<typeof fetch>(impl)
@@ -73,5 +73,68 @@ describe('apiGet', () => {
     stubFetch(async () => new Response('<html>', { status: 200 }))
     const err = await caught(apiGet('/x'))
     expect(err).toMatchObject({ status: 200, code: BAD_RESPONSE })
+  })
+})
+
+describe('apiSend', () => {
+  it('sends JSON with the method, content type and body', async () => {
+    const fetch = stubFetch(async () => jsonResponse(200, { user: null }))
+    await expect(apiSend('POST', '/api/auth/login', { email: 'a@b.ru' })).resolves.toEqual({ user: null })
+    const [path, init] = fetch.mock.calls[0]
+    expect(path).toBe('/api/auth/login')
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: '{"email":"a@b.ru"}',
+    })
+  })
+
+  it('sends an empty object when there is no body, so the server still gets JSON', async () => {
+    const fetch = stubFetch(async () => new Response(null, { status: 204 }))
+    await apiSend('POST', '/api/auth/logout')
+    expect(fetch.mock.calls[0][1]).toMatchObject({ body: '{}' })
+  })
+
+  it('treats 204 as success without a body', async () => {
+    stubFetch(async () => new Response(null, { status: 204 }))
+    await expect(apiSend('PATCH', '/x', { a: 1 })).resolves.toBeUndefined()
+  })
+
+  it('does not accept 204 for GET: a read without data is a broken answer', async () => {
+    stubFetch(async () => new Response(null, { status: 204 }))
+    const err = await caught(apiGet('/x'))
+    expect(err.code).toBe(BAD_RESPONSE)
+  })
+
+  it('carries field messages and retry delay from the error body', async () => {
+    stubFetch(async () =>
+      jsonResponse(422, { error: { code: 'validation_failed', message: 'Проверьте поля', fields: { email: 'Занято', age: 5, nothing: null } } }),
+    )
+    const err = await caught(apiSend('POST', '/x', {}))
+    expect(err).toMatchObject({ status: 422, code: 'validation_failed', fields: { email: 'Занято' }, retryAfter: undefined })
+    expect(err.fields).not.toHaveProperty('age')
+
+    stubFetch(async () => jsonResponse(429, { error: { code: 'rate_limited', message: 'Много', retry_after: 120 } }))
+    expect(await caught(apiSend('POST', '/x', {}))).toMatchObject({ code: 'rate_limited', retryAfter: 120, fields: {} })
+  })
+
+  it('ignores junk in fields and retry_after', async () => {
+    stubFetch(async () => jsonResponse(400, { error: { code: 'x', message: 'y', fields: 'nope', retry_after: 'soon' } }))
+    const err = await caught(apiSend('POST', '/x', {}))
+    expect(err.fields).toEqual({})
+    expect(err.retryAfter).toBeUndefined()
+    stubFetch(async () => jsonResponse(400, { error: { code: 'x', message: 'y', fields: null } }))
+    expect((await caught(apiSend('POST', '/x', {}))).fields).toEqual({})
+  })
+
+  it('reports an unreachable server and a broken success body like apiGet does', async () => {
+    stubFetch(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    expect(await caught(apiSend('POST', '/x', {}))).toMatchObject({ code: UNREACHABLE, status: 0 })
+    stubFetch(async () => new Response('<html>', { status: 200 }))
+    expect(await caught(apiSend('POST', '/x', {}))).toMatchObject({ code: BAD_RESPONSE })
+    stubFetch(async () => new Response('', { status: 502 }))
+    expect(await caught(apiSend('POST', '/x', {}))).toMatchObject({ code: UNREACHABLE, status: 502 })
   })
 })

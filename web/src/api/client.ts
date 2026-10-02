@@ -1,22 +1,32 @@
 import { t } from '../i18n'
 
 // Ответ сервера с ошибкой в едином формате (D-032).
-type ErrorBody = { error: { code: string; message: string } }
+type ErrorBody = {
+  error: { code: string; message: string; fields?: Record<string, string>; retry_after?: number }
+}
 
 /** Код, когда сервер недоступен или ответил не в формате API. */
 export const UNREACHABLE = 'unreachable'
 /** Код, когда сервер ответил успешно, но тело не JSON. */
 export const BAD_RESPONSE = 'bad_response'
 
+type ApiErrorExtra = { fields?: Record<string, string>; retryAfter?: number }
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
+  /** Что не так в каждом поле формы (ответ 422): имя поля → текст. */
+  readonly fields: Record<string, string>
+  /** Через сколько секунд можно повторить (ответ 429), если сервер сказал. */
+  readonly retryAfter: number | undefined
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, extra: ApiErrorExtra = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.fields = extra.fields ?? {}
+    this.retryAfter = extra.retryAfter
   }
 }
 
@@ -39,21 +49,51 @@ async function readJSON(res: Response): Promise<unknown> {
   }
 }
 
-/** GET-запрос к API. Любая неудача превращается в ApiError. */
-export async function apiGet<T>(path: string, init?: { signal?: AbortSignal }): Promise<T> {
+function fieldsOf(e: ErrorBody['error']): Record<string, string> | undefined {
+  if (typeof e.fields !== 'object' || e.fields === null) return undefined
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(e.fields)) if (typeof v === 'string') out[k] = v
+  return out
+}
+
+type Options = { method: string; signal?: AbortSignal; body?: unknown }
+
+async function request<T>(path: string, { method, signal, body }: Options, allowEmpty: boolean): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' }
+  const init: RequestInit = { headers, signal, ...(method === 'GET' ? {} : { method }) }
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    init.body = JSON.stringify(body)
+  }
   let res: Response
   try {
-    res = await fetch(path, { headers: { Accept: 'application/json' }, signal: init?.signal })
+    res = await fetch(path, init)
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err
     throw new ApiError(0, UNREACHABLE, t.api.unreachable)
   }
-  const body = await readJSON(res)
+  if (res.ok && allowEmpty && res.status === 204) return undefined as T
+  const data = await readJSON(res)
   if (res.ok) {
-    if (body === undefined) throw new ApiError(res.status, BAD_RESPONSE, t.api.unknown)
-    return body as T
+    if (data === undefined) throw new ApiError(res.status, BAD_RESPONSE, t.api.unknown)
+    return data as T
   }
-  if (isErrorBody(body)) throw new ApiError(res.status, body.error.code, body.error.message)
+  if (isErrorBody(data)) {
+    throw new ApiError(res.status, data.error.code, data.error.message, {
+      fields: fieldsOf(data.error),
+      retryAfter: typeof data.error.retry_after === 'number' ? data.error.retry_after : undefined,
+    })
+  }
   // Не наш формат: так отвечает прокси разработки, когда сервер не запущен.
   throw new ApiError(res.status, UNREACHABLE, t.api.unreachable)
+}
+
+/** GET-запрос к API. Любая неудача превращается в ApiError. */
+export function apiGet<T>(path: string, init?: { signal?: AbortSignal }): Promise<T> {
+  return request<T>(path, { method: 'GET', signal: init?.signal }, false)
+}
+
+/** Запрос, меняющий данные (POST, PATCH), с телом JSON. Ответ 204 (без тела) даёт undefined. */
+export function apiSend<T = void>(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  return request<T>(path, { method, body: body ?? {} }, true)
 }
