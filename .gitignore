@@ -1,0 +1,21 @@
+# Зависимости и сборка
+node_modules/
+web/dist/
+server/bin/
+*.log
+
+# Локальные данные
+storage/
+.env
+.env.local
+
+# Локальные настройки Claude и пробные файлы
+.claude/settings.local.json
+.impeccable/config.local.json
+skill-test/
+
+# Системное
+.DS_Store
+
+# Бинарник impeccable (скачивается лаунчером сам)
+.claude/skills/impeccable/scripts/bin/
