@@ -19,3 +19,7 @@ skill-test/
 
 # Бинарник impeccable (скачивается лаунчером сам)
 .claude/skills/impeccable/scripts/bin/
+
+# Отчёты покрытия
+server/coverage.out
+web/coverage/

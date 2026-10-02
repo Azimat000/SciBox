@@ -1,0 +1,34 @@
+# Локальное окружение SciBox: база данных и почтовый ящик для тестовых писем.
+# Порт базы 5433, потому что 5432 на машине разработчика занят (D-028).
+name: scibox
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: scibox
+      POSTGRES_PASSWORD: scibox
+      POSTGRES_DB: scibox
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scibox -d scibox"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

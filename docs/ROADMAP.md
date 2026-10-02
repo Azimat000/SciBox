@@ -5,14 +5,14 @@
 Порядок работы внутри среза и критерии готовности: см. `.claude/skills/next-slice/SKILL.md`.
 Во всех срезах с кодом: покрытие тестами ≥ 90%, в критичных зонах ≥ 97% (правила в `docs/TESTING.md`).
 
-ТЕКУЩИЙ: 1
+ТЕКУЩИЙ: 2
 
 ---
 
 ## [x] 0. Каркас памяти
 git, файлы памяти в `docs/`, скилл `/next-slice`, хук SessionStart, правила в `CLAUDE.md`.
 
-## [ ] 1. Фундамент проекта
+## [x] 1. Фундамент проекта
 - `/impeccable init` → `PRODUCT.md` (с секцией `## Stack`: React+Vite+TS / Go / PostgreSQL; решения в DECISIONS).
 - Структура `web/` (Vite + React + TypeScript, React Router, TanStack Query, словарь i18n `ru`) и `server/` (Go, chi, pgx + sqlc, goose).
 - `docker-compose.yml`: PostgreSQL 16, Mailpit. `Makefile`: `dev`, `test`, `seed`, `migrate`, `db-reset`.

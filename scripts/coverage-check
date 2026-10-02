@@ -1,0 +1,8 @@
+#!/bin/sh
+# Тесты сервера с проверкой порогов покрытия (docs/TESTING.md, правила в server/coverage.conf).
+# Нужна запущенная база: make db-up.
+set -eu
+cd "$(dirname "$0")/../server"
+go vet ./...
+go test -race -covermode=atomic -coverpkg=./internal/... -coverprofile=coverage.out ./...
+go run ./cmd/covercheck coverage.conf coverage.out

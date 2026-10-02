@@ -1,0 +1,45 @@
+# Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
+.PHONY: dev test test-server test-web install db-up db-down db-reset migrate seed sqlc
+
+SCIBOX = cd server && go run ./cmd/api
+
+## dev: поднять базу и почту, накатить миграции, запустить сервер и сайт
+dev: install migrate
+	./scripts/dev.sh
+
+## test: все тесты с проверкой порогов покрытия
+test: install db-up test-server test-web
+
+test-server:
+	./scripts/coverage-check
+
+test-web:
+	cd web && npm run typecheck && npm run lint && npm run test:coverage
+
+install: web/node_modules/.package-lock.json
+
+web/node_modules/.package-lock.json: web/package-lock.json
+	cd web && npm ci
+
+## db-up / db-down: база PostgreSQL (порт 5433) и Mailpit (8025)
+db-up:
+	docker compose up -d --wait
+
+db-down:
+	docker compose down
+
+migrate: db-up
+	$(SCIBOX) migrate up
+
+seed: migrate
+	$(SCIBOX) seed
+
+## db-reset: откатить всё, накатить заново и загрузить демо-данные
+db-reset: db-up
+	$(SCIBOX) migrate reset
+	$(SCIBOX) migrate up
+	$(SCIBOX) seed
+
+## sqlc: пересобрать код запросов из server/db/queries
+sqlc:
+	cd server && go tool sqlc generate
