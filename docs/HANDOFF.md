@@ -9,7 +9,8 @@
 Срез 1 «Фундамент проекта» (см. `docs/ROADMAP.md`):
 - начать с `/impeccable init` → `PRODUCT.md`. Ответы на вопросы init почти все есть в `docs/DECISIONS.md`, переспрашивать только то, чего там нет;
 - `buildPath` для impeccable (comp-first / code-first) ещё не выбран. Спросить пользователя в срезе 2, перед выбором визуального направления;
-- каркас `web/` + `server/`, docker-compose, Makefile, `/api/health`.
+- каркас `web/` + `server/`, docker-compose, Makefile, `/api/health`;
+- тестовая инфраструктура с порогами покрытия (D-026, `docs/TESTING.md`) закладывается сразу в срезе 1, до остального кода.
 
 ## Как запустить
 Пока нечего. С 1-го среза: `make dev`.

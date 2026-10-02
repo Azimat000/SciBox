@@ -8,7 +8,8 @@ roadmap="$root/docs/ROADMAP.md"
 
 echo "=== ПАМЯТЬ ПРОЕКТА SciBox ==="
 echo "Проект ведётся срезами. Следующий срез запускается командой /next-slice."
-echo "Источник правды: docs/ (ROADMAP, HANDOFF, DECISIONS, ARCHITECTURE, DOMAIN, slices/)."
+echo "Источник правды: docs/ (ROADMAP, HANDOFF, DECISIONS, ARCHITECTURE, DOMAIN, TESTING, slices/)."
+echo "Покрытие тестами: >= 90% везде, >= 97% в критичных зонах (docs/TESTING.md)."
 echo
 
 if [ -f "$roadmap" ]; then
