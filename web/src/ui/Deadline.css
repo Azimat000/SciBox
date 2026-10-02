@@ -1,0 +1,52 @@
+/* Жёлтый маркер: единственный акцентный приём системы. Им отмечено то, что нужно успеть. */
+.mark {
+  background: linear-gradient(transparent 55%, var(--mark) 55%) no-repeat left / 100% 100%;
+  padding-inline: 0.15em;
+  margin-inline: -0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.deadline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.deadline[data-align='end'] {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.deadline-date {
+  font-weight: 600;
+  color: var(--ink);
+  width: fit-content;
+}
+
+.deadline[data-state='normal'] .deadline-date {
+  font-weight: 500;
+}
+
+.deadline[data-state='expired'] .deadline-date {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.deadline-rest {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Маркер «проводится» один раз, когда срок появляется на странице */
+.deadline-date.mark {
+  animation: mark-draw 700ms var(--ease) 250ms backwards;
+}
+
+@keyframes mark-draw {
+  from {
+    background-size: 0% 100%;
+  }
+}

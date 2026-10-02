@@ -1,7 +1,9 @@
 import { useHealth } from '../../api/health'
 import { t } from '../../i18n'
+import { Button } from '../../ui/Button'
 import { StatusIcon } from '../../ui/StatusIcon'
 import { describeHealth } from './describe'
+import './status.css'
 
 export function StatusPage() {
   const health = useHealth()
@@ -29,9 +31,9 @@ export function StatusPage() {
         {view.hint && <p className="check-hint">{view.hint}</p>}
         {view.version && <p className="check-meta">{view.version}</p>}
         {health.isError && (
-          <button type="button" className="button" onClick={() => void health.refetch()} disabled={health.isFetching}>
+          <Button variant="secondary" onClick={() => void health.refetch()} loading={health.isFetching}>
             {t.common.retry}
-          </button>
+          </Button>
         )}
       </section>
 

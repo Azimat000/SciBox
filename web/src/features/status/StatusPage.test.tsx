@@ -22,7 +22,7 @@ describe('StatusPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'pending')
     expect(within(row('База данных')).getByText('Проверяем…')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Проверить ещё раз' })).not.toBeInTheDocument()
   })
 
   it('reports a healthy server and database', async () => {

@@ -1,0 +1,97 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.field-label {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.field-flag {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.field-hint {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  max-width: var(--measure);
+}
+
+.field-message {
+  font-size: var(--text-sm);
+  color: var(--fail);
+  font-weight: 500;
+}
+
+.control {
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.4;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.control::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+
+.control:hover {
+  border-color: var(--ink);
+}
+
+.control:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--focus);
+}
+
+.control:disabled {
+  background: var(--wash);
+  color: var(--ink-soft);
+  border-color: var(--line);
+  cursor: not-allowed;
+}
+
+.field-error .control {
+  border-color: var(--fail);
+  background: var(--fail-wash);
+}
+
+textarea.control {
+  resize: vertical;
+  min-height: 7rem;
+}
+
+/* Выбор из списка: родной select с нарисованной стрелкой */
+.select-wrap {
+  position: relative;
+}
+
+.select-wrap select.control {
+  appearance: none;
+  padding-right: 2.5rem;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.select-wrap .select-chevron {
+  position: absolute;
+  right: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ink-soft);
+}

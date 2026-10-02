@@ -1,0 +1,27 @@
+{
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "geologica",
+        "createdAt": "2026-10-02T20:29:07.307Z",
+        "reason": "Claude: шрифты отвергнутых образцов направлений в черновом файле .impeccable/mocks/decision/directions.html, на сайт не попадают"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "pt sans narrow",
+        "createdAt": "2026-10-02T20:29:07.323Z",
+        "reason": "Claude: шрифты отвергнутых образцов направлений в черновом файле .impeccable/mocks/decision/directions.html, на сайт не попадают"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "pt mono",
+        "createdAt": "2026-10-02T20:29:07.338Z",
+        "reason": "Claude: шрифты отвергнутых образцов направлений в черновом файле .impeccable/mocks/decision/directions.html, на сайт не попадают"
+      }
+    ]
+  }
+}

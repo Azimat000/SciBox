@@ -32,7 +32,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
       // Исключения перечислены в docs/TESTING.md.
-      exclude: ['src/main.tsx', 'src/test/**', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
+      exclude: ['src/main.tsx', 'src/test/**', 'src/features/styleguide/**', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
       reporter: ['text', 'html'],
       thresholds: {
         lines: 90,

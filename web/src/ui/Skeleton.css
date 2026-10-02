@@ -1,0 +1,48 @@
+.skeleton {
+  display: block;
+  max-width: 100%;
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--wash) 0%, var(--wash-deep) 50%, var(--wash) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.6s var(--ease) infinite;
+}
+
+.entry-skeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2) var(--s-6);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.entry-skeleton-main,
+.entry-skeleton-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.entry-skeleton-side {
+  align-items: flex-end;
+  min-width: 11rem;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 40rem) {
+  .entry-skeleton {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .entry-skeleton-side {
+    min-width: 0;
+    align-items: flex-start;
+  }
+}

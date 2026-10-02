@@ -1,0 +1,32 @@
+.role-switch {
+  display: inline-flex;
+  gap: var(--s-4);
+}
+
+.role-option {
+  min-height: var(--control-h);
+  padding: 0.25rem 0;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.role-option:hover {
+  color: var(--ink);
+}
+
+.role-option[aria-pressed='true'] {
+  color: var(--ink);
+  font-weight: 600;
+  /* маркер под активным режимом */
+  border-bottom-color: var(--mark);
+}
+
+.role-option:focus-visible {
+  border-radius: 0;
+}

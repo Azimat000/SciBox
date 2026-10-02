@@ -1,0 +1,33 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 30rem;
+  margin-inline: auto;
+  padding: var(--s-7) var(--s-4);
+  text-align: center;
+  color: var(--ink);
+}
+
+.empty-art {
+  color: var(--edge);
+  margin-bottom: var(--s-2);
+}
+
+.empty[data-tone='error'] .empty-art {
+  color: var(--fail);
+}
+
+.empty-text {
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+.empty-action {
+  margin-top: var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+}

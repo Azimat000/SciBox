@@ -1,0 +1,33 @@
+/* Общая рамка страниц */
+.page {
+  max-width: var(--content);
+  margin-inline: auto;
+  padding: var(--s-7) var(--gutter) 0;
+}
+
+.page-narrow {
+  max-width: 44rem;
+}
+
+.lead {
+  margin-top: var(--s-3);
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+@media (max-width: 40rem) {
+  .page {
+    padding-top: var(--s-6);
+  }
+}
+
+.page-actions {
+  margin-top: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}

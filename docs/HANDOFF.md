@@ -1,36 +1,42 @@
 # HANDOFF: записка следующей сессии
 
-Обновлено: 2026-10-02, после среза 1.
+Обновлено: 2026-10-02, после среза 2.
 
 ## Где остановились
-Срез 1 «Фундамент» готов. Работают сервер на Go с `/api/health`, база PostgreSQL в Docker, сайт на React с временной стартовой страницей, `make dev` и `make test` с порогами покрытия. Отчёт: `docs/slices/01-foundation.md`.
+Срез 2 «Визуальный мир и дизайн-система» готов. Выбран мир «Журнал» (D-035). Есть токены, шрифты, компоненты, шапка с переключателем «Ищу работу / Нанимаю», мобильное меню, подвал, `/styleguide`. Отчёт: `docs/slices/02-design-system.md`. Внешний вид описан в `DESIGN.md`.
 
 ## Что дальше
-Срез 2 «Визуальный мир и дизайн-система» (`docs/ROADMAP.md`):
-- `PRODUCT.md` уже есть, `/impeccable init` повторно не нужен. Запустить `impeccable context`, затем `reference/new-work.md`.
-- Спросить пользователя `buildPath` (comp-first / code-first) перед выбором направления, если доступна генерация картинок. Ответ писать в `.impeccable/config.json`.
-- Показать 2–3 направления (D-024), пользователь выбирает. Шрифт с кириллицей, не Inter.
-- Заменить `web/src/index.css` и стартовую страницу (D-034): сейчас там системный шрифт и временная палитра.
-- Тексты только в `web/src/i18n/ru.ts`.
+Срез 3 «Аккаунты» (`docs/ROADMAP.md`): регистрация, подтверждение почты, вход/выход, сброс пароля, сессии, argon2id, письма в Mailpit.
+- Строить формы из `src/ui` (`TextField`, `Button`, `Field`), ошибки через `useToast` или `Field error`.
+- Код аккаунтов класть в `server/internal/auth` (критичная зона 97%, D-033) и `web/src/features/auth` (добавить блок порогов в `web/vite.config.ts`, см. `docs/TESTING.md`).
+- Страница `/login` сейчас «Раздел готовится» (`web/src/features/shell/nav.ts`, список `comingSoonPaths`): заменить настоящей страницей и убрать адрес из списка.
+- Кнопка «Войти» в шапке (`SiteHeader.tsx`) ведёт на `/login`; после входа показывать меню пользователя. Кнопки «скоро» для ORCID / Яндекс / ВК / Госуслуги (D-019).
 
 ## Как запустить
 - `make dev`: база + Mailpit, миграции, сервер (127.0.0.1:8080) и сайт (http://localhost:5173). Остановка: Ctrl+C.
-- `make test`: всё с проверкой покрытия. Сначала сам поднимает Docker-контейнеры.
-- `make db-reset`, `make migrate`, `make seed` (пока заглушка), `make sqlc` (после правки `server/db/queries`).
+- `make test`: всё с проверкой покрытия (сам поднимает Docker-контейнеры).
+- `make db-reset`, `make migrate`, `make seed` (пока заглушка), `make sqlc`.
 - Docker Desktop должен быть запущен (`open -a Docker`).
+- Только сайт без сервера (для работы над внешним видом): `cd web && npx vite --strictPort`. Адрес `/styleguide` показывает все компоненты.
 
 ## Известные проблемы и долги
-- Встроенный браузер Claude не может сам выполнить `make dev` из папки «Документы» (macOS: `getcwd: Operation not permitted`). Обход: запустить `make dev` через Bash в фоне, потом `preview_start` с `url: http://localhost:5173`. После проверки остановить: `pkill -f "bin/scibox serve"; pkill -f "vite --strictPort"`.
-- Непокрытые строки сервера (честно, не исключены): ветка ошибки `srv.Serve` и `Shutdown` в `internal/cli`, ветка ошибки миграции в `internal/testdb`, ошибка `NewProvider` в `migrate.Command` (миграции встроены, недостижимо).
-- `seed` пока выводит «Демо-данных пока нет».
+- Встроенный браузер Claude не запускает `make dev` из папки «Документы» (macOS `getcwd: Operation not permitted`). Обход: запустить через Bash в фоне, потом `preview_start` с `url`. Остановка: `pkill -f "bin/scibox serve"; pkill -f "vite --strictPort"`.
+- Снимки страниц целиком и сценарии с кликами удобнее делать через `playwright-core` + headless-оболочку из `~/Library/Caches/ms-playwright/chromium_headless_shell-*/`: скрипт лежал во временной папке сессии, при необходимости переписать (в проект Playwright придёт в срезе 13). Снимок встроенного браузера на ширине 1440 получается смазанным.
+- Страница выбора impeccable (`serve-question`) закрылась без ответа и показывала английский интерфейс и без картинок; выбор повторён обычным вопросом.
+- `/impeccable audit`, `/impeccable critique`, `web-design-guidelines` по новым экранам не запускались полностью: сделать в срезе 6 на реальных экранах (поиск вакансий).
+- Тёмной темы нет. Информационного всплывающего пояснения (tooltip) нет.
+- Непокрытые строки сервера (честно): ветка ошибки `srv.Serve` и `Shutdown` в `internal/cli`, ветка ошибки миграции в `internal/testdb`, ошибка `NewProvider` в `migrate.Command`.
+- `seed` пока выводит «Демо-данных пока нет». Демо-вакансии для интерфейса пока только в `web/src/features/styleguide/demo.ts`.
 
 ## Неочевидные вещи
-- Порт базы **5433**, на 5432 у пользователя своя PostgreSQL (D-028).
-- Тесты с базой: `testdb.New(t)` / `testdb.Create(t, migrated)` создают отдельную базу на тест (D-031). Пакеты, которые импортирует testdb (сейчас `migrate`), тестируются из внешнего пакета `*_test` + `export_test.go`, иначе цикл импортов.
-- Критичные зоны сервера = имена пакетов в `server/coverage.conf` (D-033). Код аккаунтов класть в `internal/auth`, права в `internal/access` и т.д.; порог 97% включится сам. На фронтенде блок порогов для папки добавлять в `web/vite.config.ts`.
+- Порт базы **5433** (D-028). Тесты с базой: `testdb.New(t)` / `testdb.Create(t, migrated)` (D-031). Критичные зоны сервера = имена пакетов в `server/coverage.conf` (D-033).
 - Название продукта меняется в одном месте: `config/product.json` (D-029).
-- React Router 8: `RouterProvider` импортировать из `react-router/dom`. `react/only-export-components` в oxlint включён с `--deny-warnings`: вспомогательные функции держать в отдельных `.ts`.
-- Ошибки API: `{"error":{"code","message"}}` (D-032). На сайте `apiGet` отличает «сервер лежит» (`unreachable`) от ошибки в формате API.
+- React Router 8: `RouterProvider` из `react-router/dom`. `oxlint --deny-warnings` строгий: правило `react/only-export-components` (вспомогательные функции и контексты в отдельных `.ts`), `react/purity` (нельзя `new Date()` в теле компонента: брать через `useState(() => new Date())`), `react/refs`, `set-state-in-effect`.
+- Все цвета и размеры только через токены `src/styles/tokens.css`; жёлтый маркер (`--mark`) единственный акцент: близкие сроки (до 14 дней) и активный режим/пункт меню. Не добавлять второй акцент, тени у записей списка, цветные боковые рамки.
+- Подсказка к полю стоит под полем, ошибка над подсказкой (так поля в одной строке выровнены). Тосты: ошибка не скрывается сама, на телефоне тосты наверху (иначе закрывают кнопки окна).
+- Режим «Ищу / Нанимаю» пока влияет только на меню (D-038); реальные права появятся в срезах 3–4.
+- Тексты только в `src/i18n/ru.ts`; демо-данные `/styleguide` в `demo.ts`.
+- Выбор направления записан в `docs/slices/02-design-system.md`, контракт в `.impeccable/surfaces/web.md`. Образцы направлений: `.impeccable/mocks/decision/`.
 
 ## Окружение
-Go 1.26.5, Node 26.8, npm 11.19, Docker 29, Mailpit 1.31.3, PostgreSQL 16.15 (проверено 2026-10-02).
+Go 1.26.5, Node 26.8, npm 11.19, Docker 29, Mailpit 1.31.3, PostgreSQL 16.15 (проверено 2026-10-02). Новые пакеты сайта: `@fontsource-variable/literata`, `@fontsource-variable/golos-text`.

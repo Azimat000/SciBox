@@ -1,0 +1,88 @@
+.status-page h1 {
+  max-width: 22ch;
+}
+
+.check {
+  margin-top: var(--s-7);
+  max-width: 42rem;
+}
+
+.check h2 {
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+}
+
+.check-list {
+  margin: 0;
+}
+
+.check-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 11rem) 1fr;
+  gap: var(--s-1) var(--s-4);
+  align-items: center;
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.check-row dt {
+  font-weight: 600;
+}
+
+.check-row dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.check-row[data-kind='ok'] dd {
+  color: var(--ok);
+}
+
+.check-row[data-kind='fail'] dd {
+  color: var(--fail);
+}
+
+.check-row[data-kind='pending'] dd {
+  color: var(--ink-soft);
+}
+
+.status-icon {
+  flex: none;
+}
+
+.check-hint {
+  margin-top: var(--s-4);
+  max-width: var(--measure);
+}
+
+.check-meta {
+  margin-top: var(--s-3);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.check .btn {
+  margin-top: var(--s-4);
+}
+
+.note {
+  margin-top: var(--s-6);
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+@media (max-width: 30rem) {
+  .check-row {
+    grid-template-columns: 1fr;
+  }
+}

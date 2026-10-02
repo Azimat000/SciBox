@@ -1,0 +1,96 @@
+.toast-region {
+  position: fixed;
+  z-index: 80;
+  right: var(--s-4);
+  bottom: var(--s-4);
+  left: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-2);
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  width: min(26rem, 100%);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+  background: var(--ink);
+  color: var(--on-ink);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift);
+  animation: toast-in var(--t-med) var(--ease);
+}
+
+.toast[data-kind='success'] .toast-icon {
+  color: var(--ok-on-ink);
+}
+
+.toast[data-kind='error'] .toast-icon {
+  color: var(--fail-on-ink);
+}
+
+.toast[data-kind='info'] .toast-icon {
+  color: var(--mark);
+}
+
+.toast-icon {
+  padding-top: 0.0625rem;
+}
+
+.toast-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.toast-text {
+  margin-top: 0.125rem;
+  font-size: var(--text-sm);
+  color: var(--on-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--on-ink-soft);
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--on-ink);
+}
+
+.toast-close:focus-visible {
+  outline-color: var(--on-ink);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* На телефоне окно выезжает снизу и прячет за собой кнопки, поэтому уведомления уходят наверх */
+@media (max-width: 30rem) {
+  .toast-region {
+    top: var(--s-3);
+    bottom: auto;
+    align-items: stretch;
+  }
+
+  .toast {
+    width: 100%;
+  }
+}

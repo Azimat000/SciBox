@@ -1,0 +1,423 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T20:28:45+00:00",
+  "title": "Design System: SciBox",
+  "extensions": {
+    "colorMeta": {
+      "ink-blue": {
+        "role": "primary",
+        "displayName": "Ink Blue",
+        "canonical": "#1c2c66",
+        "tonalRamp": [
+          "#080d1f",
+          "#0e1633",
+          "#141f47",
+          "#19285c",
+          "#495685",
+          "#828bab",
+          "#bbc0d1",
+          "#e4e6ed"
+        ]
+      },
+      "ink-blue-deep": {
+        "role": "primary",
+        "displayName": "Ink Blue Deep",
+        "canonical": "#121e4d",
+        "tonalRamp": [
+          "#050917",
+          "#090f26",
+          "#0d1536",
+          "#101b45",
+          "#414b71",
+          "#7d839d",
+          "#b8bcca",
+          "#e3e4ea"
+        ]
+      },
+      "blue-wash": {
+        "role": "primary",
+        "displayName": "Blue Wash",
+        "canonical": "#eceefa",
+        "tonalRamp": [
+          "#47474b",
+          "#76777d",
+          "#a5a7af",
+          "#d4d6e1",
+          "#f0f1fb",
+          "#f5f6fc",
+          "#f9fafe",
+          "#fdfdfe"
+        ]
+      },
+      "marker-yellow": {
+        "role": "secondary",
+        "displayName": "Marker Yellow",
+        "canonical": "#f7d559",
+        "tonalRamp": [
+          "#4a401b",
+          "#7c6a2c",
+          "#ad953e",
+          "#dec050",
+          "#f9dd7a",
+          "#fbe8a4",
+          "#fdf2cd",
+          "#fefaeb"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#4d4d4d",
+          "#808080",
+          "#b2b2b2",
+          "#e6e6e6",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "#f6f4f1",
+        "tonalRamp": [
+          "#4a4948",
+          "#7b7a78",
+          "#acaba9",
+          "#dddcd9",
+          "#f8f6f4",
+          "#faf9f7",
+          "#fcfcfb",
+          "#fefefd"
+        ]
+      },
+      "wash-deep": {
+        "role": "neutral",
+        "displayName": "Wash Deep",
+        "canonical": "#ece9e4",
+        "tonalRamp": [
+          "#474644",
+          "#767472",
+          "#a5a3a0",
+          "#d4d2cd",
+          "#f0ede9",
+          "#f5f3f0",
+          "#f9f8f7",
+          "#fdfcfc"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1f1d1a",
+        "tonalRamp": [
+          "#090908",
+          "#100e0d",
+          "#161412",
+          "#1c1a17",
+          "#4c4a48",
+          "#848381",
+          "#bcbbba",
+          "#e4e4e4"
+        ]
+      },
+      "ink-body": {
+        "role": "neutral",
+        "displayName": "Ink Body",
+        "canonical": "#38352f",
+        "tonalRamp": [
+          "#11100e",
+          "#1c1a18",
+          "#272521",
+          "#32302a",
+          "#605d59",
+          "#92908d",
+          "#c3c2c1",
+          "#e7e7e6"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Ink Soft",
+        "canonical": "#5d5a55",
+        "tonalRamp": [
+          "#1c1b1a",
+          "#2e2d2a",
+          "#413f3b",
+          "#54514c",
+          "#7d7b77",
+          "#a6a4a2",
+          "#cececc",
+          "#ecebeb"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#e4e1dc",
+        "tonalRamp": [
+          "#444442",
+          "#72706e",
+          "#a09e9a",
+          "#cdcac6",
+          "#e9e7e3",
+          "#f0eeec",
+          "#f7f6f4",
+          "#fcfbfb"
+        ]
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Edge",
+        "canonical": "#85807a",
+        "tonalRamp": [
+          "#282625",
+          "#42403d",
+          "#5d5a55",
+          "#78736e",
+          "#9d9995",
+          "#bcb9b6",
+          "#dad9d7",
+          "#f0f0ef"
+        ]
+      },
+      "ok": {
+        "role": "status",
+        "displayName": "OK Green",
+        "canonical": "#1e6b45",
+        "tonalRamp": [
+          "#092015",
+          "#0f3622",
+          "#154b30",
+          "#1b603e",
+          "#4b896a",
+          "#83ae99",
+          "#bcd3c7",
+          "#e4ede9"
+        ]
+      },
+      "fail": {
+        "role": "status",
+        "displayName": "Fail Red",
+        "canonical": "#a3261b",
+        "tonalRamp": [
+          "#310b08",
+          "#52130e",
+          "#721b13",
+          "#932218",
+          "#b55149",
+          "#cc8882",
+          "#e3bebb",
+          "#f4e5e4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles (h1), Literata 600."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles (h2)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Sub-sections, modal titles, entry titles (fluid 1.25-1.5rem)."
+      },
+      "abstract": {
+        "displayName": "Abstract",
+        "purpose": "Vacancy abstracts and page leads, 68ch, 3-line clamp."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running interface text in Golos Text."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels, active tabs and nav, sentence case."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Tags and small facts."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lift",
+        "value": "0 1px 2px rgb(31 29 26 / 0.08), 0 12px 32px -8px rgb(31 29 26 / 0.22)",
+        "purpose": "Floating layers only: modal, toast, combobox list."
+      },
+      {
+        "name": "focus-ring-field",
+        "value": "0 0 0 2px #ffffff, 0 0 0 4px #1c2c66",
+        "purpose": "Focus on fields and the search bar."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Default easing for all transitions and entrances."
+      },
+      {
+        "name": "t-fast",
+        "value": "140ms",
+        "purpose": "Hover, color and border transitions."
+      },
+      {
+        "name": "t-med",
+        "value": "240ms",
+        "purpose": "Modal, toast and scrim entrances."
+      },
+      {
+        "name": "mark-draw",
+        "value": "700ms var(--ease) 250ms",
+        "purpose": "Marker highlight drawn once under an urgent deadline."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "toast-modal-sheet",
+        "value": "30rem"
+      },
+      {
+        "name": "entry-single-column",
+        "value": "40rem"
+      },
+      {
+        "name": "header-menu",
+        "value": "52rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink-blue action, one per view.",
+      "html": "<button class=\"ds-btn\">Найти</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 20px;border:1px solid transparent;border-radius:var(--r-md,10px);background:#1c2c66;color:#fff;font:inherit;font-weight:600;cursor:pointer;transition:background-color 140ms}.ds-btn:hover{background:#121e4d}.ds-btn:focus-visible{outline:2px solid #1c2c66;outline-offset:2px}.ds-btn:active{transform:translateY(1px)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined alternative action.",
+      "html": "<button class=\"ds-btn-2\">Сохранить поиск</button>",
+      "css": ".ds-btn-2{min-height:44px;padding:8px 20px;border:1px solid #85807a;border-radius:10px;background:#fff;color:#1f1d1a;font:inherit;font-weight:600;cursor:pointer}.ds-btn-2:hover{background:#f6f4f1}.ds-btn-2:focus-visible{outline:2px solid #1c2c66;outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "Labelled field with edge border and double focus ring.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-label\">Название</span><input class=\"ds-input\" placeholder=\"Например, лаборатория\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:4px}.ds-label{font-weight:600;font-size:.875rem}.ds-input{min-height:44px;padding:8px 14px;border:1px solid #85807a;border-radius:10px;background:#fff;color:#1f1d1a;font:inherit}.ds-input::placeholder{color:#5d5a55}.ds-input:hover{border-color:#1f1d1a}.ds-input:focus-visible{outline:none;border-color:#1c2c66;box-shadow:0 0 0 2px #fff,0 0 0 4px #1c2c66}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Pill filter; pressed state is blue-wash.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">Постдок</button>",
+      "css": ".ds-chip{min-height:36px;padding:4px 14px;border:1px solid #85807a;border-radius:999px;background:#fff;color:#1f1d1a;font:inherit;font-size:.875rem;cursor:pointer}.ds-chip:hover{background:#f6f4f1;border-color:#1f1d1a}.ds-chip[aria-pressed=true]{background:#eceefa;border-color:#1c2c66;color:#1c2c66;font-weight:600}.ds-chip:focus-visible{outline:2px solid #1c2c66;outline-offset:2px}"
+    },
+    {
+      "name": "Role Switch",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Two text tabs, marker underline on the active one.",
+      "html": "<div class=\"ds-role\"><button aria-pressed=\"true\">Ищу работу</button><button aria-pressed=\"false\">Нанимаю</button></div>",
+      "css": ".ds-role{display:inline-flex;gap:16px}.ds-role button{min-height:44px;padding:4px 0;border:0;border-bottom:3px solid transparent;background:transparent;color:#5d5a55;font:inherit;font-size:.875rem;cursor:pointer}.ds-role button:hover{color:#1f1d1a}.ds-role button[aria-pressed=true]{color:#1f1d1a;font-weight:600;border-bottom-color:#f7d559}.ds-role button:focus-visible{outline:2px solid #1c2c66;outline-offset:2px}"
+    },
+    {
+      "name": "Vacancy Entry",
+      "kind": "custom",
+      "refersTo": "vacancy-entry",
+      "description": "Journal-style entry: serif title, org, abstract, facts, deadline on the right.",
+      "html": "<article class=\"ds-entry\"><div><h3 class=\"ds-title\"><a href=\"#\">Старший научный сотрудник, лаборатория нейрофизиологии</a></h3><p class=\"ds-org\">Институт высшей нервной деятельности РАН, Москва</p><p class=\"ds-abs\">Исследование механизмов памяти на моделях in vivo; руководство группой из трёх аспирантов.</p><ul class=\"ds-facts\"><li><strong>R3</strong></li><li>Полная занятость</li></ul></div><p class=\"ds-dl\"><time class=\"ds-mark\">до 14 ноября</time><span>осталось 6 дней</span></p></article>",
+      "css": ".ds-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:32px;padding-block:16px;border-bottom:1px solid #e4e1dc}.ds-title{margin:0;font-family:var(--font-serif,Literata,Georgia,serif);font-weight:600;font-size:1.375rem;line-height:1.25}.ds-title a{color:#1f1d1a;text-decoration:none}.ds-title a:hover{color:#1c2c66;text-decoration:underline}.ds-org{margin:4px 0 0;color:#5d5a55;font-weight:500;font-size:.875rem}.ds-abs{margin:12px 0 0;max-width:68ch;font-family:var(--font-serif,Literata,Georgia,serif);font-size:1.125rem;line-height:1.6;color:#38352f}.ds-facts{display:flex;gap:16px;margin:12px 0 0;padding:0;list-style:none;font-size:.875rem;color:#5d5a55}.ds-facts strong{color:#1f1d1a}.ds-dl{display:flex;flex-direction:column;align-items:flex-end;margin:0;min-width:11rem;font-size:.875rem;color:#5d5a55}.ds-mark{font-weight:600;color:#1f1d1a;background:linear-gradient(transparent 55%,#f7d559 55%);padding-inline:.15em}"
+    },
+    {
+      "name": "Results Header",
+      "kind": "custom",
+      "refersTo": "results-header",
+      "description": "Count line over a solid ink rule.",
+      "html": "<div class=\"ds-results\">Найдено 24 вакансии</div>",
+      "css": ".ds-results{padding-bottom:8px;border-bottom:1px solid #1f1d1a;font-size:.875rem;color:#5d5a55}"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Dark floating notice; the only shadowed layer besides modal and combobox list.",
+      "html": "<div class=\"ds-toast\"><strong>Поиск сохранён</strong><span>Мы напомним о сроках.</span></div>",
+      "css": ".ds-toast{display:flex;flex-direction:column;gap:2px;padding:12px 16px;width:min(26rem,100%);background:#1f1d1a;color:#fff;border-radius:10px;box-shadow:0 1px 2px rgb(31 29 26/.08),0 12px 32px -8px rgb(31 29 26/.22)}.ds-toast span{font-size:.875rem;color:#d9d6d1}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Journal",
+    "overview": "A vacancy is set like an article in a serious science journal: serif title, organization line, abstract, a row of facts. The page is pure white, the ink is warm near-black, actions and links are one deep ink-blue, and the single accent is a marker-yellow highlighter that appears only on a deadline that needs attention. Entries are separated by hairline rules, not boxed cards. The world refuses the generic job-board card grid with logo tiles and a bright blue button.\n\nDensity is calm and readable: generous line height, a 68ch reading measure, a 72rem content column. Phone and desktop are equal; the same entry reflows so the deadline stays visible before the abstract on a phone. There is no dark theme. Depth is typographic and linear (rules, weight, whitespace), not shadowed.",
+    "keyCharacteristics": [
+      "Serif for what is read (titles, abstracts, lead paragraphs, wordmark); sans for what is operated (interface, facts, forms).",
+      "One action color (ink-blue) and one accent (marker yellow), never mixed in roles.",
+      "Hairlines (1px) between entries and sections; one black rule under the result count.",
+      "Square-ish corners (6px small, 10px controls and panels); pills only for filter chips.",
+      "Shadow only on floating layers (modal, toast, combobox list) and as the focus ring."
+    ],
+    "rules": [
+      {
+        "name": "The One Highlighter Rule",
+        "body": "Marker yellow marks what must be done soon, and the current place in navigation. It is never a button fill, a background panel, or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Action Blue Rule",
+        "body": "Every clickable commitment is ink-blue. Status colors never stand in for actions except the danger button.",
+        "section": "colors"
+      },
+      {
+        "name": "The Read-or-Operate Rule",
+        "body": "If a person reads it as prose, set it in Literata; if they click, scan or fill it, set it in Golos Text.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Numbers Rule",
+        "body": "Dates, counts and columns use tabular lining numerals (.num, deadline remainder).",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Instead of Card Rule",
+        "body": "Group content with a rule and spacing, not a box with a shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Floating-Only Shadow Rule",
+        "body": "A shadow means \"this layer sits above the page and will go away\".",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use ink-blue (#1c2c66) for every primary action and link, and keep marker yellow (#f7d559) for urgent deadlines and the current place in navigation.",
+      "Do separate list entries with a 1px line (#e4e1dc) and give the results count a single ink rule.",
+      "Do set titles, abstracts and leads in Literata and everything operable in Golos Text.",
+      "Do keep control borders at edge (#85807a) so fields stay above 3:1 on white, and keep every control at least 44px tall on touch layouts.",
+      "Do use tokens from `tokens.css` only; components do not introduce their own colors, sizes or spacing.",
+      "Do make the deadline visible before the abstract on a phone.",
+      "Do respect reduced motion; animations drop to near zero duration."
+    ],
+    "donts": [
+      "Don't build a card grid with logo tiles, boxed shadows and a blue button.",
+      "Don't add shadows to anything that sits in the page flow; shadows are for modal, toast and combobox list.",
+      "Don't use yellow as a button fill, panel background or decoration, and don't highlight non-urgent dates.",
+      "Don't add a kicker or eyebrow above headings, colored side borders, or gradient text.",
+      "Don't add a dark theme or a second accent color without a new decision.",
+      "Don't invent statistics or logos in demo content."
+    ]
+  }
+}

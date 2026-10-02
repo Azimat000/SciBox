@@ -1,0 +1,96 @@
+.searchbar {
+  display: flex;
+  gap: var(--s-3);
+}
+
+.searchbar-query,
+.searchbar-region {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.searchbar-query {
+  flex: 1;
+  min-width: 0;
+}
+
+.searchbar-region {
+  flex: 0 0 13rem;
+}
+
+.searchbar-query:hover,
+.searchbar-region:hover {
+  border-color: var(--ink);
+}
+
+.searchbar-query:focus-within,
+.searchbar-region:focus-within {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--focus);
+}
+
+.searchbar-icon {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.searchbar-input,
+.searchbar-select {
+  width: 100%;
+  min-height: 3rem;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.searchbar-input {
+  padding: 0.5rem 0.875rem 0.5rem 2.75rem;
+}
+
+.searchbar-input::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+
+.searchbar-select {
+  appearance: none;
+  padding: 0.5rem 2.5rem 0.5rem 0.875rem;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.searchbar-input:focus-visible,
+.searchbar-select:focus-visible {
+  outline: none;
+}
+
+.searchbar-chevron {
+  position: absolute;
+  right: 0.875rem;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.searchbar-go {
+  min-height: 3rem;
+  padding-inline: var(--s-6);
+}
+
+@media (max-width: 40rem) {
+  .searchbar {
+    flex-direction: column;
+  }
+
+  .searchbar-region {
+    flex-basis: auto;
+  }
+}
