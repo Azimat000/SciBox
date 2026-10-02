@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"scibox/server/internal/testdb"
 )
 
@@ -48,7 +50,8 @@ func TestCommandsWithoutDatabase(t *testing.T) {
 		{"help", []string{"help"}, map[string]string{}, 0, "Использование", ""},
 		{"unknown", []string{"fly"}, map[string]string{}, 2, "", "неизвестная команда"},
 		{"bad product config", []string{"seed"}, map[string]string{"SCIBOX_PRODUCT_CONFIG": "/nope.json"}, 1, "", "load config"},
-		{"seed placeholder", []string{"seed"}, map[string]string{}, 0, "Демо-данных пока нет", ""},
+		{"seed bad url", []string{"seed"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "connect database"},
+		{"seed without migrations", []string{"seed"}, map[string]string{"DATABASE_URL": testdb.Create(t, false)}, 1, "", "seed"},
 		{"migrate without subcommand", []string{"migrate"}, map[string]string{}, 2, "", "Использование"},
 		{"migrate bad url", []string{"migrate", "up"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "parse database url"},
 		{"serve bad url", []string{"serve"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "connect database"},
@@ -68,6 +71,50 @@ func TestMigrateUp(t *testing.T) {
 	r := run(context.Background(), []string{"migrate", "up"}, map[string]string{"DATABASE_URL": dbURL}, nil)
 	if r.code != 0 || !strings.Contains(r.stdout, "00001_extensions.sql") {
 		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
+	dbURL := testdb.Create(t, true)
+	env := map[string]string{"DATABASE_URL": dbURL}
+	first := run(context.Background(), []string{"seed"}, env, nil)
+	if first.code != 0 || !strings.Contains(first.stdout, "новых организаций 8") || !strings.Contains(first.stdout, "elena.orlova@demo.example.ru") {
+		t.Fatalf("first run: %+v", first)
+	}
+	// Пароль не печатается в терминал.
+	if strings.Contains(first.stdout, "demo-password") {
+		t.Errorf("the demo password must not be printed: %s", first.stdout)
+	}
+	second := run(context.Background(), []string{"seed"}, env, nil)
+	if second.code != 0 || !strings.Contains(second.stdout, "новых организаций 0") || !strings.Contains(second.stdout, "новых людей 0") {
+		t.Fatalf("second run must add nothing: %+v", second)
+	}
+	pool, err := pgxpool.New(context.Background(), dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	count := func(q string) (n int) {
+		if err := pool.QueryRow(context.Background(), q).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := count("SELECT count(*) FROM organizations"); n != 8 {
+		t.Errorf("%d organizations, want 8", n)
+	}
+	if n := count("SELECT count(*) FROM users WHERE email_confirmed_at IS NOT NULL"); n != 9 {
+		t.Errorf("%d confirmed users, want 9", n)
+	}
+	// У каждой организации есть владелец и подразделение; руководители подразделений — её сотрудники.
+	if n := count("SELECT count(*) FROM organizations o WHERE NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.role = 'owner') OR NOT EXISTS (SELECT 1 FROM units u WHERE u.org_id = o.id)"); n != 0 {
+		t.Errorf("%d organizations without an owner or units", n)
+	}
+	if n := count("SELECT count(*) FROM units u WHERE u.head_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = u.org_id AND m.user_id = u.head_user_id)"); n != 0 {
+		t.Errorf("%d unit heads who are not members", n)
+	}
+	if n := count("SELECT count(*) FROM org_invitations"); n != 1 {
+		t.Errorf("%d invitations, want 1", n)
 	}
 }
 

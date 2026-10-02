@@ -21,6 +21,8 @@ import (
 	"scibox/server/internal/httpapi"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/migrate"
+	"scibox/server/internal/orgs"
+	"scibox/server/seed"
 )
 
 // Version задаётся при сборке через -ldflags; при локальном запуске "dev".
@@ -84,8 +86,10 @@ func Run(ctx context.Context, args []string, env Env) int {
 		}
 		return 0
 	case "seed":
-		// Демо-данные появятся вместе с разделами (срезы 4–6).
-		fmt.Fprintln(env.Stdout, "Демо-данных пока нет: они появятся вместе с организациями и вакансиями.")
+		if err := runSeed(ctx, cfg.DatabaseURL, env.Stdout); err != nil {
+			logger.Error("seed", "err", err)
+			return 1
+		}
 		return 0
 	default:
 		if err := serve(ctx, cfg, logger, env.OnListen); err != nil {
@@ -94,6 +98,21 @@ func Run(ctx context.Context, args []string, env Env) int {
 		}
 		return 0
 	}
+}
+
+func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return fmt.Errorf("connect database: %w", err)
+	}
+	defer pool.Close()
+	res, err := seed.Run(ctx, pool, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, новых организаций %d.\n", res.People, res.Organizations)
+	fmt.Fprintf(out, "Вход для проверки: %s (пароль записан в server/seed/seed.go).\n", seed.Logins()[0])
+	return nil
 }
 
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen func(net.Addr)) error {
@@ -116,13 +135,18 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	defer stopCleanup()
 	go accounts.RunCleanup(cleanupCtx, time.Hour)
 	defer accounts.Flush()
+	organizations := orgs.NewService(pool, mailer, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	go organizations.RunCleanup(cleanupCtx, time.Hour)
+	defer organizations.Flush()
+	authHandler := auth.NewHandler(accounts, logger)
 
 	handler := httpapi.NewRouter(httpapi.Deps{
 		ProductName: cfg.Product.Name,
 		Version:     Version,
 		Health:      health.Checker{Queries: dbgen.New(pool), Migrations: migrations},
 		Logger:      logger,
-		Auth:        auth.NewHandler(accounts, logger),
+		Auth:        authHandler,
+		Orgs:        orgs.NewHandler(organizations, logger, authHandler.RequireUser),
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

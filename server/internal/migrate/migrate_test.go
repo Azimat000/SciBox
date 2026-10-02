@@ -64,6 +64,7 @@ func TestUpDownUp(t *testing.T) {
 	var out bytes.Buffer
 
 	accountTables := []string{"auth_tokens", "rate_events", "sessions", "users"}
+	allTables := []string{"auth_tokens", "org_invitations", "org_members", "organizations", "rate_events", "sessions", "units", "users"}
 	steps := []struct {
 		cmd        string
 		wantOut    string
@@ -71,15 +72,16 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00002_accounts.sql", 2, accountTables},
-		{"up", "no migrations to apply", 2, accountTables},
-		{"status", "applied", 2, accountTables},
+		{"up", "00003_organizations.sql", 2, allTables},
+		{"up", "no migrations to apply", 2, allTables},
+		{"status", "applied", 2, allTables},
+		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00002_accounts.sql", 2, accountTables},
+		{"up", "00003_organizations.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
-		{"up", "00001_extensions.sql", 2, accountTables},
+		{"up", "00001_extensions.sql", 2, allTables},
 	}
 	for i, s := range steps {
 		out.Reset()

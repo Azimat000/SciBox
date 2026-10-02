@@ -2,11 +2,9 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
-	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -29,7 +27,7 @@ const (
 	CodeInvalidCredentials = "invalid_credentials"
 	CodeEmailNotConfirmed  = "email_not_confirmed"
 	CodeInvalidToken       = "invalid_token"
-	CodeUnsupportedMedia   = "unsupported_media_type"
+	CodeUnsupportedMedia   = apierr.CodeUnsupportedMedia
 )
 
 // Handler — HTTP-часть аккаунтов: cookie, проверка источника запроса, обработчики.
@@ -172,18 +170,7 @@ func meta(r *http.Request) Meta {
 
 // decode читает JSON-тело запроса; при ошибке сам отвечает и возвращает false.
 func decode(w http.ResponseWriter, r *http.Request, dst any) bool {
-	mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if mt != "application/json" {
-		apierr.WriteError(w, http.StatusUnsupportedMediaType, CodeUnsupportedMedia, "Запрос должен быть в формате JSON")
-		return false
-	}
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		apierr.WriteError(w, http.StatusBadRequest, apierr.CodeBadRequest, "Не удалось прочитать запрос")
-		return false
-	}
-	return true
+	return apierr.DecodeJSON(w, r, dst, maxBody)
 }
 
 // fail превращает ошибку сервиса в ответ API.

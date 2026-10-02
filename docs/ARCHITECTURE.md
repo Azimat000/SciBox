@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 3 (аккаунты). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 4 (организации и подразделения). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -20,8 +20,11 @@ SciBox/
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
+│   ├── seed/             демо-данные (вымышленные организации и люди); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
-│       ├── apierr/       единый формат ответов и ошибок API (D-032), коды
+│       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
+│       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
+│       ├── apierr/       единый формат ответов и ошибок API (D-032), коды, DecodeJSON
 │       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin
 │       ├── mail/         отправка писем по SMTP (Mailpit) и `Memory` для тестов
 │       ├── cli/          разбор команд, запуск HTTP-сервера, мягкая остановка
@@ -40,6 +43,7 @@ SciBox/
         ├── config/       product.ts (имя продукта из config/product.json)
         ├── features/
         │   ├── auth/     страницы входа, регистрации, сброса пароля, подтверждения, настроек, политики; меню пользователя; useMe, useForm
+        │   ├── orgs/     каталог, страницы организации и подразделения, «Организация» (мои организации и приглашения), управление (данные, подразделения, сотрудники), принятие приглашения; api.ts, labels.ts, RequireUser
         │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts, «Раздел готовится»
         │   ├── status/   стартовая страница (проверка сервера), 404
         │   └── styleguide/  служебная страница /styleguide (вне покрытия)
@@ -51,7 +55,7 @@ SciBox/
         └── test/         setup.ts, render.tsx (renderApp, jsonResponse), api.ts (stubApi: подставной сервер), forms.ts
 ```
 
-Позже появятся: `server/seed/` (демо-данные), `storage/uploads/` (файлы пользователей, в git не попадает), папки `features/*` по разделам.
+Позже появятся: `storage/uploads/` (файлы пользователей, в git не попадает), папки `features/*` по разделам.
 
 ## Порты
 - web (Vite): 5173 · api: 127.0.0.1:8080 · Postgres в Docker: **5433** · Mailpit UI: 8025, SMTP: 1025
@@ -74,7 +78,13 @@ SciBox/
   - `sessions` (id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip);
   - `auth_tokens` (id, user_id, purpose `confirm_email|reset_password`, token_hash, created_at, expires_at, used_at);
   - `rate_events` (kind, key, at): счётчики для ограничения частоты.
-- Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики) раз в час в процессе сервера.
+- Миграция `00003_organizations.sql`:
+  - `organizations` (id, slug уникальный, name, kind, city, website, description, created_by, created_at, updated_at; индекс pg_trgm по названию);
+  - `org_members` (org_id, user_id, role `owner|hr|unit_head`, joined_at; ключ org_id+user_id);
+  - `units` (id, org_id, name, kind `department|laboratory|division|shared_facility`, description, topics text[], head_user_id, created_at, updated_at);
+  - `org_invitations` (id, org_id, email, role, unit_id, token_hash, invited_by, created_at, expires_at, accepted_at, revoked_at).
+  - Счётчики частоты в общей `rate_events`: `org_create` (5 за сутки на человека), `org_invite` (30 за час).
+- Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
@@ -93,6 +103,18 @@ SciBox/
 | `PATCH /api/account` `{name}` | 200 `{user}` (нужен вход) |
 | `POST /api/account/password` `{current_password,new_password}` | 204; другие сессии завершаются |
 | `POST /api/account/sessions/revoke-others` | 204 |
+| `GET /api/organizations?q=&kind=&limit=&offset=` | публичный каталог: `{items:[{id,slug,name,kind,city,summary,unit_count}], total}`; поиск по названию и городу без учёта регистра |
+| `GET /api/organizations/{slug}` | публично: `{organization, units:[…], viewer}`; `viewer` (роль и права) только у вошедшего; номера аккаунтов руководителей только сотрудникам |
+| `GET /api/organizations/{slug}/units/{id}` | публично: страница подразделения |
+| `POST /api/organizations` | 201, создатель становится владельцем; 422 с полями; 429 при пятой в сутки |
+| `PATCH /api/organizations/{slug}` | владелец |
+| `POST /api/organizations/{slug}/units`, `PATCH …/units/{id}`, `DELETE …/units/{id}`, `PUT …/units/{id}/head {user_id|null}` | создание, удаление и назначение руководителя: владелец; правка: владелец или руководитель этого подразделения |
+| `GET /api/organizations/{slug}/members` | владелец: сотрудники с почтами и ожидающие приглашения |
+| `PATCH …/members/{userId} {role}`, `DELETE …/members/{userId}` | владелец; уйти (DELETE себя) может любой сотрудник; последний владелец 409 `last_owner` |
+| `POST …/invitations {email,role,unit_id}`, `DELETE …/invitations/{id}` | владелец; письмо в фоне |
+| `POST /api/invitations/lookup {token}` | без входа: что за приглашение (и совпадает ли почта с вошедшим) |
+| `POST /api/invitations/accept {token}`, `POST /api/invitations/{id}/accept` | вошедший; чужая почта 403 `invitation_wrong_email`, устарело 400 `invalid_invitation`, уже в организации 409 `already_member` |
+| `GET /api/my/organizations` | `{organizations:[…с ролью], invitations:[…на почту человека]}` |
 | `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
@@ -101,7 +123,11 @@ SciBox/
 | `/` | Стартовая (в новом оформлении, содержимое пока служебное): статус сервера и базы (проверяем / работает / база недоступна / сервер не отвечает), кнопка «Проверить ещё раз» |
 | `/styleguide` | Служебно: все компоненты со всеми состояниями (в меню нет) |
 | `/login` (`?next=` — куда вернуть после входа), `/register`, `/forgot-password`, `/reset-password?token=`, `/confirm-email?token=`, `/account`, `/privacy` | Настоящие страницы аккаунтов (срез 3); `/account` без входа ведёт на `/login` |
-| `/vacancies`, `/scientists`, `/organizations`, `/favorites`, `/my-vacancies`, `/applications`, `/candidates`, `/my-organization` | «Раздел готовится» (заглушки до своих срезов) |
+| `/organizations` (поиск и тип в адресе, страницы по 20), `/organizations/new`, `/organizations/:slug`, `/organizations/:slug/units/:unitId` | Каталог, создание, публичные страницы организации и подразделения (срез 4) |
+| `/my-organization` | Мои организации и приглашения; без входа ведёт на `/login?next=` |
+| `/my-organization/:slug` (+ `/units`, `/units/new`, `/units/:unitId`, `/members`) | Управление: данные, подразделения, сотрудники и приглашения (вкладка «Сотрудники» только владельцу) |
+| `/invitations/accept?token=` | Страница по ссылке из письма |
+| `/vacancies`, `/scientists`, `/favorites`, `/my-vacancies`, `/applications`, `/candidates` | «Раздел готовится» (заглушки до своих срезов) |
 | `*` | 404 «Такой страницы нет» со ссылкой на главную |
 | (ошибка отрисовки) | `CrashPage` через `errorElement` роутера |
 

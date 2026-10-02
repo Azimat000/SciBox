@@ -98,3 +98,10 @@
     transform: rotate(360deg);
   }
 }
+
+/* На телефоне пальцем попадают хуже: мелкие кнопки получают высоту обычных (44px). */
+@media (pointer: coarse), (max-width: 40rem) {
+  .btn-sm {
+    min-height: var(--control-h);
+  }
+}

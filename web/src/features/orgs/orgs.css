@@ -1,0 +1,449 @@
+/* Страницы организаций (срез 4). Только токены из styles/tokens.css. */
+
+/* ---- общее ---- */
+
+.org-page {
+  padding-bottom: var(--s-7);
+}
+
+.org-head h1 {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.org-head h1[data-long] {
+  font-size: var(--text-2xl);
+  line-height: 1.25;
+}
+
+.org-meta {
+  margin-top: var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.org-meta a {
+  overflow-wrap: anywhere;
+}
+
+.org-abstract {
+  margin-top: var(--s-5);
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  color: var(--ink-body);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.org-section {
+  margin-top: var(--s-7);
+}
+
+.org-section > h2 {
+  font-size: var(--text-xl);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+}
+
+.org-section-note {
+  margin-top: var(--s-3);
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+
+.org-actions {
+  margin-top: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.org-skeleton {
+  margin-top: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+/* ---- каталог и списки: записи разделены тонкой линией, как вакансии ---- */
+
+.org-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.org-entry {
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.org-entry-title {
+  font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.org-entry-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.org-entry-title a:hover {
+  color: var(--blue);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.org-entry-title[data-long],
+.mine-row-title[data-long] {
+  font-size: var(--text-lg);
+  line-height: 1.35;
+}
+
+.mine-row-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.mine-row-title a:hover {
+  color: var(--blue);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+.org-entry-meta {
+  margin-top: var(--s-1);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.org-entry-summary {
+  margin-top: var(--s-3);
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--ink-body);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.org-entry-summary[data-empty] {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.org-entry-facts {
+  margin-top: var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.org-topics {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.org-topics li {
+  min-width: 0;
+}
+
+.org-topics .tag {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.org-head-person {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.org-head-person strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.catalog-search {
+  margin-top: var(--s-6);
+}
+
+.catalog-results {
+  margin-top: var(--s-5);
+}
+
+.catalog-skeleton {
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.pager {
+  margin-top: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.pager-text {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+/* ---- «моя организация» ---- */
+
+.mine-block {
+  margin-top: var(--s-6);
+}
+
+.mine-block > h2 {
+  font-size: var(--text-xl);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+}
+
+.mine-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.mine-row-main {
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.mine-row-title {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.mine-row-line {
+  margin-top: var(--s-2);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  overflow-wrap: anywhere;
+}
+
+.mine-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* ---- управление ---- */
+
+.manage-tabs {
+  margin-top: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.manage-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  padding-top: 3px;
+}
+
+.manage-tab:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.manage-tab[aria-current='page'] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--mark);
+}
+
+.manage-body {
+  margin-top: var(--s-6);
+}
+
+.manage-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 34rem;
+}
+
+.manage-form .btn {
+  align-self: flex-start;
+}
+
+.manage-intro {
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+
+.manage-note {
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.manage-subtitle {
+  margin-top: var(--s-4);
+  margin-bottom: var(--s-5);
+  font-size: var(--text-2xl);
+}
+
+.manage-section {
+  margin-top: var(--s-7);
+}
+
+.manage-intro + .manage-section {
+  margin-top: var(--s-6);
+}
+
+.manage-section > h2 {
+  font-size: var(--text-xl);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+  margin-bottom: var(--s-2);
+}
+
+.manage-danger {
+  margin-top: var(--s-7);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+
+.role-select {
+  width: 100%;
+  min-width: 12rem;
+}
+
+.member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem 5.5rem;
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.member-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.member-email {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.role-legend {
+  margin-top: var(--s-4);
+  display: grid;
+  gap: var(--s-2);
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.role-legend dt {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.role-legend dd {
+  margin: 0;
+}
+
+.invite-form {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 44rem;
+  align-items: start;
+}
+
+.invite-form .invite-wide {
+  grid-column: 1 / -1;
+}
+
+.invite-form .btn {
+  justify-self: start;
+}
+
+.accept-box {
+  margin-top: var(--s-6);
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+@media (max-width: 40rem) {
+  .member-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+
+  .member-row .row-actions {
+    justify-content: flex-start;
+  }
+
+  .role-select {
+    min-width: 0;
+  }
+
+  .invite-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pager .btn {
+    flex: 1;
+  }
+}

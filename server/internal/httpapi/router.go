@@ -12,6 +12,7 @@ import (
 
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
+	"scibox/server/internal/orgs"
 )
 
 // HealthChecker проверяет базу данных.
@@ -27,6 +28,8 @@ type Deps struct {
 	Logger      *slog.Logger
 	// Auth подключает аккаунты (/api/auth, /api/account); без него этих адресов нет.
 	Auth *auth.Handler
+	// Orgs подключает организации и подразделения (/api/organizations, /api/my, /api/invitations). Нужен вместе с Auth.
+	Orgs *orgs.Handler
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
@@ -51,6 +54,9 @@ func NewRouter(d Deps) http.Handler {
 		if d.Auth != nil {
 			r.Use(d.Auth.SameOrigin, d.Auth.Authenticate)
 			d.Auth.Mount(r)
+		}
+		if d.Orgs != nil {
+			d.Orgs.Mount(r)
 		}
 		r.Get("/health", healthHandler(d))
 	})

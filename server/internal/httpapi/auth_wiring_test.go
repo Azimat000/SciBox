@@ -11,6 +11,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
 	"scibox/server/internal/mail"
+	"scibox/server/internal/orgs"
 	"scibox/server/internal/testdb"
 )
 
@@ -21,10 +22,13 @@ func routerWithAuth(t *testing.T) http.Handler {
 	cfg := auth.DefaultConfig("SciBox", "http://localhost:5173")
 	cfg.Hash = auth.TestHashParams
 	svc := auth.NewService(pool, &mail.Memory{}, cfg, logger)
+	authH := auth.NewHandler(svc, logger)
+	orgSvc := orgs.NewService(pool, &mail.Memory{}, orgs.DefaultConfig("SciBox", "http://localhost:5173"), logger)
 	return NewRouter(Deps{
 		ProductName: "SciBox", Version: "test", Logger: logger,
-		Health: fakeHealth{db: health.Database{SchemaVersion: 2, ServerVersion: "16"}},
-		Auth:   auth.NewHandler(svc, logger),
+		Health: fakeHealth{db: health.Database{SchemaVersion: 3, ServerVersion: "16"}},
+		Auth:   authH,
+		Orgs:   orgs.NewHandler(orgSvc, logger, authH.RequireUser),
 	})
 }
 
@@ -61,6 +65,34 @@ func TestAPIResponsesAreNeverCached(t *testing.T) {
 func TestWithoutAuthTheAccountRoutesDoNotExist(t *testing.T) {
 	rec := do(t, newTestRouter(fakeHealth{}, io.Discard), http.MethodGet, "/api/auth/me")
 	if rec.Code != http.StatusNotFound || decodeError(t, rec).Code != CodeNotFound {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestOrganizationRoutesAreMountedUnderAPI(t *testing.T) {
+	r := routerWithAuth(t)
+	// Каталог открыт всем.
+	rec := do(t, r, http.MethodGet, "/api/organizations")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"total":0`) {
+		t.Fatalf("GET /api/organizations: %d %s", rec.Code, rec.Body)
+	}
+	// Создавать можно только вошедшим, и источник запроса проверяется так же, как у аккаунтов.
+	if rec := do(t, r, http.MethodGet, "/api/my/organizations"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GET /api/my/organizations without signing in: %d", rec.Code)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/organizations", strings.NewReader("{}"))
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Content-Type", "application/json")
+	out := httptest.NewRecorder()
+	r.ServeHTTP(out, req)
+	if out.Code != http.StatusForbidden {
+		t.Fatalf("foreign origin: %d", out.Code)
+	}
+}
+
+func TestWithoutOrgsTheOrganizationRoutesDoNotExist(t *testing.T) {
+	rec := do(t, newTestRouter(fakeHealth{}, io.Discard), http.MethodGet, "/api/organizations")
+	if rec.Code != http.StatusNotFound {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 }

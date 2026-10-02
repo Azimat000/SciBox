@@ -26,3 +26,8 @@ sql:
               pointer: true
           - db_type: citext
             go_type: string
+          - db_type: text
+            nullable: true
+            go_type:
+              type: string
+              pointer: true

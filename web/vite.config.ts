@@ -43,6 +43,8 @@ export default defineConfig({
         // по мере появления папок: access, privacy, references,
         // applications, files, matching.
         'src/features/auth/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
+        // Организации: кто что может видеть и менять (показ кнопок по ролям; решает сервер, но интерфейс не должен обманывать).
+        'src/features/orgs/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
       },
     },
   },

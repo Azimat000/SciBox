@@ -20,6 +20,40 @@ type AuthToken struct {
 	UsedAt    *time.Time
 }
 
+type OrgInvitation struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	Email      string
+	Role       string
+	UnitID     *uuid.UUID
+	TokenHash  []byte
+	InvitedBy  *uuid.UUID
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	AcceptedAt *time.Time
+	RevokedAt  *time.Time
+}
+
+type OrgMember struct {
+	OrgID    uuid.UUID
+	UserID   uuid.UUID
+	Role     string
+	JoinedAt time.Time
+}
+
+type Organization struct {
+	ID          uuid.UUID
+	Slug        string
+	Name        string
+	Kind        string
+	City        string
+	Website     string
+	Description string
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type RateEvent struct {
 	ID   int64
 	Kind string
@@ -36,6 +70,18 @@ type Session struct {
 	ExpiresAt  time.Time
 	UserAgent  string
 	Ip         string
+}
+
+type Unit struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	Kind        string
+	Description string
+	Topics      []string
+	HeadUserID  *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type User struct {
