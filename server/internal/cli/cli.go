@@ -24,6 +24,7 @@ import (
 	"scibox/server/internal/mail"
 	"scibox/server/internal/migrate"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/offers"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
@@ -120,7 +121,7 @@ func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей учёных %d, откликов %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications)
+	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей учёных %d, откликов %d, приглашений %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications, res.Offers)
 	fmt.Fprintf(out, "Вход для проверки: %s (пароль записан в server/seed/seed.go).\n", seed.Logins()[0])
 	return nil
 }
@@ -170,6 +171,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Applications:  applications.NewHandler(appSvc, logger, authHandler.RequireUser),
 		References:    references.NewHandler(refSvc, logger, authHandler.RequireUser),
 		Notifications: notifications.NewHandler(notes, logger, authHandler.RequireUser),
+		Offers:        offers.NewHandler(offers.NewService(pool, notes, offers.DefaultConfig()), logger, authHandler.RequireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 	})
 

@@ -53,6 +53,8 @@ export default defineConfig({
         'src/features/applications/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
         // Уведомления: колокольчик и список (срез 8).
         'src/features/notifications/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
+        // Приглашения учёных на вакансии: кому показаны кнопки и ответы (решает сервер, интерфейс не должен обманывать; срез 10).
+        'src/features/offers/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
       },
     },
   },

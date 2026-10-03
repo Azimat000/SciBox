@@ -321,6 +321,40 @@ func (q *Queries) ListProfileSpecialties(ctx context.Context, profileID uuid.UUI
 	return items, nil
 }
 
+const listSpecialtiesForProfiles = `-- name: ListSpecialtiesForProfiles :many
+SELECT ps.profile_id, s.code, s.name
+FROM profile_specialties ps JOIN specialties s ON s.code = ps.specialty_code
+WHERE ps.profile_id = ANY($1::uuid[])
+ORDER BY ps.profile_id, string_to_array(s.code, '.')::int[]
+`
+
+type ListSpecialtiesForProfilesRow struct {
+	ProfileID uuid.UUID
+	Code      string
+	Name      string
+}
+
+// Специальности сразу у нескольких профилей (карточки каталога).
+func (q *Queries) ListSpecialtiesForProfiles(ctx context.Context, ids []uuid.UUID) ([]ListSpecialtiesForProfilesRow, error) {
+	rows, err := q.db.Query(ctx, listSpecialtiesForProfiles, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSpecialtiesForProfilesRow
+	for rows.Next() {
+		var i ListSpecialtiesForProfilesRow
+		if err := rows.Scan(&i.ProfileID, &i.Code, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockProfileByUser = `-- name: LockProfileByUser :one
 SELECT id FROM profiles WHERE user_id = $1 FOR UPDATE
 `
@@ -353,6 +387,134 @@ func (q *Queries) ProfileHasDOI(ctx context.Context, arg ProfileHasDOIParams) (b
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const searchScientists = `-- name: SearchScientists :many
+SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+       hh.h::int AS h_max,
+       (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
+       count(*) OVER () AS total
+FROM profiles p
+JOIN users u ON u.id = p.user_id
+LEFT JOIN regions r ON r.code = p.region_code
+LEFT JOIN LATERAL (
+    SELECT string_agg(s.name, ' ') AS names
+    FROM profile_specialties ps JOIN specialties s ON s.code = ps.specialty_code
+    WHERE ps.profile_id = p.id
+) sp ON true
+LEFT JOIN LATERAL (
+    SELECT GREATEST(COALESCE(p.h_rsci, 0), COALESCE(p.h_scopus, 0), COALESCE(p.h_wos, 0), COALESCE(p.h_scholar, 0)) AS h
+) hh ON true
+LEFT JOIN LATERAL (
+    SELECT to_tsvector('russian', u.display_name || ' ' || p.headline || ' ' || p.city || ' ' || COALESCE(r.name, '') || ' '
+                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' ' || p.about) AS doc
+) d ON true
+WHERE p.visibility = ANY($1::text[])
+  AND p.headline <> ''
+  AND ($2::uuid IS NULL OR p.user_id <> $2::uuid)
+  AND ($3::text = '' OR CASE WHEN $4::bool
+         THEN word_similarity($3::text, u.display_name || ' ' || p.headline) >= 0.35
+         ELSE d.doc @@ websearch_to_tsquery('russian', $3::text) END)
+  AND (cardinality($5::text[]) = 0 OR EXISTS (
+         SELECT 1 FROM profile_specialties ps, unnest($5::text[]) f
+         WHERE ps.profile_id = p.id AND (ps.specialty_code = f OR ps.specialty_code LIKE f || '.%')))
+  AND ($6::text = '' OR p.region_code = $6::text)
+  AND (cardinality($7::text[]) = 0 OR p.degree = ANY($7::text[]))
+  AND (cardinality($8::text[]) = 0 OR p.academic_title = ANY($8::text[]))
+  AND (NOT $9::bool OR p.open_to_offers)
+  AND ($10::int = 0 OR hh.h >= $10::int)
+ORDER BY
+  CASE WHEN $11::text = 'relevance' AND $3::text <> '' THEN
+    CASE WHEN $4::bool
+      THEN word_similarity($3::text, u.display_name || ' ' || p.headline)
+      ELSE ts_rank_cd(d.doc, websearch_to_tsquery('russian', $3::text)) END
+  END DESC NULLS LAST,
+  CASE WHEN $11::text = 'h_index' THEN hh.h END DESC NULLS LAST,
+  CASE WHEN $11::text = 'name' THEN u.display_name END ASC NULLS LAST,
+  p.updated_at DESC, p.id
+LIMIT $13 OFFSET $12
+`
+
+type SearchScientistsParams struct {
+	Modes       []string
+	ExcludeUser *uuid.UUID
+	Q           string
+	Fuzzy       bool
+	Fields      []string
+	Region      string
+	Degrees     []string
+	Titles      []string
+	OpenOnly    bool
+	HMin        int32
+	Sort        string
+	RowOffset   int32
+	RowLimit    int32
+}
+
+type SearchScientistsRow struct {
+	ID            uuid.UUID
+	DisplayName   string
+	Headline      string
+	City          string
+	RegionName    *string
+	Degree        string
+	AcademicTitle string
+	OpenToOffers  bool
+	UpdatedAt     time.Time
+	HMax          int32
+	Publications  int64
+	Total         int64
+}
+
+// Каталог учёных (срез 10). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
+// и с заполненной должностью; сам смотрящий из каталога исключён. Слова ищутся по русской морфологии (имя, должность,
+// город, регион, организация степени, специальности, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
+// словам» (@fuzzy, имя и должность).
+func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsParams) ([]SearchScientistsRow, error) {
+	rows, err := q.db.Query(ctx, searchScientists,
+		arg.Modes,
+		arg.ExcludeUser,
+		arg.Q,
+		arg.Fuzzy,
+		arg.Fields,
+		arg.Region,
+		arg.Degrees,
+		arg.Titles,
+		arg.OpenOnly,
+		arg.HMin,
+		arg.Sort,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchScientistsRow
+	for rows.Next() {
+		var i SearchScientistsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DisplayName,
+			&i.Headline,
+			&i.City,
+			&i.RegionName,
+			&i.Degree,
+			&i.AcademicTitle,
+			&i.OpenToOffers,
+			&i.UpdatedAt,
+			&i.HMax,
+			&i.Publications,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const touchProfile = `-- name: TouchProfile :exec

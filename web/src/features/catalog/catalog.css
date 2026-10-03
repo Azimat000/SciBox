@@ -1,0 +1,62 @@
+/* Каталог учёных (срез 10). Запись наследует вид записи журнала из ui/VacancyEntry.css; здесь только то, чего там нет. */
+
+.sci-side {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.sci-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+}
+
+.sci-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sci-specs .tag {
+  white-space: normal;
+}
+
+/* Внутри метки пробел между кодом и названием стирается (она выровнена флексом): отступ задан явно */
+.sci-specs .num {
+  margin-inline-end: var(--s-2);
+  color: var(--ink-soft);
+}
+
+.catalog-note {
+  margin-top: var(--s-6);
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.search-results .sci-list {
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-results .sci-list[aria-busy='true'] {
+  opacity: 0.6;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+/* На телефоне «Открыт к предложениям» идёт сразу под должностью, как срок у вакансии */
+@media (max-width: 40rem) {
+  .sci-side {
+    justify-content: flex-start;
+  }
+
+  .sci-footer .btn {
+    width: 100%;
+  }
+}

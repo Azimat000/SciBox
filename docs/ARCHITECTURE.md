@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 9 (разбор откликов организацией: список, решения, приглашения). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 10 (каталог учёных и приглашения на вакансию). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -26,10 +26,11 @@ SciBox/
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
 │       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`), «мои вакансии», HTTP
 │       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / организациям / публичный, кто видит профиль и контакты; без базы и HTTP
-│       ├── profiles/     профиль учёного (критичная зона): основные поля, записи разделов, приватность, поиск по DOI, сборка резюме, HTTP
+│       ├── profiles/     профиль учёного (критичная зона): основные поля, записи разделов, приватность, поиск по DOI, сборка резюме, каталог учёных (`catalog.go`), HTTP
 │       ├── applications/ отклики (критичная зона): отправка (снимок профиля, резюме, PDF-файлы, рекомендатели), «Мои отклики», карточка глазами соискателя и организации, выдача файлов, отзыв, «можно ли откликнуться»; разбор организацией (`review.go`: «просмотрен» при открытии, решение, приглашения и ответы на них, список откликов), таблицы переходов (`transitions.go`), проверка приглашений (`invitation_input.go`), тексты уведомлений (`notices.go`), HTTP
 │       ├── references/   рекомендательные письма (критичная зона): просьбы, одноразовые ссылки, письмо текстом/PDF, отказ, повтор и отмена, HTTP (в том числе страница рекомендателя без входа)
 │       ├── files/        файлы откликов (критичная зона): проверка PDF, имена, multipart-запрос, таблица «вид файла → кто видит», безопасная выдача
+│       ├── offers/       приглашения учёных на вакансии (критичная зона): отправка (права `ManageVacancies`, приватность профиля, лимит), ответ «Интересно / Не сейчас», отзыв, списки обеих сторон, «куда можно пригласить», тексты уведомлений (`notices.go`), HTTP
 │       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, HTTP
 │       ├── testkit/      помощники для тестов с базой (временная база, сервисы, люди, организация со всеми ролями, «поломка» n-го запроса); вне покрытия
 │       ├── crossref/     клиент Crossref (поиск публикации по DOI), нормализация DOI
@@ -57,6 +58,8 @@ SciBox/
         │   ├── orgs/     каталог, страницы организации и подразделения, «Организация» (мои организации и приглашения), управление (данные, подразделения, сотрудники), принятие приглашения; api.ts, labels.ts, RequireUser
         │   ├── vacancies/ страницы «Мои вакансии», вакансия (статья + управление), форма (по типу позиции), список для страниц организаций; api.ts (+ справочники useReference), labels.ts, formValues.ts
         │   ├── applications/ форма отклика, кнопка на вакансии (`ApplyBlock`), «Мои отклики», отклик глазами соискателя (рекомендации: повторить, отменить, добавить), список откликов организации (`CandidatesPage`), карточка отклика для организации (панель решения), приглашения (`Invitations`, окна `InviteModal`, `DecisionModal`, `AnswerModals`), страница рекомендателя; api.ts, labels.ts, review.css
+        │   ├── catalog/  каталог учёных: страница `/scientists` (поиск, фильтры, чипы, порядок, страницы), запись `ScientistEntry`, фильтры, адрес (`params.ts`)
+        │   ├── offers/   приглашения на вакансии: окно «Пригласить» и кнопка, «Приглашения» учёного (`/offers`, `/offers/:id`), «Отправленные приглашения» организации (`/sent-offers`), вкладки «Отклики / Приглашения»; api.ts, labels.ts
         │   ├── notifications/ колокольчик в шапке (окно с последними, число непрочитанных раз в минуту), страница «Уведомления»; api.ts
         │   ├── profile/  «Мой профиль» (правка разделов в окнах, приватность), форма основного, страница учёного для других, разметка профиля `ProfileView`, поля записей по описанию (`sections.ts`)
         │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts, «Раздел готовится»
@@ -65,7 +68,7 @@ SciBox/
         ├── i18n/         ru.ts (все тексты), index.ts (t)
         ├── lib/          plural, deadline (срок подачи словами), normalize (поиск без регистра и ё)
         ├── styles/       tokens.css (цвета, шкалы), base.css (шрифты, сброс), layout.css
-        ├── ui/           Button, Field/TextField/TextArea/Select, Combobox, Tag/FilterChip, FilePicker (выбор PDF), Deadline,
+        ├── ui/           Button, Field/TextField/TextArea/Select (с группами пунктов), FilterGroup/ScienceFilter (группы фильтров и области науки; поиск и каталог), Combobox, Tag/FilterChip, FilePicker (выбор PDF), Deadline,
         │                 VacancyEntry, Modal, ToastProvider/useToast, EmptyState, Skeleton, icons; CSS рядом с компонентом
         └── test/         setup.ts, render.tsx (renderApp, jsonResponse), api.ts (stubApi: подставной сервер), forms.ts
 ```
@@ -125,6 +128,7 @@ SciBox/
 - Миграция `00009_review.sql`:
   - `applications` + `decision_note` (записка к решению, до 1000 знаков), `decided_by` (кто решил, `ON DELETE SET NULL`);
   - `application_invitations` (id, application_id `CASCADE`, kind `interview|contacts|request_contacts`, status `pending|confirmed|proposed|answered|shared|cancelled`, message, starts_at, place_kind `online|onsite`, place, contact_name, contact_email, contact_phone, answer_at (предложенное время), answer_note, answer_contact, answer_time, answered_at, created_by, created_at, updated_at; CHECK: поля собеседования заполнены ровно у `interview`).
+- Миграция `00010_offers.sql`: `vacancy_offers` (id, vacancy_id → `vacancies` `ON DELETE RESTRICT`, user_id → `users` `ON DELETE CASCADE`, invited_by → `users` `ON DELETE SET NULL`, status `pending|interested|declined|cancelled`, message, answer_note (до 1000 знаков), answered_at, created_at, updated_at; CHECK: `answered_at` есть ровно у ответивших; уникальный индекс `(vacancy_id, user_id) WHERE status <> 'cancelled'`). Счётчик частоты `offer` (20 в сутки на человека) в общей `rate_events`.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
@@ -196,6 +200,14 @@ SciBox/
 | `GET /api/notifications?limit=&offset=&unread=1` | `{items:[{id,kind,title,body,link,created_at,read}], total, unread}` (только свои) |
 | `GET /api/notifications/unread-count` | `{unread}` |
 | `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` | 204; чужое уведомление 404 |
+| `GET /api/scientists?q=&field=&region=&degree=&title=&open=1&h_min=&sort=&limit=&offset=` | публично, с учётом приватности (D-098): `{items:[{id,name,headline,city,region,degree,academic_title,open_to_offers,h_index,publications,specialties,updated_at}], total, fuzzy}`; повторяющиеся `field`, `degree`, `title` значат «или»; `sort`: `relevance`, `updated`, `h_index`, `name`; `limit` до 50, по умолчанию 20; неизвестное значение и не число 422 с `fields`; контактов в ответе нет |
+| `GET /api/scientists/{id}/offer-targets` | вошедший: `{items:[{id,title,org_name,org_slug,unit_name,deadline,offered,applied}]}` — вакансии, на которые он может пригласить этого учёного (опубликованные, срок не прошёл, в пределах `ManageVacancies`); закрытый приватностью профиль 404; не сотрудник организации получает пустой список |
+| `POST /api/offers` `{vacancy_id, profile_id, message}` | 201 `{offer}`; 404 (нет прав на вакансию или профиль закрыт: неотличимо от «нет такого»); 409 `vacancy_closed`, `deadline_passed`, `already_offered`, `already_applied`, `invitee_is_staff`; 422 `message`; 429 после 20 в сутки |
+| `GET /api/offers?status=&limit=&offset=` | «Приглашения» учёного: `{items:[offer], total, counts:{pending,interested,declined}, pending}`; отозванные не показываются; 422 на неизвестное состояние |
+| `GET /api/offers/{id}` | `{offer}` для приглашённого (с `application_id`, `can_answer`); чужое, отозванное и несуществующее 404 |
+| `POST /api/offers/{id}/answer` `{action: interested|declined, note}` | 204; только приглашённый, один раз; 422 `action`, `note`; 409 `invalid_offer_state` |
+| `POST /api/offers/{id}/cancel` | 204; ведущий вакансию; чужое 404; 409 `invalid_offer_state`, если уже ответили или отозвали |
+| `GET /api/my/sent-offers?vacancy=&status=&limit=&offset=` | «Отправленные приглашения» организации: `{items:[offer со scientist{profile_id,name} и can_cancel], total, counts по четырём состояниям}` в пределах `ManageVacancies`; 422 на неверные `vacancy` и `status` |
 | `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
@@ -214,14 +226,17 @@ SciBox/
 | `/vacancies/:id` | Страница вакансии (статья); тем, кто ведёт вакансию, сверху управление: править, сменить статус, удалить черновик |
 | `/profile` | Мой профиль: кнопки «Изменить основное», «Скачать резюме», «Как видят другие», блок приватности, профиль с «Добавить / Изменить / Удалить» у разделов; без входа ведёт на `/login?next=` |
 | `/profile/edit` | Форма основного: кто вы, степень и звание, специальности, ORCID/SPIN/Scopus/WoS, h-index, контактная почта |
-| `/scientists/:id` | Страница учёного для других (приватность решает сервер; «нет профиля» и «скрыт» выглядят одинаково) |
+| `/scientists/:id` | Страница учёного для других (приватность решает сервер; «нет профиля» и «скрыт» выглядят одинаково); у вошедшего в режиме «Нанимаю» кнопка «Пригласить на вакансию» |
 | `/vacancies/:id/apply` | Форма отклика (письмо, файлы, рекомендатели); без входа ведёт на вход и обратно |
 | `/applications`, `/applications/:id` | «Мои отклики» (страницы по 20, отметка «Ждёт вашего ответа») и отклик глазами соискателя: решение, приглашения с ответами (если открыл сотрудник организации — переход на `/candidates/:id`) |
 | `/candidates` (`?vacancy=&status=&page=`) | Список откликов организации: отбор по вакансии, вкладки по статусам со счётчиками, страницы по 20 |
 | `/candidates/:id` | Карточка отклика для организации: решение (пригласить, принять, отказать), приглашения, письмо, файлы, письма рекомендателей, снимок профиля; если открыл автор отклика — переход на `/applications/:id` |
 | `/recommend?token=` | Страница рекомендателя без входа: письмо текстом и/или PDF, отказ |
 | `/notifications` | Все уведомления страницами; колокольчик в шапке у вошедших |
-| `/scientists`, `/favorites` | «Раздел готовится» (заглушки до своих срезов) |
+| `/scientists` (`?q=&field=&region=&degree=&title=&open=&h_min=&sort=&page=`) | Каталог учёных (срез 10): строка поиска и регион, фильтры, чипы, порядок, страницы по 20; у вошедшего в режиме «Нанимаю» на каждой записи «Пригласить на вакансию» |
+| `/offers`, `/offers/:id` | «Приглашения» учёного: список; страница приглашения с ответом «Интересно / Не сейчас» (один раз, с запиской), вакансия и кнопка «Откликнуться»; без входа ведут на `/login?next=` |
+| `/sent-offers` (`?status=&page=`) | «Отправленные приглашения» организации: вкладки по состояниям со счётчиками, ответы и записки учёных, «Отозвать» |
+| `/favorites` | «Раздел готовится» (заглушка до своего среза) |
 | `*` | 404 «Такой страницы нет» со ссылкой на главную |
 | (ошибка отрисовки) | `CrashPage` через `errorElement` роутера |
 

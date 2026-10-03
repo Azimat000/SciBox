@@ -316,43 +316,12 @@ func (s *Service) invitationsOf(ctx context.Context, q *dbgen.Queries, appID uui
 
 // ---- список откликов организации ----
 
-// scope — какие отклики человек вправе видеть: на вакансии организаций целиком и отдельных подразделений.
-type scope struct {
-	wholeOrgs []uuid.UUID
-	units     []uuid.UUID
-}
-
-// scopeOf собирает права человека по всем его организациям. Решает пакет access: здесь только спрашиваем его.
-func scopeOf(ctx context.Context, q *dbgen.Queries, user auth.User) (scope, error) {
-	sc := scope{wholeOrgs: []uuid.UUID{}, units: []uuid.UUID{}}
-	mine, err := q.ListOrganizationsOfUser(ctx, user.ID)
-	if err != nil {
-		return scope{}, fmt.Errorf("applications: list my organizations: %w", err)
-	}
-	for _, o := range mine {
-		actor, err := orgs.ActorOf(ctx, q, o.ID, user.ID)
-		if err != nil {
-			return scope{}, err
-		}
-		if actor.Can(access.ViewApplications, access.NoUnit) {
-			sc.wholeOrgs = append(sc.wholeOrgs, o.ID)
-			continue
-		}
-		for _, id := range actor.HeadOf {
-			if actor.Can(access.ViewApplications, id) {
-				sc.units = append(sc.units, id)
-			}
-		}
-	}
-	return sc, nil
-}
-
 // Candidates — список откликов на вакансии, которые человек вправе разбирать: новые сверху, с числом откликов по статусам.
 func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFilter) (CandidateList, error) {
 	if f.Status != "" && !isOneOf(f.Status, Statuses) {
 		return CandidateList{}, &auth.ValidationError{Fields: map[string]string{"status": "Такого статуса нет"}}
 	}
-	sc, err := scopeOf(ctx, s.q, user)
+	sc, err := orgs.ScopeOf(ctx, s.q, user.ID, access.ViewApplications)
 	if err != nil {
 		return CandidateList{}, err
 	}
@@ -360,7 +329,7 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 	for _, st := range Statuses {
 		counts[st] = 0
 	}
-	rows, err := s.q.CountCandidatesByStatus(ctx, dbgen.CountCandidatesByStatusParams{WholeOrgs: sc.wholeOrgs, Units: sc.units, VacancyID: f.VacancyID})
+	rows, err := s.q.CountCandidatesByStatus(ctx, dbgen.CountCandidatesByStatusParams{WholeOrgs: sc.WholeOrgs, Units: sc.Units, VacancyID: f.VacancyID})
 	if err != nil {
 		return CandidateList{}, fmt.Errorf("applications: count candidates: %w", err)
 	}
@@ -379,7 +348,7 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 	}
 	limit, offset = min(limit, 50), max(offset, 0)
 	list, err := s.q.ListCandidates(ctx, dbgen.ListCandidatesParams{
-		WholeOrgs: sc.wholeOrgs, Units: sc.units, VacancyID: f.VacancyID, Status: f.Status, RowLimit: int32(limit), RowOffset: int32(offset),
+		WholeOrgs: sc.WholeOrgs, Units: sc.Units, VacancyID: f.VacancyID, Status: f.Status, RowLimit: int32(limit), RowOffset: int32(offset),
 	})
 	if err != nil {
 		return CandidateList{}, fmt.Errorf("applications: list candidates: %w", err)
@@ -403,11 +372,11 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 
 // CandidateVacancies — вакансии, на которые есть отклики и которые человек вправе разбирать, с числом откликов.
 func (s *Service) CandidateVacancies(ctx context.Context, user auth.User) ([]VacancyCount, error) {
-	sc, err := scopeOf(ctx, s.q, user)
+	sc, err := orgs.ScopeOf(ctx, s.q, user.ID, access.ViewApplications)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.q.ListCandidateVacancies(ctx, dbgen.ListCandidateVacanciesParams{WholeOrgs: sc.wholeOrgs, Units: sc.units})
+	rows, err := s.q.ListCandidateVacancies(ctx, dbgen.ListCandidateVacanciesParams{WholeOrgs: sc.WholeOrgs, Units: sc.Units})
 	if err != nil {
 		return nil, fmt.Errorf("applications: list candidate vacancies: %w", err)
 	}

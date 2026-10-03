@@ -79,7 +79,10 @@ func TestUpDownUp(t *testing.T) {
 	applicationTables := append(slices.Clone(profileTables), "application_files", "applications", "notifications", "outbox", "reference_requests")
 	slices.Sort(applicationTables)
 	// Приглашения к откликам (00009).
-	allTables := append(slices.Clone(applicationTables), "application_invitations")
+	reviewTables := append(slices.Clone(applicationTables), "application_invitations")
+	slices.Sort(reviewTables)
+	// Приглашения учёных на вакансии (00010).
+	allTables := append(slices.Clone(reviewTables), "vacancy_offers")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -88,9 +91,10 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00009_review.sql", 2, allTables},
+		{"up", "00010_offers.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		{"down", "00010_offers.sql", 2, reviewTables},
 		{"down", "00009_review.sql", 2, applicationTables},
 		{"down", "00008_applications.sql", 2, profileTables},
 		{"down", "00007_profiles.sql", 2, searchTables},
@@ -100,7 +104,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00009_review.sql", 2, allTables},
+		{"up", "00010_offers.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

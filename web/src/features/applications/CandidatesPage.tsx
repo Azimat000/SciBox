@@ -5,6 +5,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { Select } from '../../ui/Select'
 import { Tag } from '../../ui/Tag'
+import { OffersTabs } from '../offers/OffersTabs'
 import { RequireUser } from '../orgs/RequireUser'
 import { longName } from '../orgs/labels'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
@@ -67,6 +68,7 @@ function List() {
     return (
       <div className="page org-page">
         <h1>{c.title}</h1>
+        <OffersTabs side="employer" current="applications" />
         <EmptyState
           headingLevel={2}
           title={c.emptyTitle}
@@ -85,6 +87,7 @@ function List() {
     <div className="page org-page">
       <h1>{c.title}</h1>
       <p className="lead">{c.lead}</p>
+      <OffersTabs side="employer" current="applications" />
 
       {vacancies.data && vacancies.data.length > 0 && (
         <Select

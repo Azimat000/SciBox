@@ -7,6 +7,7 @@ import { Tag } from '../../ui/Tag'
 import { RequireUser } from '../orgs/RequireUser'
 import { longName } from '../orgs/labels'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
+import { OffersTabs } from '../offers/OffersTabs'
 import { PAGE_SIZE, useMyApplications, type Summary } from './api'
 import { dateText, statusLabel, statusTone } from './labels'
 import './applications.css'
@@ -38,6 +39,7 @@ function List() {
     <div className="page org-page">
       <h1>{m.title}</h1>
       <p className="lead">{m.lead}</p>
+      <OffersTabs side="seeker" current="applications" />
       {total === 0 ? (
         <EmptyState
           headingLevel={2}

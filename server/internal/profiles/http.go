@@ -50,6 +50,7 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Get("/doi", h.lookupDOI)
 		r.Get("/cv", h.ownCV)
 	})
+	r.Get("/scientists", h.catalog)
 	r.Get("/scientists/{id}", h.get)
 	r.With(h.requireUser).Get("/scientists/{id}/cv", h.cv)
 }
@@ -236,4 +237,45 @@ func (h *Handler) sendCV(w http.ResponseWriter, r *http.Request, id *uuid.UUID) 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Length", strconv.Itoa(len(pdf)))
 	_, _ = w.Write(pdf)
+}
+
+// catalogParams переводит строку запроса в параметры каталога. Ошибку формата (не число) отдаёт как ошибку поля;
+// допустимость значений проверяет сам каталог.
+func catalogParams(r *http.Request) (CatalogParams, error) {
+	q := r.URL.Query()
+	errs := map[string]string{}
+	p := CatalogParams{
+		Query: q.Get("q"), Fields: q["field"], Region: q.Get("region"), Degrees: q["degree"], Titles: q["title"],
+		OpenOnly: q.Get("open") == "1" || q.Get("open") == "true", Sort: q.Get("sort"),
+	}
+	for name, dst := range map[string]*int{"h_min": &p.HMin, "limit": &p.Limit, "offset": &p.Offset} {
+		raw := q.Get(name)
+		if raw == "" {
+			continue
+		}
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			errs[name] = "Нужно число: " + raw
+			continue
+		}
+		*dst = n
+	}
+	if len(errs) > 0 {
+		return CatalogParams{}, &auth.ValidationError{Fields: errs}
+	}
+	return p, nil
+}
+
+func (h *Handler) catalog(w http.ResponseWriter, r *http.Request) {
+	p, err := catalogParams(r)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	res, err := h.svc.Catalog(r.Context(), p, viewer(r))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, res)
 }

@@ -301,6 +301,19 @@ type Vacancy struct {
 	UpdatedAt      time.Time
 }
 
+type VacancyOffer struct {
+	ID         uuid.UUID
+	VacancyID  uuid.UUID
+	UserID     uuid.UUID
+	InvitedBy  *uuid.UUID
+	Status     string
+	Message    string
+	AnswerNote string
+	AnsweredAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type VacancySearch struct {
 	VacancyID uuid.UUID
 	Doc       interface{}

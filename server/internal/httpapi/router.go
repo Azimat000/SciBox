@@ -14,6 +14,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/offers"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
@@ -46,6 +47,8 @@ type Deps struct {
 	References *references.Handler
 	// Notifications подключает уведомления (/api/notifications). Нужен вместе с Auth.
 	Notifications *notifications.Handler
+	// Offers подключает приглашения учёных на вакансии (/api/offers, /api/my/sent-offers). Нужен вместе с Auth.
+	Offers *offers.Handler
 	// Reference подключает справочники (/api/reference).
 	Reference *refdata.Handler
 }
@@ -90,6 +93,9 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Notifications != nil {
 			d.Notifications.Mount(r)
+		}
+		if d.Offers != nil {
+			d.Offers.Mount(r)
 		}
 		if d.Reference != nil {
 			d.Reference.Mount(r)

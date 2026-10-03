@@ -207,6 +207,21 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM applications WHERE decision_note <> ''"); n == 0 {
 		t.Error("no demo decision notes")
 	}
+	// Каталог и приглашения (срез 10): приглашения во всех состояниях, ответы учёных, никто не приглашён на вакансию с откликом.
+	for _, status := range []string{"pending", "interested", "declined"} {
+		if n := count("SELECT count(*) FROM vacancy_offers WHERE status = '" + status + "'"); n == 0 {
+			t.Errorf("no %s demo offers", status)
+		}
+	}
+	if n := count("SELECT count(*) FROM vacancy_offers o JOIN applications a ON a.vacancy_id = o.vacancy_id AND a.user_id = o.user_id"); n != 0 {
+		t.Errorf("%d demo offers on vacancies the person already applied to", n)
+	}
+	if n := count("SELECT count(*) FROM vacancy_offers o JOIN profiles p ON p.user_id = o.user_id WHERE p.visibility = 'hidden'"); n != 0 {
+		t.Errorf("%d demo offers to hidden profiles", n)
+	}
+	if n := count("SELECT count(*) FROM profiles WHERE visibility <> 'hidden' AND headline <> ''"); n < 8 {
+		t.Errorf("only %d demo profiles are visible in the catalog", n)
+	}
 	if n := count("SELECT count(*) FROM outbox WHERE sent_at IS NULL"); n != 0 {
 		t.Errorf("%d demo mails are waiting to be sent: demo data must not send mail", n)
 	}

@@ -142,43 +142,12 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Det
 	return d, nil
 }
 
-// scope — какие вакансии человек ведёт: все вакансии организаций (wholeOrgs) и вакансии отдельных подразделений (units).
-type scope struct {
-	wholeOrgs []uuid.UUID
-	units     []uuid.UUID
-}
-
-// scopeOf собирает права человека по всем его организациям. Решает пакет access: здесь только спрашиваем его.
-func scopeOf(ctx context.Context, q *dbgen.Queries, user auth.User) (scope, error) {
-	sc := scope{wholeOrgs: []uuid.UUID{}, units: []uuid.UUID{}}
-	mine, err := q.ListOrganizationsOfUser(ctx, user.ID)
-	if err != nil {
-		return scope{}, fmt.Errorf("vacancies: list my organizations: %w", err)
-	}
-	for _, o := range mine {
-		actor, err := orgs.ActorOf(ctx, q, o.ID, user.ID)
-		if err != nil {
-			return scope{}, err
-		}
-		if actor.Can(access.ManageVacancies, access.NoUnit) {
-			sc.wholeOrgs = append(sc.wholeOrgs, o.ID)
-			continue
-		}
-		for _, id := range actor.HeadOf {
-			if actor.Can(access.ManageVacancies, id) {
-				sc.units = append(sc.units, id)
-			}
-		}
-	}
-	return sc, nil
-}
-
 // ListMine — «Мои вакансии»: всё, что человек может вести, по статусам. Пустой status — все статусы.
 func (s *Service) ListMine(ctx context.Context, user auth.User, status string, limit, offset int) (MineList, error) {
 	if status != "" && !isOneOf(status, Statuses) {
 		return MineList{}, &auth.ValidationError{Fields: map[string]string{"status": "Такого статуса нет"}}
 	}
-	sc, err := scopeOf(ctx, s.q, user)
+	sc, err := orgs.ScopeOf(ctx, s.q, user.ID, access.ManageVacancies)
 	if err != nil {
 		return MineList{}, err
 	}
@@ -186,7 +155,7 @@ func (s *Service) ListMine(ctx context.Context, user auth.User, status string, l
 	for _, st := range Statuses {
 		counts[st] = 0
 	}
-	rows, err := s.q.CountMyVacanciesByStatus(ctx, dbgen.CountMyVacanciesByStatusParams{WholeOrgs: sc.wholeOrgs, Units: sc.units})
+	rows, err := s.q.CountMyVacanciesByStatus(ctx, dbgen.CountMyVacanciesByStatusParams{WholeOrgs: sc.WholeOrgs, Units: sc.Units})
 	if err != nil {
 		return MineList{}, fmt.Errorf("vacancies: count mine: %w", err)
 	}
@@ -200,7 +169,7 @@ func (s *Service) ListMine(ctx context.Context, user auth.User, status string, l
 		total = counts[status]
 	}
 	lim, off := pageOf(limit, offset)
-	list, err := s.q.ListMyVacancies(ctx, dbgen.ListMyVacanciesParams{WholeOrgs: sc.wholeOrgs, Units: sc.units, Status: status, RowLimit: lim, RowOffset: off})
+	list, err := s.q.ListMyVacancies(ctx, dbgen.ListMyVacanciesParams{WholeOrgs: sc.WholeOrgs, Units: sc.Units, Status: status, RowLimit: lim, RowOffset: off})
 	if err != nil {
 		return MineList{}, fmt.Errorf("vacancies: list mine: %w", err)
 	}

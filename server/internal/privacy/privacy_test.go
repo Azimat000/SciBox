@@ -62,3 +62,37 @@ func TestWhoSeesWhat(t *testing.T) {
 		})
 	}
 }
+
+// Какие режимы видит каталог: каждый смотрящий явно. Владелец в каталоге ничем не отличается от остальных:
+// собственный профиль в каталог не попадает, поэтому его права на «скрытый» профиль здесь не работают.
+func TestCatalogModes(t *testing.T) {
+	tests := []struct {
+		name string
+		who  Viewer
+		want []Visibility
+	}{
+		{"аноним", Viewer{}, []Visibility{Public}},
+		{"вошедший без организации", Viewer{}, []Visibility{Public}},
+		{"сотрудник организации", Viewer{Staff: true}, []Visibility{Orgs, Public}},
+		{"владелец", Viewer{Owner: true}, []Visibility{Public}},
+		{"владелец и сотрудник", Viewer{Owner: true, Staff: true}, []Visibility{Orgs, Public}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := CatalogModes(tc.who)
+			if len(got) != len(tc.want) {
+				t.Fatalf("CatalogModes = %v, ожидали %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("CatalogModes = %v, ожидали %v", got, tc.want)
+				}
+			}
+			for _, m := range got {
+				if m == Hidden {
+					t.Errorf("скрытые профили не должны попадать в каталог")
+				}
+			}
+		})
+	}
+}

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { reply, stubApi } from '../../test/api'
 import { renderApp } from '../../test/render'
-import { navFor } from './nav'
+import { isCurrent, navFor } from './nav'
 import { parseRole, ROLE_STORAGE_KEY } from './role-context'
 
 const healthy = { status: 'ok', product: 'SciBox', version: 'dev', database: { schema_version: 1, server_version: '16.15' } }
@@ -26,6 +26,23 @@ describe('parseRole and navFor', () => {
   it('gives each role its own menu', () => {
     expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации', 'Избранное', 'Мои отклики'])
     expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Каталог учёных', 'Организация'])
+  })
+})
+
+describe('isCurrent', () => {
+  const item = { to: '/applications', label: 'Мои отклики', also: ['/offers'] }
+  it('marks the section itself, pages inside it and linked sections', () => {
+    expect(isCurrent(item, '/applications')).toBe(true)
+    expect(isCurrent(item, '/applications/abc')).toBe(true)
+    expect(isCurrent(item, '/offers')).toBe(true)
+    expect(isCurrent(item, '/offers/abc')).toBe(true)
+  })
+
+  it('does not mark other sections, even when the address only starts with the same letters', () => {
+    expect(isCurrent(item, '/')).toBe(false)
+    expect(isCurrent(item, '/applications-old')).toBe(false)
+    expect(isCurrent(item, '/offers2')).toBe(false)
+    expect(isCurrent({ to: '/vacancies', label: 'Вакансии' }, '/offers')).toBe(false)
   })
 })
 
@@ -106,7 +123,7 @@ describe('site shell', () => {
     renderApp('/')
     await userEvent.click(screen.getByRole('button', { name: 'Открыть меню' }))
     const mobileNav = screen.getAllByRole('navigation', { name: 'Основное меню' })[1]
-    await userEvent.click(within(mobileNav).getByRole('link', { name: 'Учёные' }))
+    await userEvent.click(within(mobileNav).getByRole('link', { name: 'Избранное' }))
     expect(await screen.findByRole('heading', { name: 'Раздел готовится' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Открыть меню' })).toHaveAttribute('aria-expanded', 'false')
     expect(document.getElementById('mobile-menu')).toHaveAttribute('hidden')
@@ -114,7 +131,7 @@ describe('site shell', () => {
 })
 
 describe('placeholder pages', () => {
-  it.each(['/scientists', '/favorites'])(
+  it.each(['/favorites'])(
     '%s says the section is coming',
     async (path) => {
       renderApp(path)

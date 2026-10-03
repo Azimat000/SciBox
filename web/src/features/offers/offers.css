@@ -1,0 +1,33 @@
+/* Приглашения на вакансии (срез 10). Только токены из styles/tokens.css. */
+
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+
+.offer-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 34rem;
+}
+
+.offer-vacancy-line {
+  color: var(--ink-body);
+  overflow-wrap: anywhere;
+}
+
+.offer-modal-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+/* На телефоне кнопки ответа во всю ширину; «Отозвать» остаётся обычной кнопкой */
+@media (max-width: 40rem) {
+  .offer-answer .offer-actions .btn {
+    flex: 1 1 100%;
+  }
+}

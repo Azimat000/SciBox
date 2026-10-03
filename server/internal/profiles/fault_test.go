@@ -87,6 +87,29 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			}
 			return func(s *Service) error { _, err := s.ForApplication(bg, p.User, "a@example.ru"); return err }
 		},
+		"catalog as anonymous": func(t *testing.T, w *world) func(*Service) error {
+			m := marker()
+			w.listed("Елена", m, "public", func(c *CoreInput) { c.Specialties = []string{"1.4.4"} })
+			return func(s *Service) error { _, err := s.Catalog(bg, CatalogParams{Query: m}, nil); return err }
+		},
+		"catalog as staff": func(t *testing.T, w *world) func(*Service) error {
+			m, staff := marker(), w.staff("Сотрудник")
+			w.listed("Елена", m, "orgs", nil)
+			return func(s *Service) error { _, err := s.Catalog(bg, CatalogParams{Query: m}, &staff.User); return err }
+		},
+		"catalog by similar words": func(t *testing.T, w *world) func(*Service) error {
+			m := marker()
+			w.listed("Зюзюкина", m, "public", nil)
+			return func(s *Service) error {
+				_, err := s.Catalog(bg, CatalogParams{Query: "Зюзюкинв"}, nil)
+				return err
+			}
+		},
+		"catalog page beyond the last": func(t *testing.T, w *world) func(*Service) error {
+			m := marker()
+			w.listed("Елена", m, "public", nil)
+			return func(s *Service) error { _, err := s.Catalog(bg, CatalogParams{Query: m, Offset: 40}, nil); return err }
+		},
 		"cv of another": func(t *testing.T, w *world) func(*Service) error {
 			p, q := w.user("Елена"), w.user("Другой")
 			w.setVisibility(p, "public", false)

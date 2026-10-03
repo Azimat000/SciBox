@@ -92,6 +92,25 @@ describe('Select', () => {
     expect(screen.queryByRole('option', { name: 'Не выбрано' })).not.toBeInTheDocument()
   })
 
+  it('puts options into labelled groups', async () => {
+    render(
+      <Select
+        label="Вакансия"
+        options={[
+          { group: 'Институт А', options: [{ value: 'a1', label: 'Постдок' }] },
+          { group: 'Институт Б', options: [{ value: 'b1', label: 'Доцент' }, { value: 'b2', label: 'Профессор' }] },
+          { value: 'x', label: 'Без организации' },
+        ]}
+      />,
+    )
+    const groups = screen.getAllByRole('group')
+    expect(groups.map((g) => g.getAttribute('label'))).toEqual(['Институт А', 'Институт Б'])
+    expect(groups[1].children).toHaveLength(2)
+    await userEvent.selectOptions(screen.getByLabelText('Вакансия'), 'b2')
+    expect(screen.getByLabelText('Вакансия')).toHaveValue('b2')
+    expect(screen.getByRole('option', { name: 'Без организации' })).toHaveValue('x')
+  })
+
   it('adds an empty option with the default text', () => {
     render(<Select label="Формат" options={options} placeholder="" />)
     expect(screen.getByRole('option', { name: 'Не выбрано' })).toHaveValue('')

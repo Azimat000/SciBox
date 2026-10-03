@@ -4,6 +4,7 @@ import { Alert } from '../../ui/Alert'
 import { ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { useMe } from '../auth/api'
+import { InviteButton } from '../offers/InviteButton'
 import { isNotFound } from '../orgs/api'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { cvPath, useScientist } from './api'
@@ -51,6 +52,7 @@ export function ScientistPage() {
         </Alert>
       )}
       <div className="profile-toolbar">
+        {!page.viewer.is_owner && <InviteButton profileId={page.profile.id} name={page.profile.name} variant="primary" />}
         {user ? (
           <a className="btn btn-secondary" href={cvPath(id)} download>
             {t.profile.downloadCv}

@@ -31,6 +31,7 @@ type Result struct {
 	Vacancies     int
 	Profiles      int
 	Applications  int
+	Offers        int
 }
 
 type person struct{ key, email, name string }
@@ -213,6 +214,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 	}
 	// Отклики идут после профилей: откликаться можно только с заполненным профилем.
 	if res.Applications, err = seedApplications(ctx, pool, ids, now); err != nil {
+		return Result{}, err
+	}
+	// Приглашения из каталога идут последними: им нужны и профили, и открытые вакансии.
+	if res.Offers, err = seedOffers(ctx, pool, ids, now); err != nil {
 		return Result{}, err
 	}
 	return res, nil

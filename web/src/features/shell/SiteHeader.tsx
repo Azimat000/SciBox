@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { productName } from '../../config/product'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
@@ -8,7 +8,7 @@ import { useMe } from '../auth/api'
 import { AccountBlock, UserMenu } from '../auth/UserMenu'
 import { useSignOut } from '../auth/useSignOut'
 import { NotificationBell } from '../notifications/NotificationBell'
-import { navFor } from './nav'
+import { isCurrent, navFor } from './nav'
 import { RoleSwitch } from './RoleSwitch'
 import { useRole } from './useRole'
 import './SiteHeader.css'
@@ -34,9 +34,9 @@ export function SiteHeader() {
   }, [menuOpen])
 
   const links = items.map((item) => (
-    <NavLink key={item.to} to={item.to} className="nav-link">
+    <Link key={item.to} to={item.to} className="nav-link" aria-current={isCurrent(item, pathname) ? 'page' : undefined}>
       {item.label}
-    </NavLink>
+    </Link>
   ))
 
   return (

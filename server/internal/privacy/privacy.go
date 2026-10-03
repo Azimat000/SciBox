@@ -55,3 +55,16 @@ func (v Visibility) CanView(who Viewer) bool {
 func (v Visibility) CanSeeContacts(who Viewer) bool {
 	return v.CanView(who) && (who.Owner || who.Staff)
 }
+
+// CatalogModes — профили в каких режимах видит в каталоге учёных такой смотрящий (D-097). Решает CanView, своих
+// правил здесь нет. Собственный профиль в каталог не попадает, поэтому владельцем смотрящий не считается.
+func CatalogModes(who Viewer) []Visibility {
+	who.Owner = false
+	var out []Visibility
+	for _, m := range Modes {
+		if m.CanView(who) {
+			out = append(out, m)
+		}
+	}
+	return out
+}

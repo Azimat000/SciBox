@@ -6,6 +6,7 @@ import { LoginPage } from '../features/auth/LoginPage'
 import { PrivacyPage } from '../features/auth/PrivacyPage'
 import { RegisterPage } from '../features/auth/RegisterPage'
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
+import { CatalogPage } from '../features/catalog/CatalogPage'
 import { AcceptInvitationPage } from '../features/orgs/AcceptInvitationPage'
 import { CreateOrganizationPage } from '../features/orgs/CreateOrganizationPage'
 import { ManageDataPage } from '../features/orgs/ManageDataPage'
@@ -27,6 +28,9 @@ import { CandidatesPage } from '../features/applications/CandidatesPage'
 import { MyApplicationsPage } from '../features/applications/MyApplicationsPage'
 import { RecommendPage } from '../features/applications/RecommendPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
+import { MyOffersPage } from '../features/offers/MyOffersPage'
+import { OfferPage } from '../features/offers/OfferPage'
+import { SentOffersPage } from '../features/offers/SentOffersPage'
 import { MyVacanciesPage } from '../features/vacancies/MyVacanciesPage'
 import { VacancyEditPage } from '../features/vacancies/VacancyEditPage'
 import { VacancyPage } from '../features/vacancies/VacancyPage'
@@ -83,7 +87,11 @@ export const routes: RouteObject[] = [
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'profile', element: <ProfilePage /> },
       { path: 'profile/edit', element: <ProfileEditPage /> },
+      { path: 'scientists', element: <CatalogPage /> },
       { path: 'scientists/:id', element: <ScientistPage /> },
+      { path: 'offers', element: <MyOffersPage /> },
+      { path: 'offers/:id', element: <OfferPage /> },
+      { path: 'sent-offers', element: <SentOffersPage /> },
       { path: 'invitations/accept', element: <AcceptInvitationPage /> },
       { path: 'styleguide', element: <StyleguidePage /> },
       ...comingSoonPaths.map((path) => ({ path, element: <ComingSoonPage /> })),
