@@ -3,7 +3,7 @@ import type { Role } from './role-context'
 
 export type NavItem = { to: string; label: string; /** Другие разделы, на которых этот пункт тоже считается текущим. */ also?: readonly string[] }
 
-/** Пункты меню по режимам. Разделы, которых ещё нет, открывают страницу «Раздел готовится». */
+/** Пункты меню по режимам. */
 export function navFor(role: Role): NavItem[] {
   if (role === 'employer') {
     return [
@@ -17,13 +17,10 @@ export function navFor(role: Role): NavItem[] {
     { to: '/vacancies', label: t.nav.vacancies },
     { to: '/scientists', label: t.nav.scientists },
     { to: '/organizations', label: t.nav.organizations },
-    { to: '/favorites', label: t.nav.favorites },
+    { to: '/favorites', label: t.nav.favorites, also: ['/matches', '/saved-searches', '/deadlines'] },
     { to: '/applications', label: t.nav.myApplications, also: ['/offers'] },
   ]
 }
-
-/** Адреса разделов-заглушек (то же, что в navFor). */
-export const comingSoonPaths = ['/favorites'] as const
 
 /** Пункт меню текущий, если открыт его раздел: сам адрес, страницы внутри него и связанные разделы (`also`). */
 export function isCurrent(item: NavItem, pathname: string): boolean {

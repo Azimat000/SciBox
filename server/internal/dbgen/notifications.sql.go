@@ -154,23 +154,30 @@ func (q *Queries) EnqueueMail(ctx context.Context, arg EnqueueMailParams) error 
 
 const enqueueMailToUser = `-- name: EnqueueMailToUser :exec
 INSERT INTO outbox (to_email, subject, body, created_at, next_attempt_at)
-SELECT u.email, $1, $2, $3, $3 FROM users u WHERE u.id = $4
+SELECT u.email, $1, $2, $3, $3
+FROM users u LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = $4
+  AND NOT ($5::text = 'new_vacancies' AND NOT COALESCE(ns.email_new_vacancies, true))
+  AND NOT ($5::text = 'deadlines' AND NOT COALESCE(ns.email_deadlines, true))
 `
 
 type EnqueueMailToUserParams struct {
-	Subject string
-	Body    string
-	Now     time.Time
-	UserID  uuid.UUID
+	Subject  string
+	Body     string
+	Now      time.Time
+	UserID   uuid.UUID
+	Category string
 }
 
-// Письмо на почту аккаунта: адрес берётся из таблицы, чужой адрес подставить нельзя.
+// Письмо на почту аккаунта: адрес берётся из таблицы, чужой адрес подставить нельзя. Письма видов new_vacancies и
+// deadlines не ставятся в очередь, если человек их выключил (D-106); остальные идут всегда.
 func (q *Queries) EnqueueMailToUser(ctx context.Context, arg EnqueueMailToUserParams) error {
 	_, err := q.db.Exec(ctx, enqueueMailToUser,
 		arg.Subject,
 		arg.Body,
 		arg.Now,
 		arg.UserID,
+		arg.Category,
 	)
 	return err
 }

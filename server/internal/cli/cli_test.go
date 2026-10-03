@@ -222,6 +222,30 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM profiles WHERE visibility <> 'hidden' AND headline <> ''"); n < 8 {
 		t.Errorf("only %d demo profiles are visible in the catalog", n)
 	}
+	// Избранное, поиски и сроки (срез 11).
+	if n := count("SELECT count(*) FROM favorites"); n < 12 {
+		t.Errorf("only %d demo favorites", n)
+	}
+	if n := count("SELECT count(DISTINCT user_id) FROM favorites"); n != 6 {
+		t.Errorf("favorites of %d people, want 6", n)
+	}
+	if n := count("SELECT count(*) FROM favorites f JOIN vacancies v ON v.id = f.vacancy_id WHERE v.status <> 'published'"); n != 0 {
+		t.Errorf("%d demo favorites on vacancies that are not published", n)
+	}
+	if n := count("SELECT count(*) FROM favorites f JOIN applications a ON a.vacancy_id = f.vacancy_id AND a.user_id = f.user_id"); n != 0 {
+		t.Errorf("%d demo favorites on vacancies the person already applied to", n)
+	}
+	if n := count("SELECT count(*) FROM favorites f JOIN vacancies v ON v.id = f.vacancy_id WHERE v.deadline BETWEEN current_date AND current_date + 7"); n < 3 {
+		t.Errorf("only %d favorites with a deadline in the coming week: the calendar would look empty", n)
+	}
+	if n := count("SELECT count(*) FROM saved_searches"); n != 7 {
+		t.Errorf("%d demo saved searches, want 7", n)
+	}
+	for _, freq := range []string{"instant", "daily", "weekly", "off"} {
+		if n := count("SELECT count(*) FROM saved_searches WHERE frequency = '" + freq + "'"); n == 0 {
+			t.Errorf("no %s demo saved searches", freq)
+		}
+	}
 	if n := count("SELECT count(*) FROM outbox WHERE sent_at IS NULL"); n != 0 {
 		t.Errorf("%d demo mails are waiting to be sent: demo data must not send mail", n)
 	}

@@ -28,14 +28,16 @@ import { CandidatesPage } from '../features/applications/CandidatesPage'
 import { MyApplicationsPage } from '../features/applications/MyApplicationsPage'
 import { RecommendPage } from '../features/applications/RecommendPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
+import { DeadlinesPage } from '../features/matching/DeadlinesPage'
+import { FavoritesPage } from '../features/matching/FavoritesPage'
+import { MatchesPage } from '../features/matching/MatchesPage'
+import { OpenSavedSearchPage, SavedSearchesPage } from '../features/matching/SavedSearchesPage'
 import { MyOffersPage } from '../features/offers/MyOffersPage'
 import { OfferPage } from '../features/offers/OfferPage'
 import { SentOffersPage } from '../features/offers/SentOffersPage'
 import { MyVacanciesPage } from '../features/vacancies/MyVacanciesPage'
 import { VacancyEditPage } from '../features/vacancies/VacancyEditPage'
 import { VacancyPage } from '../features/vacancies/VacancyPage'
-import { ComingSoonPage } from '../features/shell/ComingSoonPage'
-import { comingSoonPaths } from '../features/shell/nav'
 import { NotFoundPage } from '../features/status/NotFoundPage'
 import { SearchPage } from '../features/search/SearchPage'
 import { StatusPage } from '../features/status/StatusPage'
@@ -92,9 +94,13 @@ export const routes: RouteObject[] = [
       { path: 'offers', element: <MyOffersPage /> },
       { path: 'offers/:id', element: <OfferPage /> },
       { path: 'sent-offers', element: <SentOffersPage /> },
+      { path: 'favorites', element: <FavoritesPage /> },
+      { path: 'matches', element: <MatchesPage /> },
+      { path: 'saved-searches', element: <SavedSearchesPage /> },
+      { path: 'saved-searches/:id', element: <OpenSavedSearchPage /> },
+      { path: 'deadlines', element: <DeadlinesPage /> },
       { path: 'invitations/accept', element: <AcceptInvitationPage /> },
       { path: 'styleguide', element: <StyleguidePage /> },
-      ...comingSoonPaths.map((path) => ({ path, element: <ComingSoonPage /> })),
       { path: '*', element: <NotFoundPage /> },
     ],
   },

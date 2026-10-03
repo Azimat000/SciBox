@@ -28,6 +28,29 @@ var ErrNotFound = errors.New("notifications: not found")
 // ErrInvalid — программная ошибка: уведомление собрано неверно (пустой заголовок, внешняя ссылка и т. п.).
 var ErrInvalid = errors.New("notifications: invalid notice")
 
+// Виды уведомлений, письма которых человек может отключить (D-106). Остальные письма идут всегда.
+const (
+	KindSavedSearch      = "saved_search"      // новые вакансии по сохранённому поиску
+	KindDeadlineReminder = "deadline_reminder" // напоминание о сроке подачи
+)
+
+// Виды писем в настройках и в запросе к очереди.
+const (
+	mailNewVacancies = "new_vacancies"
+	mailDeadlines    = "deadlines"
+)
+
+// mailCategory — к какому виду писем относится уведомление. Пусто: письмо отключить нельзя.
+func mailCategory(kind string) string {
+	switch kind {
+	case KindSavedSearch:
+		return mailNewVacancies
+	case KindDeadlineReminder:
+		return mailDeadlines
+	}
+	return ""
+}
+
 // Пределы текстов (совпадают с CHECK в базе).
 const (
 	maxTitle = 300
@@ -87,7 +110,8 @@ func (n Notice) valid() error {
 }
 
 // Emit создаёт уведомление на сайте и письмо на почту аккаунта. q привязан к транзакции события.
-// Адрес письма берётся из аккаунта получателя в самом запросе, подставить чужой нельзя.
+// Адрес письма берётся из аккаунта получателя в самом запросе, подставить чужой нельзя. Если человек отключил письма этого
+// вида (напоминания и новые вакансии, D-106), остаётся только уведомление на сайте.
 func (s *Service) Emit(ctx context.Context, q *dbgen.Queries, n Notice) error {
 	if err := n.valid(); err != nil {
 		return err
@@ -96,7 +120,7 @@ func (s *Service) Emit(ctx context.Context, q *dbgen.Queries, n Notice) error {
 	if err := q.InsertNotification(ctx, dbgen.InsertNotificationParams{UserID: n.UserID, Kind: n.Kind, Title: n.Title, Body: n.Body, Link: n.Link, Now: now}); err != nil {
 		return fmt.Errorf("notifications: insert: %w", err)
 	}
-	if err := q.EnqueueMailToUser(ctx, dbgen.EnqueueMailToUserParams{UserID: n.UserID, Subject: n.Title, Body: s.mailBody(n.Body, n.Link), Now: now}); err != nil {
+	if err := q.EnqueueMailToUser(ctx, dbgen.EnqueueMailToUserParams{UserID: n.UserID, Subject: n.Title, Body: s.mailBody(n.Body, n.Link), Now: now, Category: mailCategory(n.Kind)}); err != nil {
 		return fmt.Errorf("notifications: enqueue mail: %w", err)
 	}
 	return nil

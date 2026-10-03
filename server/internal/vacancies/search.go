@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -76,6 +77,12 @@ type SearchParams struct {
 	Competition bool // только конкурсы
 	Deadline    string
 	Sort        string
+
+	// PublishedAfter и PublishedUntil — отбор по моменту первой публикации: после первого (не включая) и до второго
+	// (включая). Из адреса не читаются: нужны рассылкам по сохранённым поискам (срез 11).
+	PublishedAfter, PublishedUntil *time.Time
+	// NoFuzzy запрещает запасной поиск «по похожим словам»: рассылка не должна присылать неточные совпадения.
+	NoFuzzy bool
 
 	// Организация и подразделение: для страниц организаций. Если указана организация, которой нет, или подразделение не
 	// из неё, вакансий «нет» (ErrNotFound).
@@ -217,6 +224,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		Levels: ints32(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds), Fundings: nonNil(p.Fundings),
 		Rates: ints32(p.Rates), Terms: nonNil(p.Terms), SalaryMin: int32(p.SalaryMin), Housing: p.Housing,
 		Competition: p.Competition, NoDeadline: p.Deadline == DeadlineNone, Sort: sort, RowLimit: limit, RowOffset: offset,
+		PublishedAfter: p.PublishedAfter, PublishedUntil: p.PublishedUntil,
 	}
 	switch p.Deadline {
 	case DeadlineWeek:
@@ -232,7 +240,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		return SearchResult{}, err
 	}
 	fuzzy := false
-	if total == 0 && p.Query != "" {
+	if total == 0 && p.Query != "" && !p.NoFuzzy {
 		arg.Fuzzy = true
 		if rows, total, err = s.searchPage(ctx, arg); err != nil {
 			return SearchResult{}, err

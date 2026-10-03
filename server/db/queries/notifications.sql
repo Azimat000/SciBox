@@ -9,10 +9,15 @@ VALUES (@user_id, @kind, @title, @body, @link, @now);
 INSERT INTO outbox (to_email, subject, body, created_at, next_attempt_at)
 VALUES (@to_email, @subject, @body, @now, @now);
 
--- Письмо на почту аккаунта: адрес берётся из таблицы, чужой адрес подставить нельзя.
+-- Письмо на почту аккаунта: адрес берётся из таблицы, чужой адрес подставить нельзя. Письма видов new_vacancies и
+-- deadlines не ставятся в очередь, если человек их выключил (D-106); остальные идут всегда.
 -- name: EnqueueMailToUser :exec
 INSERT INTO outbox (to_email, subject, body, created_at, next_attempt_at)
-SELECT u.email, @subject, @body, @now, @now FROM users u WHERE u.id = @user_id;
+SELECT u.email, @subject, @body, @now, @now
+FROM users u LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.id = @user_id
+  AND NOT (@category::text = 'new_vacancies' AND NOT COALESCE(ns.email_new_vacancies, true))
+  AND NOT (@category::text = 'deadlines' AND NOT COALESCE(ns.email_deadlines, true));
 
 -- name: ListNotifications :many
 SELECT id, kind, title, body, link, created_at, read_at

@@ -23,6 +23,8 @@ export type VacancyEntryProps = {
   /** Уровень заголовка в документе; по умолчанию h3. */
   headingLevel?: 2 | 3 | 4
   footer?: ReactNode
+  /** Действие над записью (например, закладка): стоит в правой колонке под сроком. */
+  action?: ReactNode
 }
 
 /** Вакансия в списке, набранная как запись в содержании журнала. */
@@ -39,6 +41,7 @@ export function VacancyEntry({
   now,
   headingLevel = 3,
   footer,
+  action,
 }: VacancyEntryProps) {
   const Heading = `h${headingLevel}` as const
   return (
@@ -49,9 +52,10 @@ export function VacancyEntry({
       <p className="entry-org">
         {organization}, {city}
       </p>
-      {deadline && (
+      {(deadline || action) && (
         <div className="entry-side">
-          <Deadline date={deadline} now={now} align="end" />
+          {deadline && <Deadline date={deadline} now={now} align="end" />}
+          {action && <div className="entry-action">{action}</div>}
         </div>
       )}
       {abstract && <p className="entry-abstract">{abstract}</p>}

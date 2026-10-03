@@ -56,5 +56,8 @@ export const ann = {
   created_at: '2026-10-02T12:00:00Z',
 }
 
-/** Состояние «Анна уже вошла»: подставляется в stubApi. */
-export const signedInAs = (user = ann): Record<string, Route> => ({ 'GET /api/auth/me': reply(200, { user }) })
+/** Состояние «Анна уже вошла»: подставляется в stubApi. Настройки писем на странице аккаунта по умолчанию все включены. */
+export const signedInAs = (user = ann): Record<string, Route> => ({
+  'GET /api/auth/me': reply(200, { user }),
+  'GET /api/notification-settings': reply(200, { email_new_vacancies: true, email_deadlines: true }),
+})

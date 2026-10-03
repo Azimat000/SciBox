@@ -218,6 +218,7 @@ func TestHTTPErrors(t *testing.T) {
 	check("mine: not signed in", a.do(nil, "GET", "/api/my/vacancies", nil), 401, "unauthorized")
 	check("targets: not signed in", a.do(nil, "GET", "/api/my/vacancy-targets", nil), 401, "unauthorized")
 	check("list: public", a.do(nil, "GET", "/api/vacancies?limit=zz&offset=-4", nil), 200, "")
+	check("mine: page size that is not a number", a.do(&tm.owner, "GET", "/api/my/vacancies?limit=zz", nil), 200, "")
 
 	// Лимит: 429 с Retry-After.
 	a.svc.cfg.Create = Limit{Max: 1, Window: time.Hour}

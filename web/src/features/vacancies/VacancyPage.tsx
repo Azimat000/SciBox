@@ -9,6 +9,7 @@ import { Tag } from '../../ui/Tag'
 import { useToast } from '../../ui/useToast'
 import { ApplyBlock } from '../applications/ApplyBlock'
 import { describeError, fieldErrorsOf } from '../auth/errors'
+import { FavoriteButton } from '../matching/FavoriteButton'
 import { ConfirmModal } from '../orgs/ConfirmModal'
 import { isNotFound } from '../orgs/api'
 import { kindLabel, longName } from '../orgs/labels'
@@ -84,7 +85,12 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
           {v.status !== 'published' && <Tag>{statusLabel(v.status)}</Tag>}
         </p>
         {v.status === 'published' && v.deadline && <Deadline date={v.deadline} />}
-        {v.status === 'published' && !v.viewer.can_manage && <ApplyBlock vacancyId={v.id} />}
+        {(v.status === 'published' || v.status === 'closed') && !v.viewer.can_manage && (
+          <div className="vacancy-actions">
+            {v.status === 'published' && <ApplyBlock vacancyId={v.id} />}
+            <FavoriteButton vacancyId={v.id} title={v.title} />
+          </div>
+        )}
       </header>
 
       {v.status === 'draft' && <Alert kind="info">{p.draftNotice}</Alert>}

@@ -123,23 +123,14 @@ describe('site shell', () => {
     renderApp('/')
     await userEvent.click(screen.getByRole('button', { name: 'Открыть меню' }))
     const mobileNav = screen.getAllByRole('navigation', { name: 'Основное меню' })[1]
-    await userEvent.click(within(mobileNav).getByRole('link', { name: 'Избранное' }))
-    expect(await screen.findByRole('heading', { name: 'Раздел готовится' })).toBeInTheDocument()
+    await userEvent.click(within(mobileNav).getByRole('link', { name: 'Организации' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Организации' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Открыть меню' })).toHaveAttribute('aria-expanded', 'false')
     expect(document.getElementById('mobile-menu')).toHaveAttribute('hidden')
   })
 })
 
-describe('placeholder pages', () => {
-  it.each(['/favorites'])(
-    '%s says the section is coming',
-    async (path) => {
-      renderApp(path)
-      expect(await screen.findByRole('heading', { level: 2, name: 'Раздел готовится' })).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: 'На главную' })).toHaveAttribute('href', '/')
-    },
-  )
-
+describe('unknown pages', () => {
   it('unknown address shows the 404 page inside the shell', async () => {
     renderApp('/nothing-here')
     expect(await screen.findByRole('heading', { name: 'Такой страницы нет' })).toBeInTheDocument()

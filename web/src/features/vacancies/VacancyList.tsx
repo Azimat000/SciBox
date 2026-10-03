@@ -1,14 +1,32 @@
+import type { ReactNode } from 'react'
 import { t } from '../../i18n'
 import { EmptyState } from '../../ui/EmptyState'
 import { Skeleton } from '../../ui/Skeleton'
 import { VacancyEntry } from '../../ui/VacancyEntry'
 import { describeError } from '../auth/errors'
+import { FavoriteButton } from '../matching/FavoriteButton'
 import { useOrgVacancies, type Card } from './api'
 import { entryFacts, levelParts, placeText } from './labels'
 import './vacancies.css'
 
-/** Строка вакансии в списке: город берём у самой вакансии, если его нет (удалённая работа), то у организации. */
-export function VacancyCard({ card, headingLevel = 3 }: { card: Card; headingLevel?: 2 | 3 | 4 }) {
+/**
+ * Строка вакансии в списке: город берём у самой вакансии, если его нет (удалённая работа), то у организации.
+ * Справа под сроком стоит закладка «В избранное» (action заменяет её, null убирает); footer — дополнение под строкой
+ * фактов (например, причины подбора); срок можно не показывать (у закрытых вакансий он уже ни о чём не говорит).
+ */
+export function VacancyCard({
+  card,
+  headingLevel = 3,
+  footer,
+  action,
+  showDeadline = true,
+}: {
+  card: Card
+  headingLevel?: 2 | 3 | 4
+  footer?: ReactNode
+  action?: ReactNode
+  showDeadline?: boolean
+}) {
   return (
     <VacancyEntry
       to={`/vacancies/${card.id}`}
@@ -19,8 +37,10 @@ export function VacancyCard({ card, headingLevel = 3 }: { card: Card; headingLev
       level={levelParts(card.career_level) ?? undefined}
       facts={entryFacts(card)}
       competition={card.is_competition}
-      deadline={card.deadline || undefined}
+      deadline={showDeadline ? card.deadline || undefined : undefined}
       headingLevel={headingLevel}
+      footer={footer}
+      action={action === undefined ? <FavoriteButton vacancyId={card.id} title={card.title} /> : action}
     />
   )
 }

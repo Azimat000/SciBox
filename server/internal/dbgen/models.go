@@ -69,6 +69,20 @@ type AuthToken struct {
 	UsedAt    *time.Time
 }
 
+type DeadlineReminder struct {
+	UserID    uuid.UUID
+	VacancyID uuid.UUID
+	Stage     int16
+	Deadline  time.Time
+	SentAt    time.Time
+}
+
+type Favorite struct {
+	UserID    uuid.UUID
+	VacancyID uuid.UUID
+	CreatedAt time.Time
+}
+
 type Notification struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
@@ -78,6 +92,13 @@ type Notification struct {
 	Link      string
 	CreatedAt time.Time
 	ReadAt    *time.Time
+}
+
+type NotificationSetting struct {
+	UserID            uuid.UUID
+	EmailNewVacancies bool
+	EmailDeadlines    bool
+	UpdatedAt         time.Time
 }
 
 type OrgInvitation struct {
@@ -212,6 +233,19 @@ type ReferenceSource struct {
 type Region struct {
 	Code string
 	Name string
+}
+
+type SavedSearch struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Name       string
+	Query      string
+	Frequency  string
+	CheckedAt  time.Time
+	NextRunAt  time.Time
+	LastSentAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type ScienceField struct {

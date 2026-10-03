@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysUntil, describeDeadline } from './deadline'
+import { daysUntil, describeDeadline, remainingText } from './deadline'
 
 const now = new Date(2026, 9, 2, 15, 30) // 2 октября 2026, после обеда
 
@@ -53,5 +53,17 @@ describe('describeDeadline', () => {
     expect(describeDeadline('', now)).toBeNull()
     expect(describeDeadline('14.11.2026', now)).toBeNull()
     expect(describeDeadline('2026-02-30', now)).toBeNull()
+  })
+})
+
+describe('remainingText', () => {
+  it('says how long is left, in the right form', () => {
+    expect(remainingText(0)).toBe('сегодня последний день')
+    expect(remainingText(-3)).toBe('сегодня последний день')
+    expect(remainingText(1)).toBe('остался 1 день')
+    expect(remainingText(2)).toBe('осталось 2 дня')
+    expect(remainingText(5)).toBe('осталось 5 дней')
+    expect(remainingText(21)).toBe('остался 21 день')
+    expect(remainingText(11)).toBe('осталось 11 дней')
   })
 })

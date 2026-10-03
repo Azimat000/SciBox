@@ -87,3 +87,10 @@ export const PlusIcon = (p: IconProps) => (
     <path d="M10 4.5v11M4.5 10h11" />
   </Icon>
 )
+
+/** Закладка: контур, а когда вакансия в избранном, залитая. */
+export const BookmarkIcon = ({ filled = false, ...p }: IconProps & { filled?: boolean }) => (
+  <Icon {...p} fill={filled ? 'currentColor' : 'none'}>
+    <path d="M5.75 3h8.5v14L10 13.75 5.75 17z" />
+  </Icon>
+)

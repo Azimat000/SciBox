@@ -10,6 +10,7 @@ import { SearchBar } from '../../ui/SearchBar'
 import { Select } from '../../ui/Select'
 import { Skeleton } from '../../ui/Skeleton'
 import { describeError } from '../auth/errors'
+import { SaveSearchButton } from '../matching/SaveSearch'
 import { useReference } from '../vacancies/api'
 import { VacancyCard } from '../vacancies/VacancyList'
 import { useSearch } from './api'
@@ -155,6 +156,7 @@ export function SearchPage() {
                       : t.search.found(total, plural(total, t.search.foundForms), plural(total, t.search.vacancyForms))}
                   </span>
                 </p>
+                <SaveSearchButton search={search} reference={reference.data} />
                 {total > 1 && (
                   <Select
                     className="results-sort"

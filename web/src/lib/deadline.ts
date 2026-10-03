@@ -27,6 +27,14 @@ export function daysUntil(deadline: Date, now: Date): number {
   return Math.round((startOfDayUtc(deadline) - startOfDayUtc(now)) / MS_PER_DAY)
 }
 
+/** Сколько осталось: «сегодня последний день», «остался 1 день», «осталось 7 дней». Для срока, который ещё не прошёл. */
+export function remainingText(days: number): string {
+  const d = t.deadline
+  if (days <= 0) return d.lastDay
+  if (days === 1) return d.oneDay
+  return d.daysLeft(days, plural(days, d.words), plural(days, d.units))
+}
+
 /** Срок подачи для интерфейса. `deadline` — дата вида `2026-11-14`. */
 export function describeDeadline(deadline: string, now: Date): DeadlineView | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(deadline)
@@ -42,12 +50,5 @@ export function describeDeadline(deadline: string, now: Date): DeadlineView | nu
   if (days < 0) {
     return { date: dateText, relative: d.passed(-days, plural(-days, d.units)), urgent: false, expired: true }
   }
-  if (days === 0) return { date: dateText, relative: d.lastDay, urgent: true, expired: false }
-  if (days === 1) return { date: dateText, relative: d.oneDay, urgent: true, expired: false }
-  return {
-    date: dateText,
-    relative: d.daysLeft(days, plural(days, d.words), plural(days, d.units)),
-    urgent: days <= URGENT_DAYS,
-    expired: false,
-  }
+  return { date: dateText, relative: remainingText(days), urgent: days <= URGENT_DAYS, expired: false }
 }

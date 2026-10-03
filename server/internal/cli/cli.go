@@ -22,6 +22,7 @@ import (
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
 	"scibox/server/internal/mail"
+	"scibox/server/internal/matching"
 	"scibox/server/internal/migrate"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/offers"
@@ -35,6 +36,9 @@ import (
 
 // outboxInterval — как часто отправитель смотрит в очередь писем.
 const outboxInterval = 2 * time.Second
+
+// matchingInterval — как часто фоновый цикл смотрит, не пора ли слать письма о новых вакансиях и напоминания о сроках.
+const matchingInterval = 5 * time.Minute
 
 // Version задаётся при сборке через -ldflags; при локальном запуске "dev".
 var Version = "dev"
@@ -121,7 +125,7 @@ func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей учёных %d, откликов %d, приглашений %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications, res.Offers)
+	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей учёных %d, откликов %d, приглашений %d, избранных вакансий %d, сохранённых поисков %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications, res.Offers, res.Favorites, res.Searches)
 	fmt.Fprintf(out, "Вход для проверки: %s (пароль записан в server/seed/seed.go).\n", seed.Logins()[0])
 	return nil
 }
@@ -158,6 +162,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	profileSvc := profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name))
 	refSvc := references.NewService(pool, notes, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
 	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, applications.DefaultConfig())
+	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
+	matchingSvc := matching.NewService(pool, vacancySvc, notes, matching.DefaultConfig(), logger)
+	go matchingSvc.Run(cleanupCtx, matchingInterval)
 
 	handler := httpapi.NewRouter(httpapi.Deps{
 		ProductName:   cfg.Product.Name,
@@ -166,12 +173,13 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Logger:        logger,
 		Auth:          authHandler,
 		Orgs:          orgs.NewHandler(organizations, logger, authHandler.RequireUser),
-		Vacancies:     vacancies.NewHandler(vacancies.NewService(pool, vacancies.DefaultConfig()), logger, authHandler.RequireUser),
+		Vacancies:     vacancies.NewHandler(vacancySvc, logger, authHandler.RequireUser),
 		Profiles:      profiles.NewHandler(profileSvc, logger, authHandler.RequireUser),
 		Applications:  applications.NewHandler(appSvc, logger, authHandler.RequireUser),
 		References:    references.NewHandler(refSvc, logger, authHandler.RequireUser),
 		Notifications: notifications.NewHandler(notes, logger, authHandler.RequireUser),
 		Offers:        offers.NewHandler(offers.NewService(pool, notes, offers.DefaultConfig()), logger, authHandler.RequireUser),
+		Matching:      matching.NewHandler(matchingSvc, logger, authHandler.RequireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 	})
 

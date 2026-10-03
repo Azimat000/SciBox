@@ -1,0 +1,381 @@
+/* Избранное, подбор, сохранённые поиски и сроки (срез 11). Только токены из styles/tokens.css. */
+
+/* ---- закладка на вакансии ---- */
+
+.fav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.25rem;
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.fav-btn:hover {
+  background: var(--blue-wash);
+  text-decoration: none;
+}
+
+.fav-btn[aria-pressed='true'] {
+  color: var(--ink);
+}
+
+.fav-btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+@media (pointer: coarse) {
+  .fav-btn {
+    min-height: var(--control-h);
+  }
+}
+
+/* ---- общее для четырёх страниц раздела ---- */
+
+.shelf-page .results-header {
+  margin-top: var(--s-5);
+}
+
+.shelf-page .vacancy-list {
+  margin-top: var(--s-2);
+}
+
+.shelf-page .vacancy-list[aria-busy='true'] {
+  opacity: 0.6;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.shelf-page .empty-state,
+.shelf-page .pager {
+  margin-top: var(--s-6);
+}
+
+.shelf-muted {
+  margin-top: var(--s-5);
+  max-width: var(--measure);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+/* ---- избранное ---- */
+
+.fav-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-4);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.fav-removed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.fav-removed p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---- подбор ---- */
+
+.match-basis {
+  margin-top: var(--s-5);
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+}
+
+.match-basis h2 {
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.match-basis p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.match-why {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-3);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.match-why-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.match-why ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Разделитель стоит в конце причины: при переносе строки точка не окажется в начале новой */
+.match-why li:not(:last-child)::after {
+  content: '·';
+  margin-inline: var(--s-2);
+}
+
+/* ---- сохранённые поиски ---- */
+
+.save-search {
+  white-space: nowrap;
+}
+
+.save-search .btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* В строке результатов на телефоне кнопка стоит первой: её надпись вровень с краем колонки */
+@media (max-width: 40rem) {
+  .save-search {
+    margin-left: calc(var(--s-3) * -1);
+  }
+}
+
+.save-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.save-conditions-label {
+  margin: 0 0 var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.save-conditions ul,
+.saved-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Слова поиска пользователь пишет сам: длинное слово без пробелов переносится, а не ломает страницу */
+.save-conditions li,
+.saved-conditions li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.save-conditions .tag,
+.saved-conditions .tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.saved-list {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+}
+
+.saved-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  max-width: var(--measure);
+  padding-block: var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.saved-title {
+  font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.saved-title[data-long] {
+  font-size: var(--text-xl);
+}
+
+.saved-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.saved-title a:hover {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.saved-frequency {
+  width: 100%;
+  max-width: 22rem;
+}
+
+.saved-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.saved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* ---- сроки ---- */
+
+.cal {
+  margin-top: var(--s-5);
+}
+
+.cal-month + .cal-month {
+  margin-top: var(--s-6);
+}
+
+.cal-month-title {
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+  font-size: var(--text-xl);
+}
+
+.cal-month-title::first-letter {
+  text-transform: uppercase;
+}
+
+.cal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cal-entry {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr);
+  gap: var(--s-4);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 40rem) {
+  .cal-entry {
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    gap: var(--s-3);
+  }
+}
+
+.cal-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+}
+
+.cal-day {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.cal-weekday {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.cal-title {
+  font-size: var(--text-lg);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.cal-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cal-title a:hover {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.cal-org {
+  margin: var(--s-1) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.cal-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+  margin: var(--s-1) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.cal-note {
+  margin-top: var(--s-5);
+  max-width: var(--measure);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+/* ---- письма в настройках аккаунта ---- */
+
+.mail-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 34rem;
+}
+
+.mail-hint {
+  display: block;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}

@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 10 (каталог учёных и приглашения на вакансию). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 11 (избранное, сохранённые поиски, подбор, сроки и напоминания). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -20,18 +20,19 @@ SciBox/
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
-│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов); вне покрытия, проверяется тестом в internal/cli
+│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов; `matching.go` — избранное и сохранённые поиски через сервис подбора); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
-│       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`), «мои вакансии», HTTP
+│       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`; разбор и запись условий в адресе: `query.go`), «мои вакансии», HTTP
 │       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / организациям / публичный, кто видит профиль и контакты; без базы и HTTP
 │       ├── profiles/     профиль учёного (критичная зона): основные поля, записи разделов, приватность, поиск по DOI, сборка резюме, каталог учёных (`catalog.go`), HTTP
 │       ├── applications/ отклики (критичная зона): отправка (снимок профиля, резюме, PDF-файлы, рекомендатели), «Мои отклики», карточка глазами соискателя и организации, выдача файлов, отзыв, «можно ли откликнуться»; разбор организацией (`review.go`: «просмотрен» при открытии, решение, приглашения и ответы на них, список откликов), таблицы переходов (`transitions.go`), проверка приглашений (`invitation_input.go`), тексты уведомлений (`notices.go`), HTTP
 │       ├── references/   рекомендательные письма (критичная зона): просьбы, одноразовые ссылки, письмо текстом/PDF, отказ, повтор и отмена, HTTP (в том числе страница рекомендателя без входа)
 │       ├── files/        файлы откликов (критичная зона): проверка PDF, имена, multipart-запрос, таблица «вид файла → кто видит», безопасная выдача
 │       ├── offers/       приглашения учёных на вакансии (критичная зона): отправка (права `ManageVacancies`, приватность профиля, лимит), ответ «Интересно / Не сейчас», отзыв, списки обеих сторон, «куда можно пригласить», тексты уведомлений (`notices.go`), HTTP
-│       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, HTTP
+│       ├── matching/     избранное, сохранённые поиски, подбор, календарь сроков (критичная зона): правила подбора (`rules.go`, без базы), расписание (`schedule.go`), сервис (`service.go`), фоновая рассылка по поискам (`digest.go`) и напоминания о сроках (`reminders.go`), тексты писем (`notices.go`), HTTP
+│       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, переключатели писем (`settings.go`), HTTP
 │       ├── testkit/      помощники для тестов с базой (временная база, сервисы, люди, организация со всеми ролями, «поломка» n-го запроса); вне покрытия
 │       ├── crossref/     клиент Crossref (поиск публикации по DOI), нормализация DOI
 │       ├── cv/           отрисовка PDF по описанию документа (fpdf, шрифты в `fonts/`, лицензия OFL)
@@ -59,17 +60,18 @@ SciBox/
         │   ├── vacancies/ страницы «Мои вакансии», вакансия (статья + управление), форма (по типу позиции), список для страниц организаций; api.ts (+ справочники useReference), labels.ts, formValues.ts
         │   ├── applications/ форма отклика, кнопка на вакансии (`ApplyBlock`), «Мои отклики», отклик глазами соискателя (рекомендации: повторить, отменить, добавить), список откликов организации (`CandidatesPage`), карточка отклика для организации (панель решения), приглашения (`Invitations`, окна `InviteModal`, `DecisionModal`, `AnswerModals`), страница рекомендателя; api.ts, labels.ts, review.css
         │   ├── catalog/  каталог учёных: страница `/scientists` (поиск, фильтры, чипы, порядок, страницы), запись `ScientistEntry`, фильтры, адрес (`params.ts`)
+        │   ├── matching/ избранное, подбор, сохранённые поиски, сроки: четыре страницы-вкладки (`FavoritesPage`, `MatchesPage`, `SavedSearchesPage`, `DeadlinesPage`), закладка `FavoriteButton`, «Сохранить поиск» (`SaveSearch.tsx`), открытие поиска из уведомления (`OpenSavedSearchPage`), письма в настройках аккаунта (`MailSettings`); api.ts, labels.ts, matching.css
         │   ├── offers/   приглашения на вакансии: окно «Пригласить» и кнопка, «Приглашения» учёного (`/offers`, `/offers/:id`), «Отправленные приглашения» организации (`/sent-offers`), вкладки «Отклики / Приглашения»; api.ts, labels.ts
         │   ├── notifications/ колокольчик в шапке (окно с последними, число непрочитанных раз в минуту), страница «Уведомления»; api.ts
         │   ├── profile/  «Мой профиль» (правка разделов в окнах, приватность), форма основного, страница учёного для других, разметка профиля `ProfileView`, поля записей по описанию (`sections.ts`)
-        │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts, «Раздел готовится»
+        │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts
         │   ├── status/   стартовая страница (проверка сервера), 404
         │   └── styleguide/  служебная страница /styleguide (вне покрытия)
         ├── i18n/         ru.ts (все тексты), index.ts (t)
         ├── lib/          plural, deadline (срок подачи словами), normalize (поиск без регистра и ё)
         ├── styles/       tokens.css (цвета, шкалы), base.css (шрифты, сброс), layout.css
         ├── ui/           Button, Field/TextField/TextArea/Select (с группами пунктов), FilterGroup/ScienceFilter (группы фильтров и области науки; поиск и каталог), Combobox, Tag/FilterChip, FilePicker (выбор PDF), Deadline,
-        │                 VacancyEntry, Modal, ToastProvider/useToast, EmptyState, Skeleton, icons; CSS рядом с компонентом
+        │                 VacancyEntry (слот `action` под сроком: закладка), Modal, ToastProvider/useToast, EmptyState, Skeleton, icons; CSS рядом с компонентом
         └── test/         setup.ts, render.tsx (renderApp, jsonResponse), api.ts (stubApi: подставной сервер), forms.ts
 ```
 
@@ -129,6 +131,11 @@ SciBox/
   - `applications` + `decision_note` (записка к решению, до 1000 знаков), `decided_by` (кто решил, `ON DELETE SET NULL`);
   - `application_invitations` (id, application_id `CASCADE`, kind `interview|contacts|request_contacts`, status `pending|confirmed|proposed|answered|shared|cancelled`, message, starts_at, place_kind `online|onsite`, place, contact_name, contact_email, contact_phone, answer_at (предложенное время), answer_note, answer_contact, answer_time, answered_at, created_by, created_at, updated_at; CHECK: поля собеседования заполнены ровно у `interview`).
 - Миграция `00010_offers.sql`: `vacancy_offers` (id, vacancy_id → `vacancies` `ON DELETE RESTRICT`, user_id → `users` `ON DELETE CASCADE`, invited_by → `users` `ON DELETE SET NULL`, status `pending|interested|declined|cancelled`, message, answer_note (до 1000 знаков), answered_at, created_at, updated_at; CHECK: `answered_at` есть ровно у ответивших; уникальный индекс `(vacancy_id, user_id) WHERE status <> 'cancelled'`). Счётчик частоты `offer` (20 в сутки на человека) в общей `rate_events`.
+- Миграция `00011_matching.sql`:
+  - `favorites` (user_id → `users` `CASCADE`, vacancy_id → `vacancies` `CASCADE`, created_at; ключ user_id+vacancy_id);
+  - `saved_searches` (id, user_id `CASCADE`, name до 120, query до 2000 знаков в каноническом виде, frequency `instant|daily|weekly|off`, checked_at (граница «всё до неё учтено»), next_run_at, last_sent_at, created_at, updated_at; индекс по `next_run_at` для включённых);
+  - `deadline_reminders` (user_id, vacancy_id, stage 1 или 7, deadline, sent_at; ключ из четырёх полей: одно напоминание на человека, вакансию, ступень и срок);
+  - `notification_settings` (user_id, email_new_vacancies, email_deadlines, updated_at).
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
@@ -208,6 +215,16 @@ SciBox/
 | `POST /api/offers/{id}/answer` `{action: interested|declined, note}` | 204; только приглашённый, один раз; 422 `action`, `note`; 409 `invalid_offer_state` |
 | `POST /api/offers/{id}/cancel` | 204; ведущий вакансию; чужое 404; 409 `invalid_offer_state`, если уже ответили или отозвали |
 | `GET /api/my/sent-offers?vacancy=&status=&limit=&offset=` | «Отправленные приглашения» организации: `{items:[offer со scientist{profile_id,name} и can_cancel], total, counts по четырём состояниям}` в пределах `ManageVacancies`; 422 на неверные `vacancy` и `status` |
+| `GET /api/favorites?limit=&offset=` | вошедший: `{items:[{vacancy: карточка, added_at, state: open|expired|closed, application_id}], total}`: сначала открытые, внутри групп новые добавления сверху; архивные не показываются; `limit` до 50, по умолчанию 20 |
+| `GET /api/favorites/ids` | `{ids:[…]}`: номера всех избранных вакансий (для закладок в списках) |
+| `PUT /api/favorites/{vacancyId}` | 204; повтор ничего не меняет; черновик, архив и неизвестная вакансия 404; 409 `too_many_favorites` (предел 200) |
+| `DELETE /api/favorites/{vacancyId}` | 204, даже если вакансии в избранном не было |
+| `GET /api/saved-searches` | `{items:[{id,name,query,frequency,created_at,last_sent_at}]}`: свои, новые сверху |
+| `POST /api/saved-searches` `{name, query, frequency}` | 201 `{search}`; `query` — строка запроса страницы поиска (проверяется и записывается в каноническом виде); 422 по полям `name`, `frequency`, `query` (в том числе «условий нет»); 409 `too_many_searches` (предел 20) |
+| `GET /api/saved-searches/{id}`, `PATCH …` `{name, frequency}`, `DELETE …` | свой поиск; чужой и несуществующий 404; правка меняет название и частоту (условия нет); включение после «не сообщать» начинает счёт новых заново |
+| `GET /api/matches?limit=&offset=` | «Подходящие вам»: `{items:[{vacancy, score, reasons:[коды]}], total, ready, basis:{specialties, level, has_region, has_degree}}`; `ready: false` без областей науки в профиле |
+| `GET /api/deadlines` | календарь сроков избранного: `{items:[{vacancy, days_left, application_id}], without_deadline}` (опубликованные, срок сегодня или позже, ближайшие первыми) |
+| `GET /api/notification-settings`, `PUT …` `{email_new_vacancies, email_deadlines}` | какие письма присылать (оба поля обязательны); нет строки — всё включено |
 | `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
@@ -236,7 +253,10 @@ SciBox/
 | `/scientists` (`?q=&field=&region=&degree=&title=&open=&h_min=&sort=&page=`) | Каталог учёных (срез 10): строка поиска и регион, фильтры, чипы, порядок, страницы по 20; у вошедшего в режиме «Нанимаю» на каждой записи «Пригласить на вакансию» |
 | `/offers`, `/offers/:id` | «Приглашения» учёного: список; страница приглашения с ответом «Интересно / Не сейчас» (один раз, с запиской), вакансия и кнопка «Откликнуться»; без входа ведут на `/login?next=` |
 | `/sent-offers` (`?status=&page=`) | «Отправленные приглашения» организации: вкладки по состояниям со счётчиками, ответы и записки учёных, «Отозвать» |
-| `/favorites` | «Раздел готовится» (заглушка до своего среза) |
+| `/favorites` (`?page=`) | «Избранное» (срез 11): вакансии с отметками «набор закончен» / «срок прошёл» / «вы откликнулись», «Убрать» с кнопкой «Вернуть», страницы по 20; вкладки раздела |
+| `/matches` (`?page=`) | «Подходящие вам»: на что опирается подбор, вакансии с причинами; «подбирать пока не по чему», если в профиле нет областей науки |
+| `/saved-searches`, `/saved-searches/:id` | «Поиски»: условия тегами, частота прямо в списке, «Переименовать», «Удалить»; адрес с номером открывает поиск (из уведомления) с новыми вакансиями вперёд |
+| `/deadlines` | «Сроки подачи»: избранное по месяцам и датам, маркер у сроков в пределах недели, примечание о вакансиях без срока |
 | `*` | 404 «Такой страницы нет» со ссылкой на главную |
 | (ошибка отрисовки) | `CrashPage` через `errorElement` роутера |
 
@@ -246,6 +266,9 @@ SciBox/
 ## Дизайн-система (срез 2)
 - Мир «Журнал» (D-035, D-036): белая страница, чернильно-синий `--blue` для действий, жёлтый маркер `--mark` как единственный акцент (близкий срок, активный режим и пункт меню). Заголовки и аннотации Literata, интерфейс Golos Text (`@fontsource-variable`, лежат в проекте).
 - Все значения берутся из `src/styles/tokens.css`; в компонентах своих цветов и размеров нет. Тёмной темы нет.
-- Режим «Ищу работу / Нанимаю» хранится в `localStorage` (`scibox.role`), пока влияет только на меню (D-038).
+- Режим «Ищу работу / Нанимаю» хранится в `localStorage` (`scibox.role`), влияет на меню и на то, кому показаны закладка «В избранное» и «Сохранить поиск» (D-038, D-112).
 - Срок подачи: `describeDeadline` (`src/lib/deadline.ts`), «близкий» = до 14 дней включительно.
 - Подробное описание визуальной системы: `DESIGN.md` (ведёт impeccable).
+
+## Фоновая работа в процессе сервера
+`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), очистку аккаунтов и организаций (раз в час) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).

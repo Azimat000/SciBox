@@ -437,42 +437,46 @@ WHERE v.status = 'published'
   AND (NOT $18::bool OR v.is_competition)
   AND (NOT $19::bool OR v.deadline IS NULL)
   AND ($20::date IS NULL OR v.deadline <= $20::date)
+  AND ($21::timestamptz IS NULL OR v.published_at > $21::timestamptz)
+  AND ($22::timestamptz IS NULL OR v.published_at <= $22::timestamptz)
 ORDER BY
-  CASE WHEN $21::text = 'relevance' AND $4::text <> '' THEN
+  CASE WHEN $23::text = 'relevance' AND $4::text <> '' THEN
     CASE WHEN $5::bool
       THEN word_similarity($4::text, v.title || ' ' || v.position_name || ' ' || v.org_name)
       ELSE ts_rank_cd(s.doc, websearch_to_tsquery('russian', $4::text)) END
   END DESC NULLS LAST,
-  CASE WHEN $21::text = 'deadline' THEN v.deadline END ASC NULLS LAST,
-  CASE WHEN $21::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END DESC NULLS LAST,
+  CASE WHEN $23::text = 'deadline' THEN v.deadline END ASC NULLS LAST,
+  CASE WHEN $23::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END DESC NULLS LAST,
   v.published_at DESC, v.id
-LIMIT $23 OFFSET $22
+LIMIT $25 OFFSET $24
 `
 
 type SearchVacanciesParams struct {
-	Today       time.Time
-	OrgID       *uuid.UUID
-	UnitID      *uuid.UUID
-	Q           string
-	Fuzzy       bool
-	Fields      []string
-	Region      string
-	Formats     []string
-	Types       []string
-	Levels      []int32
-	Degrees     []string
-	OrgKinds    []string
-	Fundings    []string
-	Rates       []int32
-	Terms       []string
-	SalaryMin   int32
-	Housing     bool
-	Competition bool
-	NoDeadline  bool
-	DeadlineTo  *time.Time
-	Sort        string
-	RowOffset   int32
-	RowLimit    int32
+	Today          time.Time
+	OrgID          *uuid.UUID
+	UnitID         *uuid.UUID
+	Q              string
+	Fuzzy          bool
+	Fields         []string
+	Region         string
+	Formats        []string
+	Types          []string
+	Levels         []int32
+	Degrees        []string
+	OrgKinds       []string
+	Fundings       []string
+	Rates          []int32
+	Terms          []string
+	SalaryMin      int32
+	Housing        bool
+	Competition    bool
+	NoDeadline     bool
+	DeadlineTo     *time.Time
+	PublishedAfter *time.Time
+	PublishedUntil *time.Time
+	Sort           string
+	RowOffset      int32
+	RowLimit       int32
 }
 
 type SearchVacanciesRow struct {
@@ -505,6 +509,8 @@ func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams
 		arg.Competition,
 		arg.NoDeadline,
 		arg.DeadlineTo,
+		arg.PublishedAfter,
+		arg.PublishedUntil,
 		arg.Sort,
 		arg.RowOffset,
 		arg.RowLimit,

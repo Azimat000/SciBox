@@ -34,6 +34,8 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Post("/read-all", h.readAll)
 		r.Post("/{id}/read", h.read)
 	})
+	r.With(h.requireUser).Get("/notification-settings", h.settings)
+	r.With(h.requireUser).Put("/notification-settings", h.saveSettings)
 }
 
 func actor(r *http.Request) auth.User {
@@ -96,4 +98,43 @@ func (h *Handler) readAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// maxBody — запрос с двумя переключателями короткий.
+const maxBody = 1 << 10
+
+func (h *Handler) settings(w http.ResponseWriter, r *http.Request) {
+	out, err := h.svc.Settings(r.Context(), actor(r))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) saveSettings(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		EmailNewVacancies *bool `json:"email_new_vacancies"`
+		EmailDeadlines    *bool `json:"email_deadlines"`
+	}
+	if !apierr.DecodeJSON(w, r, &in, maxBody) {
+		return
+	}
+	if in.EmailNewVacancies == nil || in.EmailDeadlines == nil {
+		fields := map[string]string{}
+		if in.EmailNewVacancies == nil {
+			fields["email_new_vacancies"] = "Нужно «да» или «нет»"
+		}
+		if in.EmailDeadlines == nil {
+			fields["email_deadlines"] = "Нужно «да» или «нет»"
+		}
+		apierr.WriteFieldErrors(w, "Проверьте настройки", fields)
+		return
+	}
+	out, err := h.svc.SaveSettings(r.Context(), actor(r), Settings{EmailNewVacancies: *in.EmailNewVacancies, EmailDeadlines: *in.EmailDeadlines})
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, out)
 }

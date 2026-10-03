@@ -55,6 +55,8 @@ export default defineConfig({
         'src/features/notifications/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
         // Приглашения учёных на вакансии: кому показаны кнопки и ответы (решает сервер, интерфейс не должен обманывать; срез 10).
         'src/features/offers/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
+        // Избранное, подбор, сохранённые поиски, сроки и настройки писем: что видит и меняет человек в своём разделе (срез 11).
+        'src/features/matching/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
       },
     },
   },

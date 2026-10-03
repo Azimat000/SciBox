@@ -1,6 +1,7 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { apiGet, apiSend, apiSendForm } from '../../api/client'
 import { useMe } from '../auth/api'
+import { refreshAfterApplying } from '../matching/api'
 import type { Profile } from '../profile/api'
 
 export const statuses = ['sent', 'viewed', 'invited', 'rejected', 'accepted', 'withdrawn'] as const
@@ -278,8 +279,9 @@ export function answerInvitation(appId: string, invId: string, fields: AnswerFie
 }
 
 /** Отклик изменился: карточка, список и состояние кнопки на вакансии перечитаются. */
-export function refreshApplications(client: QueryClient) {
-  return client.invalidateQueries({ queryKey: keys.all })
+export async function refreshApplications(client: QueryClient) {
+  // Отклик (и его отзыв) меняет подборку «Подходящие вам», отметки в избранном и сроки.
+  await Promise.all([client.invalidateQueries({ queryKey: keys.all }), refreshAfterApplying(client)])
 }
 
 /** Адрес файла отклика (скачивается как PDF). */

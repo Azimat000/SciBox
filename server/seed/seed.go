@@ -32,6 +32,8 @@ type Result struct {
 	Profiles      int
 	Applications  int
 	Offers        int
+	Favorites     int
+	Searches      int
 }
 
 type person struct{ key, email, name string }
@@ -218,6 +220,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 	}
 	// Приглашения из каталога идут последними: им нужны и профили, и открытые вакансии.
 	if res.Offers, err = seedOffers(ctx, pool, ids, now); err != nil {
+		return Result{}, err
+	}
+	// Избранное и сохранённые поиски: избранное берётся из «подходящих» вакансий, поэтому после профилей и откликов.
+	if res.Favorites, res.Searches, err = seedMatching(ctx, pool, ids, now); err != nil {
 		return Result{}, err
 	}
 	return res, nil

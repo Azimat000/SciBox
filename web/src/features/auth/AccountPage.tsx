@@ -10,6 +10,7 @@ import { Skeleton } from '../../ui/Skeleton'
 import { Tag } from '../../ui/Tag'
 import { TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
+import { MailSettings } from '../matching/MailSettings'
 import { changePassword, revokeOtherSessions, setMe, updateName, useMe, type User } from './api'
 import { AuthPage } from './AuthPage'
 import { describeError, fieldErrorsOf } from './errors'
@@ -59,6 +60,7 @@ function Account({ user }: { user: User }) {
   return (
     <AuthPage title={t.auth.account.title} lead={t.auth.account.lead} wide>
       <ProfileSection user={user} />
+      <MailSettings />
       <PasswordSection />
       <DevicesSection />
       <section className="account-section">

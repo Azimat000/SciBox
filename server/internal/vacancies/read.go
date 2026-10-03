@@ -209,3 +209,8 @@ func (s *Service) Targets(ctx context.Context, user auth.User) ([]Target, error)
 	}
 	return out, nil
 }
+
+// CardsFrom собирает карточки для списков других разделов (избранное, подборка): специальности подгружаются одним запросом.
+func CardsFrom(ctx context.Context, q *dbgen.Queries, rows []dbgen.VacancyView) ([]Card, error) {
+	return cardsFrom(ctx, q, rows)
+}

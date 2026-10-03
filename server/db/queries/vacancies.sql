@@ -89,6 +89,8 @@ WHERE v.status = 'published'
   AND (NOT @competition::bool OR v.is_competition)
   AND (NOT @no_deadline::bool OR v.deadline IS NULL)
   AND (sqlc.narg(deadline_to)::date IS NULL OR v.deadline <= sqlc.narg(deadline_to)::date)
+  AND (sqlc.narg(published_after)::timestamptz IS NULL OR v.published_at > sqlc.narg(published_after)::timestamptz)
+  AND (sqlc.narg(published_until)::timestamptz IS NULL OR v.published_at <= sqlc.narg(published_until)::timestamptz)
 ORDER BY
   CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN
     CASE WHEN @fuzzy::bool

@@ -57,6 +57,23 @@
   margin-top: var(--s-4);
 }
 
+/* Отклик и закладка в одной строке; у закладки поля, поэтому её сдвигаем к краю колонки */
+.vacancy-actions {
+  margin-top: var(--s-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+}
+
+.vacancy-actions:empty {
+  display: none;
+}
+
+.vacancy-actions .apply-block {
+  margin-top: 0;
+}
+
 .vacancy-page > .alert,
 .vacancy-manage {
   margin-top: var(--s-5);
