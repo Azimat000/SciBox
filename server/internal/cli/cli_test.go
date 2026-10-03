@@ -103,8 +103,8 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM organizations"); n != 30 {
 		t.Errorf("%d organizations, want 30", n)
 	}
-	if n := count("SELECT count(*) FROM users WHERE email_confirmed_at IS NOT NULL"); n != 9 {
-		t.Errorf("%d confirmed users, want 9", n)
+	if n := count("SELECT count(*) FROM users WHERE email_confirmed_at IS NOT NULL"); n != 17 {
+		t.Errorf("%d confirmed users, want 17", n)
 	}
 	// У каждой организации есть владелец и подразделение; руководители подразделений — её сотрудники.
 	if n := count("SELECT count(*) FROM organizations o WHERE NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.role = 'owner') OR NOT EXISTS (SELECT 1 FROM units u WHERE u.org_id = o.id)"); n != 0 {
@@ -147,6 +147,24 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 		OR (v.work_format <> 'remote' AND (v.city = '' OR v.region_code IS NULL))
 		OR (v.is_competition AND v.deadline IS NULL))`); n != 0 {
 		t.Errorf("%d published vacancies are not complete", n)
+	}
+	// Профили демо-учёных: во всех режимах приватности, заполнены, записи по порядку.
+	if n := count("SELECT count(*) FROM profiles"); n != 14 {
+		t.Errorf("%d profiles, want 14", n)
+	}
+	for _, mode := range []string{"hidden", "orgs", "public"} {
+		if n := count("SELECT count(*) FROM profiles WHERE visibility = '" + mode + "'"); n == 0 {
+			t.Errorf("no %s profiles", mode)
+		}
+	}
+	if n := count("SELECT count(*) FROM profiles WHERE open_to_offers"); n == 0 {
+		t.Error("nobody is open to offers")
+	}
+	if n := count("SELECT count(DISTINCT kind) FROM profile_items"); n != 6 {
+		t.Errorf("%d kinds of profile items, want 6", n)
+	}
+	if n := count("SELECT count(*) FROM profiles p WHERE headline = '' OR NOT EXISTS (SELECT 1 FROM profile_specialties s WHERE s.profile_id = p.id) OR NOT EXISTS (SELECT 1 FROM profile_items i WHERE i.profile_id = p.id)"); n != 0 {
+		t.Errorf("%d demo profiles are empty", n)
 	}
 	if n := count("SELECT count(*) FROM org_invitations"); n != 1 {
 		t.Errorf("%d invitations, want 1", n)

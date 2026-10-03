@@ -1,0 +1,341 @@
+/* Профиль учёного (срез 7). Только токены из styles/tokens.css. */
+
+.profile-page {
+  padding-bottom: var(--s-7);
+}
+
+.profile-page > .alert {
+  margin-top: var(--s-5);
+  max-width: var(--measure);
+}
+
+.profile-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.profile-note {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+/* ---- приватность ---- */
+
+.privacy-panel {
+  margin-top: var(--s-6);
+  max-width: 48rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.privacy-panel h2 {
+  font-size: var(--text-xl);
+}
+
+.privacy-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.privacy-mode {
+  position: relative;
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.privacy-mode:hover {
+  border-color: var(--ink);
+}
+
+.privacy-mode[data-checked] {
+  border-color: var(--blue);
+  background: var(--blue-wash);
+}
+
+.privacy-mode input {
+  margin-top: 0.25rem;
+  accent-color: var(--blue);
+  flex: none;
+}
+
+.privacy-mode:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.privacy-mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.privacy-mode-label {
+  font-weight: 600;
+}
+
+.privacy-mode-hint {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+@media (max-width: 48rem) {
+  .privacy-modes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- страница профиля ---- */
+
+.profile {
+  margin-top: var(--s-6);
+}
+
+.profile-head h1 {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.profile-head h1[data-long] {
+  font-size: var(--text-2xl);
+  line-height: 1.25;
+}
+
+.profile-headline {
+  margin-top: var(--s-3);
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  line-height: 1.45;
+  color: var(--ink-body);
+  overflow-wrap: anywhere;
+}
+
+.profile-meta {
+  margin-top: var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.profile-contact {
+  margin-top: var(--s-2);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.profile-section {
+  margin-top: var(--s-7);
+}
+
+.profile-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+}
+
+.profile-section-head h2 {
+  font-size: var(--text-xl);
+}
+
+.profile-text {
+  margin-top: var(--s-4);
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  line-height: 1.7;
+  color: var(--ink-body);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.profile-empty {
+  margin-top: var(--s-4);
+  max-width: var(--measure);
+  color: var(--ink-soft);
+}
+
+.profile-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profile-item {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr) auto;
+  gap: var(--s-1) var(--s-5);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-item-label {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  padding-top: 0.15rem;
+}
+
+.profile-item-body {
+  min-width: 0;
+}
+
+.profile-item-lead {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.profile-item-line {
+  margin-top: var(--s-1);
+  max-width: var(--measure);
+  color: var(--ink-body);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.profile-item-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+}
+
+.profile-item-actions {
+  display: flex;
+  gap: var(--s-1);
+  align-self: start;
+}
+
+.profile-tags {
+  margin: var(--s-4) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.profile-tags .tag {
+  gap: 0.375rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.profile-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0 var(--s-6);
+}
+
+.profile-fact {
+  min-width: 0;
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-fact-wide {
+  grid-column: 1 / -1;
+}
+
+.profile-fact dt {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.profile-fact dd {
+  margin: var(--s-1) 0 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.profile-h {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-5);
+}
+
+.profile-h-value {
+  font-weight: 600;
+}
+
+@media (max-width: 40rem) {
+  .profile-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-item-actions {
+    margin-top: var(--s-2);
+    margin-left: calc(var(--s-3) * -1);
+  }
+}
+
+/* ---- формы ---- */
+
+.profile-form {
+  margin-top: var(--s-5);
+  max-width: 40rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+
+.modal .profile-form {
+  margin-top: 0;
+  gap: var(--s-4);
+}
+
+.profile-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+
+.profile-field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 30rem) {
+  .profile-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.profile-doi-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: start;
+}
+
+.profile-doi-row .btn {
+  margin-top: 1.65rem;
+}
+
+.profile-doi .alert {
+  margin-top: var(--s-3);
+}
+
+.profile-edit h1 {
+  overflow-wrap: anywhere;
+}

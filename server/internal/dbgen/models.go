@@ -61,6 +61,50 @@ type Position struct {
 	Sort         int16
 }
 
+type Profile struct {
+	ID                  uuid.UUID
+	UserID              uuid.UUID
+	Visibility          string
+	OpenToOffers        bool
+	Headline            string
+	City                string
+	RegionCode          *string
+	About               string
+	Degree              string
+	DegreeSpecialtyCode *string
+	DegreeYear          *int16
+	DegreeInstitution   string
+	DissertationTitle   string
+	AcademicTitle       string
+	AcademicTitleYear   *int16
+	Orcid               string
+	Spin                string
+	ScopusID            string
+	WosID               string
+	HRsci               *int16
+	HScopus             *int16
+	HWos                *int16
+	HScholar            *int16
+	ContactEmail        string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type ProfileItem struct {
+	ID        uuid.UUID
+	ProfileID uuid.UUID
+	Kind      string
+	SortYear  int16
+	Data      []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type ProfileSpecialty struct {
+	ProfileID     uuid.UUID
+	SpecialtyCode string
+}
+
 type RateEvent struct {
 	ID   int64
 	Kind string

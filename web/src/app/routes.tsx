@@ -17,6 +17,9 @@ import { OrganizationPage } from '../features/orgs/OrganizationPage'
 import { OrganizationsPage } from '../features/orgs/OrganizationsPage'
 import { UnitEditPage } from '../features/orgs/UnitEditPage'
 import { UnitPage } from '../features/orgs/UnitPage'
+import { ProfileEditPage } from '../features/profile/ProfileEditPage'
+import { ProfilePage } from '../features/profile/ProfilePage'
+import { ScientistPage } from '../features/profile/ScientistPage'
 import { MyVacanciesPage } from '../features/vacancies/MyVacanciesPage'
 import { VacancyEditPage } from '../features/vacancies/VacancyEditPage'
 import { VacancyPage } from '../features/vacancies/VacancyPage'
@@ -64,6 +67,9 @@ export const routes: RouteObject[] = [
       { path: 'my-vacancies/new', element: <VacancyEditPage /> },
       { path: 'my-vacancies/:id/edit', element: <VacancyEditPage /> },
       { path: 'vacancies/:id', element: <VacancyPage /> },
+      { path: 'profile', element: <ProfilePage /> },
+      { path: 'profile/edit', element: <ProfileEditPage /> },
+      { path: 'scientists/:id', element: <ScientistPage /> },
       { path: 'invitations/accept', element: <AcceptInvitationPage /> },
       { path: 'styleguide', element: <StyleguidePage /> },
       ...comingSoonPaths.map((path) => ({ path, element: <ComingSoonPage /> })),

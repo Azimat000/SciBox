@@ -75,6 +75,9 @@ export function AccountBlock({
         <p className="account-block-name">{user.name}</p>
         <p className="account-block-email">{user.email}</p>
       </div>
+      <Link to="/profile" className="account-block-link">
+        {t.profile.menuLink}
+      </Link>
       <Link to="/account" className="account-block-link">
         {t.shell.accountSettings}
       </Link>

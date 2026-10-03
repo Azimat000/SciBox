@@ -18,6 +18,7 @@ const (
 	DefaultProductConfig = "../config/product.json"
 	DefaultSMTPAddr      = "localhost:1025" // Mailpit из docker-compose.yml
 	DefaultPublicURL     = "http://localhost:5173"
+	DefaultCrossrefURL   = "https://api.crossref.org"
 	defaultMailAddress   = "no-reply@scibox.local"
 )
 
@@ -36,6 +37,9 @@ type Config struct {
 	MailFrom string
 	// PublicURL — адрес, по которому человек открывает сайт: из него строятся ссылки в письмах.
 	PublicURL string
+	// CrossrefURL — адрес API Crossref (поиск публикаций по DOI); CrossrefMailto — почта для «вежливого пула» Crossref.
+	CrossrefURL    string
+	CrossrefMailto string
 }
 
 // Load читает настройки. getenv обычно os.Getenv; в тестах подставляется своя функция.
@@ -45,6 +49,9 @@ func Load(getenv func(string) string) (Config, error) {
 		DatabaseURL: envOr(getenv, "DATABASE_URL", DefaultDatabaseURL),
 		SMTPAddr:    envOr(getenv, "SCIBOX_SMTP_ADDR", DefaultSMTPAddr),
 		PublicURL:   strings.TrimRight(envOr(getenv, "SCIBOX_PUBLIC_URL", DefaultPublicURL), "/"),
+
+		CrossrefURL:    strings.TrimRight(envOr(getenv, "SCIBOX_CROSSREF_URL", DefaultCrossrefURL), "/"),
+		CrossrefMailto: envOr(getenv, "SCIBOX_CROSSREF_MAILTO", ""),
 	}
 	product, err := LoadProduct(envOr(getenv, "SCIBOX_PRODUCT_CONFIG", DefaultProductConfig))
 	if err != nil {

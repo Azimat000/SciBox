@@ -33,3 +33,17 @@
 ## Степени и звания
 
 - «Кандидат наук» и «доктор наук» (степени), «доцент» и «профессор» (звания): как требования к кандидату в вакансии. Зарубежный PhD и признание иностранных степеней в вакансию не выносятся, их обработает профиль учёного (срез 7).
+
+## Идентификаторы учёного и Crossref (срез 7)
+
+Исследование `web-researcher` 2026-10-03; ссылки: Crossref REST API (github.com/CrossRef/rest-api-doc), документация Crossref по polite pool и по DOI с особыми символами, структура ORCID iD (support.orcid.org), ORCID Sandbox (info.orcid.org), форум Crossref о тестовых префиксах.
+
+- **Crossref.** `GET https://api.crossref.org/works/{doi}`: поля `title`, `container-title` (списки), `author[].given/family/name`, `issued/published-print/published-online.date-parts`, `volume`, `issue`, `page`, `type`, `DOI`. Несуществующий DOI даёт 404. Почту для «вежливого пула» указывают в `User-Agent` (`SciBox/1.0 (mailto:…)`); лимит polite pool на момент проверки: 10 запросов в интервал, 3 одновременных. Параметр `select` для `/works/{doi}` не работает. Метаданные — общедоступные факты (CC0), абстракты под правами издателя (мы их не берём).
+  Расхождение: исследователь написал, что `title` строка; на практике Crossref отдаёт список, поэтому разбор принимает и то и другое.
+- **ORCID iD:** 16 знаков, последний цифра или X; контрольный знак по ISO 7064 MOD 11-2 (алгоритм в `profiles.orcidCheckDigit`, сверен на четырёх известных образцах iD).
+- **SPIN-код РИНЦ, Scopus Author ID, WoS ResearcherID:** контрольной суммы нет; SPIN в источниках «8 цифр», Scopus «11 цифр»: приняты широкие диапазоны (4–8 и 8–12 цифр), потому что точная длина первоисточником не подтверждена. ResearcherID: `[A-Z]{1,3}-NNNN-(19|20)YY`.
+- **Типы Crossref** к типам записи: `journal-article` → статья; `book`, `monograph`, `edited-book`, `reference-book` → книга; `book-chapter`, `book-section`, `reference-entry` → глава; `proceedings-article`, `proceedings` → конференция; `posted-content` → препринт; `dissertation` → диссертация; остальное → другое.
+- **h-index:** вводится вручную; верхняя граница проверки 300 (исследователь советовал 200, взят запас: у Google Scholar значения выше).
+- **Демо-данные:** DOI из префикса `10.5555` (Crossref использует его для тестов, но случайные настоящие записи там бывают); ORCID `0000-0001-50xx-xxxx` (диапазон песочницы ORCID, прямого подтверждения, что люди его не получают, не найдено); тестовых диапазонов у Scopus, SPIN и WoS нет, поэтому демо-номера придуманы и могут случайно совпасть с настоящими.
+- **Шрифты резюме:** Golos Text и Literata с github.com/google/fonts (папки `ofl/golostext`, `ofl/literata`), лицензия SIL OFL 1.1 (`server/internal/cv/fonts/OFL.txt`). Статические начертания получены из вариативных программой fonttools (`varLib.instancer`, `pyftsubset`): Golos 400 и 700, Literata 400 (opsz 12) и 600 (opsz 24); оставлены латиница, кириллица, греческий, математические знаки и пунктуация.
+

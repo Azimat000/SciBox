@@ -200,8 +200,10 @@ func TestHTTPFullCycle(t *testing.T) {
 	if c == nil || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.Secure || c.Value == "" {
 		t.Fatalf("session cookie: %+v", c)
 	}
-	if c.MaxAge < 29*24*3600 || c.MaxAge > 30*24*3600 {
-		t.Fatalf("cookie max-age = %d", c.MaxAge)
+	// Срок задаёт сервис по своим (в тесте подставным) часам, а Max-Age считается по настоящим: поэтому проверяем срок
+	// относительно подставных часов (Max-Age через месяц после даты теста стал бы отрицательным и ронял бы тест).
+	if got := c.Expires.Sub(a.e.clock.Now()); got < 29*24*time.Hour || got > 30*24*time.Hour {
+		t.Fatalf("cookie lives %v from the test clock", got)
 	}
 
 	r = a.get("/api/auth/me")

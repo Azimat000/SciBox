@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 6 (поиск вакансий). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 7 (профиль учёного). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -20,11 +20,15 @@ SciBox/
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
-│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений); вне покрытия, проверяется тестом в internal/cli
+│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
 │       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`), «мои вакансии», HTTP
+│       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / организациям / публичный, кто видит профиль и контакты; без базы и HTTP
+│       ├── profiles/     профиль учёного (критичная зона): основные поля, записи разделов, приватность, поиск по DOI, сборка резюме, HTTP
+│       ├── crossref/     клиент Crossref (поиск публикации по DOI), нормализация DOI
+│       ├── cv/           отрисовка PDF по описанию документа (fpdf, шрифты в `fonts/`, лицензия OFL)
 │       ├── refdata/      справочники (специальности ВАК, регионы, должности, источники): `GET /api/reference`
 │       ├── apierr/       единый формат ответов и ошибок API (D-032), коды, DecodeJSON
 │       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin
@@ -47,6 +51,7 @@ SciBox/
         │   ├── auth/     страницы входа, регистрации, сброса пароля, подтверждения, настроек, политики; меню пользователя; useMe, useForm
         │   ├── orgs/     каталог, страницы организации и подразделения, «Организация» (мои организации и приглашения), управление (данные, подразделения, сотрудники), принятие приглашения; api.ts, labels.ts, RequireUser
         │   ├── vacancies/ страницы «Мои вакансии», вакансия (статья + управление), форма (по типу позиции), список для страниц организаций; api.ts (+ справочники useReference), labels.ts, formValues.ts
+        │   ├── profile/  «Мой профиль» (правка разделов в окнах, приватность), форма основного, страница учёного для других, разметка профиля `ProfileView`, поля записей по описанию (`sections.ts`)
         │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts, «Раздел готовится»
         │   ├── status/   стартовая страница (проверка сервера), 404
         │   └── styleguide/  служебная страница /styleguide (вне покрытия)
@@ -73,6 +78,8 @@ SciBox/
 | `SCIBOX_PUBLIC_URL` | `http://localhost:5173` (из него строятся ссылки в письмах; https включает Secure у cookie) |
 | `SCIBOX_HTTP_ADDR` | `127.0.0.1:8080` |
 | `DATABASE_URL` | `postgres://scibox:scibox@localhost:5433/scibox?sslmode=disable` |
+| `SCIBOX_CROSSREF_URL` | `https://api.crossref.org` (поиск публикаций по DOI) |
+| `SCIBOX_CROSSREF_MAILTO` | пусто (почта для «вежливого пула» Crossref, необязательно) |
 | `SCIBOX_PRODUCT_CONFIG` | `../config/product.json` (путь от папки `server/`) |
 | `TEST_DATABASE_URL` (тесты) | `postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable` |
 
@@ -96,6 +103,11 @@ SciBox/
   - представление `vacancy_view` (вакансия + названия должности, региона, организации, подразделения; при добавлении колонок в `vacancies` пересоздать).
   - Счётчик частоты `vacancy_create` (100 в сутки на человека) в общей `rate_events`.
 - Миграция `00006_search.sql`: `vacancy_search` (vacancy_id, doc tsvector; индекс GIN), функция `refresh_vacancy_search(uuid)` и триггеры: на `vacancies` (при вставке и смене текстовых полей), `vacancy_specialties`, `organizations` (название, город), `units` (название). Текст в `vacancy_view` не входит.
+- Миграция `00007_profiles.sql`:
+  - `profiles` (id, user_id уникальный → `users` `ON DELETE CASCADE`, visibility `hidden|orgs|public`, open_to_offers, headline, city, region_code, about, degree `none|candidate|doctor`, degree_specialty_code, degree_year, degree_institution, dissertation_title, academic_title `none|docent|professor`, academic_title_year, orcid, spin, scopus_id, wos_id, h_rsci, h_scopus, h_wos, h_scholar, contact_email, created_at, updated_at; CHECK на длины и перечисления, форматы проверяет сервис);
+  - `profile_specialties` (profile_id, specialty_code);
+  - `profile_items` (id, profile_id, kind `education|experience|publication|grant|patent|teaching`, sort_year, data jsonb, created_at, updated_at; уникальный индекс по `(profile_id, data->>'doi')` для публикаций).
+  - Счётчик частоты `doi_lookup` (60 в час на человека) в общей `rate_events`.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
@@ -136,6 +148,16 @@ SciBox/
 | `DELETE /api/vacancies/{id}` | только черновик; иначе 409 `vacancy_not_draft` |
 | `GET /api/my/vacancies?status=&limit=&offset=` | «Мои вакансии»: `{items,total,counts по статусам}` в пределах прав |
 | `GET /api/my/vacancy-targets` | где человек может создать вакансию: `[{organization, whole_org, units}]` |
+| `GET /api/profile` | вошедший: свой профиль (создаётся пустым и скрытым): `{profile, viewer:{is_owner, can_see_contacts}}`; в `profile` есть `visibility`, `contact_email`, разделы `sections` (всегда списки) |
+| `PUT /api/profile` | основные поля целиком (`headline, city, region_code, about, degree, degree_specialty_code, degree_year, degree_institution, dissertation_title, academic_title, academic_title_year, orcid, spin, scopus_id, wos_id, h_rsci, h_scopus, h_wos, h_scholar, contact_email, specialties`); 422 с полями; приватность и записи не трогает |
+| `PUT /api/profile/privacy` `{visibility, open_to_offers}` | 200 `{profile, viewer}`; 422 при неизвестном режиме |
+| `POST /api/profile/items` `{kind, …поля вида}` | 201 `{item}`; виды `education, experience, publication, grant, patent, teaching`; 422 с полями; 409 `too_many_items` |
+| `PUT /api/profile/items/{id}` `{kind?, …поля}` | 200 `{item}`; чужая или несуществующая запись 404; сменить вид нельзя (422) |
+| `DELETE /api/profile/items/{id}` | 204; чужая запись 404 |
+| `GET /api/profile/doi?doi=` | 200 `{work:{doi,title,authors,venue,year,type,volume,issue,pages}}` из Crossref; 422 неверный или уже добавленный DOI; 404 `doi_not_found`; 502 `doi_unavailable`; 429 после 60 в час |
+| `GET /api/profile/cv` | PDF собственного резюме (`Content-Disposition: attachment`) |
+| `GET /api/scientists/{id}` | публично, с учётом приватности: `{profile, viewer}`; скрытый или неизвестный 404; контакты только владельцу и сотрудникам организаций, `visibility` только владельцу |
+| `GET /api/scientists/{id}/cv` | PDF резюме по тем же правилам (нужен вход) |
 | `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
@@ -152,6 +174,9 @@ SciBox/
 | `/my-vacancies` (`?status=`, `?page=`) | Мои вакансии: вкладки по статусам со счётчиками, действия; без входа ведёт на `/login?next=` |
 | `/my-vacancies/new` (`?org=&unit=`), `/my-vacancies/:id/edit` | Форма вакансии; поля зависят от типа позиции |
 | `/vacancies/:id` | Страница вакансии (статья); тем, кто ведёт вакансию, сверху управление: править, сменить статус, удалить черновик |
+| `/profile` | Мой профиль: кнопки «Изменить основное», «Скачать резюме», «Как видят другие», блок приватности, профиль с «Добавить / Изменить / Удалить» у разделов; без входа ведёт на `/login?next=` |
+| `/profile/edit` | Форма основного: кто вы, степень и звание, специальности, ORCID/SPIN/Scopus/WoS, h-index, контактная почта |
+| `/scientists/:id` | Страница учёного для других (приватность решает сервер; «нет профиля» и «скрыт» выглядят одинаково) |
 | `/scientists`, `/favorites`, `/applications`, `/candidates` | «Раздел готовится» (заглушки до своих срезов) |
 | `*` | 404 «Такой страницы нет» со ссылкой на главную |
 | (ошибка отрисовки) | `CrashPage` через `errorElement` роутера |

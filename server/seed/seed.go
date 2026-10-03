@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,6 +29,7 @@ type Result struct {
 	People        int
 	Organizations int
 	Vacancies     int
+	Profiles      int
 }
 
 type person struct{ key, email, name string }
@@ -163,7 +165,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 
 	var res Result
 	ids := map[string]uuid.UUID{}
-	for _, p := range people {
+	for _, p := range append(slices.Clone(people), extraPeople...) {
 		user, err := q.CreateUser(ctx, dbgen.CreateUserParams{
 			Email: p.email, DisplayName: p.name, PasswordHash: hash, PrivacyConsentAt: now, PrivacyPolicyVersion: auth.PolicyVersion,
 		})
@@ -203,6 +205,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, fmt.Errorf("seed: commit: %w", err)
+	}
+	// Профили учёных заполняются через сервис профилей (у него свои транзакции), поэтому после основной.
+	if res.Profiles, err = seedScientists(ctx, pool, ids); err != nil {
+		return Result{}, err
 	}
 	return res, nil
 }

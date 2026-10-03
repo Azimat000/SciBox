@@ -35,6 +35,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.SMTPAddr != DefaultSMTPAddr || cfg.PublicURL != DefaultPublicURL {
 		t.Fatalf("mail defaults not applied: %+v", cfg)
 	}
+	if cfg.CrossrefURL != DefaultCrossrefURL || cfg.CrossrefMailto != "" {
+		t.Fatalf("crossref defaults not applied: %+v", cfg)
+	}
 	if cfg.MailFrom != "\"SciBox\" <no-reply@scibox.local>" && cfg.MailFrom != "SciBox <no-reply@scibox.local>" {
 		t.Fatalf("mail from = %q", cfg.MailFrom)
 	}
@@ -43,18 +46,23 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadOverrides(t *testing.T) {
 	p := writeFile(t, `{"name":"  НаукаРабота  "}`)
 	cfg, err := Load(envMap(map[string]string{
-		"SCIBOX_PRODUCT_CONFIG": p,
-		"SCIBOX_HTTP_ADDR":      " :9999 ",
-		"DATABASE_URL":          "postgres://x@y/z",
-		"SCIBOX_SMTP_ADDR":      "mail.internal:25",
-		"SCIBOX_PUBLIC_URL":     "https://scibox.example/",
-		"SCIBOX_MAIL_FROM":      "Команда <team@scibox.example>",
+		"SCIBOX_PRODUCT_CONFIG":  p,
+		"SCIBOX_HTTP_ADDR":       " :9999 ",
+		"DATABASE_URL":           "postgres://x@y/z",
+		"SCIBOX_SMTP_ADDR":       "mail.internal:25",
+		"SCIBOX_PUBLIC_URL":      "https://scibox.example/",
+		"SCIBOX_MAIL_FROM":       "Команда <team@scibox.example>",
+		"SCIBOX_CROSSREF_URL":    "http://crossref.test/",
+		"SCIBOX_CROSSREF_MAILTO": " ops@scibox.example ",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.HTTPAddr != ":9999" || cfg.DatabaseURL != "postgres://x@y/z" || cfg.Product.Name != "НаукаРабота" {
 		t.Fatalf("overrides not applied: %+v", cfg)
+	}
+	if cfg.CrossrefURL != "http://crossref.test" || cfg.CrossrefMailto != "ops@scibox.example" {
+		t.Fatalf("crossref overrides not applied: %+v", cfg)
 	}
 	if cfg.SMTPAddr != "mail.internal:25" || cfg.PublicURL != "https://scibox.example" || cfg.MailFrom != "Команда <team@scibox.example>" {
 		t.Fatalf("mail overrides not applied: %+v", cfg)
