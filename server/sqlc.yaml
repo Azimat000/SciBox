@@ -24,6 +24,23 @@ sql:
             go_type:
               type: time.Time
               pointer: true
+          - db_type: date
+            go_type: time.Time
+          - db_type: date
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
+          - db_type: "pg_catalog.int2"
+            nullable: true
+            go_type:
+              type: int16
+              pointer: true
+          - db_type: "pg_catalog.int4"
+            nullable: true
+            go_type:
+              type: int32
+              pointer: true
           - db_type: citext
             go_type: string
           - db_type: text

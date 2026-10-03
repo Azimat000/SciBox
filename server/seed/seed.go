@@ -27,6 +27,7 @@ const DemoPassword = "demo-password-2026"
 type Result struct {
 	People        int
 	Organizations int
+	Vacancies     int
 }
 
 type person struct{ key, email, name string }
@@ -190,6 +191,15 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 		if created {
 			res.Organizations++
 		}
+		org, err := q.GetOrganizationBySlug(ctx, o.slug)
+		if err != nil {
+			return Result{}, fmt.Errorf("seed: %s: %w", o.slug, err)
+		}
+		n, err := seedVacancies(ctx, tx, q, org, ids[o.members[0].who], now)
+		if err != nil {
+			return Result{}, fmt.Errorf("seed: %s: %w", o.slug, err)
+		}
+		res.Vacancies += n
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, fmt.Errorf("seed: commit: %w", err)

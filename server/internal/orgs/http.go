@@ -23,6 +23,7 @@ const (
 	CodeAlreadyMember        = "already_member"
 	CodeInvalidInvitation    = "invalid_invitation"
 	CodeInvitationWrongEmail = "invitation_wrong_email"
+	CodeUnitHasVacancies     = "unit_has_vacancies"
 )
 
 // Handler — HTTP-часть организаций.
@@ -115,6 +116,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusConflict, CodeAlreadyMember, "Вы уже работаете в этой организации")
 	case errors.Is(err, ErrInvalidInvitation):
 		apierr.WriteError(w, http.StatusBadRequest, CodeInvalidInvitation, "Приглашение устарело, отозвано или уже принято. Попросите отправить новое")
+	case errors.Is(err, ErrUnitHasVacancies):
+		apierr.WriteError(w, http.StatusConflict, CodeUnitHasVacancies, "В подразделении есть вакансии. Сначала перенесите их в другое подразделение или удалите")
 	case errors.Is(err, ErrWrongEmail):
 		apierr.WriteError(w, http.StatusForbidden, CodeInvitationWrongEmail, "Приглашение отправлено на другую почту. Войдите в аккаунт с той почтой, на которую пришло письмо")
 	default:

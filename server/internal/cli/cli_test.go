@@ -78,7 +78,7 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	dbURL := testdb.Create(t, true)
 	env := map[string]string{"DATABASE_URL": dbURL}
 	first := run(context.Background(), []string{"seed"}, env, nil)
-	if first.code != 0 || !strings.Contains(first.stdout, "новых организаций 8") || !strings.Contains(first.stdout, "elena.orlova@demo.example.ru") {
+	if first.code != 0 || !strings.Contains(first.stdout, "организаций 8") || !strings.Contains(first.stdout, "elena.orlova@demo.example.ru") {
 		t.Fatalf("first run: %+v", first)
 	}
 	// Пароль не печатается в терминал.
@@ -86,7 +86,7 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 		t.Errorf("the demo password must not be printed: %s", first.stdout)
 	}
 	second := run(context.Background(), []string{"seed"}, env, nil)
-	if second.code != 0 || !strings.Contains(second.stdout, "новых организаций 0") || !strings.Contains(second.stdout, "новых людей 0") {
+	if second.code != 0 || !strings.Contains(second.stdout, "организаций 0") || !strings.Contains(second.stdout, "новых людей 0") {
 		t.Fatalf("second run must add nothing: %+v", second)
 	}
 	pool, err := pgxpool.New(context.Background(), dbURL)
@@ -112,6 +112,25 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	}
 	if n := count("SELECT count(*) FROM units u WHERE u.head_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = u.org_id AND m.user_id = u.head_user_id)"); n != 0 {
 		t.Errorf("%d unit heads who are not members", n)
+	}
+	// Демонстрационные вакансии: все четыре типа, есть черновик и закрытая; опубликованные заполнены так, как требует публикация.
+	if n := count("SELECT count(*) FROM vacancies"); n != 26 {
+		t.Errorf("%d vacancies, want 26", n)
+	}
+	for _, status := range []string{"draft", "published", "closed"} {
+		if n := count("SELECT count(*) FROM vacancies WHERE status = '" + status + "'"); n == 0 {
+			t.Errorf("no %s vacancies", status)
+		}
+	}
+	if n := count("SELECT count(DISTINCT p.position_type) FROM vacancies v JOIN positions p ON p.code = v.position_code"); n != 4 {
+		t.Errorf("%d position types among vacancies, want 4", n)
+	}
+	if n := count(`SELECT count(*) FROM vacancies v JOIN positions p ON p.code = v.position_code WHERE v.status <> 'draft' AND (
+		v.summary = '' OR v.description = '' OR v.work_format IS NULL OR v.contract_type IS NULL
+		OR (p.position_type <> 'management' AND (v.career_level IS NULL OR NOT EXISTS (SELECT 1 FROM vacancy_specialties s WHERE s.vacancy_id = v.id)))
+		OR (v.work_format <> 'remote' AND (v.city = '' OR v.region_code IS NULL))
+		OR (v.is_competition AND v.deadline IS NULL))`); n != 0 {
+		t.Errorf("%d published vacancies are not complete", n)
 	}
 	if n := count("SELECT count(*) FROM org_invitations"); n != 1 {
 		t.Errorf("%d invitations, want 1", n)

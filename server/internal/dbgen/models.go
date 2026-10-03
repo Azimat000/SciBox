@@ -54,11 +54,42 @@ type Organization struct {
 	UpdatedAt   time.Time
 }
 
+type Position struct {
+	Code         string
+	PositionType string
+	Name         string
+	Sort         int16
+}
+
 type RateEvent struct {
 	ID   int64
 	Kind string
 	Key  string
 	At   time.Time
+}
+
+type ReferenceSource struct {
+	Catalog   string
+	Title     string
+	Url       string
+	Edition   string
+	CheckedOn time.Time
+}
+
+type Region struct {
+	Code string
+	Name string
+}
+
+type ScienceField struct {
+	Code string
+	Name string
+}
+
+type ScienceGroup struct {
+	Code      string
+	FieldCode string
+	Name      string
 }
 
 type Session struct {
@@ -70,6 +101,12 @@ type Session struct {
 	ExpiresAt  time.Time
 	UserAgent  string
 	Ip         string
+}
+
+type Specialty struct {
+	Code      string
+	GroupCode string
+	Name      string
 }
 
 type Unit struct {
@@ -94,4 +131,87 @@ type User struct {
 	PrivacyPolicyVersion string
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+}
+
+type Vacancy struct {
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	UnitID         *uuid.UUID
+	CreatedBy      *uuid.UUID
+	Status         string
+	Title          string
+	PositionCode   string
+	Summary        string
+	Description    string
+	Requirements   string
+	Focus          string
+	CareerLevel    *int16
+	WorkFormat     *string
+	RegionCode     *string
+	City           string
+	Housing        string
+	RatePercent    *int16
+	SalaryFrom     *int32
+	SalaryTo       *int32
+	ContractType   *string
+	ContractMonths *int16
+	FundingSource  *string
+	FundingNote    string
+	DegreeRequired string
+	TitleRequired  string
+	IsCompetition  bool
+	Deadline       *time.Time
+	PublishedAt    *time.Time
+	ClosedAt       *time.Time
+	ArchivedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type VacancySpecialty struct {
+	VacancyID     uuid.UUID
+	SpecialtyCode string
+}
+
+type VacancyView struct {
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	UnitID         *uuid.UUID
+	CreatedBy      *uuid.UUID
+	Status         string
+	Title          string
+	PositionCode   string
+	Summary        string
+	Description    string
+	Requirements   string
+	Focus          string
+	CareerLevel    *int16
+	WorkFormat     *string
+	RegionCode     *string
+	City           string
+	Housing        string
+	RatePercent    *int16
+	SalaryFrom     *int32
+	SalaryTo       *int32
+	ContractType   *string
+	ContractMonths *int16
+	FundingSource  *string
+	FundingNote    string
+	DegreeRequired string
+	TitleRequired  string
+	IsCompetition  bool
+	Deadline       *time.Time
+	PublishedAt    *time.Time
+	ClosedAt       *time.Time
+	ArchivedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	PositionName   string
+	PositionType   string
+	RegionName     *string
+	OrgSlug        string
+	OrgName        string
+	OrgKind        string
+	OrgCity        string
+	UnitName       *string
 }

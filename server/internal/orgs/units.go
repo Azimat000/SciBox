@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"scibox/server/internal/access"
 	"scibox/server/internal/auth"
@@ -20,6 +21,9 @@ type OrgRef struct {
 	Kind string `json:"kind"`
 	City string `json:"city"`
 }
+
+// foreignKeyViolation — код ошибки PostgreSQL «нарушен внешний ключ».
+const foreignKeyViolation = "23503"
 
 // UnitView — страница подразделения.
 type UnitView struct {
@@ -146,6 +150,11 @@ func (s *Service) DeleteUnit(ctx context.Context, user auth.User, slug string, u
 	}
 	n, err := s.q.DeleteUnit(ctx, dbgen.DeleteUnitParams{ID: unitID, OrgID: org.ID})
 	if err != nil {
+		// Внешний ключ вакансий не даёт удалить подразделение, пока в нём есть вакансии (D-051).
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation && pgErr.ConstraintName == "vacancies_unit_id_fkey" {
+			return ErrUnitHasVacancies
+		}
 		return fmt.Errorf("orgs: delete unit: %w", err)
 	}
 	if n == 0 {

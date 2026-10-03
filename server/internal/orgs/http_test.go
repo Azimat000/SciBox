@@ -493,3 +493,13 @@ func TestHTTPMyOrganizationsFailures(t *testing.T) {
 		}
 	}
 }
+
+// Удаление подразделения с вакансиями: 409 и понятный текст (саму ошибку выдаёт внешний ключ вакансий, её проверяет пакет vacancies).
+func TestUnitHasVacanciesIsAConflict(t *testing.T) {
+	h := NewHandler(nil, slog.New(slog.DiscardHandler), nil)
+	rec := httptest.NewRecorder()
+	h.fail(rec, httptest.NewRequest("DELETE", "/", nil), ErrUnitHasVacancies)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), CodeUnitHasVacancies) || !strings.Contains(rec.Body.String(), "вакансии") {
+		t.Errorf("%d %s", rec.Code, rec.Body.String())
+	}
+}

@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 4 (организации и подразделения). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 5 (справочники и вакансии). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -20,10 +20,12 @@ SciBox/
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
-│   ├── seed/             демо-данные (вымышленные организации и люди); вне покрытия, проверяется тестом в internal/cli
+│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
+│       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, списки, «мои вакансии», HTTP
+│       ├── refdata/      справочники (специальности ВАК, регионы, должности, источники): `GET /api/reference`
 │       ├── apierr/       единый формат ответов и ошибок API (D-032), коды, DecodeJSON
 │       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin
 │       ├── mail/         отправка писем по SMTP (Mailpit) и `Memory` для тестов
@@ -44,6 +46,7 @@ SciBox/
         ├── features/
         │   ├── auth/     страницы входа, регистрации, сброса пароля, подтверждения, настроек, политики; меню пользователя; useMe, useForm
         │   ├── orgs/     каталог, страницы организации и подразделения, «Организация» (мои организации и приглашения), управление (данные, подразделения, сотрудники), принятие приглашения; api.ts, labels.ts, RequireUser
+        │   ├── vacancies/ страницы «Мои вакансии», вакансия (статья + управление), форма (по типу позиции), список для страниц организаций; api.ts (+ справочники useReference), labels.ts, formValues.ts
         │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts, «Раздел готовится»
         │   ├── status/   стартовая страница (проверка сервера), 404
         │   └── styleguide/  служебная страница /styleguide (вне покрытия)
@@ -54,6 +57,8 @@ SciBox/
         │                 VacancyEntry, Modal, ToastProvider/useToast, EmptyState, Skeleton, icons; CSS рядом с компонентом
         └── test/         setup.ts, render.tsx (renderApp, jsonResponse), api.ts (stubApi: подставной сервер), forms.ts
 ```
+
+Страницы организации и подразделения показывают список опубликованных вакансий (`VacancyList`).
 
 Позже появятся: `storage/uploads/` (файлы пользователей, в git не попадает), папки `features/*` по разделам.
 
@@ -84,11 +89,17 @@ SciBox/
   - `units` (id, org_id, name, kind `department|laboratory|division|shared_facility`, description, topics text[], head_user_id, created_at, updated_at);
   - `org_invitations` (id, org_id, email, role, unit_id, token_hash, invited_by, created_at, expires_at, accepted_at, revoked_at).
   - Счётчики частоты в общей `rate_events`: `org_create` (5 за сутки на человека), `org_invite` (30 за час).
+- Миграция `00004_reference.sql`: `reference_sources` (источники), `science_fields` / `science_groups` / `specialties` (номенклатура ВАК, 5 / 35 / 350), `regions` (89), `positions` (27, с типом). Данные внутри миграции (docs/REFERENCE.md).
+- Миграция `00005_vacancies.sql`:
+  - `vacancies` (id, org_id, unit_id → `ON DELETE RESTRICT`, created_by, status `draft|published|closed|archived`, title, position_code, summary, description, requirements, focus, career_level 1–4, work_format, region_code, city, housing, rate_percent, salary_from/to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline date, published_at, closed_at, archived_at, created_at, updated_at; CHECK на значения);
+  - `vacancy_specialties` (vacancy_id, specialty_code);
+  - представление `vacancy_view` (вакансия + названия должности, региона, организации, подразделения; при добавлении колонок в `vacancies` пересоздать).
+  - Счётчик частоты `vacancy_create` (100 в сутки на человека) в общей `rate_events`.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
-Коды: `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415). Все ответы `/api/*` с `Cache-Control: no-store`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
+Коды: `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415). Все ответы `/api/*` с `Cache-Control: no-store`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
 
 | Метод и адрес | Ответ |
 |---|---|
@@ -115,6 +126,15 @@ SciBox/
 | `POST /api/invitations/lookup {token}` | без входа: что за приглашение (и совпадает ли почта с вошедшим) |
 | `POST /api/invitations/accept {token}`, `POST /api/invitations/{id}/accept` | вошедший; чужая почта 403 `invitation_wrong_email`, устарело 400 `invalid_invitation`, уже в организации 409 `already_member` |
 | `GET /api/my/organizations` | `{organizations:[…с ролью], invitations:[…на почту человека]}` |
+| `GET /api/reference` | публично: `{science:[область → группы → специальности], regions, positions:[{code,type,name}], sources}` |
+| `GET /api/vacancies?org=&unit=&limit=&offset=` | публично: опубликованные вакансии, новые сверху: `{items:[карточка], total}`; без `org` все |
+| `POST /api/vacancies` `{organization: slug, …поля}` | 201 `{vacancy}`: черновик; ведущий вакансии этого подразделения; 422 с полями; 429 после 100 в сутки |
+| `GET /api/vacancies/{id}` | опубликованную и закрытую видят все; черновик и архив только ведущие вакансии (остальным 404); в ответе `viewer:{can_manage, transitions}` |
+| `PATCH /api/vacancies/{id}` | правка (черновик проверяется мягко, остальное строго); перенос в другое подразделение нужно право на оба |
+| `POST /api/vacancies/{id}/status` `{status}` | смена статуса по таблице переходов; публикация проверяет готовность; 409 `invalid_status_change`, `vacancy_changed` |
+| `DELETE /api/vacancies/{id}` | только черновик; иначе 409 `vacancy_not_draft` |
+| `GET /api/my/vacancies?status=&limit=&offset=` | «Мои вакансии»: `{items,total,counts по статусам}` в пределах прав |
+| `GET /api/my/vacancy-targets` | где человек может создать вакансию: `[{organization, whole_org, units}]` |
 | `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
@@ -127,7 +147,10 @@ SciBox/
 | `/my-organization` | Мои организации и приглашения; без входа ведёт на `/login?next=` |
 | `/my-organization/:slug` (+ `/units`, `/units/new`, `/units/:unitId`, `/members`) | Управление: данные, подразделения, сотрудники и приглашения (вкладка «Сотрудники» только владельцу) |
 | `/invitations/accept?token=` | Страница по ссылке из письма |
-| `/vacancies`, `/scientists`, `/favorites`, `/my-vacancies`, `/applications`, `/candidates` | «Раздел готовится» (заглушки до своих срезов) |
+| `/my-vacancies` (`?status=`, `?page=`) | Мои вакансии: вкладки по статусам со счётчиками, действия; без входа ведёт на `/login?next=` |
+| `/my-vacancies/new` (`?org=&unit=`), `/my-vacancies/:id/edit` | Форма вакансии; поля зависят от типа позиции |
+| `/vacancies/:id` | Страница вакансии (статья); тем, кто ведёт вакансию, сверху управление: править, сменить статус, удалить черновик |
+| `/vacancies`, `/scientists`, `/favorites`, `/applications`, `/candidates` | «Раздел готовится» (заглушки до своих срезов; `/vacancies` станет поиском в срезе 6) |
 | `*` | 404 «Такой страницы нет» со ссылкой на главную |
 | (ошибка отрисовки) | `CrashPage` через `errorElement` роутера |
 

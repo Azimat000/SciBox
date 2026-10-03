@@ -22,6 +22,8 @@ import (
 	"scibox/server/internal/mail"
 	"scibox/server/internal/migrate"
 	"scibox/server/internal/orgs"
+	"scibox/server/internal/refdata"
+	"scibox/server/internal/vacancies"
 	"scibox/server/seed"
 )
 
@@ -110,7 +112,7 @@ func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, новых организаций %d.\n", res.People, res.Organizations)
+	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d.\n", res.People, res.Organizations, res.Vacancies)
 	fmt.Fprintf(out, "Вход для проверки: %s (пароль записан в server/seed/seed.go).\n", seed.Logins()[0])
 	return nil
 }
@@ -147,6 +149,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Logger:      logger,
 		Auth:        authHandler,
 		Orgs:        orgs.NewHandler(organizations, logger, authHandler.RequireUser),
+		Vacancies:   vacancies.NewHandler(vacancies.NewService(pool, vacancies.DefaultConfig()), logger, authHandler.RequireUser),
+		Reference:   refdata.NewHandler(refdata.NewService(pool), logger),
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

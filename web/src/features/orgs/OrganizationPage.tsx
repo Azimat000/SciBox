@@ -1,8 +1,8 @@
 import { Link, useParams } from 'react-router'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
-import { EmptyState } from '../../ui/EmptyState'
 import { Tag } from '../../ui/Tag'
+import { VacancyList } from '../vacancies/VacancyList'
 import { NotFoundPage } from '../status/NotFoundPage'
 import { useOrganization, type Unit, isNotFound } from './api'
 import { kindLabel, longName, siteLabel, unitKindShort } from './labels'
@@ -64,7 +64,7 @@ export function OrganizationPage() {
 
       <section className="org-section" aria-labelledby="org-vacancies">
         <h2 id="org-vacancies">{t.orgs.page.vacancies}</h2>
-        <EmptyState headingLevel={3} title={t.orgs.page.vacanciesEmptyTitle} text={t.orgs.page.vacanciesEmptyText} />
+        <VacancyList slug={org.slug} />
       </section>
     </div>
   )

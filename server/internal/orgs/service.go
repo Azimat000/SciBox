@@ -32,6 +32,7 @@ var (
 	ErrAlreadyMember     = errors.New("orgs: already a member")
 	ErrInvalidInvitation = errors.New("orgs: invalid or expired invitation")
 	ErrWrongEmail        = errors.New("orgs: invitation was sent to another address")
+	ErrUnitHasVacancies  = errors.New("orgs: the unit still has vacancies")
 )
 
 // Виды счётчиков частоты (таблица rate_events общая с аккаунтами).
@@ -178,8 +179,9 @@ func (s *Service) loadOrg(ctx context.Context, q *dbgen.Queries, slug string) (d
 	return org, nil
 }
 
-// actorOf собирает права человека в организации. Не сотрудник — нулевой Actor (ему ничего нельзя).
-func (s *Service) actorOf(ctx context.Context, q *dbgen.Queries, orgID, userID uuid.UUID) (access.Actor, error) {
+// ActorOf собирает права человека в организации. Не сотрудник — нулевой Actor (ему ничего нельзя).
+// Им пользуются и другие разделы (вакансии), чтобы не писать свою проверку ролей: права решает пакет access.
+func ActorOf(ctx context.Context, q *dbgen.Queries, orgID, userID uuid.UUID) (access.Actor, error) {
 	m, err := q.GetMember(ctx, dbgen.GetMemberParams{OrgID: orgID, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return access.Actor{}, nil
@@ -194,6 +196,10 @@ func (s *Service) actorOf(ctx context.Context, q *dbgen.Queries, orgID, userID u
 		}
 	}
 	return actor, nil
+}
+
+func (s *Service) actorOf(ctx context.Context, q *dbgen.Queries, orgID, userID uuid.UUID) (access.Actor, error) {
+	return ActorOf(ctx, q, orgID, userID)
 }
 
 // viewerOf описывает, что может человек; nil для того, кто не вошёл. Для вошедшего не сотрудника все права ложны.

@@ -47,6 +47,8 @@ export const orgView = (viewer: Viewer | null, units: Unit[] = [lab, dept]): Org
 /** Ответы для страницы организации (и страниц управления) от лица человека с таким видом. */
 export const orgRoutes = (viewer: Viewer | null, units?: Unit[]): Record<string, Route> => ({
   [`GET /api/organizations/${SLUG}`]: reply(200, orgView(viewer, units)),
+  // Список вакансий на той же странице: по умолчанию пустой.
+  [`GET /api/vacancies?org=${SLUG}`]: reply(200, { items: [], total: 0 }),
 })
 
 export const members: Member[] = [

@@ -114,7 +114,7 @@ describe('site shell', () => {
 })
 
 describe('placeholder pages', () => {
-  it.each(['/vacancies', '/scientists', '/favorites', '/my-vacancies', '/applications', '/candidates'])(
+  it.each(['/vacancies', '/scientists', '/favorites', '/applications', '/candidates'])(
     '%s says the section is coming',
     async (path) => {
       renderApp(path)

@@ -13,6 +13,8 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
 	"scibox/server/internal/orgs"
+	"scibox/server/internal/refdata"
+	"scibox/server/internal/vacancies"
 )
 
 // HealthChecker проверяет базу данных.
@@ -30,6 +32,10 @@ type Deps struct {
 	Auth *auth.Handler
 	// Orgs подключает организации и подразделения (/api/organizations, /api/my, /api/invitations). Нужен вместе с Auth.
 	Orgs *orgs.Handler
+	// Vacancies подключает вакансии (/api/vacancies, /api/my/vacancies). Нужен вместе с Auth.
+	Vacancies *vacancies.Handler
+	// Reference подключает справочники (/api/reference).
+	Reference *refdata.Handler
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
@@ -57,6 +63,12 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Orgs != nil {
 			d.Orgs.Mount(r)
+		}
+		if d.Vacancies != nil {
+			d.Vacancies.Mount(r)
+		}
+		if d.Reference != nil {
+			d.Reference.Mount(r)
 		}
 		r.Get("/health", healthHandler(d))
 	})

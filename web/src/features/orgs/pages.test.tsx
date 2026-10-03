@@ -26,7 +26,7 @@ describe('public page of an organization', () => {
     expect(within(deptEntry).getByText('Кафедра')).toBeInTheDocument()
     expect(within(deptEntry).queryByRole('list')).not.toBeInTheDocument()
 
-    expect(screen.getByRole('heading', { level: 3, name: /Открытых вакансий пока нет/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 3, name: /(Открытых вакансий пока нет|В подразделении открытых вакансий нет)/ })).toBeInTheDocument()
     // Посетителю кнопки управления не показываются.
     expect(screen.queryByRole('link', { name: 'Управление организацией' })).not.toBeInTheDocument()
   })
@@ -71,6 +71,7 @@ describe('public page of an organization', () => {
 
 describe('public page of a unit', () => {
   const unitRoute = (viewer: (typeof viewers)[keyof typeof viewers] | null, unit = lab) => ({
+    [`GET /api/vacancies?org=${SLUG}&unit=${unit.id}`]: reply(200, { items: [], total: 0 }),
     [`GET /api/organizations/${SLUG}/units/${unit.id}`]: reply(200, {
       organization: { slug: SLUG, name: org.name, kind: org.kind, city: org.city },
       unit,
@@ -87,7 +88,7 @@ describe('public page of a unit', () => {
     expect(screen.getByText('Синтез и измерение плёнок.')).toBeInTheDocument()
     const topics = within(screen.getByRole('heading', { level: 2, name: 'Научные темы' }).closest('section')!)
     expect(topics.getByText('Сверхпроводимость')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 3, name: /Открытых вакансий пока нет/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 3, name: /(Открытых вакансий пока нет|В подразделении открытых вакансий нет)/ })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Править подразделение' })).not.toBeInTheDocument()
   })
 
