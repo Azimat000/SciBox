@@ -46,7 +46,7 @@ describe('site shell', () => {
     const link = within(desktopNav()).getByRole('link', { name: 'Вакансии' })
     expect(link).toHaveAttribute('aria-current', 'page')
     expect(within(desktopNav()).getByRole('link', { name: 'Учёные' })).not.toHaveAttribute('aria-current')
-    expect(await screen.findByRole('heading', { name: 'Раздел готовится' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
   })
 
   it('switches to the employer menu, remembers the choice and restores it', async () => {
@@ -114,7 +114,7 @@ describe('site shell', () => {
 })
 
 describe('placeholder pages', () => {
-  it.each(['/vacancies', '/scientists', '/favorites', '/applications', '/candidates'])(
+  it.each(['/scientists', '/favorites', '/applications', '/candidates'])(
     '%s says the section is coming',
     async (path) => {
       renderApp(path)

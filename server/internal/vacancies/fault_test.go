@@ -204,13 +204,25 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"list published of an organization": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
 			return func(s *Service) error {
-				_, err := s.ListPublished(bg, ListFilter{OrgSlug: b.tm.slug, UnitID: &b.tm.unitA.ID})
+				_, err := s.Search(bg, SearchParams{OrgSlug: b.tm.slug, UnitID: &b.tm.unitA.ID})
 				return err
 			}
 		},
 		"list published": func(t *testing.T, w *world) func(*Service) error {
 			mk(w)
-			return func(s *Service) error { _, err := s.ListPublished(bg, ListFilter{}); return err }
+			return func(s *Service) error { _, err := s.Search(bg, SearchParams{}); return err }
+		},
+		"search with words": func(t *testing.T, w *world) func(*Service) error {
+			b := mk(w)
+			return func(s *Service) error { _, err := s.Search(bg, SearchParams{Query: "катализа", OrgSlug: b.tm.slug}); return err }
+		},
+		"search with typos": func(t *testing.T, w *world) func(*Service) error {
+			b := mk(w)
+			return func(s *Service) error { _, err := s.Search(bg, SearchParams{Query: "катлаизу", OrgSlug: b.tm.slug}); return err }
+		},
+		"search a page beyond the last": func(t *testing.T, w *world) func(*Service) error {
+			b := mk(w)
+			return func(s *Service) error { _, err := s.Search(bg, SearchParams{OrgSlug: b.tm.slug, Offset: 50}); return err }
 		},
 		"list mine": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)

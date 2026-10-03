@@ -423,7 +423,7 @@ func TestPublicListShowsOnlyPublished(t *testing.T) {
 	}
 	w.published(other, goodInput())
 
-	res, err := w.svc.ListPublished(bg, ListFilter{OrgSlug: tm.slug})
+	res, err := w.svc.Search(bg, SearchParams{OrgSlug: tm.slug})
 	if err != nil || res.Total != 2 || len(res.Items) != 2 {
 		t.Fatalf("org list: %+v %v", res, err)
 	}
@@ -432,23 +432,23 @@ func TestPublicListShowsOnlyPublished(t *testing.T) {
 			t.Errorf("card: %+v", c)
 		}
 	}
-	res, _ = w.svc.ListPublished(bg, ListFilter{OrgSlug: tm.slug, UnitID: &tm.unitA.ID})
+	res, _ = w.svc.Search(bg, SearchParams{OrgSlug: tm.slug, UnitID: &tm.unitA.ID})
 	if res.Total != 1 || res.Items[0].ID != a.ID || res.Items[0].Unit == nil {
 		t.Errorf("unit list: %+v", res)
 	}
-	res, _ = w.svc.ListPublished(bg, ListFilter{OrgSlug: tm.slug, Limit: 1, Offset: 1})
+	res, _ = w.svc.Search(bg, SearchParams{OrgSlug: tm.slug, Limit: 1, Offset: 1})
 	if res.Total != 2 || len(res.Items) != 1 {
 		t.Errorf("paging: %+v", res)
 	}
 	// Без организации: все опубликованные (минимум наши три), новые сверху.
-	all, _ := w.svc.ListPublished(bg, ListFilter{Limit: MaxLimit * 3})
+	all, _ := w.svc.Search(bg, SearchParams{Limit: MaxLimit * 3})
 	if all.Total < 3 || len(all.Items) > MaxLimit {
 		t.Errorf("all: total %d, items %d", all.Total, len(all.Items))
 	}
-	if _, err := w.svc.ListPublished(bg, ListFilter{OrgSlug: "no-such"}); !errors.Is(err, ErrNotFound) {
+	if _, err := w.svc.Search(bg, SearchParams{OrgSlug: "no-such"}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown organization: %v", err)
 	}
-	if _, err := w.svc.ListPublished(bg, ListFilter{OrgSlug: tm.slug, UnitID: &other.unitA.ID}); !errors.Is(err, ErrNotFound) {
+	if _, err := w.svc.Search(bg, SearchParams{OrgSlug: tm.slug, UnitID: &other.unitA.ID}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a unit from another organization: %v", err)
 	}
 	_ = b

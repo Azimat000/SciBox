@@ -19,7 +19,7 @@ function row(name: string) {
 describe('StatusPage', () => {
   it('shows a pending state while the check runs', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
-    renderApp('/')
+    renderApp('/status')
     expect(screen.getByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'pending')
     expect(within(row('База данных')).getByText('Проверяем…')).toBeInTheDocument()
@@ -28,7 +28,7 @@ describe('StatusPage', () => {
 
   it('reports a healthy server and database', async () => {
     stubApi({ 'GET /api/health': reply(200, healthy) })
-    renderApp('/')
+    renderApp('/status')
     expect(await screen.findByText('Работает, схема версии 1')).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'ok')
     expect(screen.getByText('Версия сервера: dev')).toBeInTheDocument()
@@ -37,7 +37,7 @@ describe('StatusPage', () => {
 
   it('separates "database down" from "server down"', async () => {
     stubApi({ 'GET /api/health': apiError(503, 'database_unavailable', 'База данных недоступна') })
-    renderApp('/')
+    renderApp('/status')
     expect(await screen.findByText('Недоступна')).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'ok')
     expect(row('База данных')).toHaveAttribute('data-kind', 'fail')
@@ -47,7 +47,7 @@ describe('StatusPage', () => {
   it('explains how to start a server that does not answer, and recovers on retry', async () => {
     let answered = 0
     const api = stubApi({ 'GET /api/health': () => (answered++ === 0 ? reply(500) : reply(200, healthy)) })
-    renderApp('/')
+    renderApp('/status')
 
     expect(await screen.findByText('Не отвечает')).toBeInTheDocument()
     expect(screen.getByText(/make dev/)).toBeInTheDocument()
@@ -60,7 +60,7 @@ describe('StatusPage', () => {
 
   it('shows the server message for an unexpected API error', async () => {
     stubApi({ 'GET /api/health': apiError(500, 'internal', 'Что-то сломалось на сервере') })
-    renderApp('/')
+    renderApp('/status')
     expect(await screen.findByText('Что-то сломалось на сервере')).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'fail')
     expect(screen.getByText(/журнале сервера/)).toBeInTheDocument()

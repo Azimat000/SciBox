@@ -142,52 +142,6 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Det
 	return d, nil
 }
 
-// ListFilter — какие опубликованные вакансии показать. Пустой Org и Unit — все.
-type ListFilter struct {
-	OrgSlug string
-	UnitID  *uuid.UUID
-	Limit   int
-	Offset  int
-}
-
-// ListPublished — публичный список опубликованных вакансий, новые сверху. Если указана организация, которой нет, или
-// подразделение не из неё, вакансий «нет» (ErrNotFound).
-func (s *Service) ListPublished(ctx context.Context, f ListFilter) (List, error) {
-	var orgID *uuid.UUID
-	if f.OrgSlug != "" {
-		org, err := s.q.GetOrganizationBySlug(ctx, f.OrgSlug)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return List{}, ErrNotFound
-		}
-		if err != nil {
-			return List{}, fmt.Errorf("vacancies: load organization: %w", err)
-		}
-		orgID = &org.ID
-		if f.UnitID != nil {
-			if _, err := s.q.GetUnitInOrg(ctx, dbgen.GetUnitInOrgParams{ID: *f.UnitID, OrgID: org.ID}); err != nil {
-				if errors.Is(err, pgx.ErrNoRows) {
-					return List{}, ErrNotFound
-				}
-				return List{}, fmt.Errorf("vacancies: load unit: %w", err)
-			}
-		}
-	}
-	limit, offset := pageOf(f.Limit, f.Offset)
-	rows, err := s.q.ListPublishedVacancies(ctx, dbgen.ListPublishedVacanciesParams{OrgID: orgID, UnitID: f.UnitID, RowLimit: limit, RowOffset: offset})
-	if err != nil {
-		return List{}, fmt.Errorf("vacancies: list published: %w", err)
-	}
-	total, err := s.q.CountPublishedVacancies(ctx, dbgen.CountPublishedVacanciesParams{OrgID: orgID, UnitID: f.UnitID})
-	if err != nil {
-		return List{}, fmt.Errorf("vacancies: count published: %w", err)
-	}
-	items, err := cardsFrom(ctx, s.q, rows)
-	if err != nil {
-		return List{}, err
-	}
-	return List{Items: items, Total: int(total)}, nil
-}
-
 // scope — какие вакансии человек ведёт: все вакансии организаций (wholeOrgs) и вакансии отдельных подразделений (units).
 type scope struct {
 	wholeOrgs []uuid.UUID

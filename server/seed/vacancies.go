@@ -252,7 +252,7 @@ func seedVacancies(ctx context.Context, tx pgx.Tx, q *dbgen.Queries, org dbgen.O
 		params.RegionCode = strPtr(v.region)
 		params.ContractType = strPtr(v.contract)
 		params.FundingSource = strPtr(v.funding)
-		if v.daysLeft > 0 {
+		if v.daysLeft != 0 {
 			d := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, v.daysLeft)
 			params.Deadline = &d
 		}

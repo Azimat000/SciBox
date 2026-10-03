@@ -53,20 +53,52 @@ FROM vacancy_specialties vs JOIN specialties s ON s.code = vs.specialty_code
 WHERE vs.vacancy_id = ANY(@ids::uuid[])
 ORDER BY vs.vacancy_id, string_to_array(s.code, '.')::int[];
 
--- Опубликованные вакансии (публично). org_id и unit_id, если нужна одна организация или одно подразделение.
--- name: ListPublishedVacancies :many
-SELECT * FROM vacancy_view
-WHERE status = 'published'
-  AND (sqlc.narg(org_id)::uuid IS NULL OR org_id = sqlc.narg(org_id)::uuid)
-  AND (sqlc.narg(unit_id)::uuid IS NULL OR unit_id = sqlc.narg(unit_id)::uuid)
-ORDER BY published_at DESC, id
+-- Поиск среди опубликованных вакансий (срез 6). Вакансии с прошедшим сроком подачи не показываются (today — сегодня по Москве).
+-- Пустой список или пустая строка у фильтра значит «любые». total — сколько всего нашлось (до LIMIT).
+-- fuzzy включает поиск с опечатками вместо словоформ: сервис включает его, когда точных совпадений нет.
+-- name: SearchVacancies :many
+SELECT sqlc.embed(v), count(*) OVER () AS total
+FROM vacancy_view v
+JOIN vacancy_search s ON s.vacancy_id = v.id
+WHERE v.status = 'published'
+  AND (v.deadline IS NULL OR v.deadline >= @today::date)
+  AND (sqlc.narg(org_id)::uuid IS NULL OR v.org_id = sqlc.narg(org_id)::uuid)
+  AND (sqlc.narg(unit_id)::uuid IS NULL OR v.unit_id = sqlc.narg(unit_id)::uuid)
+  AND (@q::text = '' OR CASE WHEN @fuzzy::bool
+         THEN word_similarity(@q::text, v.title || ' ' || v.position_name || ' ' || v.org_name) >= 0.35
+         ELSE s.doc @@ websearch_to_tsquery('russian', @q::text) END)
+  AND (cardinality(@fields::text[]) = 0 OR EXISTS (
+         SELECT 1 FROM vacancy_specialties vs, unnest(@fields::text[]) f
+         WHERE vs.vacancy_id = v.id AND (vs.specialty_code = f OR vs.specialty_code LIKE f || '.%')))
+  AND (@region::text = '' OR v.region_code = @region::text)
+  AND (cardinality(@formats::text[]) = 0 OR v.work_format = ANY(@formats::text[]))
+  AND (cardinality(@types::text[]) = 0 OR v.position_type = ANY(@types::text[]))
+  AND (cardinality(@levels::int[]) = 0 OR v.career_level = ANY(@levels::int[]))
+  AND (cardinality(@degrees::text[]) = 0 OR v.degree_required = ANY(@degrees::text[]))
+  AND (cardinality(@org_kinds::text[]) = 0 OR v.org_kind = ANY(@org_kinds::text[]))
+  AND (cardinality(@fundings::text[]) = 0 OR v.funding_source = ANY(@fundings::text[]))
+  AND (cardinality(@rates::int[]) = 0 OR v.rate_percent = ANY(@rates::int[]))
+  AND (cardinality(@terms::text[]) = 0 OR (CASE
+         WHEN v.contract_type = 'permanent' THEN 'permanent'
+         WHEN v.contract_months <= 12 THEN 'short'
+         WHEN v.contract_months <= 36 THEN 'medium'
+         WHEN v.contract_months > 36 THEN 'long'
+       END) = ANY(@terms::text[]))
+  AND (@salary_min::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= @salary_min::int)
+  AND (NOT @housing::bool OR v.housing <> 'none')
+  AND (NOT @competition::bool OR v.is_competition)
+  AND (NOT @no_deadline::bool OR v.deadline IS NULL)
+  AND (sqlc.narg(deadline_to)::date IS NULL OR v.deadline <= sqlc.narg(deadline_to)::date)
+ORDER BY
+  CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN
+    CASE WHEN @fuzzy::bool
+      THEN word_similarity(@q::text, v.title || ' ' || v.position_name || ' ' || v.org_name)
+      ELSE ts_rank_cd(s.doc, websearch_to_tsquery('russian', @q::text)) END
+  END DESC NULLS LAST,
+  CASE WHEN @sort::text = 'deadline' THEN v.deadline END ASC NULLS LAST,
+  CASE WHEN @sort::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END DESC NULLS LAST,
+  v.published_at DESC, v.id
 LIMIT @row_limit OFFSET @row_offset;
-
--- name: CountPublishedVacancies :one
-SELECT count(*) FROM vacancy_view
-WHERE status = 'published'
-  AND (sqlc.narg(org_id)::uuid IS NULL OR org_id = sqlc.narg(org_id)::uuid)
-  AND (sqlc.narg(unit_id)::uuid IS NULL OR unit_id = sqlc.narg(unit_id)::uuid);
 
 -- «Мои вакансии»: вся организация (whole_orgs) или только перечисленные подразделения (units).
 -- name: ListMyVacancies :many

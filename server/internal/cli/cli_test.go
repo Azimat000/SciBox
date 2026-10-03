@@ -78,7 +78,7 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	dbURL := testdb.Create(t, true)
 	env := map[string]string{"DATABASE_URL": dbURL}
 	first := run(context.Background(), []string{"seed"}, env, nil)
-	if first.code != 0 || !strings.Contains(first.stdout, "организаций 8") || !strings.Contains(first.stdout, "elena.orlova@demo.example.ru") {
+	if first.code != 0 || !strings.Contains(first.stdout, "организаций 30") || !strings.Contains(first.stdout, "elena.orlova@demo.example.ru") {
 		t.Fatalf("first run: %+v", first)
 	}
 	// Пароль не печатается в терминал.
@@ -100,8 +100,8 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 		}
 		return n
 	}
-	if n := count("SELECT count(*) FROM organizations"); n != 8 {
-		t.Errorf("%d organizations, want 8", n)
+	if n := count("SELECT count(*) FROM organizations"); n != 30 {
+		t.Errorf("%d organizations, want 30", n)
 	}
 	if n := count("SELECT count(*) FROM users WHERE email_confirmed_at IS NOT NULL"); n != 9 {
 		t.Errorf("%d confirmed users, want 9", n)
@@ -114,8 +114,24 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 		t.Errorf("%d unit heads who are not members", n)
 	}
 	// Демонстрационные вакансии: все четыре типа, есть черновик и закрытая; опубликованные заполнены так, как требует публикация.
-	if n := count("SELECT count(*) FROM vacancies"); n != 26 {
-		t.Errorf("%d vacancies, want 26", n)
+	if n := count("SELECT count(*) FROM vacancies"); n < 200 || n > 230 {
+		t.Errorf("%d vacancies, want about 200 (for the search)", n)
+	}
+	// Поиск должен быть на чём проверить: есть вакансии с прошедшим сроком, которые он прячет, и в разных регионах.
+	if n := count("SELECT count(*) FROM vacancies WHERE status = 'published' AND deadline < current_date"); n == 0 {
+		t.Error("no published vacancies with an expired deadline")
+	}
+	if n := count("SELECT count(DISTINCT region_code) FROM vacancies WHERE status = 'published'"); n < 15 {
+		t.Errorf("vacancies are spread over %d regions only", n)
+	}
+	if n := count("SELECT count(*) FROM vacancies WHERE status = 'published' AND work_format = 'remote'"); n == 0 {
+		t.Error("no remote vacancies")
+	}
+	if n := count("SELECT count(*) FROM (SELECT org_id, title FROM vacancies GROUP BY 1, 2 HAVING count(*) > 1) d"); n != 0 {
+		t.Errorf("%d repeated titles inside an organization", n)
+	}
+	if n := count("SELECT count(*) FROM vacancies v WHERE NOT EXISTS (SELECT 1 FROM vacancy_search s WHERE s.vacancy_id = v.id)"); n != 0 {
+		t.Errorf("%d vacancies without search text", n)
 	}
 	for _, status := range []string{"draft", "published", "closed"} {
 		if n := count("SELECT count(*) FROM vacancies WHERE status = '" + status + "'"); n == 0 {

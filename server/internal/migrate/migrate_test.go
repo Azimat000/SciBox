@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -68,8 +69,10 @@ func TestUpDownUp(t *testing.T) {
 	referenceTables := []string{"auth_tokens", "org_invitations", "org_members", "organizations", "positions", "rate_events", "reference_sources",
 		"regions", "science_fields", "science_groups", "sessions", "specialties", "units", "users"}
 	// vacancy_view — представление, но информационная схема перечисляет и его.
-	allTables := []string{"auth_tokens", "org_invitations", "org_members", "organizations", "positions", "rate_events", "reference_sources",
+	vacancyTables := []string{"auth_tokens", "org_invitations", "org_members", "organizations", "positions", "rate_events", "reference_sources",
 		"regions", "science_fields", "science_groups", "sessions", "specialties", "units", "users", "vacancies", "vacancy_specialties", "vacancy_view"}
+	// vacancy_search — текст для поиска (00006).
+	allTables := append(slices.Clone(vacancyTables[:15]), "vacancy_search", "vacancy_specialties", "vacancy_view")
 	steps := []struct {
 		cmd        string
 		wantOut    string
@@ -77,15 +80,16 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00005_vacancies.sql", 2, allTables},
+		{"up", "00006_search.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		{"down", "00006_search.sql", 2, vacancyTables},
 		{"down", "00005_vacancies.sql", 2, referenceTables},
 		{"down", "00004_reference.sql", 2, orgTables},
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00005_vacancies.sql", 2, allTables},
+		{"up", "00006_search.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

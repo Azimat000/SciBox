@@ -24,7 +24,9 @@ export function stubApi(routes: Record<string, Route> = {}) {
     const method = init?.method ?? 'GET'
     const call: Call = { method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined }
     calls.push(call)
-    const route = table[`${method} ${path}`]
+    const key = `${method} ${path}`
+    // Ключ, оканчивающийся на «*», отвечает на любой адрес с таким началом (поиск с любыми параметрами).
+    const route = table[key] ?? Object.entries(table).find(([k]) => k.endsWith('*') && key.startsWith(k.slice(0, -1)))?.[1]
     if (!route) return respond(apiError(404, 'not_found', `в тесте нет ответа для ${method} ${path}`))
     return respond(typeof route === 'function' ? await route(call) : route)
   })

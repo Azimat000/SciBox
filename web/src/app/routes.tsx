@@ -23,6 +23,7 @@ import { VacancyPage } from '../features/vacancies/VacancyPage'
 import { ComingSoonPage } from '../features/shell/ComingSoonPage'
 import { comingSoonPaths } from '../features/shell/nav'
 import { NotFoundPage } from '../features/status/NotFoundPage'
+import { SearchPage } from '../features/search/SearchPage'
 import { StatusPage } from '../features/status/StatusPage'
 import { StyleguidePage } from '../features/styleguide/StyleguidePage'
 import { CrashPage } from './CrashPage'
@@ -33,7 +34,9 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     errorElement: <CrashPage />,
     children: [
-      { index: true, element: <StatusPage /> },
+      { index: true, element: <SearchPage /> },
+      { path: 'vacancies', element: <SearchPage /> },
+      { path: 'status', element: <StatusPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'register', element: <RegisterPage /> },
       { path: 'forgot-password', element: <ForgotPasswordPage /> },

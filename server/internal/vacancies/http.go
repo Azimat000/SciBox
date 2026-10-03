@@ -249,17 +249,65 @@ func (h *Handler) setStatus(w http.ResponseWriter, r *http.Request) {
 	apierr.WriteJSON(w, http.StatusOK, map[string]Detail{"vacancy": d})
 }
 
-func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	f := ListFilter{OrgSlug: r.URL.Query().Get("org"), Limit: intParam(r, "limit"), Offset: intParam(r, "offset")}
-	if raw := r.URL.Query().Get("unit"); raw != "" {
+// queryInts читает повторяющийся числовой параметр; нечисло — ошибка поля.
+func queryInts(r *http.Request, name string, errs map[string]string) []int {
+	var out []int
+	for _, raw := range r.URL.Query()[name] {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			errs[name] = "Нужно число: " + raw
+			return nil
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// queryFlag читает «галочку»: 1 или true.
+func queryFlag(r *http.Request, name string) bool {
+	v := r.URL.Query().Get(name)
+	return v == "1" || v == "true"
+}
+
+// searchParams переводит строку запроса в параметры поиска. Ошибку формата (не число, не номер подразделения) отдаёт
+// как ошибку поля; допустимость значений проверяет сам поиск.
+func searchParams(r *http.Request) (SearchParams, error) {
+	q := r.URL.Query()
+	errs := map[string]string{}
+	p := SearchParams{
+		Query: q.Get("q"), Fields: q["field"], Region: q.Get("region"), Formats: q["format"], Types: q["type"],
+		Levels: queryInts(r, "level", errs), Degrees: q["degree"], OrgKinds: q["org_kind"], Fundings: q["funding"],
+		Rates: queryInts(r, "rate", errs), Terms: q["term"], Housing: queryFlag(r, "housing"),
+		Competition: queryFlag(r, "competition"), Deadline: q.Get("deadline"), Sort: q.Get("sort"),
+		OrgSlug: q.Get("org"), Limit: intParam(r, "limit"), Offset: intParam(r, "offset"),
+	}
+	if raw := q.Get("salary_min"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			errs["salary_min"] = "Нужно число: " + raw
+		}
+		p.SalaryMin = n
+	}
+	if raw := q.Get("unit"); raw != "" {
 		u, err := uuid.Parse(raw)
 		if err != nil {
-			notFound(w)
-			return
+			return SearchParams{}, ErrNotFound
 		}
-		f.UnitID = &u
+		p.UnitID = &u
 	}
-	res, err := h.svc.ListPublished(r.Context(), f)
+	if len(errs) > 0 {
+		return SearchParams{}, &auth.ValidationError{Fields: errs}
+	}
+	return p, nil
+}
+
+func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
+	p, err := searchParams(r)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	res, err := h.svc.Search(r.Context(), p)
 	if err != nil {
 		h.fail(w, r, err)
 		return

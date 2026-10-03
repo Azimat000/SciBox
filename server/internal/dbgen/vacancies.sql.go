@@ -62,25 +62,6 @@ func (q *Queries) CountMyVacanciesByStatus(ctx context.Context, arg CountMyVacan
 	return items, nil
 }
 
-const countPublishedVacancies = `-- name: CountPublishedVacancies :one
-SELECT count(*) FROM vacancy_view
-WHERE status = 'published'
-  AND ($1::uuid IS NULL OR org_id = $1::uuid)
-  AND ($2::uuid IS NULL OR unit_id = $2::uuid)
-`
-
-type CountPublishedVacanciesParams struct {
-	OrgID  *uuid.UUID
-	UnitID *uuid.UUID
-}
-
-func (q *Queries) CountPublishedVacancies(ctx context.Context, arg CountPublishedVacanciesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countPublishedVacancies, arg.OrgID, arg.UnitID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createVacancy = `-- name: CreateVacancy :one
 
 INSERT INTO vacancies (
@@ -315,89 +296,6 @@ func (q *Queries) ListMyVacancies(ctx context.Context, arg ListMyVacanciesParams
 	return items, nil
 }
 
-const listPublishedVacancies = `-- name: ListPublishedVacancies :many
-SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at, position_name, position_type, region_name, org_slug, org_name, org_kind, org_city, unit_name FROM vacancy_view
-WHERE status = 'published'
-  AND ($1::uuid IS NULL OR org_id = $1::uuid)
-  AND ($2::uuid IS NULL OR unit_id = $2::uuid)
-ORDER BY published_at DESC, id
-LIMIT $4 OFFSET $3
-`
-
-type ListPublishedVacanciesParams struct {
-	OrgID     *uuid.UUID
-	UnitID    *uuid.UUID
-	RowOffset int32
-	RowLimit  int32
-}
-
-// Опубликованные вакансии (публично). org_id и unit_id, если нужна одна организация или одно подразделение.
-func (q *Queries) ListPublishedVacancies(ctx context.Context, arg ListPublishedVacanciesParams) ([]VacancyView, error) {
-	rows, err := q.db.Query(ctx, listPublishedVacancies,
-		arg.OrgID,
-		arg.UnitID,
-		arg.RowOffset,
-		arg.RowLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []VacancyView
-	for rows.Next() {
-		var i VacancyView
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.UnitID,
-			&i.CreatedBy,
-			&i.Status,
-			&i.Title,
-			&i.PositionCode,
-			&i.Summary,
-			&i.Description,
-			&i.Requirements,
-			&i.Focus,
-			&i.CareerLevel,
-			&i.WorkFormat,
-			&i.RegionCode,
-			&i.City,
-			&i.Housing,
-			&i.RatePercent,
-			&i.SalaryFrom,
-			&i.SalaryTo,
-			&i.ContractType,
-			&i.ContractMonths,
-			&i.FundingSource,
-			&i.FundingNote,
-			&i.DegreeRequired,
-			&i.TitleRequired,
-			&i.IsCompetition,
-			&i.Deadline,
-			&i.PublishedAt,
-			&i.ClosedAt,
-			&i.ArchivedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.PositionName,
-			&i.PositionType,
-			&i.RegionName,
-			&i.OrgSlug,
-			&i.OrgName,
-			&i.OrgKind,
-			&i.OrgCity,
-			&i.UnitName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUnitNames = `-- name: ListUnitNames :many
 SELECT id, name FROM units WHERE org_id = $1 ORDER BY lower(name), id
 `
@@ -504,6 +402,171 @@ func (q *Queries) LockVacancy(ctx context.Context, id uuid.UUID) (Vacancy, error
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const searchVacancies = `-- name: SearchVacancies :many
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, count(*) OVER () AS total
+FROM vacancy_view v
+JOIN vacancy_search s ON s.vacancy_id = v.id
+WHERE v.status = 'published'
+  AND (v.deadline IS NULL OR v.deadline >= $1::date)
+  AND ($2::uuid IS NULL OR v.org_id = $2::uuid)
+  AND ($3::uuid IS NULL OR v.unit_id = $3::uuid)
+  AND ($4::text = '' OR CASE WHEN $5::bool
+         THEN word_similarity($4::text, v.title || ' ' || v.position_name || ' ' || v.org_name) >= 0.35
+         ELSE s.doc @@ websearch_to_tsquery('russian', $4::text) END)
+  AND (cardinality($6::text[]) = 0 OR EXISTS (
+         SELECT 1 FROM vacancy_specialties vs, unnest($6::text[]) f
+         WHERE vs.vacancy_id = v.id AND (vs.specialty_code = f OR vs.specialty_code LIKE f || '.%')))
+  AND ($7::text = '' OR v.region_code = $7::text)
+  AND (cardinality($8::text[]) = 0 OR v.work_format = ANY($8::text[]))
+  AND (cardinality($9::text[]) = 0 OR v.position_type = ANY($9::text[]))
+  AND (cardinality($10::int[]) = 0 OR v.career_level = ANY($10::int[]))
+  AND (cardinality($11::text[]) = 0 OR v.degree_required = ANY($11::text[]))
+  AND (cardinality($12::text[]) = 0 OR v.org_kind = ANY($12::text[]))
+  AND (cardinality($13::text[]) = 0 OR v.funding_source = ANY($13::text[]))
+  AND (cardinality($14::int[]) = 0 OR v.rate_percent = ANY($14::int[]))
+  AND (cardinality($15::text[]) = 0 OR (CASE
+         WHEN v.contract_type = 'permanent' THEN 'permanent'
+         WHEN v.contract_months <= 12 THEN 'short'
+         WHEN v.contract_months <= 36 THEN 'medium'
+         WHEN v.contract_months > 36 THEN 'long'
+       END) = ANY($15::text[]))
+  AND ($16::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= $16::int)
+  AND (NOT $17::bool OR v.housing <> 'none')
+  AND (NOT $18::bool OR v.is_competition)
+  AND (NOT $19::bool OR v.deadline IS NULL)
+  AND ($20::date IS NULL OR v.deadline <= $20::date)
+ORDER BY
+  CASE WHEN $21::text = 'relevance' AND $4::text <> '' THEN
+    CASE WHEN $5::bool
+      THEN word_similarity($4::text, v.title || ' ' || v.position_name || ' ' || v.org_name)
+      ELSE ts_rank_cd(s.doc, websearch_to_tsquery('russian', $4::text)) END
+  END DESC NULLS LAST,
+  CASE WHEN $21::text = 'deadline' THEN v.deadline END ASC NULLS LAST,
+  CASE WHEN $21::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END DESC NULLS LAST,
+  v.published_at DESC, v.id
+LIMIT $23 OFFSET $22
+`
+
+type SearchVacanciesParams struct {
+	Today       time.Time
+	OrgID       *uuid.UUID
+	UnitID      *uuid.UUID
+	Q           string
+	Fuzzy       bool
+	Fields      []string
+	Region      string
+	Formats     []string
+	Types       []string
+	Levels      []int32
+	Degrees     []string
+	OrgKinds    []string
+	Fundings    []string
+	Rates       []int32
+	Terms       []string
+	SalaryMin   int32
+	Housing     bool
+	Competition bool
+	NoDeadline  bool
+	DeadlineTo  *time.Time
+	Sort        string
+	RowOffset   int32
+	RowLimit    int32
+}
+
+type SearchVacanciesRow struct {
+	VacancyView VacancyView
+	Total       int64
+}
+
+// Поиск среди опубликованных вакансий (срез 6). Вакансии с прошедшим сроком подачи не показываются (today — сегодня по Москве).
+// Пустой список или пустая строка у фильтра значит «любые». total — сколько всего нашлось (до LIMIT).
+// fuzzy включает поиск с опечатками вместо словоформ: сервис включает его, когда точных совпадений нет.
+func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams) ([]SearchVacanciesRow, error) {
+	rows, err := q.db.Query(ctx, searchVacancies,
+		arg.Today,
+		arg.OrgID,
+		arg.UnitID,
+		arg.Q,
+		arg.Fuzzy,
+		arg.Fields,
+		arg.Region,
+		arg.Formats,
+		arg.Types,
+		arg.Levels,
+		arg.Degrees,
+		arg.OrgKinds,
+		arg.Fundings,
+		arg.Rates,
+		arg.Terms,
+		arg.SalaryMin,
+		arg.Housing,
+		arg.Competition,
+		arg.NoDeadline,
+		arg.DeadlineTo,
+		arg.Sort,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchVacanciesRow
+	for rows.Next() {
+		var i SearchVacanciesRow
+		if err := rows.Scan(
+			&i.VacancyView.ID,
+			&i.VacancyView.OrgID,
+			&i.VacancyView.UnitID,
+			&i.VacancyView.CreatedBy,
+			&i.VacancyView.Status,
+			&i.VacancyView.Title,
+			&i.VacancyView.PositionCode,
+			&i.VacancyView.Summary,
+			&i.VacancyView.Description,
+			&i.VacancyView.Requirements,
+			&i.VacancyView.Focus,
+			&i.VacancyView.CareerLevel,
+			&i.VacancyView.WorkFormat,
+			&i.VacancyView.RegionCode,
+			&i.VacancyView.City,
+			&i.VacancyView.Housing,
+			&i.VacancyView.RatePercent,
+			&i.VacancyView.SalaryFrom,
+			&i.VacancyView.SalaryTo,
+			&i.VacancyView.ContractType,
+			&i.VacancyView.ContractMonths,
+			&i.VacancyView.FundingSource,
+			&i.VacancyView.FundingNote,
+			&i.VacancyView.DegreeRequired,
+			&i.VacancyView.TitleRequired,
+			&i.VacancyView.IsCompetition,
+			&i.VacancyView.Deadline,
+			&i.VacancyView.PublishedAt,
+			&i.VacancyView.ClosedAt,
+			&i.VacancyView.ArchivedAt,
+			&i.VacancyView.CreatedAt,
+			&i.VacancyView.UpdatedAt,
+			&i.VacancyView.PositionName,
+			&i.VacancyView.PositionType,
+			&i.VacancyView.RegionName,
+			&i.VacancyView.OrgSlug,
+			&i.VacancyView.OrgName,
+			&i.VacancyView.OrgKind,
+			&i.VacancyView.OrgCity,
+			&i.VacancyView.UnitName,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setVacancyStatus = `-- name: SetVacancyStatus :execrows

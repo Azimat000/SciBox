@@ -1,0 +1,296 @@
+/* Поиск вакансий (срез 6). Только токены из styles/tokens.css. */
+
+.search-bar {
+  margin-top: var(--s-5);
+}
+
+.search-layout {
+  margin-top: var(--s-6);
+  display: grid;
+  grid-template-columns: 17.5rem minmax(0, 1fr);
+  column-gap: var(--s-7);
+  align-items: start;
+}
+
+/* ---- колонка фильтров ---- */
+
+/* На компьютере колонка остаётся на экране, пока листают выдачу; длинная прокручивается сама. */
+@media (min-width: 60rem) {
+  .search-filters {
+    position: sticky;
+    top: calc(var(--s-7) + var(--s-6));
+    max-height: calc(100dvh - var(--s-7) - var(--s-6) - var(--s-4));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: var(--s-2);
+  }
+}
+
+.filters-toggle {
+  display: none;
+}
+
+.filter-group {
+  border-top: 1px solid var(--line);
+}
+
+.filter-group:first-child {
+  border-top: 1px solid var(--ink);
+}
+
+.filter-group > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: var(--control-h);
+  padding-block: var(--s-3);
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.filter-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* стрелка нарисована границами: цвет из токена */
+.filter-group > summary::after {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-start: auto;
+  border: solid var(--ink-soft);
+  border-width: 0 2px 2px 0;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.filter-group[open] > summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.filter-group > summary:hover .filter-group-title {
+  color: var(--blue);
+}
+
+.filter-group-count {
+  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--ink-body);
+  white-space: nowrap;
+}
+
+.filter-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-bottom: var(--s-4);
+}
+
+.filter-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* разделы науки вложены в группу «Область науки» */
+.filter-science .filter-group:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.filter-science .filter-group > summary {
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
+.filter-code {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.filters-done {
+  display: none;
+}
+
+/* ---- выбранные фильтры ---- */
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.active-filters ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 100%;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--wash);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+
+.filter-tag span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.filter-tag svg {
+  flex: none;
+}
+
+.filter-tag:hover {
+  background: var(--paper);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+/* ---- выдача ---- */
+
+/* Чёрная линия журнала идёт под всей строкой: счётчик слева, порядок справа. */
+.results-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--ink);
+}
+
+.results-bar .results-header {
+  flex: 1 1 auto;
+  margin: 0;
+  padding-bottom: var(--s-2);
+  border-bottom: 0;
+}
+
+.results-sort {
+  flex: 0 1 16rem;
+  min-width: 12rem;
+}
+
+.search-results .alert {
+  margin-top: var(--s-4);
+}
+
+.search-results .vacancy-list {
+  margin-top: var(--s-2);
+}
+
+.search-results .vacancy-list[aria-busy='true'] {
+  opacity: 0.6;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.search-skeleton {
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+/* ---- телефон и узкий экран: фильтры раскрываются кнопкой над выдачей ---- */
+
+@media (max-width: 59.99rem) {
+  .search-layout {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--s-5);
+  }
+
+  .filters-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: var(--control-h);
+    padding: 0 var(--s-4);
+    border: 1px solid var(--edge);
+    border-radius: var(--r-md);
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .filters-toggle[aria-expanded='true'] {
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  .filters-toggle svg {
+    transition: transform var(--t-fast) var(--ease);
+  }
+
+  .filters-toggle[aria-expanded='true'] svg {
+    transform: rotate(180deg);
+  }
+
+  .filters-body[data-open='false'] {
+    display: none;
+  }
+
+  .filters-body {
+    margin-top: var(--s-3);
+  }
+
+  .filters-done {
+    display: inline-flex;
+    width: 100%;
+    margin-top: var(--s-4);
+    position: sticky;
+    bottom: var(--s-3);
+  }
+
+  .filter-tag,
+  .filter-group-body .chip {
+    min-height: 2.75rem;
+  }
+
+  .filters-toggle {
+    border-color: var(--ink);
+  }
+
+  .results-sort {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 40rem) {
+  .search-page .searchbar {
+    flex-wrap: wrap;
+  }
+}

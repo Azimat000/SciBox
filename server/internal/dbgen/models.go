@@ -168,6 +168,11 @@ type Vacancy struct {
 	UpdatedAt      time.Time
 }
 
+type VacancySearch struct {
+	VacancyID uuid.UUID
+	Doc       interface{}
+}
+
 type VacancySpecialty struct {
 	VacancyID     uuid.UUID
 	SpecialtyCode string
