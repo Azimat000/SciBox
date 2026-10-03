@@ -34,6 +34,7 @@ import {
   type FileRef,
   type Reference,
 } from './api'
+import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
 
@@ -100,6 +101,26 @@ function Page({ app }: { app: Detail }) {
           <span>{d.sentAt(dateText(app.created_at))}</span>
         </p>
       </header>
+
+      {(app.status === 'accepted' || app.status === 'rejected') && (
+        <section className="application-section" aria-labelledby="app-decision">
+          <h2 id="app-decision">{d.decision}</h2>
+          <p className="review-final">{app.status === 'accepted' ? d.decisionAccepted : d.decisionRejected}</p>
+          {app.decision_note && (
+            <p className="review-note">
+              <span>{d.organizationNote}: </span>
+              {app.decision_note}
+            </p>
+          )}
+        </section>
+      )}
+
+      {app.invitations.length > 0 && (
+        <section className="application-section" aria-labelledby="app-invitations">
+          <h2 id="app-invitations">{t.applications.invitation.titleApplicant}</h2>
+          <InvitationList appId={app.id} invitations={app.invitations} role="applicant" />
+        </section>
+      )}
 
       <section className="application-section" aria-labelledby="app-letter">
         <h2 id="app-letter">{d.yourLetter}</h2>

@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
 import { t } from '../../i18n'
+import { Button } from '../../ui/Button'
 import { Tag } from '../../ui/Tag'
 import { sizeText } from '../../lib/fileSize'
 import { isNotFound } from '../orgs/api'
@@ -8,14 +10,17 @@ import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { RequireUser } from '../orgs/RequireUser'
 import { ProfileView } from '../profile/ProfileView'
 import { NotFoundPage } from '../status/NotFoundPage'
-import { useApplication, type StaffReference } from './api'
+import { useApplication, type Detail, type StaffReference } from './api'
 import { FileLink } from './ApplicationPage'
+import { DecisionModal } from './DecisionModal'
+import { InviteModal } from './InviteModal'
+import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
 
 /**
- * Карточка отклика для организации: кто откликнулся, письмо, файлы, рекомендательные письма и профиль, как он был
- * отправлен. Список откликов и смена статусов появятся со следующим срезом; сюда ведут уведомления.
+ * Карточка отклика для организации: решение и приглашения, письмо, файлы, рекомендательные письма и профиль, как он был
+ * отправлен. Первое открытие отмечает отклик просмотренным (это делает сервер). Список откликов: `/candidates`.
  */
 export function CandidatePage() {
   const { id = '' } = useParams()
@@ -48,6 +53,19 @@ function Loader({ id }: { id: string }) {
           <span>{t.applications.detail.sentAt(dateText(app.created_at))}</span>
         </p>
       </header>
+
+      <ReviewPanel app={app} />
+
+      {(app.invitations.length > 0 || app.viewer.can_invite) && (
+        <section className="application-section" aria-labelledby="cand-invitations">
+          <h2 id="cand-invitations">{t.applications.invitation.title}</h2>
+          {app.invitations.length === 0 ? (
+            <p className="application-muted">{t.applications.invitation.noneStaff}</p>
+          ) : (
+            <InvitationList appId={app.id} invitations={app.invitations} role="staff" />
+          )}
+        </section>
+      )}
 
       <section className="application-section" aria-labelledby="cand-letter">
         <h2 id="cand-letter">{c.letter}</h2>
@@ -112,5 +130,47 @@ function Loader({ id }: { id: string }) {
         <ProfileView nested page={{ profile: app.profile, viewer: { is_owner: false, can_see_contacts: true } }} />
       </section>
     </article>
+  )
+}
+
+/** Решение по отклику: пока оно не принято, кнопки «Пригласить», «Принять», «Отказать»; потом итог и записка. */
+function ReviewPanel({ app }: { app: Detail }) {
+  const r = t.applications.review
+  const [dialog, setDialog] = useState<'invite' | 'accepted' | 'rejected' | null>(null)
+  const { decisions, can_invite: canInvite } = app.viewer
+  const open = canInvite || decisions.length > 0
+  return (
+    <section className="application-section" aria-labelledby="cand-decision">
+      <h2 id="cand-decision">{r.decisionTitle}</h2>
+      {open ? (
+        <div className="review-actions">
+          {canInvite && <Button onClick={() => setDialog('invite')}>{t.applications.invitation.invite}</Button>}
+          {decisions.includes('accepted') && (
+            <Button variant="secondary" onClick={() => setDialog('accepted')}>
+              {r.accept}
+            </Button>
+          )}
+          {decisions.includes('rejected') && (
+            <Button variant="quiet" onClick={() => setDialog('rejected')}>
+              {r.reject}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <p className="review-final">
+          {app.status === 'accepted' && r.finalAccepted(dateText(app.status_changed_at))}
+          {app.status === 'rejected' && r.finalRejected(dateText(app.status_changed_at))}
+          {app.status === 'withdrawn' && r.withdrawnNote}
+        </p>
+      )}
+      {app.decision_note && (
+        <p className="review-note">
+          <span>{r.noteShown}: </span>
+          {app.decision_note}
+        </p>
+      )}
+      {dialog === 'invite' && <InviteModal appId={app.id} onClose={() => setDialog(null)} />}
+      {(dialog === 'accepted' || dialog === 'rejected') && <DecisionModal appId={app.id} decision={dialog} onClose={() => setDialog(null)} />}
+    </section>
   )
 }

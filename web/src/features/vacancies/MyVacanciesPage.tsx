@@ -1,5 +1,7 @@
 import { Link, useSearchParams } from 'react-router'
 import { t } from '../../i18n'
+import { plural } from '../../lib/plural'
+import { useCandidateVacancies, type VacancyCount } from '../applications/api'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { Tag } from '../../ui/Tag'
@@ -24,6 +26,9 @@ function MyVacancies() {
   const page = Math.max(1, Number(params.get('page')) || 1)
   const mine = useMyVacancies(status, page)
   const targets = useTargets()
+  // Числа откликов вспомогательные: если их не удалось получить, страница работает без них.
+  const apps = useCandidateVacancies()
+  const counted = new Map((apps.data ?? []).map((v) => [v.id, v]))
 
   if (mine.isPending || targets.isPending) return <PageSkeleton />
   if (mine.isError) return <LoadFailed title={t.vacancies.mine.loadError} error={mine.error} onRetry={() => void mine.refetch()} />
@@ -100,7 +105,7 @@ function MyVacancies() {
         ) : (
           <>
             {items.map((c) => (
-              <Row key={c.id} card={c} />
+              <Row key={c.id} card={c} apps={counted.get(c.id)} />
             ))}
             {pages > 1 && (
               <nav className="pager" aria-label={t.vacancies.mine.pager}>
@@ -120,7 +125,7 @@ function MyVacancies() {
   )
 }
 
-function Row({ card: c }: { card: Card }) {
+function Row({ card: c, apps }: { card: Card; apps: VacancyCount | undefined }) {
   return (
     <div className="mine-row">
       <div className="mine-row-main">
@@ -135,6 +140,12 @@ function Row({ card: c }: { card: Card }) {
           <span>{c.position.name}</span>
           <span className="num">{t.vacancies.mine.updated(formatDate(c.updated_at))}</span>
         </p>
+        {apps && apps.total > 0 && (
+          <p className="mine-row-apps num">
+            <Link to={`/candidates?vacancy=${c.id}`}>{t.vacancies.mine.applications(apps.total, plural(apps.total, t.vacancies.mine.applicationsForms))}</Link>
+            {apps.new > 0 && `, ${t.vacancies.mine.applicationsNew(apps.new)}`}
+          </p>
+        )}
       </div>
       <div className="mine-row-actions">
         <ButtonLink to={`/my-vacancies/${c.id}/edit`} size="sm">

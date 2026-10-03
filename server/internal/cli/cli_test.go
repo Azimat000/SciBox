@@ -190,6 +190,23 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM notifications WHERE kind = 'application_received'"); n == 0 {
 		t.Error("organizations were not notified about demo applications")
 	}
+	// Разбор откликов (срез 9): приглашения всех видов и состояний, записки к решениям; открытые приглашения только у «приглашённых».
+	for _, kind := range []string{"interview", "contacts", "request_contacts"} {
+		if n := count("SELECT count(*) FROM application_invitations WHERE kind = '" + kind + "'"); n == 0 {
+			t.Errorf("no %s demo invitations", kind)
+		}
+	}
+	for _, status := range []string{"pending", "proposed", "confirmed", "answered", "shared"} {
+		if n := count("SELECT count(*) FROM application_invitations WHERE status = '" + status + "'"); n == 0 {
+			t.Errorf("no %s demo invitations", status)
+		}
+	}
+	if n := count("SELECT count(*) FROM application_invitations i JOIN applications a ON a.id = i.application_id WHERE i.status IN ('pending', 'proposed') AND a.status <> 'invited'"); n != 0 {
+		t.Errorf("%d open demo invitations on applications that are not 'invited'", n)
+	}
+	if n := count("SELECT count(*) FROM applications WHERE decision_note <> ''"); n == 0 {
+		t.Error("no demo decision notes")
+	}
 	if n := count("SELECT count(*) FROM outbox WHERE sent_at IS NULL"); n != 0 {
 		t.Errorf("%d demo mails are waiting to be sent: demo data must not send mail", n)
 	}

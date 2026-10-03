@@ -316,7 +316,7 @@ func (s *Service) Mine(ctx context.Context, user auth.User, limit, offset int) (
 		out.Items = append(out.Items, Summary{
 			ID: r.ID, Status: r.Status, CreatedAt: r.CreatedAt, StatusChangedAt: r.StatusChangedAt,
 			Vacancy:    VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug, Deadline: dateStr(r.Deadline)},
-			References: RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)},
+			References: RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)}, PendingInvitations: int(r.InvitesPending),
 		})
 	}
 	return out, nil
@@ -360,6 +360,12 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 	if err != nil {
 		return Detail{}, err
 	}
+	// Организация, открывшая карточку впервые, отмечает отклик просмотренным (и соискатель об этом узнаёт).
+	if reader == files.Staff && a.Status == StatusSent {
+		if err := s.markViewed(ctx, &a); err != nil {
+			return Detail{}, err
+		}
+	}
 	var view profiles.View
 	if err := json.Unmarshal(a.Profile, &view); err != nil {
 		return Detail{}, fmt.Errorf("applications: decode profile snapshot %s: %w", a.ID, err)
@@ -371,8 +377,11 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 	d := Detail{Base: Base{
 		ID: a.ID, Status: a.Status, CreatedAt: a.CreatedAt, StatusChangedAt: a.StatusChangedAt,
 		Vacancy:       VacancyRef{ID: a.VacancyID, Title: a.VacancyTitle, Status: a.VacancyStatus, OrgName: a.OrgName, OrgSlug: a.OrgSlug, Deadline: dateStr(a.Deadline)},
-		ApplicantName: a.ApplicantName, ContactEmail: a.ContactEmail, CoverLetter: a.CoverLetter, Profile: view, Files: []FileRef{},
+		ApplicantName: a.ApplicantName, ContactEmail: a.ContactEmail, CoverLetter: a.CoverLetter, Profile: view, Files: []FileRef{}, DecisionNote: a.DecisionNote,
 	}}
+	if d.Invitations, err = s.invitationsOf(ctx, s.q, a.ID, reader); err != nil {
+		return Detail{}, err
+	}
 	for _, f := range fs {
 		kind, ok := files.Parse(f.Kind)
 		// Письма рекомендателей показываются в блоке рекомендаций, а не среди файлов отклика.
@@ -388,12 +397,12 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 	}
 	switch reader {
 	case files.Applicant:
-		d.Viewer = ViewerInfo{Role: RoleApplicant, CanWithdraw: CanWithdraw(a.Status)}
+		d.Viewer = ViewerInfo{Role: RoleApplicant, CanWithdraw: CanWithdraw(a.Status), Decisions: []string{}}
 		if d.References, err = s.refs.ListForApplicant(ctx, a.ID); err != nil {
 			return Detail{}, err
 		}
 	default:
-		d.Viewer = ViewerInfo{Role: RoleStaff}
+		d.Viewer = ViewerInfo{Role: RoleStaff, Decisions: DecisionsFrom(a.Status), CanInvite: CanInvite(a.Status)}
 		if d.References, err = s.refs.ListForStaff(ctx, a.ID); err != nil {
 			return Detail{}, err
 		}
@@ -440,6 +449,9 @@ func (s *Service) Withdraw(ctx context.Context, user auth.User, id uuid.UUID) er
 		}
 		if n == 0 {
 			return ErrBadStatus
+		}
+		if err := q.CancelOpenInvitations(ctx, dbgen.CancelOpenInvitationsParams{ApplicationID: id, Now: s.now()}); err != nil {
+			return fmt.Errorf("applications: cancel invitations: %w", err)
 		}
 		staff, err := orgs.UsersWhoCan(ctx, q, a.OrgID, access.ViewApplications, unitOf(a.UnitID))
 		if err != nil {

@@ -76,7 +76,10 @@ func TestUpDownUp(t *testing.T) {
 	// Профили учёных (00007): три таблицы встают между positions и rate_events.
 	profileTables := slices.Concat(searchTables[:5], []string{"profile_items", "profile_specialties", "profiles"}, searchTables[5:])
 	// Отклики, рекомендации, уведомления и очередь писем (00008). Информационная схема отдаёт имена по алфавиту.
-	allTables := append(slices.Clone(profileTables), "application_files", "applications", "notifications", "outbox", "reference_requests")
+	applicationTables := append(slices.Clone(profileTables), "application_files", "applications", "notifications", "outbox", "reference_requests")
+	slices.Sort(applicationTables)
+	// Приглашения к откликам (00009).
+	allTables := append(slices.Clone(applicationTables), "application_invitations")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -85,9 +88,10 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00008_applications.sql", 2, allTables},
+		{"up", "00009_review.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		{"down", "00009_review.sql", 2, applicationTables},
 		{"down", "00008_applications.sql", 2, profileTables},
 		{"down", "00007_profiles.sql", 2, searchTables},
 		{"down", "00006_search.sql", 2, vacancyTables},
@@ -96,7 +100,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00008_applications.sql", 2, allTables},
+		{"up", "00009_review.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

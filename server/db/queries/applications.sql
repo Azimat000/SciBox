@@ -19,7 +19,7 @@ RETURNING id;
 
 -- Карточка отклика с вакансией и именем соискателя.
 -- name: GetApplication :one
-SELECT a.id, a.vacancy_id, a.user_id, a.status, a.cover_letter, a.contact_email, a.profile,
+SELECT a.id, a.vacancy_id, a.user_id, a.status, a.cover_letter, a.contact_email, a.profile, a.decision_note,
        a.created_at, a.updated_at, a.status_changed_at,
        u.display_name AS applicant_name,
        v.title AS vacancy_title, v.status AS vacancy_status, v.org_id, v.unit_id, v.org_name, v.org_slug, v.deadline
@@ -33,7 +33,8 @@ WHERE a.id = $1;
 SELECT a.id, a.status, a.created_at, a.status_changed_at,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.deadline, v.city AS vacancy_city,
        (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id)::bigint AS refs_total,
-       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received
+       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received,
+       (SELECT count(*) FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending')::bigint AS invites_pending
 FROM applications a
 JOIN vacancy_view v ON v.id = a.vacancy_id
 WHERE a.user_id = @user_id

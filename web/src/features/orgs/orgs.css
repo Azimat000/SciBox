@@ -259,6 +259,12 @@
   overflow-wrap: anywhere;
 }
 
+.mine-row-apps {
+  margin-top: var(--s-1);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
 .mine-row-actions {
   display: flex;
   flex-wrap: wrap;

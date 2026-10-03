@@ -66,8 +66,12 @@ var (
 	ErrOwnVacancy = errors.New("applications: own vacancy")
 	// ErrAlreadyApplied — на эту вакансию человек уже откликнулся.
 	ErrAlreadyApplied = errors.New("applications: already applied")
-	// ErrBadStatus — отклик в таком статусе нельзя отозвать.
+	// ErrBadStatus — отклик в таком статусе нельзя отозвать, решить по нему или пригласить.
 	ErrBadStatus = errors.New("applications: invalid status change")
+	// ErrBadInvitation — приглашение уже в другом состоянии (отвечено, отменено): действие не подходит.
+	ErrBadInvitation = errors.New("applications: invalid invitation state")
+	// ErrTooManyInvitations — на отклик уже отправлено предельное число приглашений.
+	ErrTooManyInvitations = errors.New("applications: too many invitations")
 )
 
 // VacancyRef — вакансия, на которую пришёл отклик.
@@ -101,6 +105,8 @@ type Summary struct {
 	StatusChangedAt time.Time  `json:"status_changed_at"`
 	Vacancy         VacancyRef `json:"vacancy"`
 	References      RefsCount  `json:"references"`
+	// PendingInvitations — приглашения, которые ждут ответа соискателя.
+	PendingInvitations int `json:"pending_invitations"`
 }
 
 // List — страница откликов.
@@ -122,12 +128,19 @@ type Base struct {
 	Profile         profiles.View `json:"profile"`
 	CV              *FileRef      `json:"cv"`
 	Files           []FileRef     `json:"files"`
+	// DecisionNote — записка организации к решению (принят, отказ); её видят обе стороны.
+	DecisionNote string       `json:"decision_note"`
+	Invitations  []Invitation `json:"invitations"`
 }
 
-// ViewerInfo — кто смотрит и что ему можно.
+// ViewerInfo — кто смотрит и что ему можно. Сайт показывает кнопки по этим полям, но проверяет всё сервер.
 type ViewerInfo struct {
 	Role        string `json:"role"`
 	CanWithdraw bool   `json:"can_withdraw"`
+	// Decisions — какие решения организация может поставить сейчас (accepted, rejected); у соискателя пусто.
+	Decisions []string `json:"decisions"`
+	// CanInvite — можно ли отправить приглашение; у соискателя false.
+	CanInvite bool `json:"can_invite"`
 }
 
 // Detail — карточка отклика. References зависит от того, кто смотрит: соискателю []references.Request (без писем),
@@ -165,4 +178,75 @@ type VacancyState struct {
 	CanApply    bool            `json:"can_apply"`
 	Reason      string          `json:"reason,omitempty"`
 	Application *ApplicationRef `json:"application"`
+}
+
+// InvitationAnswer — ответ соискателя на приглашение.
+type InvitationAnswer struct {
+	ProposedAt *time.Time `json:"proposed_at"`
+	Note       string     `json:"note"`
+	Contact    string     `json:"contact"`
+	Time       string     `json:"time"`
+	AnsweredAt time.Time  `json:"answered_at"`
+}
+
+// Invitation — приглашение; обе стороны видят его целиком. Флаги can_* зависят от того, кто смотрит.
+type Invitation struct {
+	ID           uuid.UUID         `json:"id"`
+	Kind         string            `json:"kind"`
+	Status       string            `json:"status"`
+	Message      string            `json:"message"`
+	StartsAt     *time.Time        `json:"starts_at"`
+	PlaceKind    string            `json:"place_kind"`
+	Place        string            `json:"place"`
+	ContactName  string            `json:"contact_name"`
+	ContactEmail string            `json:"contact_email"`
+	ContactPhone string            `json:"contact_phone"`
+	Answer       *InvitationAnswer `json:"answer"`
+	CreatedAt    time.Time         `json:"created_at"`
+	// CanAnswer — соискатель может ответить; CanCancel и CanAcceptProposal — организация может отменить и принять предложенное время.
+	CanAnswer         bool `json:"can_answer"`
+	CanCancel         bool `json:"can_cancel"`
+	CanAcceptProposal bool `json:"can_accept_proposal"`
+}
+
+// Candidate — отклик в списке организации.
+type Candidate struct {
+	ID              uuid.UUID  `json:"id"`
+	Status          string     `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
+	StatusChangedAt time.Time  `json:"status_changed_at"`
+	ApplicantName   string     `json:"applicant_name"`
+	Headline        string     `json:"headline"`
+	Vacancy         VacancyRef `json:"vacancy"`
+	UnitName        string     `json:"unit_name"`
+	References      RefsCount  `json:"references"`
+	// PendingInvitations ждут ответа соискателя, ProposedInvitations ждут решения организации.
+	PendingInvitations  int `json:"pending_invitations"`
+	ProposedInvitations int `json:"proposed_invitations"`
+}
+
+// CandidateList — страница откликов организации и число откликов по каждому статусу (при выбранной вакансии — на неё).
+type CandidateList struct {
+	Items  []Candidate    `json:"items"`
+	Total  int            `json:"total"`
+	Counts map[string]int `json:"counts"`
+}
+
+// CandidateFilter — что показать в списке: вакансия (uuid.Nil — любая), статус (пусто — любой), страница.
+type CandidateFilter struct {
+	VacancyID uuid.UUID
+	Status    string
+	Limit     int
+	Offset    int
+}
+
+// VacancyCount — вакансия с числом откликов (отозванные не считаются) и числом непросмотренных.
+type VacancyCount struct {
+	ID      uuid.UUID `json:"id"`
+	Title   string    `json:"title"`
+	Status  string    `json:"status"`
+	OrgName string    `json:"org_name"`
+	OrgSlug string    `json:"org_slug"`
+	Total   int       `json:"total"`
+	New     int       `json:"new"`
 }

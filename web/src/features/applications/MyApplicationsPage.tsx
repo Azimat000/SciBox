@@ -89,6 +89,7 @@ function Entry({ app }: { app: Summary }) {
       <p className="app-entry-meta">
         <Tag tone={statusTone(app.status)}>{statusLabel(app.status)}</Tag>
         <span>{m.sentAt(dateText(app.created_at))}</span>
+        {app.pending_invitations > 0 && <Tag tone="accent">{m.waitsYou}</Tag>}
         {refs.total > 0 && <span>{m.refs(refs.received, refs.total)}</span>}
       </p>
     </li>

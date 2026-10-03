@@ -137,7 +137,7 @@ describe('application page (applicant)', () => {
   })
 
   it('sends the staff to the card meant for the organization', async () => {
-    stubApi(one({ ...application, viewer: { role: 'staff', can_withdraw: false }, references: [] }))
+    stubApi(one({ ...application, viewer: { role: 'staff', can_withdraw: false, decisions: [], can_invite: false }, references: [] }))
     const { router } = renderApp(`/applications/${APP_ID}`)
     await waitFor(() => expect(router.state.location.pathname).toBe(`/candidates/${APP_ID}`))
   })
@@ -195,7 +195,7 @@ describe('application page (applicant)', () => {
   })
 
   it('does not offer to withdraw once a decision is made', async () => {
-    stubApi(one({ ...application, status: 'rejected', viewer: { role: 'applicant', can_withdraw: false }, references: [receivedRef] }))
+    stubApi(one({ ...application, status: 'rejected', viewer: { role: 'applicant', can_withdraw: false, decisions: [], can_invite: false }, references: [receivedRef] }))
     renderApp(`/applications/${APP_ID}`)
     expect(await screen.findByText('Отказ', { selector: '.tag' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument()

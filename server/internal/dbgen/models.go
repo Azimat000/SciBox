@@ -21,6 +21,8 @@ type Application struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	StatusChangedAt time.Time
+	DecisionNote    string
+	DecidedBy       *uuid.UUID
 }
 
 type ApplicationFile struct {
@@ -33,6 +35,28 @@ type ApplicationFile struct {
 	Position      int16
 	Data          []byte
 	CreatedAt     time.Time
+}
+
+type ApplicationInvitation struct {
+	ID            uuid.UUID
+	ApplicationID uuid.UUID
+	Kind          string
+	Status        string
+	Message       string
+	StartsAt      *time.Time
+	PlaceKind     *string
+	Place         string
+	ContactName   string
+	ContactEmail  string
+	ContactPhone  string
+	AnswerAt      *time.Time
+	AnswerNote    string
+	AnswerContact string
+	AnswerTime    string
+	AnsweredAt    *time.Time
+	CreatedBy     *uuid.UUID
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type AuthToken struct {

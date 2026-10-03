@@ -57,7 +57,7 @@ func (q *Queries) GetActiveApplicationForVacancy(ctx context.Context, arg GetAct
 }
 
 const getApplication = `-- name: GetApplication :one
-SELECT a.id, a.vacancy_id, a.user_id, a.status, a.cover_letter, a.contact_email, a.profile,
+SELECT a.id, a.vacancy_id, a.user_id, a.status, a.cover_letter, a.contact_email, a.profile, a.decision_note,
        a.created_at, a.updated_at, a.status_changed_at,
        u.display_name AS applicant_name,
        v.title AS vacancy_title, v.status AS vacancy_status, v.org_id, v.unit_id, v.org_name, v.org_slug, v.deadline
@@ -75,6 +75,7 @@ type GetApplicationRow struct {
 	CoverLetter     string
 	ContactEmail    string
 	Profile         []byte
+	DecisionNote    string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	StatusChangedAt time.Time
@@ -100,6 +101,7 @@ func (q *Queries) GetApplication(ctx context.Context, id uuid.UUID) (GetApplicat
 		&i.CoverLetter,
 		&i.ContactEmail,
 		&i.Profile,
+		&i.DecisionNote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
@@ -288,7 +290,8 @@ const listMyApplications = `-- name: ListMyApplications :many
 SELECT a.id, a.status, a.created_at, a.status_changed_at,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.deadline, v.city AS vacancy_city,
        (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id)::bigint AS refs_total,
-       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received
+       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received,
+       (SELECT count(*) FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending')::bigint AS invites_pending
 FROM applications a
 JOIN vacancy_view v ON v.id = a.vacancy_id
 WHERE a.user_id = $1
@@ -316,6 +319,7 @@ type ListMyApplicationsRow struct {
 	VacancyCity     string
 	RefsTotal       int64
 	RefsReceived    int64
+	InvitesPending  int64
 }
 
 // «Мои отклики»: новые сверху, с числом рекомендаций.
@@ -342,6 +346,7 @@ func (q *Queries) ListMyApplications(ctx context.Context, arg ListMyApplications
 			&i.VacancyCity,
 			&i.RefsTotal,
 			&i.RefsReceived,
+			&i.InvitesPending,
 		); err != nil {
 			return nil, err
 		}

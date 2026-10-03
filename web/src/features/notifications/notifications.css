@@ -178,6 +178,7 @@
 }
 
 .notice-body {
+  white-space: pre-line;
   color: var(--ink-body);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;

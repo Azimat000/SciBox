@@ -23,6 +23,7 @@ import { ScientistPage } from '../features/profile/ScientistPage'
 import { ApplicationPage } from '../features/applications/ApplicationPage'
 import { ApplyPage } from '../features/applications/ApplyPage'
 import { CandidatePage } from '../features/applications/CandidatePage'
+import { CandidatesPage } from '../features/applications/CandidatesPage'
 import { MyApplicationsPage } from '../features/applications/MyApplicationsPage'
 import { RecommendPage } from '../features/applications/RecommendPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
@@ -76,6 +77,7 @@ export const routes: RouteObject[] = [
       { path: 'vacancies/:id/apply', element: <ApplyPage /> },
       { path: 'applications', element: <MyApplicationsPage /> },
       { path: 'applications/:id', element: <ApplicationPage /> },
+      { path: 'candidates', element: <CandidatesPage /> },
       { path: 'candidates/:id', element: <CandidatePage /> },
       { path: 'recommend', element: <RecommendPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
