@@ -39,6 +39,7 @@ import { MyVacanciesPage } from '../features/vacancies/MyVacanciesPage'
 import { VacancyEditPage } from '../features/vacancies/VacancyEditPage'
 import { VacancyPage } from '../features/vacancies/VacancyPage'
 import { NotFoundPage } from '../features/status/NotFoundPage'
+import { LandingPage } from '../features/landing/LandingPage'
 import { SearchPage } from '../features/search/SearchPage'
 import { StatusPage } from '../features/status/StatusPage'
 import { StyleguidePage } from '../features/styleguide/StyleguidePage'
@@ -50,7 +51,7 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     errorElement: <CrashPage />,
     children: [
-      { index: true, element: <SearchPage /> },
+      { index: true, element: <LandingPage /> },
       { path: 'vacancies', element: <SearchPage /> },
       { path: 'status', element: <StatusPage /> },
       { path: 'login', element: <LoginPage /> },

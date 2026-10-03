@@ -1,0 +1,339 @@
+/* Главная страница (срез 12). Только токены из styles/tokens.css. */
+
+/* Сетка всей страницы: в первой строке слева заголовок и поиск, справа оглавление; остальное во всю ширину. */
+.landing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 21rem;
+  column-gap: var(--s-8);
+  align-items: start;
+  padding-bottom: var(--s-8);
+}
+
+.landing > * {
+  grid-column: 1 / -1;
+}
+
+.landing > .hero {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.landing > .hero-browse {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* ---- первый экран ---- */
+
+.hero-title {
+  font-size: var(--text-hero);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.hero-title span {
+  display: block;
+  text-wrap: pretty;
+}
+
+/* Вторая фраза тише первой: заголовок читается как строка и ответ на неё. */
+.hero-title-second {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.hero-lead {
+  margin-top: var(--s-5);
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  color: var(--ink-body);
+  text-wrap: pretty;
+}
+
+.hero-search {
+  margin-top: var(--s-6);
+}
+
+/* Место под числа занято всегда, чтобы страница не прыгала, когда они придут. */
+.hero-facts-slot {
+  min-height: calc(var(--s-4) + 1.55rem);
+}
+
+.hero-facts {
+  list-style: none;
+  margin: var(--s-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-5);
+  font-size: var(--text-md);
+}
+
+.hero-facts strong {
+  font-weight: 600;
+}
+
+/* Один заметный выход: заголовок, пояснение и поиск выходят друг за другом. */
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+.hero-title span:first-child {
+  animation: landing-rise 640ms var(--ease) backwards;
+}
+
+.hero-title-second {
+  animation: landing-rise 640ms var(--ease) 90ms backwards;
+}
+
+.hero-lead {
+  animation: landing-rise 640ms var(--ease) 180ms backwards;
+}
+
+.hero-search {
+  animation: landing-rise 640ms var(--ease) 270ms backwards;
+}
+
+/* ---- оглавление: области науки и виды позиций ---- */
+
+.hero-browse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+
+.hero-browse section {
+  border-top: 1px solid var(--ink);
+}
+
+.browse-title {
+  padding-top: var(--s-3);
+  font-size: var(--text-xl);
+}
+
+.browse-list {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+}
+
+.browse-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.browse-list a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: var(--control-h);
+  padding-block: var(--s-2);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.browse-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.browse-count {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.browse-list a:hover .browse-name {
+  color: var(--blue);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.browse-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding-top: var(--s-4);
+}
+
+/* ---- разделы ---- */
+
+.landing-section {
+  margin-top: var(--s-8);
+}
+
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-5);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--ink);
+}
+
+.section-more {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+/* ---- две дорожки ---- */
+
+.tracks {
+  margin-top: var(--s-8);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(4, auto);
+  column-gap: var(--s-8);
+}
+
+/* Строки общие у обеих дорожек: заголовки, пояснения, шаги и кнопки стоят на одной высоте. */
+.track {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  align-content: start;
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--ink);
+}
+
+.track-text {
+  margin-top: var(--s-3);
+  max-width: var(--measure);
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+.track-steps {
+  margin: var(--s-5) 0 0;
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: var(--measure);
+  color: var(--ink-body);
+}
+
+.track-steps li {
+  padding-left: var(--s-1);
+  text-wrap: pretty;
+}
+
+.track-steps li::marker {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink);
+}
+
+.track-actions {
+  margin-top: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: var(--s-2);
+  min-height: var(--control-h);
+}
+
+/* ---- «Устроено под науку» ---- */
+
+.science .section-head {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.science-list {
+  margin: var(--s-4) 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--s-8);
+}
+
+.science-item {
+  padding-block: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.science-list dt {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -0.015em;
+}
+
+.science-list dd {
+  margin: var(--s-2) 0 0;
+  max-width: var(--measure);
+  color: var(--ink-body);
+  text-wrap: pretty;
+}
+
+/* ---- узкие экраны ---- */
+
+@media (max-width: 62rem) {
+  .landing {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing > .hero,
+  .landing > .hero-browse {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .hero-browse {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--s-6);
+    align-items: start;
+    margin-top: var(--s-8);
+  }
+}
+
+@media (max-width: 48rem) {
+  .tracks,
+  .science-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tracks {
+    grid-template-rows: none;
+    row-gap: var(--s-7);
+  }
+
+  .track {
+    grid-row: auto;
+    grid-template-rows: none;
+  }
+
+  .landing-section,
+  .tracks {
+    margin-top: var(--s-7);
+  }
+}
+
+@media (max-width: 40rem) {
+  .hero-browse {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-6);
+    margin-top: var(--s-7);
+  }
+
+  .hero-lead {
+    font-size: var(--text-md);
+  }
+
+  .hero-search {
+    margin-top: var(--s-5);
+  }
+
+  .hero-facts {
+    flex-direction: column;
+  }
+}

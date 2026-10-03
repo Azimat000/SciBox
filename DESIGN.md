@@ -197,6 +197,8 @@ A white sheet, warm ink, one blue, one yellow; status colors are muted and used 
 
 Single centered column, max 72rem, with a fluid gutter (1rem to 3.5rem, 4vw). Narrow pages use 44rem. Spacing runs on a 4px-based scale (4, 8, 12, 16, 24, 32, 48, 72) with `s-7` as page top padding (`s-6` on phones) and `s-8` above the footer. Controls are 44px tall (36px small); the search bar is 48px.
 
+**Landing (`/`).** One grid for the whole page: the first row holds the headline and search on the left and a table of contents (open vacancies by field and by position type, hairline rows with tabular counts) on the right; below it, full width: fresh vacancies, two tracks (seeker, employer) on a shared subgrid so headings, steps and buttons align, and a definition list "Устроено под науку". Under 62rem it is one column and the table of contents moves below the fresh vacancies. The headline uses a larger token `--text-hero` (clamp 2.25rem to 3.125rem): first sentence at weight 600 in ink, second at weight 400 in ink-soft. The numbers are a single row of ink-blue links, not big figures. The one authored motion is the rise of headline, lead and search (640ms, staggered).
+
 A vacancy entry is a two-column grid: title, organization, abstract, facts on the left; deadline on the right in an 11rem column, right-aligned. Under 40rem it collapses to one column with the deadline directly after the organization line. The header collapses at 66rem (sign-in buttons and a signed-in name need the room) into a menu button and a stacked menu; role tabs go full width inside it. The search bar stacks vertically under 40rem. Toasts and modals rearrange under 30rem (toasts move to the top, modals become bottom sheets).
 
 ## Elevation & Depth

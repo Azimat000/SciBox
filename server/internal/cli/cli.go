@@ -21,6 +21,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
+	"scibox/server/internal/landing"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/matching"
 	"scibox/server/internal/migrate"
@@ -181,6 +182,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Offers:        offers.NewHandler(offers.NewService(pool, notes, offers.DefaultConfig()), logger, authHandler.RequireUser),
 		Matching:      matching.NewHandler(matchingSvc, logger, authHandler.RequireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
+		Landing:       landing.NewHandler(landing.NewService(pool), logger),
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

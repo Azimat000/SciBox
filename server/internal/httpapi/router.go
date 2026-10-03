@@ -13,6 +13,7 @@ import (
 	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
+	"scibox/server/internal/landing"
 	"scibox/server/internal/matching"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/offers"
@@ -55,6 +56,8 @@ type Deps struct {
 	Matching *matching.Handler
 	// Reference подключает справочники (/api/reference).
 	Reference *refdata.Handler
+	// Landing подключает числа для главной страницы (/api/landing, публично).
+	Landing *landing.Handler
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
@@ -106,6 +109,9 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Reference != nil {
 			d.Reference.Mount(r)
+		}
+		if d.Landing != nil {
+			d.Landing.Mount(r)
 		}
 		r.Get("/health", healthHandler(d))
 	})

@@ -40,6 +40,7 @@
   --text-xl: 1.3125rem;
   --text-2xl: 1.625rem;
   --text-3xl: clamp(1.875rem, 1.45rem + 1.9vw, 2.625rem);
+  --text-hero: clamp(2.25rem, 1.5rem + 3vw, 3.125rem); /* только заголовок главной */
 
   /* Отступы (шаг 4px) */
   --s-1: 0.25rem;

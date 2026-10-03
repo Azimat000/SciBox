@@ -281,12 +281,17 @@ func TestServeHealthAndShutdown(t *testing.T) {
 		} `json:"database"`
 	}
 	var got healthBody
-	var status int
+	var status, landingStatus int
 	var reqErr error
 
 	r := run(ctx, nil, map[string]string{"DATABASE_URL": dbURL, "SCIBOX_HTTP_ADDR": "127.0.0.1:0"}, func(addr net.Addr) {
 		defer cancel()
 		client := http.Client{Timeout: 5 * time.Second}
+		// Числа главной страницы подключены и отвечают без входа.
+		if resp, err := client.Get(fmt.Sprintf("http://%s/api/landing", addr)); err == nil {
+			landingStatus = resp.StatusCode
+			_ = resp.Body.Close()
+		}
 		resp, err := client.Get(fmt.Sprintf("http://%s/api/health", addr))
 		if err != nil {
 			reqErr = err
@@ -304,5 +309,8 @@ func TestServeHealthAndShutdown(t *testing.T) {
 	}
 	if status != http.StatusOK || got.Status != "ok" || got.Product != "SciBox" || got.Database.SchemaVersion < 1 {
 		t.Fatalf("health = %d %+v", status, got)
+	}
+	if landingStatus != http.StatusOK {
+		t.Fatalf("landing numbers answered %d", landingStatus)
 	}
 }
