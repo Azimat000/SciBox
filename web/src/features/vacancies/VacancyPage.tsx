@@ -7,6 +7,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { Deadline } from '../../ui/Deadline'
 import { Tag } from '../../ui/Tag'
 import { useToast } from '../../ui/useToast'
+import { ApplyBlock } from '../applications/ApplyBlock'
 import { describeError, fieldErrorsOf } from '../auth/errors'
 import { ConfirmModal } from '../orgs/ConfirmModal'
 import { isNotFound } from '../orgs/api'
@@ -83,6 +84,7 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
           {v.status !== 'published' && <Tag>{statusLabel(v.status)}</Tag>}
         </p>
         {v.status === 'published' && v.deadline && <Deadline date={v.deadline} />}
+        {v.status === 'published' && !v.viewer.can_manage && <ApplyBlock vacancyId={v.id} />}
       </header>
 
       {v.status === 'draft' && <Alert kind="info">{p.draftNotice}</Alert>}

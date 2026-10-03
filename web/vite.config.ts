@@ -49,6 +49,10 @@ export default defineConfig({
         'src/features/vacancies/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
         // Профиль: что показывается другим людям и кому (решает сервер, интерфейс не должен обманывать).
         'src/features/profile/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
+        // Отклики и рекомендательные письма: кто что видит и какие кнопки показаны (решает сервер, интерфейс не должен обманывать).
+        'src/features/applications/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
+        // Уведомления: колокольчик и список (срез 8).
+        'src/features/notifications/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
       },
     },
   },

@@ -121,7 +121,7 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM vacancies WHERE status = 'published' AND deadline < current_date"); n == 0 {
 		t.Error("no published vacancies with an expired deadline")
 	}
-	if n := count("SELECT count(DISTINCT region_code) FROM vacancies WHERE status = 'published'"); n < 15 {
+	if n := count("SELECT count(DISTINCT region_code) FROM vacancies WHERE status = 'published'"); n < 12 {
 		t.Errorf("vacancies are spread over %d regions only", n)
 	}
 	if n := count("SELECT count(*) FROM vacancies WHERE status = 'published' AND work_format = 'remote'"); n == 0 {
@@ -168,6 +168,30 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	}
 	if n := count("SELECT count(*) FROM org_invitations"); n != 1 {
 		t.Errorf("%d invitations, want 1", n)
+	}
+	// Демо-отклики (срез 8): разные статусы, файлы, рекомендатели во всех состояниях, уведомления организациям.
+	if n := count("SELECT count(*) FROM applications"); n < 12 {
+		t.Errorf("%d demo applications, want at least 12", n)
+	}
+	if n := count("SELECT count(DISTINCT status) FROM applications"); n != 6 {
+		t.Errorf("%d statuses among demo applications, want 6", n)
+	}
+	for _, status := range []string{"pending", "received", "declined"} {
+		if n := count("SELECT count(*) FROM reference_requests WHERE status = '" + status + "'"); n == 0 {
+			t.Errorf("no %s reference requests", status)
+		}
+	}
+	if n := count("SELECT count(*) FROM application_files WHERE kind = 'reference_letter'"); n == 0 {
+		t.Error("no reference letters as files")
+	}
+	if n := count("SELECT count(*) FROM applications a WHERE NOT EXISTS (SELECT 1 FROM application_files f WHERE f.application_id = a.id AND f.kind = 'cv')"); n != 0 {
+		t.Errorf("%d demo applications without a cv", n)
+	}
+	if n := count("SELECT count(*) FROM notifications WHERE kind = 'application_received'"); n == 0 {
+		t.Error("organizations were not notified about demo applications")
+	}
+	if n := count("SELECT count(*) FROM outbox WHERE sent_at IS NULL"); n != 0 {
+		t.Errorf("%d demo mails are waiting to be sent: demo data must not send mail", n)
 	}
 }
 

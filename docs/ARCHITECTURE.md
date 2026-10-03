@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 7 (профиль учёного). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 8 (отклики, рекомендательные письма, уведомления). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -20,13 +20,18 @@ SciBox/
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
-│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей); вне покрытия, проверяется тестом в internal/cli
+│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
 │       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`), «мои вакансии», HTTP
 │       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / организациям / публичный, кто видит профиль и контакты; без базы и HTTP
 │       ├── profiles/     профиль учёного (критичная зона): основные поля, записи разделов, приватность, поиск по DOI, сборка резюме, HTTP
+│       ├── applications/ отклики (критичная зона): отправка (снимок профиля, резюме, PDF-файлы, рекомендатели), «Мои отклики», карточка глазами соискателя и организации, выдача файлов, отзыв, «можно ли откликнуться», HTTP
+│       ├── references/   рекомендательные письма (критичная зона): просьбы, одноразовые ссылки, письмо текстом/PDF, отказ, повтор и отмена, HTTP (в том числе страница рекомендателя без входа)
+│       ├── files/        файлы откликов (критичная зона): проверка PDF, имена, multipart-запрос, таблица «вид файла → кто видит», безопасная выдача
+│       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, HTTP
+│       ├── testkit/      помощники для тестов с базой (временная база, сервисы, люди, организация со всеми ролями, «поломка» n-го запроса); вне покрытия
 │       ├── crossref/     клиент Crossref (поиск публикации по DOI), нормализация DOI
 │       ├── cv/           отрисовка PDF по описанию документа (fpdf, шрифты в `fonts/`, лицензия OFL)
 │       ├── refdata/      справочники (специальности ВАК, регионы, должности, источники): `GET /api/reference`
@@ -51,6 +56,8 @@ SciBox/
         │   ├── auth/     страницы входа, регистрации, сброса пароля, подтверждения, настроек, политики; меню пользователя; useMe, useForm
         │   ├── orgs/     каталог, страницы организации и подразделения, «Организация» (мои организации и приглашения), управление (данные, подразделения, сотрудники), принятие приглашения; api.ts, labels.ts, RequireUser
         │   ├── vacancies/ страницы «Мои вакансии», вакансия (статья + управление), форма (по типу позиции), список для страниц организаций; api.ts (+ справочники useReference), labels.ts, formValues.ts
+        │   ├── applications/ форма отклика, кнопка на вакансии (`ApplyBlock`), «Мои отклики», отклик глазами соискателя (рекомендации: повторить, отменить, добавить), карточка отклика для организации, страница рекомендателя; api.ts, labels.ts
+        │   ├── notifications/ колокольчик в шапке (окно с последними, число непрочитанных раз в минуту), страница «Уведомления»; api.ts
         │   ├── profile/  «Мой профиль» (правка разделов в окнах, приватность), форма основного, страница учёного для других, разметка профиля `ProfileView`, поля записей по описанию (`sections.ts`)
         │   ├── shell/    шапка, мобильное меню, подвал, переключатель «Ищу работу / Нанимаю» (RoleProvider), nav.ts, «Раздел готовится»
         │   ├── status/   стартовая страница (проверка сервера), 404
@@ -58,14 +65,14 @@ SciBox/
         ├── i18n/         ru.ts (все тексты), index.ts (t)
         ├── lib/          plural, deadline (срок подачи словами), normalize (поиск без регистра и ё)
         ├── styles/       tokens.css (цвета, шкалы), base.css (шрифты, сброс), layout.css
-        ├── ui/           Button, Field/TextField/TextArea/Select, Combobox, Tag/FilterChip, Deadline,
+        ├── ui/           Button, Field/TextField/TextArea/Select, Combobox, Tag/FilterChip, FilePicker (выбор PDF), Deadline,
         │                 VacancyEntry, Modal, ToastProvider/useToast, EmptyState, Skeleton, icons; CSS рядом с компонентом
         └── test/         setup.ts, render.tsx (renderApp, jsonResponse), api.ts (stubApi: подставной сервер), forms.ts
 ```
 
 Страницы организации и подразделения показывают список опубликованных вакансий (`VacancyList`).
 
-Позже появятся: `storage/uploads/` (файлы пользователей, в git не попадает), папки `features/*` по разделам.
+Файлы откликов лежат в базе (D-080), папки `storage/uploads/` нет.
 
 ## Порты
 - web (Vite): 5173 · api: 127.0.0.1:8080 · Postgres в Docker: **5433** · Mailpit UI: 8025, SMTP: 1025
@@ -108,11 +115,18 @@ SciBox/
   - `profile_specialties` (profile_id, specialty_code);
   - `profile_items` (id, profile_id, kind `education|experience|publication|grant|patent|teaching`, sort_year, data jsonb, created_at, updated_at; уникальный индекс по `(profile_id, data->>'doi')` для публикаций).
   - Счётчик частоты `doi_lookup` (60 в час на человека) в общей `rate_events`.
+- Миграция `00008_applications.sql`:
+  - `applications` (id, vacancy_id → `vacancies` `ON DELETE RESTRICT`, user_id → `users` `ON DELETE CASCADE`, status `sent|viewed|invited|rejected|accepted|withdrawn`, cover_letter, contact_email, profile jsonb (снимок профиля), created_at, updated_at, status_changed_at; уникальный индекс `(vacancy_id, user_id) WHERE status <> 'withdrawn'`);
+  - `reference_requests` (id, application_id `CASCADE`, name, email citext, relation, token_hash уникальный, status `pending|received|declined`, letter_text, created_at, expires_at, last_sent_at, send_count, answered_at; уникальный `(application_id, email)`);
+  - `application_files` (id, application_id `CASCADE`, reference_id → `reference_requests` `CASCADE` (только у `reference_letter`), kind `cv|attachment|reference_letter`, name, size, position, data bytea, created_at);
+  - `notifications` (id, user_id `CASCADE`, kind, title, body, link, created_at, read_at);
+  - `outbox` (id bigserial, to_email, subject, body, created_at, next_attempt_at, attempts, last_error, sent_at, failed_at; индекс по `next_attempt_at` для неотправленных).
+  - Счётчики частоты в общей `rate_events`: `apply` (20 в сутки на человека), `reference_request` (15 в сутки на человека).
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
-Коды: `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415). Все ответы `/api/*` с `Cache-Control: no-store`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
+Коды: `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415), `payload_too_large` (413, запрос с файлами больше предела). Все ответы `/api/*` с `Cache-Control: no-store`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
 
 | Метод и адрес | Ответ |
 |---|---|
@@ -158,6 +172,20 @@ SciBox/
 | `GET /api/profile/cv` | PDF собственного резюме (`Content-Disposition: attachment`) |
 | `GET /api/scientists/{id}` | публично, с учётом приватности: `{profile, viewer}`; скрытый или неизвестный 404; контакты только владельцу и сотрудникам организаций, `visibility` только владельцу |
 | `GET /api/scientists/{id}/cv` | PDF резюме по тем же правилам (нужен вход) |
+| `POST /api/applications` (multipart: часть `data` — JSON `{vacancy_id, contact_email, cover_letter, referees:[{name,email,relation}]}`, части `file` — PDF) | 201 `{application}`; 422 с полями (`contact_email`, `cover_letter`, `referees`, `files`, `profile`); 409 `vacancy_closed`, `deadline_passed`, `already_applied`; 403 `own_vacancy`; 404; 429 |
+| `GET /api/applications?limit=&offset=` | «Мои отклики»: `{items:[{id,status,created_at,status_changed_at,vacancy,references:{total,received}}], total}` |
+| `GET /api/applications/for-vacancy/{vacancyId}` | `{can_apply, reason?: own_vacancy|closed|deadline_passed|applied, application}` для вошедшего |
+| `GET /api/applications/{id}` | карточка: `{application}` с `viewer.role` `applicant` (рекомендации — только статусы) или `staff` (с письмами); чужой и несуществующий — одинаковый 404 |
+| `GET /api/applications/{id}/files/{fileId}` | PDF как скачивание; письмо рекомендателя соискателю — 404 |
+| `POST /api/applications/{id}/withdraw` | 204; 409 `invalid_status_change` |
+| `POST /api/applications/{id}/references` `{name,email,relation}` | 201 `{reference}`; 409 `too_many_references`, `application_closed` |
+| `POST …/references/{refId}/resend`, `DELETE …/references/{refId}` | повтор (429 `resend_too_soon` пока не прошли сутки) и отмена (409 `reference_not_pending`) |
+| `POST /api/recommendations/lookup {token}` | без входа: `{request:{referee_name,relation,applicant_name,vacancy_title,org_name,status,expires_at}}`; 404 `invalid_link`, 410 `link_expired`, 410 `application_withdrawn` |
+| `POST /api/recommendations/submit` (multipart: `data` `{token,text}`, не более одной части `file`) | 200; 422 (`text`, `file`); 409 `already_answered` |
+| `POST /api/recommendations/decline {token}` | 200; те же ошибки |
+| `GET /api/notifications?limit=&offset=&unread=1` | `{items:[{id,kind,title,body,link,created_at,read}], total, unread}` (только свои) |
+| `GET /api/notifications/unread-count` | `{unread}` |
+| `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` | 204; чужое уведомление 404 |
 | `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
@@ -177,7 +205,12 @@ SciBox/
 | `/profile` | Мой профиль: кнопки «Изменить основное», «Скачать резюме», «Как видят другие», блок приватности, профиль с «Добавить / Изменить / Удалить» у разделов; без входа ведёт на `/login?next=` |
 | `/profile/edit` | Форма основного: кто вы, степень и звание, специальности, ORCID/SPIN/Scopus/WoS, h-index, контактная почта |
 | `/scientists/:id` | Страница учёного для других (приватность решает сервер; «нет профиля» и «скрыт» выглядят одинаково) |
-| `/scientists`, `/favorites`, `/applications`, `/candidates` | «Раздел готовится» (заглушки до своих срезов) |
+| `/vacancies/:id/apply` | Форма отклика (письмо, файлы, рекомендатели); без входа ведёт на вход и обратно |
+| `/applications`, `/applications/:id` | «Мои отклики» (страницы по 20) и отклик глазами соискателя (если открыл сотрудник организации — переход на `/candidates/:id`) |
+| `/candidates/:id` | Карточка отклика для организации (письмо, файлы, письма рекомендателей, снимок профиля); если открыл автор отклика — переход на `/applications/:id` |
+| `/recommend?token=` | Страница рекомендателя без входа: письмо текстом и/или PDF, отказ |
+| `/notifications` | Все уведомления страницами; колокольчик в шапке у вошедших |
+| `/scientists`, `/favorites`, `/candidates` | «Раздел готовится» (заглушки до своих срезов) |
 | `*` | 404 «Такой страницы нет» со ссылкой на главную |
 | (ошибка отрисовки) | `CrashPage` через `errorElement` роутера |
 

@@ -22,7 +22,7 @@ export function stubApi(routes: Record<string, Route> = {}) {
   const fn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     const method = init?.method ?? 'GET'
-    const call: Call = { method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined }
+    const call: Call = { method, path, body: bodyOf(init?.body) }
     calls.push(call)
     const key = `${method} ${path}`
     // Ключ, оканчивающийся на «*», отвечает на любой адрес с таким началом (поиск с любыми параметрами).
@@ -32,6 +32,15 @@ export function stubApi(routes: Record<string, Route> = {}) {
   })
   vi.stubGlobal('fetch', fn)
   return { calls, fetch: fn, called: (method: string, path: string) => calls.filter((c) => c.method === method && c.path === path) }
+}
+
+/** Тело запроса для проверок: JSON как есть; форма с файлами — её поле data и имена файлов. */
+function bodyOf(body: BodyInit | null | undefined): unknown {
+  if (!body) return undefined
+  if (body instanceof FormData) {
+    return { ...JSON.parse(String(body.get('data'))), __files: body.getAll('file').map((f) => (f as File).name) }
+  }
+  return JSON.parse(String(body))
 }
 
 function respond(r: Reply): Response {

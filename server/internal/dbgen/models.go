@@ -10,6 +10,31 @@ import (
 	"github.com/google/uuid"
 )
 
+type Application struct {
+	ID              uuid.UUID
+	VacancyID       uuid.UUID
+	UserID          uuid.UUID
+	Status          string
+	CoverLetter     string
+	ContactEmail    string
+	Profile         []byte
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	StatusChangedAt time.Time
+}
+
+type ApplicationFile struct {
+	ID            uuid.UUID
+	ApplicationID uuid.UUID
+	ReferenceID   *uuid.UUID
+	Kind          string
+	Name          string
+	Size          int32
+	Position      int16
+	Data          []byte
+	CreatedAt     time.Time
+}
+
 type AuthToken struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
@@ -18,6 +43,17 @@ type AuthToken struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	UsedAt    *time.Time
+}
+
+type Notification struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Kind      string
+	Title     string
+	Body      string
+	Link      string
+	CreatedAt time.Time
+	ReadAt    *time.Time
 }
 
 type OrgInvitation struct {
@@ -52,6 +88,19 @@ type Organization struct {
 	CreatedBy   *uuid.UUID
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type Outbox struct {
+	ID            int64
+	ToEmail       string
+	Subject       string
+	Body          string
+	CreatedAt     time.Time
+	NextAttemptAt time.Time
+	Attempts      int32
+	LastError     string
+	SentAt        *time.Time
+	FailedAt      *time.Time
 }
 
 type Position struct {
@@ -110,6 +159,22 @@ type RateEvent struct {
 	Kind string
 	Key  string
 	At   time.Time
+}
+
+type ReferenceRequest struct {
+	ID            uuid.UUID
+	ApplicationID uuid.UUID
+	Name          string
+	Email         string
+	Relation      string
+	TokenHash     []byte
+	Status        string
+	LetterText    string
+	CreatedAt     time.Time
+	ExpiresAt     time.Time
+	LastSentAt    time.Time
+	SendCount     int16
+	AnsweredAt    *time.Time
 }
 
 type ReferenceSource struct {

@@ -8,8 +8,8 @@ export function navFor(role: Role): NavItem[] {
   if (role === 'employer') {
     return [
       { to: '/my-vacancies', label: t.nav.myVacancies },
-      { to: '/applications', label: t.nav.applications },
-      { to: '/candidates', label: t.nav.candidates },
+      { to: '/candidates', label: t.nav.applications },
+      { to: '/scientists', label: t.nav.candidates },
       { to: '/my-organization', label: t.nav.myOrganization },
     ]
   }
@@ -18,8 +18,9 @@ export function navFor(role: Role): NavItem[] {
     { to: '/scientists', label: t.nav.scientists },
     { to: '/organizations', label: t.nav.organizations },
     { to: '/favorites', label: t.nav.favorites },
+    { to: '/applications', label: t.nav.myApplications },
   ]
 }
 
 /** Адреса разделов-заглушек (то же, что в navFor). */
-export const comingSoonPaths = ['/scientists', '/favorites', '/applications', '/candidates'] as const
+export const comingSoonPaths = ['/scientists', '/favorites', '/candidates'] as const

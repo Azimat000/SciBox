@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
+	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/config"
 	"scibox/server/internal/crossref"
@@ -22,12 +23,17 @@ import (
 	"scibox/server/internal/httpapi"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/migrate"
+	"scibox/server/internal/notifications"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
+	"scibox/server/internal/references"
 	"scibox/server/internal/vacancies"
 	"scibox/server/seed"
 )
+
+// outboxInterval — как часто отправитель смотрит в очередь писем.
+const outboxInterval = 2 * time.Second
 
 // Version задаётся при сборке через -ldflags; при локальном запуске "dev".
 var Version = "dev"
@@ -114,7 +120,7 @@ func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей учёных %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles)
+	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей учёных %d, откликов %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications)
 	fmt.Fprintf(out, "Вход для проверки: %s (пароль записан в server/seed/seed.go).\n", seed.Logins()[0])
 	return nil
 }
@@ -133,27 +139,38 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	}
 
-	mailer := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom}
-	accounts := auth.NewService(pool, mailer, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	// Письма сначала попадают в очередь в базе и уходят оттуда в фоне: они переживают падение сервера и повторяются при сбоях.
+	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom}
+	queue := notifications.NewQueue(pool)
+	accounts := auth.NewService(pool, queue, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
 	cleanupCtx, stopCleanup := context.WithCancel(ctx)
 	defer stopCleanup()
 	go accounts.RunCleanup(cleanupCtx, time.Hour)
 	defer accounts.Flush()
-	organizations := orgs.NewService(pool, mailer, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	organizations := orgs.NewService(pool, queue, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
 	go organizations.RunCleanup(cleanupCtx, time.Hour)
 	defer organizations.Flush()
+	go notifications.NewWorker(pool, smtp, logger).Run(cleanupCtx, outboxInterval)
 	authHandler := auth.NewHandler(accounts, logger)
 
+	notes := notifications.NewService(pool, notifications.Config{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL})
+	profileSvc := profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name))
+	refSvc := references.NewService(pool, notes, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
+	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, applications.DefaultConfig())
+
 	handler := httpapi.NewRouter(httpapi.Deps{
-		ProductName: cfg.Product.Name,
-		Version:     Version,
-		Health:      health.Checker{Queries: dbgen.New(pool), Migrations: migrations},
-		Logger:      logger,
-		Auth:        authHandler,
-		Orgs:        orgs.NewHandler(organizations, logger, authHandler.RequireUser),
-		Vacancies:   vacancies.NewHandler(vacancies.NewService(pool, vacancies.DefaultConfig()), logger, authHandler.RequireUser),
-		Profiles:    profiles.NewHandler(profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name)), logger, authHandler.RequireUser),
-		Reference:   refdata.NewHandler(refdata.NewService(pool), logger),
+		ProductName:   cfg.Product.Name,
+		Version:       Version,
+		Health:        health.Checker{Queries: dbgen.New(pool), Migrations: migrations},
+		Logger:        logger,
+		Auth:          authHandler,
+		Orgs:          orgs.NewHandler(organizations, logger, authHandler.RequireUser),
+		Vacancies:     vacancies.NewHandler(vacancies.NewService(pool, vacancies.DefaultConfig()), logger, authHandler.RequireUser),
+		Profiles:      profiles.NewHandler(profileSvc, logger, authHandler.RequireUser),
+		Applications:  applications.NewHandler(appSvc, logger, authHandler.RequireUser),
+		References:    references.NewHandler(refSvc, logger, authHandler.RequireUser),
+		Notifications: notifications.NewHandler(notes, logger, authHandler.RequireUser),
+		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

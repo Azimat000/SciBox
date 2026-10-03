@@ -356,8 +356,13 @@ var scientists = []scientist{
 
 // seedScientists заполняет профили демо-учёных через сервис профилей: так каждое поле проходит те же проверки,
 // что и в приложении. Профиль, в котором уже есть содержимое, не трогаем (повторный запуск ничего не дублирует).
+// newProfiles — сервис профилей для демо-данных (Crossref не нужен: все публикации вводятся вручную).
+func newProfiles(pool *pgxpool.Pool) *prof.Service {
+	return prof.NewService(pool, nil, prof.DefaultConfig("SciBox"))
+}
+
 func seedScientists(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid.UUID) (int, error) {
-	svc := prof.NewService(pool, nil, prof.DefaultConfig("SciBox"))
+	svc := newProfiles(pool)
 	created := 0
 	for _, s := range scientists {
 		user := auth.User{ID: ids[s.key]}

@@ -67,3 +67,23 @@ export const AlertIcon = (p: IconProps) => (
     <path d="M10 8.5v3.2M10 14h.01" />
   </Icon>
 )
+
+export const BellIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 8.25a5 5 0 0110 0c0 3.5 1.25 4.75 1.75 5.5H3.25C3.75 13 5 11.75 5 8.25z" />
+    <path d="M8.25 16.25a1.9 1.9 0 003.5 0" />
+  </Icon>
+)
+
+export const FileIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 2.75h6.25L15 6.5v10.75H5z" />
+    <path d="M11 2.75V6.5h4" />
+  </Icon>
+)
+
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M10 4.5v11M4.5 10h11" />
+  </Icon>
+)

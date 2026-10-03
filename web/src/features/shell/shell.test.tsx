@@ -24,7 +24,7 @@ describe('parseRole and navFor', () => {
   })
 
   it('gives each role its own menu', () => {
-    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации', 'Избранное'])
+    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации', 'Избранное', 'Мои отклики'])
     expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Каталог учёных', 'Организация'])
   })
 })
@@ -114,7 +114,7 @@ describe('site shell', () => {
 })
 
 describe('placeholder pages', () => {
-  it.each(['/scientists', '/favorites', '/applications', '/candidates'])(
+  it.each(['/scientists', '/favorites', '/candidates'])(
     '%s says the section is coming',
     async (path) => {
       renderApp(path)

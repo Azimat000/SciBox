@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { jsonResponse } from '../test/render'
-import { ApiError, BAD_RESPONSE, UNREACHABLE, apiGet, apiSend } from './client'
+import { ApiError, BAD_RESPONSE, UNREACHABLE, apiGet, apiSend, apiSendForm } from './client'
 
 function stubFetch(impl: typeof fetch) {
   const fn = vi.fn<typeof fetch>(impl)
@@ -136,5 +136,33 @@ describe('apiSend', () => {
     expect(await caught(apiSend('POST', '/x', {}))).toMatchObject({ code: BAD_RESPONSE })
     stubFetch(async () => new Response('', { status: 502 }))
     expect(await caught(apiSend('POST', '/x', {}))).toMatchObject({ code: UNREACHABLE, status: 502 })
+  })
+})
+
+describe('apiSendForm', () => {
+  it('sends the fields as JSON in the data part and the files as file parts, leaving the content type to the browser', async () => {
+    const fetch = stubFetch(async () => jsonResponse(201, { ok: true }))
+    const a = new File(['%PDF-a'], 'a.pdf', { type: 'application/pdf' })
+    const b = new File(['%PDF-b'], 'б.pdf', { type: 'application/pdf' })
+    await expect(apiSendForm('POST', '/api/applications', { vacancy_id: 'v1', text: 'привет' }, [a, b])).resolves.toEqual({ ok: true })
+    const [path, init] = fetch.mock.calls[0]
+    expect(path).toBe('/api/applications')
+    expect(init).toMatchObject({ method: 'POST', headers: { Accept: 'application/json' } })
+    expect((init!.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+    const form = init!.body as FormData
+    expect(JSON.parse(String(form.get('data')))).toEqual({ vacancy_id: 'v1', text: 'привет' })
+    expect(form.getAll('file').map((f) => (f as File).name)).toEqual(['a.pdf', 'б.pdf'])
+  })
+
+  it('works without files and accepts an empty answer', async () => {
+    const fetch = stubFetch(async () => new Response(null, { status: 204 }))
+    await expect(apiSendForm('POST', '/x', { a: 1 })).resolves.toBeUndefined()
+    expect((fetch.mock.calls[0][1]!.body as FormData).getAll('file')).toEqual([])
+  })
+
+  it('turns an error answer into ApiError with the field messages', async () => {
+    stubFetch(async () => jsonResponse(422, { error: { code: 'validation_failed', message: 'Проверьте файлы', fields: { files: 'Файл не PDF' } } }))
+    const err = await caught(apiSendForm('POST', '/x', {}, []))
+    expect(err).toMatchObject({ status: 422, code: 'validation_failed', fields: { files: 'Файл не PDF' } })
   })
 })

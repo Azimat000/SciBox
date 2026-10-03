@@ -30,6 +30,7 @@ type Result struct {
 	Organizations int
 	Vacancies     int
 	Profiles      int
+	Applications  int
 }
 
 type person struct{ key, email, name string }
@@ -208,6 +209,10 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 	}
 	// Профили учёных заполняются через сервис профилей (у него свои транзакции), поэтому после основной.
 	if res.Profiles, err = seedScientists(ctx, pool, ids); err != nil {
+		return Result{}, err
+	}
+	// Отклики идут после профилей: откликаться можно только с заполненным профилем.
+	if res.Applications, err = seedApplications(ctx, pool, ids, now); err != nil {
 		return Result{}, err
 	}
 	return res, nil

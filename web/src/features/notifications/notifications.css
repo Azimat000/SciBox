@@ -1,0 +1,220 @@
+/* Колокольчик и уведомления (срез 8). Только токены из styles/tokens.css. */
+
+.bell {
+  position: relative;
+}
+
+.bell-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.bell-button:hover {
+  background: var(--wash);
+}
+
+.bell-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.bell-button[aria-expanded='true'] {
+  background: var(--wash);
+}
+
+.bell-count {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.05rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--blue);
+  color: var(--on-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bell-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-2));
+  z-index: 50;
+  width: 24rem;
+  max-width: calc(100vw - 2 * var(--gutter));
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift);
+  display: flex;
+  flex-direction: column;
+}
+
+.bell-panel[hidden] {
+  display: none;
+}
+
+.bell-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.bell-panel-title {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.bell-empty {
+  padding: var(--s-5) var(--s-4);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.bell-all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-h);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* ---- список ---- */
+
+.notice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.notice-list-page {
+  max-height: none;
+  margin-top: var(--s-4);
+  max-width: 48rem;
+  border-top: 1px solid var(--ink);
+}
+
+.notice-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.notice-row:last-child {
+  border-bottom: 0;
+}
+
+.notice-list-page .notice-row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.notice-button {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notice-list-page .notice-button {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.notice-button:hover {
+  background: var(--wash);
+}
+
+.notice-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.notice-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.notice-dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--r-pill);
+  background: var(--blue);
+  transform: translateY(-0.1rem);
+}
+
+.notice-title {
+  font-weight: 500;
+}
+
+.notice-row[data-unread] .notice-title {
+  font-weight: 700;
+}
+
+.notice-body {
+  color: var(--ink-body);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.notice-row[data-compact] .notice-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notice-time {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.notice-toolbar {
+  margin-top: var(--s-5);
+}
+
+@media (max-width: 40rem) {
+  /* На телефоне окно прижато к краям экрана под шапкой, а не к значку: иначе оно уезжает за левый край. */
+  .bell {
+    position: static;
+  }
+
+  .bell-panel {
+    position: fixed;
+    top: calc(4.25rem + env(safe-area-inset-top, 0px));
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+    max-width: none;
+  }
+
+  .notice-list {
+    max-height: min(24rem, 60vh);
+  }
+}

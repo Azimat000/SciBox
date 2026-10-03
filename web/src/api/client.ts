@@ -33,12 +33,7 @@ export class ApiError extends Error {
 function isErrorBody(v: unknown): v is ErrorBody {
   if (typeof v !== 'object' || v === null || !('error' in v)) return false
   const e = (v as { error: unknown }).error
-  return (
-    typeof e === 'object' &&
-    e !== null &&
-    typeof (e as { code?: unknown }).code === 'string' &&
-    typeof (e as { message?: unknown }).message === 'string'
-  )
+  return typeof e === 'object' && e !== null && typeof (e as { code?: unknown }).code === 'string' && typeof (e as { message?: unknown }).message === 'string'
 }
 
 async function readJSON(res: Response): Promise<unknown> {
@@ -56,12 +51,15 @@ function fieldsOf(e: ErrorBody['error']): Record<string, string> | undefined {
   return out
 }
 
-type Options = { method: string; signal?: AbortSignal; body?: unknown }
+type Options = { method: string; signal?: AbortSignal; body?: unknown; form?: FormData }
 
-async function request<T>(path: string, { method, signal, body }: Options, allowEmpty: boolean): Promise<T> {
+async function request<T>(path: string, { method, signal, body, form }: Options, allowEmpty: boolean): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const init: RequestInit = { headers, signal, ...(method === 'GET' ? {} : { method }) }
-  if (body !== undefined) {
+  if (form) {
+    // Тип с границей частей выставляет сам браузер.
+    init.body = form
+  } else if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(body)
   }
@@ -96,4 +94,12 @@ export function apiGet<T>(path: string, init?: { signal?: AbortSignal }): Promis
 /** Запрос, меняющий данные (POST, PATCH), с телом JSON. Ответ 204 (без тела) даёт undefined. */
 export function apiSend<T = void>(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
   return request<T>(path, { method, body: body ?? {} }, true)
+}
+
+/** Запрос с файлами (multipart): поля одним JSON в части `data`, файлы частями `file`. Ответ 204 даёт undefined. */
+export function apiSendForm<T = void>(method: 'POST' | 'PUT', path: string, data: unknown, files: readonly File[] = []): Promise<T> {
+  const form = new FormData()
+  form.append('data', JSON.stringify(data))
+  for (const f of files) form.append('file', f, f.name)
+  return request<T>(path, { method, form }, true)
 }

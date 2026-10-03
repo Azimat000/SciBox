@@ -10,11 +10,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
+	"scibox/server/internal/notifications"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
+	"scibox/server/internal/references"
 	"scibox/server/internal/vacancies"
 )
 
@@ -37,6 +40,12 @@ type Deps struct {
 	Vacancies *vacancies.Handler
 	// Profiles подключает профили учёных (/api/profile, /api/scientists). Нужен вместе с Auth.
 	Profiles *profiles.Handler
+	// Applications подключает отклики (/api/applications). Нужен вместе с Auth.
+	Applications *applications.Handler
+	// References подключает рекомендательные письма (/api/applications/{id}/references, /api/recommendations). Нужен вместе с Auth.
+	References *references.Handler
+	// Notifications подключает уведомления (/api/notifications). Нужен вместе с Auth.
+	Notifications *notifications.Handler
 	// Reference подключает справочники (/api/reference).
 	Reference *refdata.Handler
 }
@@ -72,6 +81,15 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Profiles != nil {
 			d.Profiles.Mount(r)
+		}
+		if d.Applications != nil {
+			d.Applications.Mount(r)
+		}
+		if d.References != nil {
+			d.References.Mount(r)
+		}
+		if d.Notifications != nil {
+			d.Notifications.Mount(r)
 		}
 		if d.Reference != nil {
 			d.Reference.Mount(r)

@@ -80,6 +80,13 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			p := w.user("Елена")
 			return func(s *Service) error { _, _, err := s.CV(bg, p.User, nil); return err }
 		},
+		"for application": func(t *testing.T, w *world) func(*Service) error {
+			p := w.user("Елена")
+			if _, err := w.svc.SaveCore(bg, p.User, goodCore()); err != nil {
+				t.Fatal(err)
+			}
+			return func(s *Service) error { _, err := s.ForApplication(bg, p.User, "a@example.ru"); return err }
+		},
 		"cv of another": func(t *testing.T, w *world) func(*Service) error {
 			p, q := w.user("Елена"), w.user("Другой")
 			w.setVisibility(p, "public", false)

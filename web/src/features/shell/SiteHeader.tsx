@@ -7,6 +7,7 @@ import { CloseIcon, MenuIcon } from '../../ui/icons'
 import { useMe } from '../auth/api'
 import { AccountBlock, UserMenu } from '../auth/UserMenu'
 import { useSignOut } from '../auth/useSignOut'
+import { NotificationBell } from '../notifications/NotificationBell'
 import { navFor } from './nav'
 import { RoleSwitch } from './RoleSwitch'
 import { useRole } from './useRole'
@@ -57,9 +58,12 @@ export function SiteHeader() {
           {isLoading ? (
             <span className="header-auth-placeholder" aria-hidden="true" />
           ) : user ? (
-            <div className="header-signin">
-              <UserMenu user={user} />
-            </div>
+            <>
+              <NotificationBell />
+              <div className="header-signin">
+                <UserMenu user={user} />
+              </div>
+            </>
           ) : (
             <div className="header-auth header-signin">
               <ButtonLink to="/login" variant="secondary" size="sm">

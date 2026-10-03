@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -624,5 +625,51 @@ func TestDefaultConfigAndNewService(t *testing.T) {
 	p := w.user("Елена")
 	if _, err := s.Own(bg, p.User); err != nil {
 		t.Errorf("сервис на настоящем пуле: %v", err)
+	}
+}
+
+func TestForApplicationIgnoresPrivacyButNeverLeaksOwnerFields(t *testing.T) {
+	w := newWorld(t)
+	for _, mode := range []string{"hidden", "orgs", "public"} {
+		p := w.user("Елена Орлова")
+		if _, err := w.svc.SaveCore(bg, p.User, goodCore()); err != nil {
+			t.Fatal(err)
+		}
+		w.addItem(p, goodPublication())
+		w.setVisibility(p, mode, true)
+
+		pkg, err := w.svc.ForApplication(bg, p.User, "elena.apply@example.ru")
+		if err != nil {
+			t.Fatalf("%s: %v", mode, err)
+		}
+		v := pkg.Profile
+		if v.Visibility != "" {
+			t.Errorf("%s: visibility leaked into the snapshot: %q", mode, v.Visibility)
+		}
+		if v.ContactEmail != "elena.apply@example.ru" {
+			t.Errorf("%s: contact = %q (the application's contact must replace the profile's)", mode, v.ContactEmail)
+		}
+		if v.Name != "Елена Орлова" || len(v.Sections.Publications) != 1 || len(v.Specialties) != 2 || !v.OpenToOffers {
+			t.Errorf("%s: snapshot is incomplete: %+v", mode, v)
+		}
+		if !bytes.HasPrefix(pkg.CV, []byte("%PDF-")) || pkg.CVName != "Елена Орлова — CV.pdf" {
+			t.Errorf("%s: cv = %d bytes, name %q", mode, len(pkg.CV), pkg.CVName)
+		}
+	}
+}
+
+func TestForApplicationNeedsAHeadline(t *testing.T) {
+	w := newWorld(t)
+	p := w.user("Пустой Профиль")
+	if _, err := w.svc.ForApplication(bg, p.User, "a@example.ru"); !errors.Is(err, ErrIncomplete) {
+		t.Errorf("new profile: %v", err)
+	}
+	core := goodCore()
+	core.Headline = "   "
+	if _, err := w.svc.SaveCore(bg, p.User, core); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.svc.ForApplication(bg, p.User, "a@example.ru"); !errors.Is(err, ErrIncomplete) {
+		t.Errorf("blank headline: %v", err)
 	}
 }

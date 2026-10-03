@@ -42,6 +42,7 @@
 
 .nav-link {
   display: inline-flex;
+  white-space: nowrap;
   align-items: center;
   min-height: var(--control-h);
   color: var(--ink-soft);
@@ -106,7 +107,7 @@
   display: none;
 }
 
-@media (max-width: 66rem) {
+@media (max-width: 72rem) {
   .nav-desktop,
   .header-role,
   .header-signin,

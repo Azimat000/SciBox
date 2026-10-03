@@ -1,0 +1,84 @@
+/* Выбор PDF-файлов. Только токены из styles/tokens.css. */
+
+.file-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.file-picker .field-hint,
+.file-picker .field-message {
+  max-width: var(--measure);
+}
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 40rem;
+  border-top: 1px solid var(--line);
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--control-h);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.file-size {
+  flex: none;
+  font-size: var(--text-sm);
+}
+
+.file-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin-right: calc(-1 * var(--s-2));
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.file-remove:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.file-remove:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.file-empty {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.file-picker[data-invalid] .file-list {
+  border-top-color: var(--fail);
+}
+
+.file-picker .btn svg {
+  flex: none;
+}

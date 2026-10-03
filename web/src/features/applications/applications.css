@@ -1,0 +1,423 @@
+/* Отклики и рекомендательные письма (срез 8). Только токены из styles/tokens.css. */
+
+/* ---- кнопка «Откликнуться» на странице вакансии ---- */
+
+.apply-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+  margin-top: var(--s-4);
+}
+
+.apply-block-note {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* ---- форма отклика ---- */
+
+.apply-head h1 {
+  text-wrap: balance;
+}
+
+.apply-vacancy {
+  margin-top: var(--s-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.apply-vacancy a {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.apply-sends {
+  margin-top: var(--s-5);
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-width: var(--measure);
+}
+
+.apply-sends h2 {
+  font-size: var(--text-lg);
+}
+
+.apply-page > .alert {
+  margin-top: var(--s-4);
+}
+
+.apply-form {
+  margin-top: var(--s-5);
+  max-width: 40rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.apply-cover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.apply-cover textarea.control {
+  min-height: 12rem;
+}
+
+.apply-count {
+  align-self: flex-end;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.apply-count[data-over] {
+  color: var(--fail);
+  font-weight: 600;
+}
+
+.apply-referees {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.apply-referees > legend {
+  float: left;
+  width: 100%;
+  padding: 0 0 var(--s-2);
+  margin-bottom: var(--s-1);
+  border-bottom: 1px solid var(--ink);
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.apply-referees > legend + * {
+  clear: both;
+}
+
+.apply-referee {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.apply-referee-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.apply-referee-title {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+
+/* ---- «Мои отклики» ---- */
+
+.app-count {
+  margin-top: var(--s-5);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.app-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-entry {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  max-width: var(--measure);
+}
+
+.app-entry-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.app-entry-title a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.app-entry-title a:hover {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.app-entry-title[data-long] {
+  font-size: var(--text-xl);
+}
+
+.app-entry-org {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.app-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-1);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+/* ---- карточка отклика ---- */
+
+.application-page {
+  padding-bottom: var(--s-7);
+  max-width: 56rem;
+}
+
+.application-head h1 {
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.application-head h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.application-head h1 a:hover {
+  color: var(--blue);
+}
+
+.application-org {
+  margin-top: var(--s-2);
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.application-meta {
+  margin-top: var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.application-section {
+  margin-top: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.application-section > h2 {
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+  font-size: var(--text-xl);
+}
+
+.application-text {
+  max-width: var(--measure);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: 1.65;
+  color: var(--ink-body);
+}
+
+.application-contact {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.application-contact span {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.application-muted {
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.application-actions {
+  margin-top: var(--s-6);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.application-profile > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-h);
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+
+.application-profile > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.application-profile[open] > summary {
+  margin-bottom: var(--s-3);
+}
+
+.application-page .profile {
+  max-width: none;
+}
+
+.file-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.file-links li {
+  border-bottom: 1px solid var(--line);
+}
+
+.file-link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--control-h);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.file-link svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+/* ---- рекомендатели ---- */
+
+.ref-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.ref-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ref-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ref-sub,
+.ref-when {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.ref-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-1);
+  text-align: right;
+}
+
+.ref-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+
+.ref-letter {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-2) 0 var(--s-1);
+}
+
+/* ---- страница рекомендателя ---- */
+
+.recommend-page h1 {
+  text-wrap: balance;
+}
+
+.recommend-hello {
+  margin-top: var(--s-4);
+  max-width: var(--measure);
+}
+
+.recommend-privacy {
+  margin-top: var(--s-2);
+  max-width: var(--measure);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.recommend-page textarea.control {
+  min-height: 16rem;
+}
+
+@media (max-width: 40rem) {
+  .ref-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ref-state {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* Очень длинное название вакансии: заголовок мельче, как на странице вакансии. */
+.application-head h1[data-long] {
+  font-size: var(--text-2xl);
+  line-height: 1.25;
+}

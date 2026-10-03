@@ -571,3 +571,39 @@ func cvFileName(name string) string {
 	}
 	return name + " — CV.pdf"
 }
+
+// ---- профиль для отклика ----
+
+// ErrIncomplete — профиль слишком пуст, чтобы откликаться: не заполнена должность («кто вы»).
+var ErrIncomplete = errors.New("profiles: profile is too empty to apply with")
+
+// ApplicationPackage — то, что уходит организации вместе с откликом: снимок профиля и PDF-резюме.
+type ApplicationPackage struct {
+	Profile View
+	CV      []byte
+	CVName  string
+}
+
+// ForApplication собирает снимок собственного профиля для отклика (D-072, D-081). Человек сам откликается, поэтому режим
+// приватности здесь не спрашивается: организация, на вакансию которой пришёл отклик, видит именно то, что человек отправил,
+// включая контакты. Служебное поле `visibility` в снимок не попадает. Контактная почта в снимке и резюме — та,
+// которую человек указал в отклике, а не из профиля. Вызывающий (пакет applications) отвечает за то, чтобы снимок
+// ушёл только организации этой вакансии. Приватность профиля при этом не меняется, и для других путей (страница, каталог)
+// действуют прежние правила.
+func (s *Service) ForApplication(ctx context.Context, user auth.User, contactEmail string) (ApplicationPackage, error) {
+	page, err := s.Own(ctx, user)
+	if err != nil {
+		return ApplicationPackage{}, err
+	}
+	v := page.Profile
+	if strings.TrimSpace(v.Headline) == "" {
+		return ApplicationPackage{}, ErrIncomplete
+	}
+	v.Visibility = ""
+	v.ContactEmail = contactEmail
+	pdf, err := renderCV(Page{Profile: v, Viewer: ViewerInfo{CanSeeContacts: true}}, s.cfg.ProductName, s.now())
+	if err != nil {
+		return ApplicationPackage{}, err
+	}
+	return ApplicationPackage{Profile: v, CV: pdf, CVName: cvFileName(v.Name)}, nil
+}
