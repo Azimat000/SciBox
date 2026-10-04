@@ -7,6 +7,11 @@
 # Туннель: tuna (tuna.am, российский сервис), если он установлен, иначе localhost.run
 # (ничего ставить не нужно, работает через ssh). Выбрать вручную: SCIBOX_TUNNEL=tuna или
 # SCIBOX_TUNNEL=localhost.run.
+#
+# Постоянная ссылка (D-133): бесплатный аккаунт tuna даёт один постоянный адрес вида
+# brave-otter-4821.ru.tuna.am. Его имя (brave-otter-4821) записывается в файл .share.local
+# в корне проекта строкой SCIBOX_TUNA_SUBDOMAIN=brave-otter-4821 (файл не попадает в git)
+# или передаётся той же переменной окружения.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 port=${SCIBOX_SHARE_PORT:-8088}
@@ -16,6 +21,12 @@ if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Порт $port занят: похоже, сайт уже показывается. Остановите прошлый запуск (Ctrl+C в его окне)." >&2
   exit 1
 fi
+
+if [ -f "$root/.share.local" ]; then
+  # shellcheck disable=SC1091
+  . "$root/.share.local"
+fi
+subdomain=${SCIBOX_TUNA_SUBDOMAIN:-}
 
 tunnel=${SCIBOX_TUNNEL:-}
 if [ -z "$tunnel" ]; then
@@ -41,7 +52,11 @@ echo "Собираю сервер…"
 (cd "$root/server" && go build -o bin/scibox ./cmd/api)
 
 case "$tunnel" in
-  tuna) pattern='https://[A-Za-z0-9.-]*tuna\.am' ;;
+  tuna)
+    pattern='https://[A-Za-z0-9.-]*tuna\.am'
+    # С постоянным адресом ищем именно его: tuna печатает и другие ссылки (инспектор запросов, подсказки).
+    if [ -n "$subdomain" ]; then pattern="https://$subdomain\.[A-Za-z0-9.-]*tuna\.am"; fi
+    ;;
   localhost.run) pattern='https://[A-Za-z0-9.-]*\.(lhr\.life|localhost\.run)' ;;
   *)
     echo "Неизвестный туннель «$tunnel»: можно tuna или localhost.run." >&2
@@ -53,7 +68,13 @@ tunnel_pid=""
 start_tunnel() {
   : >"$log"
   case "$tunnel" in
-    tuna) tuna http "$port" >"$log" 2>&1 & ;;
+    tuna)
+      if [ -n "$subdomain" ]; then
+        tuna http "$port" --subdomain="$subdomain" >"$log" 2>&1 &
+      else
+        tuna http "$port" >"$log" 2>&1 &
+      fi
+      ;;
     localhost.run)
       ssh -T -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -o ExitOnForwardFailure=yes -R 80:127.0.0.1:"$port" nokey@localhost.run >"$log" 2>&1 &
@@ -65,7 +86,7 @@ start_tunnel() {
 # Последняя ссылка, которую выдал туннель: бесплатный localhost.run время от времени меняет адрес
 # в том же соединении и пишет новый в свой вывод.
 latest_url() {
-  grep -aEo "$pattern" "$log" | grep -v 'admin\.localhost\.run' | tail -n 1 || true
+  grep -aEo "$pattern" "$log" | grep -vE 'admin\.localhost\.run|inspect|my\.tuna\.am' | tail -n 1 || true
 }
 
 wait_url() {

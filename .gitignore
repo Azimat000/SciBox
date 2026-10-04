@@ -23,3 +23,6 @@ skill-test/
 # Отчёты покрытия
 server/coverage.out
 web/coverage/
+
+# Постоянный адрес туннеля tuna для make share (D-133)
+.share.local
