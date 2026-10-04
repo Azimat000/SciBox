@@ -23,7 +23,15 @@
   color: var(--on-ink);
   border-radius: var(--r-md);
   box-shadow: var(--lift);
-  animation: toast-in var(--t-med) var(--ease);
+  /* Переход, а не ключевые кадры: если уведомления сыплются подряд, каждое продолжает с того места, где было. */
+  transition:
+    opacity var(--t-med) var(--ease),
+    transform var(--t-med) var(--ease);
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 .toast[data-kind='success'] .toast-icon {
@@ -75,13 +83,6 @@
   outline-color: var(--on-ink);
 }
 
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
 /* На телефоне окно выезжает снизу и прячет за собой кнопки, поэтому уведомления уходят наверх */
 @media (max-width: 30rem) {
   .toast-region {
@@ -92,5 +93,14 @@
 
   .toast {
     width: 100%;
+  }
+}
+
+/* Меньше движения: уведомление только проявляется, не выезжает. */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    @starting-style {
+      transform: none;
+    }
   }
 }

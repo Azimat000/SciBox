@@ -92,7 +92,7 @@ describe('favorite button', () => {
     stubApi(signedIn(route('published')))
     const published = renderApp(`/vacancies/${detail.id}`)
     expect(await screen.findByRole('button', { name: `В избранное: ${detail.title}` })).toBeInTheDocument()
-    expect(await screen.findByRole('link', { name: 'Откликнуться' })).toBeInTheDocument()
+    expect(await screen.findAllByRole('link', { name: 'Откликнуться' })).toHaveLength(2)
     published.unmount()
 
     stubApi(signedIn(route('closed')))

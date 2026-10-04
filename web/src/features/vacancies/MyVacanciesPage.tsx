@@ -4,6 +4,7 @@ import { plural } from '../../lib/plural'
 import { useCandidateVacancies, type VacancyCount } from '../applications/api'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
+import { Deadline } from '../../ui/Deadline'
 import { Tag } from '../../ui/Tag'
 import { RequireUser } from '../orgs/RequireUser'
 import { formatDate, longName } from '../orgs/labels'
@@ -140,6 +141,7 @@ function Row({ card: c, apps }: { card: Card; apps: VacancyCount | undefined }) 
           <span>{c.position.name}</span>
           <span className="num">{t.vacancies.mine.updated(formatDate(c.updated_at))}</span>
         </p>
+        {c.status === 'published' && c.deadline && <Deadline date={c.deadline} />}
         {apps && apps.total > 0 && (
           <p className="mine-row-apps num">
             <Link to={`/candidates?vacancy=${c.id}`}>{t.vacancies.mine.applications(apps.total, plural(apps.total, t.vacancies.mine.applicationsForms))}</Link>
@@ -147,12 +149,10 @@ function Row({ card: c, apps }: { card: Card; apps: VacancyCount | undefined }) 
           </p>
         )}
       </div>
+      {/* Вакансию открывает её название; синяя кнопка на странице одна: «Создать вакансию». */}
       <div className="mine-row-actions">
-        <ButtonLink to={`/my-vacancies/${c.id}/edit`} size="sm">
+        <ButtonLink to={`/my-vacancies/${c.id}/edit`} variant="secondary" size="sm" aria-label={`${t.vacancies.mine.edit}: ${c.title}`}>
           {t.vacancies.mine.edit}
-        </ButtonLink>
-        <ButtonLink to={`/vacancies/${c.id}`} variant="secondary" size="sm">
-          {t.vacancies.mine.view}
         </ButtonLink>
       </div>
     </div>

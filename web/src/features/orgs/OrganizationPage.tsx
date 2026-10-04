@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../app/pageTitle'
 import { Link, useParams } from 'react-router'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
@@ -13,6 +14,7 @@ import './orgs.css'
 export function OrganizationPage() {
   const { slug = '' } = useParams()
   const query = useOrganization(slug)
+  usePageTitle(query.data?.organization.name)
 
   if (query.isPending) return <PageSkeleton />
   if (query.isError) {

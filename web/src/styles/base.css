@@ -127,13 +127,38 @@ svg {
   transform: none;
 }
 
+/*
+ * Меньше движения: всё, что едет и вырастает, появляется сразу или лёгким проявлением.
+ * Не выключаем то, что сообщает о состоянии: вращение «Подождите…» на кнопке остаётся,
+ * проявление окон и уведомлений остаётся (без сдвига), см. Modal.css, Toast.css, landing.css.
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Ссылки, стоящие отдельно (не внутри фразы), получают невидимый запас по высоте: так в них легко попасть пальцем
+ * (WCAG 2.5.8, не меньше 24 px; на сенсорном экране около 44 px). Отрицательный отступ не сдвигает соседей.
+ */
+.hero-facts a,
+.section-more,
+.vacancy-org a,
+.footer-nav a {
+  display: inline-block;
+  padding-block: var(--s-1);
+  margin-block: calc(-1 * var(--s-1));
+}
+
+@media (pointer: coarse) {
+  .hero-facts a,
+  .section-more,
+  .vacancy-org a,
+  .footer-nav a {
+    padding-block: var(--s-3);
+    margin-block: calc(-1 * var(--s-3));
   }
 }

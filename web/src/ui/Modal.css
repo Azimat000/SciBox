@@ -59,6 +59,7 @@
 .modal-body {
   padding: 0 var(--s-5) var(--s-4);
   overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--ink);
 }
 
@@ -98,5 +99,12 @@
     width: 100%;
     max-height: 92dvh;
     border-radius: var(--r-md) var(--r-md) 0 0;
+  }
+}
+
+/* Меньше движения: окно только проявляется, не выезжает. */
+@media (prefers-reduced-motion: reduce) {
+  .modal {
+    animation-name: modal-fade;
   }
 }

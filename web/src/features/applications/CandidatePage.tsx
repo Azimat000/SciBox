@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../app/pageTitle'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
 import { t } from '../../i18n'
@@ -30,6 +31,7 @@ export function CandidatePage() {
 function Loader({ id }: { id: string }) {
   const c = t.applications.candidate
   const query = useApplication(id)
+  usePageTitle(query.data?.applicant_name)
   if (query.isPending) return <PageSkeleton />
   if (query.isError) {
     return isNotFound(query.error) ? <NotFoundPage /> : <LoadFailed title={c.loadError} error={query.error} onRetry={() => void query.refetch()} />
@@ -51,10 +53,9 @@ function Loader({ id }: { id: string }) {
         <p className="application-meta">
           <Tag tone={statusTone(app.status)}>{statusLabel(app.status)}</Tag>
           <span>{t.applications.detail.sentAt(dateText(app.created_at))}</span>
+          <Link to={`/candidates?vacancy=${app.vacancy.id}`}>{c.allForVacancy}</Link>
         </p>
       </header>
-
-      <ReviewPanel app={app} />
 
       {(app.invitations.length > 0 || app.viewer.can_invite) && (
         <section className="application-section" aria-labelledby="cand-invitations">
@@ -75,6 +76,9 @@ function Loader({ id }: { id: string }) {
           <a href={`mailto:${app.contact_email}`}>{app.contact_email}</a>
         </p>
       </section>
+
+      {/* Решение после письма: сначала кандидат, потом кнопки. Ждущие ответа приглашения стоят выше всего. */}
+      <ReviewPanel app={app} />
 
       <section className="application-section" aria-labelledby="cand-files">
         <h2 id="cand-files">{c.files}</h2>

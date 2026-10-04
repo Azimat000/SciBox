@@ -4,8 +4,10 @@ import { SiteFooter } from '../features/shell/SiteFooter'
 import { SiteHeader } from '../features/shell/SiteHeader'
 import { t } from '../i18n'
 import { ToastProvider } from '../ui/ToastProvider'
+import { useRouteTitle } from './pageTitle'
 
 export function Layout() {
+  useRouteTitle()
   return (
     <RoleProvider>
       <ToastProvider>

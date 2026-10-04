@@ -74,6 +74,21 @@
   margin-top: 0;
 }
 
+/* Повтор кнопки в конце вакансии, под чертой. */
+.vacancy-end {
+  margin-top: var(--s-6);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+}
+
+.vacancy-end:not(:has(.apply-block)) {
+  display: none;
+}
+
+.vacancy-end .apply-block {
+  margin-top: 0;
+}
+
 .vacancy-page > .alert,
 .vacancy-manage {
   margin-top: var(--s-5);

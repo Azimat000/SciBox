@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { t } from '../../i18n'
+import { useRole } from '../shell/useRole'
 import { plural } from '../../lib/plural'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -75,11 +76,12 @@ export function CatalogPage() {
   const sortNow = effectiveSort(search)
   const sortOptions = sorts.filter((s) => s !== 'relevance' || search.q).map((s) => ({ value: s, label: c.sorts[s] }))
   const word = plural(total, c.scientistForms)
+  const { role } = useRole()
 
   return (
     <div className="page search-page">
       <h1>{c.title}</h1>
-      <p className="lead">{c.lead}</p>
+      <p className="lead">{role === 'employer' ? c.lead : c.leadSeeker}</p>
 
       <div className="search-bar">
         <SearchBar

@@ -89,8 +89,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrBadState):
 		apierr.WriteError(w, http.StatusConflict, CodeInvalidState, "С этим приглашением это действие уже невозможно: оно изменилось. Обновите страницу")
 	default:
-		h.logger.Error("offers request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "offers", err)
 	}
 }
 

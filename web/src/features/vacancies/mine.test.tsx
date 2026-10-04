@@ -29,8 +29,10 @@ describe('my vacancies', () => {
     const row = screen.getByRole('link', { name: card.title }).closest('.mine-row')! as HTMLElement
     expect(within(row).getByText('Опубликована')).toBeInTheDocument()
     expect(within(row).getByText(/Сибирский институт · Лаборатория сверхпроводников/)).toBeInTheDocument()
-    expect(within(row).getByRole('link', { name: 'Править' })).toHaveAttribute('href', `/my-vacancies/${card.id}/edit`)
-    expect(within(row).getByRole('link', { name: 'Открыть' })).toHaveAttribute('href', `/vacancies/${card.id}`)
+    expect(within(row).getByRole('link', { name: `Править: ${card.title}` })).toHaveAttribute('href', `/my-vacancies/${card.id}/edit`)
+    // Открывает вакансию её название; срок подачи виден у опубликованной.
+    expect(within(row).getByRole('link', { name: card.title })).toHaveAttribute('href', `/vacancies/${card.id}`)
+    expect(within(row).getByText(/Заявки до 31 декабря 2099/)).toBeInTheDocument()
     // Вакансия без подразделения подписана «Вся организация».
     const draftRow = screen.getByRole('link', { name: draft.title }).closest('.mine-row')! as HTMLElement
     expect(within(draftRow).getByText(/Вся организация/)).toBeInTheDocument()

@@ -48,18 +48,30 @@ function Own() {
 
   return (
     <div className="page profile-page">
-      <div className="profile-toolbar">
-        <ButtonLink to="/profile/edit">{t.profile.editCore}</ButtonLink>
-        <a className="btn btn-secondary" href={ownCvPath} download>
-          {t.profile.downloadCv}
-        </a>
-        <ButtonLink to={`/scientists/${p.id}`} variant="quiet">
-          {t.profile.viewAsOthers}
-        </ButtonLink>
-      </div>
-      {p.visibility === 'hidden' && <Alert kind="info">{t.profile.hiddenNote}</Alert>}
-      <PrivacyPanel visibility={p.visibility ?? 'hidden'} openToOffers={p.open_to_offers} />
-      <ProfileView page={page} editable onAdd={(kind) => setEditing({ kind, item: null })} onEdit={(item) => setEditing({ kind: item.kind, item })} onRemove={setRemoving} />
+      <ProfileView
+        page={page}
+        editable
+        onAdd={(kind) => setEditing({ kind, item: null })}
+        onEdit={(item) => setEditing({ kind: item.kind, item })}
+        onRemove={setRemoving}
+        actions={
+          <>
+            <ButtonLink to="/profile/edit">{t.profile.editCore}</ButtonLink>
+            <a className="btn btn-secondary" href={ownCvPath} download>
+              {t.profile.downloadCv}
+            </a>
+            <ButtonLink to={`/scientists/${p.id}`} variant="quiet">
+              {t.profile.viewAsOthers}
+            </ButtonLink>
+          </>
+        }
+        afterHead={
+          <>
+            {p.visibility === 'hidden' && <Alert kind="info">{t.profile.hiddenNote}</Alert>}
+            <PrivacyPanel visibility={p.visibility ?? 'hidden'} openToOffers={p.open_to_offers} />
+          </>
+        }
+      />
       {editing && <ItemModal kind={editing.kind} item={editing.item} onClose={() => setEditing(null)} />}
       <ConfirmModal
         open={removing !== null}

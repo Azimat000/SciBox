@@ -46,3 +46,10 @@
     align-items: flex-start;
   }
 }
+
+/* Меньше движения: заглушка стоит на месте, без бегущего блика. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

@@ -21,7 +21,8 @@ export default defineConfig({
     port: 5173,
     fs: { allow: ['.', '../config'] },
     proxy: {
-      '/api': 'http://127.0.0.1:8080',
+      // Сквозные тесты (e2e/) поднимают второй сервер на другом порту.
+      '/api': process.env.SCIBOX_API_URL ?? 'http://127.0.0.1:8080',
     },
   },
   test: {

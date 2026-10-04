@@ -1,9 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
+import { useLeaveGuard } from '../../ui/useLeaveGuard'
 import { useToast } from '../../ui/useToast'
 import { isNotFound } from '../orgs/api'
 import { RequireUser } from '../orgs/RequireUser'
@@ -81,6 +82,8 @@ function Editor() {
   const vacancy = useVacancy(id ?? '', id !== undefined)
   // Черновик, который уже создан этой формой: если публикация не прошла, повторная отправка правит его, а не создаёт второй.
   const created = useRef<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const guard = useLeaveGuard(dirty)
 
   const save = useMutation({
     mutationFn: async ({ organization, fields, intent }: { organization: string; fields: VacancyFields; intent: Intent }) => {
@@ -94,6 +97,7 @@ function Editor() {
       await refreshVacancies(client, saved.id)
       const f = t.vacancies.form
       toast.show({ kind: 'success', title: intent === 'publish' ? f.published : id ? f.saved : f.savedDraft })
+      guard.release()
       void navigate(`/vacancies/${saved.id}`)
     },
   })
@@ -160,7 +164,9 @@ function Editor() {
         error={save.error}
         onSubmit={(organization, fields, intent) => save.mutate({ organization, fields, intent })}
         onCancel={() => void navigate(current ? `/vacancies/${current.id}` : '/my-vacancies')}
+        onDirtyChange={setDirty}
       />
+      {guard.prompt}
     </div>
   )
 }

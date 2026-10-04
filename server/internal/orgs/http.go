@@ -121,8 +121,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrWrongEmail):
 		apierr.WriteError(w, http.StatusForbidden, CodeInvitationWrongEmail, "Приглашение отправлено на другую почту. Войдите в аккаунт с той почтой, на которую пришло письмо")
 	default:
-		h.logger.Error("organizations request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "organizations", err)
 	}
 }
 

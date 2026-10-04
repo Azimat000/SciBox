@@ -98,8 +98,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrTooManyInvitations):
 		apierr.WriteError(w, http.StatusConflict, CodeTooManyInvites, "На один отклик можно отправить не больше десяти приглашений")
 	default:
-		h.logger.Error("applications request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "applications", err)
 	}
 }
 

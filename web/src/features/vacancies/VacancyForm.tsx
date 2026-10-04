@@ -1,4 +1,4 @@
-import { useMemo, useRef, type FormEvent } from 'react'
+import { type FormEvent, useEffect, useMemo, useRef } from 'react'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -37,14 +37,17 @@ type Props = {
   error: unknown
   onSubmit: (organization: string, fields: VacancyFields, intent: Intent) => void
   onCancel: () => void
+  /** Сообщает странице, начал ли человек править форму (для вопроса «Уйти без сохранения?»). */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /** Форма вакансии: и для новой, и для правки. Поля зависят от типа позиции. */
-export function VacancyForm({ initial, reference, targets, organizationLocked, draft, pending, error, onSubmit, onCancel }: Props) {
+export function VacancyForm({ initial, reference, targets, organizationLocked, draft, pending, error, onSubmit, onCancel, onDirtyChange }: Props) {
   const f = t.vacancies.form
   const formRef = useRef<HTMLFormElement>(null)
   const intent = useRef<Intent>('save')
-  const { values, set, errors, validate } = useForm<FormValues>(initial, error, formRef)
+  const { values, set, errors, validate, dirty } = useForm<FormValues>(initial, error, formRef)
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange])
 
   const type = values.position_type as PositionType | ''
   const target = targets.find((x) => x.organization.slug === values.organization)

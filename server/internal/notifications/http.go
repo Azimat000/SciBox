@@ -48,8 +48,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, "Такого уведомления нет")
 		return
 	}
-	h.logger.Error("notifications request failed", "path", r.URL.Path, "err", err)
-	apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+	apierr.WriteInternal(w, r, h.logger, "notifications", err)
 }
 
 // intParam читает целое из адреса; пусто или не число — def.

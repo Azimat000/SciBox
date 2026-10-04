@@ -103,8 +103,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		h.logger.Warn("crossref lookup failed", "err", err)
 		apierr.WriteError(w, http.StatusBadGateway, CodeDOIUnavailable, "Crossref сейчас недоступен. Заполните публикацию вручную")
 	default:
-		h.logger.Error("profiles request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "profiles", err)
 	}
 }
 

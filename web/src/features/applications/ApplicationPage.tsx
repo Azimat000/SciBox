@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../app/pageTitle'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useParams } from 'react-router'
@@ -68,6 +69,7 @@ export function FileLink({ appId, file, label }: { appId: string; file: FileRef;
 }
 
 function Page({ app }: { app: Detail }) {
+  usePageTitle(app.vacancy.title)
   const d = t.applications.detail
   const client = useQueryClient()
   const toast = useToast()

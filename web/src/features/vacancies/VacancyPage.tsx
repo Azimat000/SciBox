@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../app/pageTitle'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -52,6 +53,7 @@ export function VacancyPage() {
 }
 
 function Article({ vacancy: v }: { vacancy: Detail }) {
+  usePageTitle(v.title)
   const p = t.vacancies.page
   const level = levelParts(v.career_level)
   const pay = salaryText(v.salary_from, v.salary_to)
@@ -150,8 +152,19 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
       )}
       <section className="vacancy-section" aria-labelledby="vacancy-requirements">
         <h2 id="vacancy-requirements">{p.requirements}</h2>
-        {v.requirements ? <p className="vacancy-text">{v.requirements}</p> : <p className="vacancy-text vacancy-muted">{p.noRequirements}</p>}
+        {v.requirements ? (
+          <p className="vacancy-text">{v.requirements}</p>
+        ) : (
+          <p className="vacancy-text vacancy-muted">{v.degree_required !== 'none' || v.title_required !== 'none' ? p.noExtraRequirements : p.noRequirements}</p>
+        )}
       </section>
+
+      {/* Дочитавшему до конца (на телефоне это три экрана) не нужно листать обратно к кнопке. */}
+      {v.status === 'published' && !v.viewer.can_manage && (
+        <section className="vacancy-end" aria-label={p.endActions}>
+          <ApplyBlock vacancyId={v.id} />
+        </section>
+      )}
     </article>
   )
 }

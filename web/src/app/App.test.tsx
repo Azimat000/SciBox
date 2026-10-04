@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { productName } from '../config/product'
+import { stubApi } from '../test/api'
 import { renderApp } from '../test/render'
+import { detail, vacancyRoute } from '../test/vacancies'
 import { App } from './App'
 import { Layout } from './Layout'
 import { CrashPage } from './CrashPage'
@@ -36,5 +38,27 @@ describe('App shell', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Что-то пошло не так' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Обновить страницу' }))
     expect(reload).toHaveBeenCalledOnce()
+  })
+})
+
+describe('browser tab titles', () => {
+  it('names the page: «Вакансии — SciBox», only the product on the home page', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
+    const { router } = renderApp('/vacancies')
+    await waitFor(() => expect(document.title).toBe(`Вакансии — ${productName}`))
+    await router.navigate('/')
+    await waitFor(() => expect(document.title).toBe(productName))
+    await router.navigate('/my-organization/lab/members')
+    await waitFor(() => expect(document.title).toBe(`Управление организацией — ${productName}`))
+    await router.navigate('/no/such/page')
+    await waitFor(() => expect(document.title).toBe(`Страница не найдена — ${productName}`))
+  })
+
+  it('a page with data puts its own name, once the data is there', async () => {
+    stubApi(vacancyRoute(detail))
+    renderApp(`/vacancies/${detail.id}`)
+    expect(document.title).toBe(productName)
+    await screen.findByRole('heading', { level: 1, name: detail.title })
+    await waitFor(() => expect(document.title).toBe(`${detail.title} — ${productName}`))
   })
 })

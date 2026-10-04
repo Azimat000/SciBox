@@ -277,3 +277,19 @@ describe('the invite button in the catalog', () => {
     expect(screen.getByRole('button', { name: 'Пригласить на вакансию: Борис Лапин' })).toBeInTheDocument()
   })
 })
+
+describe('catalog intro', () => {
+  it('talks to the employer about inviting, and to the seeker about being seen', async () => {
+    localStorage.setItem('scibox.role', 'employer')
+    setup()
+    const employer = renderApp('/scientists')
+    expect(await screen.findByText(/пригласите его на свою вакансию/)).toBeInTheDocument()
+    employer.unmount()
+    localStorage.setItem('scibox.role', 'seeker')
+    setup()
+    renderApp('/scientists')
+    expect(await screen.findByText(/Учёные, открывшие свой профиль/)).toBeInTheDocument()
+    expect(screen.queryByText(/пригласите его/)).not.toBeInTheDocument()
+    localStorage.removeItem('scibox.role')
+  })
+})

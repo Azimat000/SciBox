@@ -10,6 +10,7 @@ import { TextArea, TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
 import { describeError, fieldErrorsOf } from '../auth/errors'
 import { useForm } from '../auth/useForm'
+import { useLeaveGuard } from '../../ui/useLeaveGuard'
 import { checkEmail, compact } from '../auth/validation'
 import { isNotFound } from '../orgs/api'
 import { RequireUser } from '../orgs/RequireUser'
@@ -103,10 +104,12 @@ function ApplyForm({ head, vacancyId, complete, contact }: { head: React.ReactNo
     onSuccess: async (saved) => {
       await Promise.all([refreshApplications(client), refreshNotifications(client)])
       toast.show({ kind: 'success', title: a.sent })
+      guard.release()
       void navigate(`/applications/${saved.id}`)
     },
   })
-  const { values, set, errors, validate } = useForm({ contact_email: contact, cover_letter: '' }, send.error, formRef)
+  const { values, set, errors, validate, dirty } = useForm({ contact_email: contact, cover_letter: '' }, send.error, formRef)
+  const guard = useLeaveGuard(dirty || files.length > 0 || referees.length > 0)
   const serverFields = fieldErrorsOf(send.error)
   const formError = send.error && Object.keys(serverFields).length === 0 ? describeError(send.error) : undefined
   const coverLength = [...values.cover_letter.trim()].length
@@ -124,6 +127,7 @@ function ApplyForm({ head, vacancyId, complete, contact }: { head: React.ReactNo
 
   return (
     <div className="page page-narrow apply-page">
+      {guard.prompt}
       {head}
       <section className="apply-sends" aria-labelledby="apply-sends">
         <h2 id="apply-sends">{a.sendsTitle}</h2>

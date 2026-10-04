@@ -110,8 +110,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrAlreadyAnswered):
 		apierr.WriteError(w, http.StatusConflict, CodeAlreadyAnswered, "На эту ссылку уже ответили")
 	default:
-		h.logger.Error("references request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "references", err)
 	}
 }
 

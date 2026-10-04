@@ -10,6 +10,7 @@ import { TextArea, TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
 import { describeError, fieldErrorsOf } from '../auth/errors'
 import { useForm } from '../auth/useForm'
+import { useLeaveGuard } from '../../ui/useLeaveGuard'
 import { RequireUser } from '../orgs/RequireUser'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { SpecialtiesPicker } from '../vacancies/SpecialtiesPicker'
@@ -101,10 +102,12 @@ function EditForm({ profile, reference }: { profile: Profile; reference: NonNull
     onSuccess: async () => {
       await refreshProfile(client)
       toast.show({ kind: 'success', title: e.saved })
+      guard.release()
       void navigate('/profile')
     },
   })
-  const { values, set, errors, validate } = useForm<Values>(initialOf(profile), save.error, formRef)
+  const { values, set, errors, validate, dirty } = useForm<Values>(initialOf(profile), save.error, formRef)
+  const guard = useLeaveGuard(dirty)
   const formError = save.error && Object.keys(fieldErrorsOf(save.error)).length === 0 ? describeError(save.error) : undefined
 
   const regionOptions: Option[] = useMemo(() => reference.regions.map((r) => ({ value: r.code, label: r.name })), [reference])
@@ -129,6 +132,7 @@ function EditForm({ profile, reference }: { profile: Profile; reference: NonNull
 
   return (
     <div className="page page-narrow profile-edit">
+      {guard.prompt}
       <h1>{e.title}</h1>
       <p className="lead">{e.lead}</p>
       <form className="profile-form" onSubmit={submit} ref={formRef} noValidate>

@@ -424,3 +424,26 @@ describe('editing a vacancy', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/vacancies/${VACANCY_ID}`))
   })
 })
+
+describe('leaving a started vacancy form', () => {
+  it('asks before leaving, and stays on «Остаться»', async () => {
+    stubApi(base())
+    const { router } = renderApp('/my-vacancies/new')
+    await screen.findByLabelText(/Название вакансии/)
+    await fill(/Название вакансии/, 'Научный сотрудник в лабораторию')
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Основное меню' })).getAllByRole('link')[0])
+    const dialog = await screen.findByRole('dialog', { name: 'Уйти без сохранения?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Остаться' }))
+    expect(router.state.location.pathname).toBe('/my-vacancies/new')
+    expect(field(/Название вакансии/)).toHaveValue('Научный сотрудник в лабораторию')
+  })
+
+  it('does not ask when nothing was typed', async () => {
+    stubApi(base())
+    const { router } = renderApp('/my-vacancies/new')
+    await screen.findByRole('heading', { level: 1 })
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Основное меню' })).getAllByRole('link')[0])
+    await waitFor(() => expect(router.state.location.pathname).not.toBe('/my-vacancies/new'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})

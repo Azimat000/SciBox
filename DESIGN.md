@@ -239,13 +239,13 @@ Sticky white header with a hairline bottom rule, 4.25rem tall. Serif ink-blue wo
 Serif title (ink, underlined in blue on hover), organization line in ink-soft medium, a 3-line serif abstract, a facts row of 0.875rem ink-soft items with ink semibold values, and the deadline column at the right. Entries separate by a 1px line.
 
 ### Deadline (signature)
-Date in 0.875rem. Only an urgent deadline gets the marker: a yellow band under the lower 45% of the date, drawn once in 700ms on appear. Normal deadlines are medium weight ink; expired ones are ink-soft. The remaining-time text sits beneath in ink-soft tabular numerals.
+Date in 0.875rem. Only an urgent deadline gets the marker: a yellow band under the lower 45% of the date, drawn once in 480ms (150ms delay) on appear; with reduced motion it is simply there. Normal deadlines are medium weight ink; expired ones are ink-soft. The remaining-time text sits beneath in ink-soft tabular numerals.
 
 ### Results Header
 Count line in 0.875rem ink-soft above a 1px solid ink rule.
 
 ### Modal and Toast
-Modal: white, 10px corners, shadow, scrim of ink at 50%, header with serif title and close button, hairline above actions. Toast: ink background, white text, 10px corners, shadow; the icon carries the kind (green, red, or yellow for info). Both enter with a 240ms ease-out rise.
+Modal: white, 10px corners, shadow, scrim of ink at 50%, header with serif title and close button, hairline above actions. Toast: ink background, white text, 10px corners, shadow; the icon carries the kind (green, red, or yellow for info). Both enter with a 240ms ease-out rise (the toast as a transition from `@starting-style`, so quick successive toasts retarget instead of restarting). With reduced motion both only fade.
 
 ### Skeleton and Empty State
 Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry layout. Empty state is centered, 30rem wide, with an edge-colored (or fail for errors) illustration, text in ink-soft, and actions below.
@@ -259,7 +259,10 @@ Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry
 - **Do** keep control borders at edge (#85807a) so fields stay above 3:1 on white, and keep every control at least 44px tall on touch layouts.
 - **Do** use tokens from `tokens.css` only; components do not introduce their own colors, sizes or spacing.
 - **Do** make the deadline visible before the abstract on a phone.
-- **Do** respect reduced motion; animations drop to near zero duration.
+- **Do** respect reduced motion: anything that moves (rise, marker draw, skeleton sweep, chevron turn) appears in place or only fades; the button spinner keeps turning because it reports state.
+- **Do** put the person or the thing first and its actions after: a profile shows name, headline and contacts, then buttons; a long vacancy repeats its apply button after the requirements.
+- **Do** keep one ink-blue button per screen region; list rows get secondary or quiet actions and are opened by their title.
+- **Do** give standalone links (number rows, "all vacancies", footer, organization line) an invisible vertical hit area of at least 24px, about 44px on touch screens.
 
 ### Don't:
 - **Don't** build a card grid with logo tiles, boxed shadows and a blue button.

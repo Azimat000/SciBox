@@ -81,6 +81,14 @@ describe('vacancy page for a visitor', () => {
     expect(screen.queryByRole('heading', { level: 2, name: 'Описание' })).not.toBeInTheDocument()
   })
 
+  it('says «кроме степени» when there are no written requirements but a degree is required', async () => {
+    stubApi(vacancyRoute({ ...detail, requirements: '', degree_required: 'candidate', title_required: 'none' }))
+    renderApp(path)
+    await screen.findByRole('heading', { level: 1, name: detail.title })
+    expect(screen.getByText('Кроме степени или звания из условий выше, особых требований не указано.')).toBeInTheDocument()
+    expect(screen.queryByText('Особых требований не указано.')).not.toBeInTheDocument()
+  })
+
   it('shows the required title for teaching staff and a stipend for early career', async () => {
     stubApi(vacancyRoute({ ...detail, title_required: 'professor', position: { code: 'postdoc', name: 'Постдок', type: 'early_career' } }))
     renderApp(path)

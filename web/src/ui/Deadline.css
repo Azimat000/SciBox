@@ -42,11 +42,18 @@
 
 /* Маркер «проводится» один раз, когда срок появляется на странице */
 .deadline-date.mark {
-  animation: mark-draw 700ms var(--ease) 250ms backwards;
+  animation: mark-draw 480ms var(--ease) 150ms backwards;
 }
 
 @keyframes mark-draw {
   from {
     background-size: 0% 100%;
+  }
+}
+
+/* Меньше движения: маркер стоит сразу, без «проведения». */
+@media (prefers-reduced-motion: reduce) {
+  .deadline-date.mark {
+    animation: none;
   }
 }

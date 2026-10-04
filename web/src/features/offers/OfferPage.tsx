@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../app/pageTitle'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
 import { Link, useParams } from 'react-router'
@@ -56,6 +57,7 @@ function Loader({ id }: { id: string }) {
 }
 
 function Page({ offer }: { offer: Offer }) {
+  usePageTitle(offer.vacancy.title)
   const o = t.offers.one
   const v = offer.vacancy
   const open = vacancyOpen(offer)

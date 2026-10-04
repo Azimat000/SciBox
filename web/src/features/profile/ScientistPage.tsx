@@ -1,3 +1,4 @@
+import { usePageTitle } from '../../app/pageTitle'
 import { useParams } from 'react-router'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
@@ -16,6 +17,7 @@ export function ScientistPage() {
   const { id = '' } = useParams()
   const query = useScientist(id)
   const { user } = useMe()
+  usePageTitle(query.data?.profile.name)
 
   if (query.isPending) return <PageSkeleton />
   if (query.isError) {
@@ -51,17 +53,21 @@ export function ScientistPage() {
           {t.profile.ownBanner}
         </Alert>
       )}
-      <div className="profile-toolbar">
-        {!page.viewer.is_owner && <InviteButton profileId={page.profile.id} name={page.profile.name} variant="primary" />}
-        {user ? (
-          <a className="btn btn-secondary" href={cvPath(id)} download>
-            {t.profile.downloadCv}
-          </a>
-        ) : (
-          <p className="profile-note">{t.profile.cvNeedLogin}</p>
-        )}
-      </div>
-      <ProfileView page={page} />
+      <ProfileView
+        page={page}
+        actions={
+          <>
+            {!page.viewer.is_owner && <InviteButton profileId={page.profile.id} name={page.profile.name} variant="primary" />}
+            {user ? (
+              <a className="btn btn-secondary" href={cvPath(id)} download>
+                {t.profile.downloadCv}
+              </a>
+            ) : (
+              <p className="profile-note">{t.profile.cvNeedLogin}</p>
+            )}
+          </>
+        }
+      />
     </div>
   )
 }

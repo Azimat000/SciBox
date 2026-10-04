@@ -54,3 +54,20 @@ func WriteJSON(w http.ResponseWriter, status int, body any) {
 		slog.Error("write json response", "err", err)
 	}
 }
+
+// StatusClientClosed — запрос оборвал сам человек: ушёл со страницы, закрыл вкладку.
+// Код взят из nginx (499); отвечать уже некому, он нужен только в журнале запросов.
+const StatusClientClosed = 499
+
+// WriteInternal отвечает 500 на непредвиденную ошибку и пишет её в журнал.
+// Если запрос оборвал сам человек, это не поломка: в журнал идёт спокойная строка, а не ошибка,
+// чтобы настоящие сбои не терялись среди обрывов.
+func WriteInternal(w http.ResponseWriter, r *http.Request, logger *slog.Logger, what string, err error) {
+	if r.Context().Err() != nil {
+		logger.Info(what+" cancelled by client", "path", r.URL.Path)
+		w.WriteHeader(StatusClientClosed)
+		return
+	}
+	logger.Error(what+" request failed", "path", r.URL.Path, "err", err)
+	WriteError(w, http.StatusInternalServerError, CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+}

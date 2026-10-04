@@ -197,8 +197,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrUnauthenticated):
 		apierr.WriteError(w, http.StatusUnauthorized, apierr.CodeUnauthorized, "Войдите в аккаунт")
 	default:
-		h.logger.Error("auth request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "auth", err)
 	}
 }
 

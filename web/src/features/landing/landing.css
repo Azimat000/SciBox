@@ -83,6 +83,12 @@
   }
 }
 
+@keyframes landing-fade {
+  from {
+    opacity: 0;
+  }
+}
+
 .hero-title span:first-child {
   animation: landing-rise 640ms var(--ease) backwards;
 }
@@ -97,6 +103,16 @@
 
 .hero-search {
   animation: landing-rise 640ms var(--ease) 270ms backwards;
+}
+
+/* Меньше движения: заголовок и поиск проявляются на месте, без подъёма. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-title span:first-child,
+  .hero-title-second,
+  .hero-lead,
+  .hero-search {
+    animation-name: landing-fade;
+  }
 }
 
 /* ---- оглавление: области науки и виды позиций ---- */

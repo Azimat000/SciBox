@@ -9,6 +9,7 @@ import type { FieldErrors } from './validation'
  * не надо искать его самим. Во время обычной правки фокус не трогаем.
  */
 export function useForm<V extends Record<string, string | boolean>>(initial: V, serverError: unknown, form: RefObject<HTMLElement | null>) {
+  const [start] = useState<V>(initial)
   const [values, setValues] = useState<V>(initial)
   const [attempts, setAttempts] = useState(0)
   const [clientErrors, setClientErrors] = useState<FieldErrors>({})
@@ -43,5 +44,8 @@ export function useForm<V extends Record<string, string | boolean>>(initial: V, 
     form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
   }, [form, attempts, serverError])
 
-  return { values, set, errors, validate }
+  /** Человек что-то поменял относительно начальных значений (для вопроса «Уйти без сохранения?»). */
+  const dirty = useMemo(() => Object.keys(values).some((k) => values[k] !== start[k]), [values, start])
+
+  return { values, set, errors, validate, dirty }
 }

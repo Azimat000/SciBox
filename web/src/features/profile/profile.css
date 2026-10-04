@@ -4,7 +4,8 @@
   padding-bottom: var(--s-7);
 }
 
-.profile-page > .alert {
+.profile-page > .alert,
+.profile > .alert {
   margin-top: var(--s-5);
   max-width: var(--measure);
 }
@@ -101,6 +102,10 @@
   margin-top: var(--s-6);
 }
 
+.profile:first-child {
+  margin-top: 0;
+}
+
 .profile-head h1 {
   overflow-wrap: anywhere;
   text-wrap: balance;
@@ -136,6 +141,11 @@
   margin-top: var(--s-2);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
+}
+
+/* Действия идут после имени и должности: сначала видно, чей это профиль. */
+.profile-head .profile-toolbar {
+  margin-top: var(--s-5);
 }
 
 .profile-section {

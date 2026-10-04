@@ -109,8 +109,7 @@ func (h *Handler) Mount(r chi.Router) {
 	r.Get("/landing", func(w http.ResponseWriter, r *http.Request) {
 		stats, err := h.svc.Stats(r.Context())
 		if err != nil {
-			h.logger.Error("landing request failed", "err", err)
-			apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+			apierr.WriteInternal(w, r, h.logger, "landing", err)
 			return
 		}
 		apierr.WriteJSON(w, http.StatusOK, stats)

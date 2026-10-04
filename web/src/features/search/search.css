@@ -294,3 +294,11 @@
     flex-wrap: wrap;
   }
 }
+
+/* Меньше движения: стрелки фильтров поворачиваются сразу. */
+@media (prefers-reduced-motion: reduce) {
+  .filter-group > summary::after,
+  .filters-toggle svg {
+    transition: none;
+  }
+}

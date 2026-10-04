@@ -144,8 +144,7 @@ func (h *Handler) Mount(r chi.Router) {
 	r.Get("/reference", func(w http.ResponseWriter, r *http.Request) {
 		cat, err := h.svc.Catalog(r.Context())
 		if err != nil {
-			h.logger.Error("reference request failed", "err", err)
-			apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+			apierr.WriteInternal(w, r, h.logger, "reference", err)
 			return
 		}
 		apierr.WriteJSON(w, http.StatusOK, cat)

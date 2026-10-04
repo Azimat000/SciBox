@@ -82,8 +82,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrTooManySearches):
 		apierr.WriteError(w, http.StatusConflict, CodeTooManySearches, "Сохранено слишком много поисков. Удалите ненужные, чтобы добавить новый")
 	default:
-		h.logger.Error("matching request failed", "path", r.URL.Path, "err", err)
-		apierr.WriteError(w, http.StatusInternalServerError, apierr.CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
+		apierr.WriteInternal(w, r, h.logger, "matching", err)
 	}
 }
 

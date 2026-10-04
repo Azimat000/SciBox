@@ -18,6 +18,10 @@ type Props = {
   onAdd?: (kind: ItemKind) => void
   onEdit?: (item: Item) => void
   onRemove?: (item: Item) => void
+  /** Кнопки под именем и должностью: сначала человек видит, чей это профиль, потом действия. */
+  actions?: ReactNode
+  /** То, что идёт сразу после шапки и до разделов (у владельца: приватность). */
+  afterHead?: ReactNode
 }
 
 /** Адрес сайта без пути; если ссылку не удалось разобрать, показываем её целиком. */
@@ -35,7 +39,7 @@ const spinText = (spin: string) => (/^\d{8}$/.test(spin) ? `${spin.slice(0, 4)}-
 const longName = (s: string) => (s.length > 40 ? 'true' : undefined)
 
 /** Профиль учёного как страница журнала. Одна разметка и для владельца (с кнопками правки), и для остальных (без них). */
-export function ProfileView({ page, nested = false, editable = false, onAdd, onEdit, onRemove }: Props) {
+export function ProfileView({ page, nested = false, editable = false, onAdd, onEdit, onRemove, actions, afterHead }: Props) {
   const p = page.profile
   const place = t.profile.place(p.city, p.region?.name ?? '')
   const hRows = [
@@ -81,7 +85,9 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
               <a href={`mailto:${p.contact_email}`}>{p.contact_email}</a>
             </p>
           )}
+          {actions && <div className="profile-toolbar">{actions}</div>}
         </header>
+        {afterHead}
 
         {(p.about || editable) && (
           <Section title={t.profile.sections.about} action={editCore(t.profile.sections.about)} id="about">

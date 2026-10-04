@@ -28,29 +28,34 @@ describe('apply button on the vacancy page', () => {
   it('sends a visitor to sign in and back to the form', async () => {
     stubApi(vacancyRoute(detail))
     renderApp(vacancyPath)
-    const link = await screen.findByRole('link', { name: 'Войти и откликнуться' })
-    expect(link).toHaveAttribute('href', `/login?next=${encodeURIComponent(applyPath)}`)
+    // Кнопка стоит под заголовком и ещё раз в конце вакансии.
+    const links = await screen.findAllByRole('link', { name: 'Войти и откликнуться' })
+    expect(links).toHaveLength(2)
+    for (const link of links) expect(link).toHaveAttribute('href', `/login?next=${encodeURIComponent(applyPath)}`)
+    expect(within(screen.getByRole('region', { name: 'Откликнуться на вакансию' })).getByRole('link')).toBe(links[1])
   })
 
   it('offers the form to a signed-in person who can apply', async () => {
     stubApi(signedIn())
     renderApp(vacancyPath)
-    expect(await screen.findByRole('link', { name: 'Откликнуться' })).toHaveAttribute('href', applyPath)
+    const links = await screen.findAllByRole('link', { name: 'Откликнуться' })
+    expect(links).toHaveLength(2)
+    for (const link of links) expect(link).toHaveAttribute('href', applyPath)
   })
 
   it('shows the existing application instead of the button', async () => {
     const applied: ApplyState = { can_apply: false, reason: 'applied', application: { id: APP_ID, status: 'sent' } }
     stubApi(signedIn(stateRoute(applied)))
     renderApp(vacancyPath)
-    expect(await screen.findByText('Вы уже откликнулись на эту вакансию.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Смотреть отклик' })).toHaveAttribute('href', `/applications/${APP_ID}`)
+    expect(await screen.findAllByText('Вы уже откликнулись на эту вакансию.')).toHaveLength(2)
+    for (const link of screen.getAllByRole('link', { name: 'Смотреть отклик' })) expect(link).toHaveAttribute('href', `/applications/${APP_ID}`)
     expect(screen.queryByRole('link', { name: 'Откликнуться' })).not.toBeInTheDocument()
   })
 
   it('says the deadline has passed and offers nothing', async () => {
     stubApi(signedIn(stateRoute({ can_apply: false, reason: 'deadline_passed', application: null })))
     renderApp(vacancyPath)
-    expect(await screen.findByText('Срок подачи прошёл: отклики не принимаются.')).toBeInTheDocument()
+    expect(await screen.findAllByText('Срок подачи прошёл: отклики не принимаются.')).toHaveLength(2)
     expect(screen.queryByRole('link', { name: 'Откликнуться' })).not.toBeInTheDocument()
   })
 
@@ -299,5 +304,18 @@ describe('apply page', () => {
     await press('Отправить отклик')
     expect(await screen.findByText('Не удалось отправить отклик')).toBeInTheDocument()
     expect(screen.getByText('Сервер не отвечает')).toBeInTheDocument()
+  })
+})
+
+describe('leaving a started application', () => {
+  it('asks before the letter is lost, and «Уйти» leaves', async () => {
+    stubApi(signedIn())
+    const { router } = renderApp(applyPath)
+    await screen.findByLabelText(/Сопроводительное письмо/)
+    await fill(/Сопроводительное письмо/, cover)
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Основное меню' })).getAllByRole('link')[0])
+    const dialog = await screen.findByRole('dialog', { name: 'Уйти без сохранения?' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Уйти' }))
+    await waitFor(() => expect(router.state.location.pathname).not.toBe(applyPath))
   })
 })

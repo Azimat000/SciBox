@@ -398,6 +398,8 @@ describe('invitations on both sides', () => {
       ),
     )
     renderApp(`/candidates/${APP_ID}`)
+    // Назад к списку откликов на ту же вакансию.
+    expect(await screen.findByRole('link', { name: 'Все отклики на эту вакансию' })).toHaveAttribute('href', `/candidates?vacancy=${reviewedApplication.vacancy.id}`)
     const section = within((await screen.findByRole('heading', { level: 2, name: 'Приглашения' })).closest('section')!)
     expect(section.getAllByText('Ответ кандидата')).toHaveLength(4)
     expect(section.getByText('Время подходит.')).toBeInTheDocument()

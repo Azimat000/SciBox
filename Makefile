@@ -1,5 +1,5 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev test test-server test-web install db-up db-down db-reset migrate seed sqlc
+.PHONY: dev test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc
 
 SCIBOX = cd server && go run ./cmd/api
 
@@ -15,6 +15,15 @@ test-server:
 
 test-web:
 	cd web && npm run typecheck && npm run lint && npm run test:coverage
+
+## e2e: сквозные сценарии в настоящем браузере (Playwright) на отдельной базе scibox_e2e.
+## Нужен свободный порт 8090 и 5174; `make dev` может работать параллельно.
+e2e: install db-up e2e/node_modules/.package-lock.json
+	./scripts/e2e-db
+	cd e2e && npx tsc -p . && npx playwright test
+
+e2e/node_modules/.package-lock.json: e2e/package-lock.json
+	cd e2e && npm ci && npx playwright install chromium
 
 install: web/node_modules/.package-lock.json
 
