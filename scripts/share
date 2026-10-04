@@ -23,9 +23,10 @@ if [ -z "$tunnel" ]; then
 fi
 
 pids=""
+tunnel_pid=""
 cleanup() {
   # shellcheck disable=SC2086
-  [ -n "$pids" ] && kill $pids 2>/dev/null || true
+  [ -n "$pids$tunnel_pid" ] && kill $pids $tunnel_pid 2>/dev/null || true
   rm -f "$log"
 }
 trap cleanup EXIT
@@ -39,31 +40,55 @@ fi
 echo "Собираю сервер…"
 (cd "$root/server" && go build -o bin/scibox ./cmd/api)
 
-echo "Открываю туннель ($tunnel)…"
 case "$tunnel" in
-  tuna)
-    tuna http "$port" >"$log" 2>&1 &
-    pattern='https://[A-Za-z0-9.-]*tuna\.am'
-    ;;
-  localhost.run)
-    ssh -T -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
-      -R 80:127.0.0.1:"$port" nokey@localhost.run >"$log" 2>&1 &
-    pattern='https://[A-Za-z0-9.-]*\.(lhr\.life|localhost\.run)'
-    ;;
+  tuna) pattern='https://[A-Za-z0-9.-]*tuna\.am' ;;
+  localhost.run) pattern='https://[A-Za-z0-9.-]*\.(lhr\.life|localhost\.run)' ;;
   *)
     echo "Неизвестный туннель «$tunnel»: можно tuna или localhost.run." >&2
     exit 2
     ;;
 esac
-pids="$pids $!"
 
-url=""
-i=0
-while [ -z "$url" ] && [ $i -lt 60 ]; do
-  sleep 1
-  url=$(grep -Eo "$pattern" "$log" | grep -v 'admin\.localhost\.run' | head -n 1 || true)
-  i=$((i + 1))
-done
+tunnel_pid=""
+start_tunnel() {
+  : >"$log"
+  case "$tunnel" in
+    tuna) tuna http "$port" >"$log" 2>&1 & ;;
+    localhost.run)
+      ssh -T -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -o ExitOnForwardFailure=yes -R 80:127.0.0.1:"$port" nokey@localhost.run >"$log" 2>&1 &
+      ;;
+  esac
+  tunnel_pid=$!
+}
+
+# Последняя ссылка, которую выдал туннель: бесплатный localhost.run время от времени меняет адрес
+# в том же соединении и пишет новый в свой вывод.
+latest_url() {
+  grep -aEo "$pattern" "$log" | grep -v 'admin\.localhost\.run' | tail -n 1 || true
+}
+
+wait_url() {
+  i=0
+  url=""
+  while [ -z "$url" ] && [ $i -lt 60 ]; do
+    sleep 1
+    url=$(latest_url)
+    i=$((i + 1))
+  done
+}
+
+# Ссылку видно в окне и во всплывающем уведомлении: человеку не нужно следить за окном.
+announce() {
+  echo
+  echo "  $1:  $url"
+  echo
+  osascript -e "display notification \"$url\" with title \"SciBox: $1\"" >/dev/null 2>&1 || true
+}
+
+echo "Открываю туннель ($tunnel)…"
+start_tunnel
+wait_url
 if [ -z "$url" ]; then
   echo "Туннель не дал ссылку за минуту. Что он ответил:" >&2
   cat "$log" >&2
@@ -89,13 +114,27 @@ done
 caffeinate -ims -w $$ &
 pids="$pids $!"
 
-echo
-echo "  Ссылка для коллеги:  $url"
-echo "  Письма сайта:        http://localhost:8025 (коллеге они не придут, ссылку из письма можно переслать)"
-echo "  Остановить:          Ctrl+C"
-echo
-if [ "$tunnel" = localhost.run ]; then
-  echo "  localhost.run иногда меняет ссылку. Если коллега пишет, что не открывается, перезапустите и пришлите новую."
-  echo
-fi
-wait
+echo "  Письма сайта:  http://localhost:8025 (коллеге они не придут, ссылку из письма можно переслать)"
+echo "  Остановить:    Ctrl+C"
+announce "Ссылка для коллеги"
+
+# Следим за туннелем: новая ссылка — сообщить, обрыв — переподключить.
+# Сервер не перезапускаем: защита от чужих сайтов принимает и адрес, по которому пришёл запрос;
+# только ссылки в новых письмах будут со старым адресом.
+while sleep 5; do
+  if ! kill -0 "$tunnel_pid" 2>/dev/null; then
+    echo "Туннель оборвался, подключаю заново…"
+    sleep 3
+    start_tunnel
+    wait_url
+    if [ -n "$url" ]; then
+      announce "Новая ссылка для коллеги (старая больше не работает)"
+    fi
+    continue
+  fi
+  now=$(latest_url)
+  if [ -n "$now" ] && [ "$now" != "$url" ]; then
+    url=$now
+    announce "Ссылка сменилась, отправьте коллеге новую"
+  fi
+done
