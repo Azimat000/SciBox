@@ -26,7 +26,7 @@ A job board for science in Russia: organizations publish research, teaching, ear
 
 ## Positioning
 
-Built for science, not adapted from a general job site. It understands degrees and academic titles, VAK specialties, competitive selections (конкурсы) with deadlines, grants and funding sources, publications and identifiers (ORCID, SPIN, Scopus, WoS). A scientist keeps a scientific profile, not a CV. Borrowed from international academic boards: reference letters submitted through the platform, career levels R1–R4, deadline reminders, rule-based "suitable for you" matching. Everything is free; there are no tariffs or paid placements (D-016).
+Built for science, not adapted from a general job site. It understands degrees and academic titles, VAK specialties, competitive selections (конкурсы) with deadlines, grants and funding sources, publications and identifiers (ORCID, SPIN, Scopus, WoS). A scientist keeps a scientific profile, not a CV. Borrowed from international academic boards: reference letters submitted through the platform, career levels R1–R4, deadline reminders, rule-based "suitable for you" matching. There are no tariffs or paid placements (D-016). The interface never advertises the service as free: no "бесплатно" in copy (D-129).
 
 ## Operating Context
 
@@ -61,7 +61,7 @@ None yet. Demo content is fictional organizations and people with real Russian c
 1. Speak the language of science: degrees, VAK specialties, competitions and grants are first-class fields, not free text.
 2. Both sides at once: every feature is checked from the seeker's and the organization's seat.
 3. Privacy is the seeker's choice: hidden / visible to organizations / public, and nothing leaks past it.
-4. Free and honest: no paid placement, no fake verification, no invented numbers.
+4. Honest: no paid placement, no fake verification, no invented numbers.
 5. Works on a phone as well as at a desk.
 
 ## Accessibility & Inclusion

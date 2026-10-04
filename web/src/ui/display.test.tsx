@@ -115,6 +115,14 @@ describe('VacancyEntry', () => {
     expect(screen.getByRole('list', { name: 'Основные факты' })).toBeInTheDocument()
   })
 
+  it('says there is no deadline instead of leaving the side column empty, and puts specialties on their own line', () => {
+    inRouter(<VacancyEntry to="/v/3" title="Инженер" organization="ТЦФ" city="Томск" deadline={null} topics="Оптика и ещё 2" action={<button>В избранное</button>} />)
+    expect(screen.getByText('Без срока подачи')).toBeInTheDocument()
+    expect(screen.getByText('приём до закрытия')).toBeInTheDocument()
+    expect(screen.getByText('Оптика и ещё 2')).toHaveClass('entry-topics')
+    expect(screen.getByRole('button', { name: 'В избранное' })).toBeInTheDocument()
+  })
+
   it('works with the minimum of data and a custom heading level', () => {
     inRouter(<VacancyEntry to="/v/2" title="Аспирант" organization="ИМС" city="Дубна" headingLevel={2} />)
     expect(screen.getByRole('heading', { level: 2, name: 'Аспирант' })).toBeInTheDocument()

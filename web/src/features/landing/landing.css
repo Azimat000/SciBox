@@ -56,6 +56,22 @@
   margin-top: var(--s-6);
 }
 
+/* В колонке главной поиску тесно в одну строку: запрос во всю ширину, под ним регион и кнопка.
+   На телефоне поиск и так идёт столбиком (ui/SearchBar.css). */
+@media (min-width: 40.0625rem) {
+  .hero-search .searchbar {
+    flex-wrap: wrap;
+  }
+
+  .hero-search .searchbar-query {
+    flex: 1 1 100%;
+  }
+
+  .hero-search .searchbar-region {
+    flex: 1 1 12rem;
+  }
+}
+
 /* Место под числа занято всегда, чтобы страница не прыгала, когда они придут. */
 .hero-facts-slot {
   min-height: calc(var(--s-4) + 1.55rem);

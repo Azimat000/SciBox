@@ -178,7 +178,7 @@ describe('favorites page', () => {
     )
     renderApp(path)
     const menu = (await screen.findAllByRole('navigation', { name: 'Основное меню' }))[0]
-    expect(within(menu).getByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
+    expect(await within(menu).findByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('explains an empty list and leads to the search', async () => {

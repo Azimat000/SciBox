@@ -135,13 +135,14 @@ function Row({ card: c, apps }: { card: Card; apps: VacancyCount | undefined }) 
         </p>
         <p className="mine-row-line">
           <Tag tone={c.status === 'published' ? 'accent' : 'neutral'}>{statusLabel(c.status)}</Tag>
-          <span>
-            {c.organization.name} · {c.unit?.name ?? t.vacancies.mine.noUnit}
+          <span className="mine-row-facts">
+            <span>
+              {c.organization.name} · {c.unit?.name ?? t.vacancies.mine.noUnit}
+            </span>
+            <span>{c.position.name}</span>
+            <span className="num">{t.vacancies.mine.updated(formatDate(c.updated_at))}</span>
           </span>
-          <span>{c.position.name}</span>
-          <span className="num">{t.vacancies.mine.updated(formatDate(c.updated_at))}</span>
         </p>
-        {c.status === 'published' && c.deadline && <Deadline date={c.deadline} />}
         {apps && apps.total > 0 && (
           <p className="mine-row-apps num">
             <Link to={`/candidates?vacancy=${c.id}`}>{t.vacancies.mine.applications(apps.total, plural(apps.total, t.vacancies.mine.applicationsForms))}</Link>
@@ -149,8 +150,10 @@ function Row({ card: c, apps }: { card: Card; apps: VacancyCount | undefined }) 
           </p>
         )}
       </div>
-      {/* Вакансию открывает её название; синяя кнопка на странице одна: «Создать вакансию». */}
-      <div className="mine-row-actions">
+      {/* Срок и правка в одной колонке справа, на одной высоте у всех строк.
+          Вакансию открывает её название; синяя кнопка на странице одна: «Создать вакансию». */}
+      <div className="mine-row-side">
+        {c.status === 'published' && c.deadline && <Deadline date={c.deadline} align="end" />}
         <ButtonLink to={`/my-vacancies/${c.id}/edit`} variant="secondary" size="sm" aria-label={`${t.vacancies.mine.edit}: ${c.title}`}>
           {t.vacancies.mine.edit}
         </ButtonLink>

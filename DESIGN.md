@@ -161,7 +161,7 @@ A white sheet, warm ink, one blue, one yellow; status colors are muted and used 
 - **Ink Blue** (#1c2c66): primary buttons, links, the wordmark, selected chip text, focus ring, caret. Hover deepens to **Ink Blue Deep** (#121e4d). **Blue Wash** (#eceefa) is its tint for the selected chip, accent tag, active combobox option, and quiet-button hover.
 
 ### Secondary
-- **Marker Yellow** (#f7d559): the only accent. It highlights an urgent deadline date, underlines the active nav item and active role tab (3px), colors text selection, and tints the info icon on dark toasts.
+- **Marker Yellow** (#f7d559): the only accent. It highlights an urgent deadline date, underlines the active nav item and active section tab (3px), colors text selection, and tints the info icon on dark toasts.
 
 ### Neutral
 - **Paper** (#ffffff): page, fields, modal, secondary buttons.
@@ -199,7 +199,11 @@ Single centered column, max 72rem, with a fluid gutter (1rem to 3.5rem, 4vw). Na
 
 **Landing (`/`).** One grid for the whole page: the first row holds the headline and search on the left and a table of contents (open vacancies by field and by position type, hairline rows with tabular counts) on the right; below it, full width: fresh vacancies, two tracks (seeker, employer) on a shared subgrid so headings, steps and buttons align, and a definition list "Устроено под науку". Under 62rem it is one column and the table of contents moves below the fresh vacancies. The headline uses a larger token `--text-hero` (clamp 2.25rem to 3.125rem): first sentence at weight 600 in ink, second at weight 400 in ink-soft. The numbers are a single row of ink-blue links, not big figures. The one authored motion is the rise of headline, lead and search (640ms, staggered).
 
-A vacancy entry is a two-column grid: title, organization, abstract, facts on the left; deadline on the right in an 11rem column, right-aligned. Under 40rem it collapses to one column with the deadline directly after the organization line. The header collapses at 66rem (sign-in buttons and a signed-in name need the room) into a menu button and a stacked menu; role tabs go full width inside it. The search bar stacks vertically under 40rem. Toasts and modals rearrange under 30rem (toasts move to the top, modals become bottom sheets).
+A vacancy entry is a two-column grid: title, organization, abstract, facts and specialties on the left; deadline on the right in a fixed 11rem column, right-aligned. Under 40rem it collapses to one column with the deadline directly after the organization line. Rows of "Мои вакансии" follow the same grid (deadline and the edit button in the right column).
+
+**Action column (`.split`).** A page about one thing that asks for one decision (vacancy, candidate card) has the text on the left and a 17rem column on the right under a 1px ink rule: deadline, the primary action, quiet secondary actions stacked full width. The column is sticky (below the header) so the action stays in view while reading. Under 62rem it moves directly under the page header and its buttons go back into a row.
+
+The header collapses at 72rem into a menu button and a stacked menu; the role switch goes full width at the top of it. The search bar stacks vertically under 40rem. Toasts and modals rearrange under 30rem (toasts move to the top, modals become bottom sheets).
 
 ## Elevation & Depth
 
@@ -233,10 +237,10 @@ Square-ish and quiet: 6px for tags, option rows and skeletons; 10px for buttons,
 - Select is the native element with a drawn chevron; the combobox adds a floating white list (edge border, shadow) with blue-wash active row and a drawn check on the selected option.
 
 ### Navigation
-Sticky white header with a hairline bottom rule, 4.25rem tall. Serif ink-blue wordmark (1.625rem, 700), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline. The role switcher ("Ищу работу" / "Нанимаю") is two text tabs with the same marker underline on the active one. In the mobile menu the active link carries an inset 3px marker line over the hairline.
+Sticky white header with a hairline bottom rule, 4.25rem tall. Serif ink-blue wordmark (1.625rem, 700), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: a wash track with a line border and 10px corners, the active segment white with a line border, ink and semibold. In the mobile menu the active link carries an inset 3px marker line over the hairline.
 
 ### Vacancy Entry (signature)
-Serif title (ink, underlined in blue on hover), organization line in ink-soft medium, a 3-line serif abstract, a facts row of 0.875rem ink-soft items with ink semibold values, and the deadline column at the right. Entries separate by a 1px line.
+Serif title (ink, underlined in blue on hover), organization line in ink-soft medium, a 3-line serif abstract, a facts row in 0.875rem ink-body joined by edge-colored middle dots (the accent "Конкурс" tag leads the row, the level code is ink semibold), the specialties on their own ink-soft line, and the deadline column at the right. A vacancy without a deadline says "Без срока подачи / приём до закрытия" in ink-soft, so the column never collapses and the bookmark stays at the same height. Entries separate by a 1px line. On the vacancy page VAK specialties are a list with the code in its own 3.5rem column, never wrapped.
 
 ### Deadline (signature)
 Date in 0.875rem. Only an urgent deadline gets the marker: a yellow band under the lower 45% of the date, drawn once in 480ms (150ms delay) on appear; with reduced motion it is simply there. Normal deadlines are medium weight ink; expired ones are ink-soft. The remaining-time text sits beneath in ink-soft tabular numerals.
@@ -271,3 +275,4 @@ Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry
 - **Don't** add a kicker or eyebrow above headings, colored side borders, or gradient text.
 - **Don't** add a dark theme or a second accent color without a new decision.
 - **Don't** invent statistics or logos in demo content.
+- **Don't** advertise the service as free anywhere in the interface, emails or README (D-129).

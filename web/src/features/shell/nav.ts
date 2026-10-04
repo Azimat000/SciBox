@@ -3,6 +3,15 @@ import type { Role } from './role-context'
 
 export type NavItem = { to: string; label: string; /** Другие разделы, на которых этот пункт тоже считается текущим. */ also?: readonly string[] }
 
+/** Меню гостя: только то, что открыто без входа. Избранное, отклики и режим «Нанимаю» появляются после входа. */
+export function publicNav(): NavItem[] {
+  return [
+    { to: '/vacancies', label: t.nav.vacancies },
+    { to: '/scientists', label: t.nav.scientists },
+    { to: '/organizations', label: t.nav.organizations },
+  ]
+}
+
 /** Пункты меню по режимам. */
 export function navFor(role: Role): NavItem[] {
   if (role === 'employer') {

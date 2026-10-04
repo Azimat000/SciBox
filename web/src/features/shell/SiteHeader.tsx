@@ -8,7 +8,7 @@ import { useMe } from '../auth/api'
 import { AccountBlock, UserMenu } from '../auth/UserMenu'
 import { useSignOut } from '../auth/useSignOut'
 import { NotificationBell } from '../notifications/NotificationBell'
-import { isCurrent, navFor } from './nav'
+import { isCurrent, navFor, publicNav } from './nav'
 import { RoleSwitch } from './RoleSwitch'
 import { useRole } from './useRole'
 import './SiteHeader.css'
@@ -17,7 +17,8 @@ export function SiteHeader() {
   const { role } = useRole()
   const { user, isLoading } = useMe()
   const signOut = useSignOut()
-  const items = navFor(role)
+  // Гость видит только открытые разделы; режимы и личные разделы появляются после входа
+  const items = user ? navFor(role) : publicNav()
   const { pathname } = useLocation()
   // Меню открыто «на этой странице»: перешли на другую, и оно закрылось само
   const [openAt, setOpenAt] = useState<string | null>(null)
@@ -51,9 +52,11 @@ export function SiteHeader() {
         </nav>
 
         <div className="header-tools">
-          <div className="header-role">
-            <RoleSwitch />
-          </div>
+          {user && (
+            <div className="header-role">
+              <RoleSwitch />
+            </div>
+          )}
           {/* Пока неизвестно, вошёл ли человек, держим место, чтобы шапка не прыгала */}
           {isLoading ? (
             <span className="header-auth-placeholder" aria-hidden="true" />
@@ -88,10 +91,12 @@ export function SiteHeader() {
       </div>
 
       <div id="mobile-menu" className="mobile-menu" hidden={!menuOpen}>
+        {user && (
+          <div className="mobile-menu-role">
+            <RoleSwitch />
+          </div>
+        )}
         <nav aria-label={t.shell.mainNav}>{links}</nav>
-        <div className="mobile-menu-role">
-          <RoleSwitch />
-        </div>
         {user ? (
           <AccountBlock user={user} signOut={() => signOut.mutate()} signingOut={signOut.isPending} />
         ) : (

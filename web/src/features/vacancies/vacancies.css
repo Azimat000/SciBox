@@ -24,26 +24,18 @@
 .vacancy-head h1 {
   overflow-wrap: anywhere;
   text-wrap: balance;
+  max-width: 24ch;
 }
 
 .vacancy-head h1[data-long] {
   font-size: var(--text-2xl);
   line-height: 1.25;
+  max-width: 40ch;
 }
 
-.vacancy-org {
-  margin-top: var(--s-3);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-1) var(--s-4);
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
+/* Метки над заголовком, как рубрика статьи: «Конкурс», «Черновик» */
 .vacancy-tags {
-  margin-top: var(--s-3);
+  margin-bottom: var(--s-3);
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
@@ -53,17 +45,57 @@
   display: none;
 }
 
-.vacancy-head .deadline {
-  margin-top: var(--s-4);
+/* Организация и место: выходные данные под заголовком, части разделены средней точкой.
+   Строка течёт как текст, поэтому точка при переносе остаётся в конце строки, а не в начале новой. */
+.vacancy-org,
+.vacancy-where {
+  overflow-wrap: anywhere;
 }
 
-/* Отклик и закладка в одной строке; у закладки поля, поэтому её сдвигаем к краю колонки */
+.vacancy-org {
+  margin-top: var(--s-3);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.vacancy-where {
+  margin-top: var(--s-1);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.vacancy-org > * + *::before,
+.vacancy-where > * + *::before {
+  content: '\00a0· ';
+  color: var(--edge);
+}
+
+.vacancy-org a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration-color: var(--edge);
+}
+
+.vacancy-where a {
+  color: var(--ink-soft);
+  text-decoration-color: var(--line);
+}
+
+.vacancy-org a:hover,
+.vacancy-where a:hover {
+  color: var(--blue);
+}
+
+.vacancy-aside .deadline {
+  font-size: var(--text-md);
+}
+
 .vacancy-actions {
-  margin-top: var(--s-4);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-4);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-2);
 }
 
 .vacancy-actions:empty {
@@ -72,6 +104,16 @@
 
 .vacancy-actions .apply-block {
   margin-top: 0;
+}
+
+.vacancy-actions .apply-block .btn {
+  width: 100%;
+}
+
+/* Закладка — тихая кнопка: её надпись встаёт вровень с краем колонки */
+.vacancy-actions .fav-btn {
+  align-self: flex-start;
+  margin-left: calc(var(--s-3) * -1);
 }
 
 /* Повтор кнопки в конце вакансии, под чертой. */
@@ -89,9 +131,8 @@
   margin-top: 0;
 }
 
-.vacancy-page > .alert,
-.vacancy-manage {
-  margin-top: var(--s-5);
+.vacancy-main > .alert {
+  margin-bottom: var(--s-5);
   max-width: var(--measure);
 }
 
@@ -103,12 +144,12 @@
 
 .vacancy-manage-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--s-2);
 }
 
 .vacancy-lead {
-  margin-top: var(--s-5);
   max-width: var(--measure);
   font-family: var(--font-serif);
   font-size: var(--text-xl);
@@ -122,6 +163,14 @@
   margin-top: var(--s-7);
 }
 
+.vacancy-lead + .vacancy-section {
+  margin-top: var(--s-6);
+}
+
+.vacancy-main > .vacancy-section:first-child {
+  margin-top: 0;
+}
+
 .vacancy-section > h2 {
   font-size: var(--text-xl);
   padding-bottom: var(--s-2);
@@ -132,7 +181,7 @@
   margin-top: var(--s-4);
   max-width: var(--measure);
   font-family: var(--font-serif);
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   line-height: 1.7;
   color: var(--ink-body);
   white-space: pre-line;
@@ -146,7 +195,7 @@
 .vacancy-facts {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
   gap: 0 var(--s-6);
 }
 
@@ -171,23 +220,66 @@
   overflow-wrap: anywhere;
 }
 
+/* Специальности ВАК: шифр отдельной колонкой, название рядом; шифр никогда не переносится */
 .vacancy-specialties {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
+  flex-direction: column;
+  gap: var(--s-1);
 }
 
 .vacancy-specialties li {
-  min-width: 0;
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: baseline;
 }
 
-.vacancy-specialties .tag {
-  gap: 0.375rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
+.vacancy-specialty-code {
+  color: var(--ink-soft);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 62rem) {
+  .vacancy-aside {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  .vacancy-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-4);
+  }
+
+  .vacancy-actions .apply-block .btn {
+    width: auto;
+  }
+
+  .vacancy-actions .fav-btn {
+    align-self: center;
+    margin-left: 0;
+  }
+
+  .vacancy-manage-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 30rem) {
+  .vacancy-actions .apply-block,
+  .vacancy-actions .apply-block .btn {
+    width: 100%;
+  }
+
+  .vacancy-actions .fav-btn {
+    margin-left: calc(var(--s-3) * -1);
+  }
 }
 
 /* ---- «Мои вакансии» ---- */

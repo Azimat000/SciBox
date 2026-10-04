@@ -7,7 +7,7 @@
   align-items: center;
   gap: var(--s-2);
   min-height: var(--control-h);
-  max-width: 16rem;
+  max-width: 11rem;
   padding: 0 var(--s-3);
   border: 1px solid transparent;
   border-radius: var(--r-md);
@@ -52,7 +52,10 @@
 .account-block {
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
+}
+
+.account-block .btn {
+  margin-top: var(--s-3);
 }
 
 .account-block-who {
@@ -72,12 +75,27 @@
 }
 
 .account-block-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   min-height: var(--control-h);
   font-size: var(--text-sm);
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
 }
 
+.account-block-link:hover {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+/* В мобильном меню ссылки аккаунта — такие же строки, как пункты меню выше */
 .mobile-menu .account-block-link {
-  font-size: var(--text-md);
+  min-height: 3.25rem;
+  font-size: var(--text-lg);
+  color: var(--ink-soft);
+}
+
+.mobile-menu .account-block-who {
+  padding-top: var(--s-3);
 }

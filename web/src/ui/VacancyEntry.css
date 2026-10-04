@@ -6,10 +6,11 @@
     'org side'
     'abstract side'
     'facts side'
+    'topics side'
     'footer side';
-  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto auto 1fr;
   column-gap: var(--s-6);
-  padding-block: var(--s-4);
+  padding-block: var(--s-5);
   border-bottom: 1px solid var(--line);
 }
 
@@ -63,9 +64,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-1) var(--s-4);
+  gap: var(--s-1) 0;
   font-size: var(--text-sm);
-  color: var(--ink-soft);
+  line-height: 1.5;
+  color: var(--ink-body);
 }
 
 .entry-facts li {
@@ -73,9 +75,29 @@
   overflow-wrap: anywhere;
 }
 
+/* Факты разделены средней точкой, как выходные данные статьи; у метки «Конкурс» точки нет */
+.entry-facts li:not(:last-child):not(.entry-facts-tag)::after {
+  content: '·';
+  margin-inline: 0.5em;
+  color: var(--edge);
+}
+
+.entry-facts-tag {
+  margin-right: var(--s-3);
+}
+
 .entry-facts strong {
   color: var(--ink);
   font-weight: 600;
+}
+
+.entry-topics {
+  grid-area: topics;
+  margin-top: var(--s-1);
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .entry-footer {
@@ -85,12 +107,18 @@
 
 .entry-side {
   grid-area: side;
-  min-width: 11rem;
+  width: 11rem;
   padding-top: 0.25rem;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--s-2);
+}
+
+/* Срока нет: тише, чем настоящая дата */
+.deadline-open .deadline-date {
+  font-weight: 500;
+  color: var(--ink-soft);
 }
 
 /* Кнопка с полями: сдвигаем, чтобы её надпись вставала вровень с краем колонки */
@@ -108,6 +136,7 @@
       'side'
       'abstract'
       'facts'
+      'topics'
       'footer'
       'action';
     grid-template-rows: none;
@@ -116,6 +145,7 @@
   /* Срок остаётся наверху, а закладка уходит под текст: её нажимают, дочитав запись */
   .entry-side {
     display: contents;
+    width: auto;
   }
 
   .entry-side .deadline {

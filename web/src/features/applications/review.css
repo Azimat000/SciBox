@@ -2,11 +2,44 @@
 
 /* ---- панель решения ---- */
 
+.review-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.review-title {
+  font-size: var(--text-lg);
+}
+
+/* В колонке справа кнопки решения стоят столбиком во всю ширину; «Отказать» — тихая, слева */
 .review-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-3);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-2);
+}
+
+.review-actions .btn-quiet {
+  align-self: flex-start;
+  margin-left: calc(var(--s-3) * -1);
+}
+
+.application-main > .application-section:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 62rem) {
+  .review-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .review-actions .btn-quiet {
+    align-self: center;
+    margin-left: 0;
+  }
 }
 
 .review-final {
@@ -39,8 +72,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  padding: var(--s-4) 0;
+  padding: var(--s-5) 0;
   border-bottom: 1px solid var(--line);
+}
+
+/* Черта между откликами во всю ширину списка, а текст держит удобную длину строки */
+.cand-row > * {
   max-width: var(--measure);
 }
 
@@ -159,8 +196,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
-  padding: var(--s-4) 0;
+  padding: var(--s-5) 0;
   border-bottom: 1px solid var(--line);
+}
+
+/* Черта между откликами во всю ширину списка, а текст держит удобную длину строки */
+.cand-row > * {
   max-width: var(--measure);
 }
 

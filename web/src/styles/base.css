@@ -146,19 +146,29 @@ svg {
  */
 .hero-facts a,
 .section-more,
-.vacancy-org a,
 .footer-nav a {
   display: inline-block;
   padding-block: var(--s-1);
   margin-block: calc(-1 * var(--s-1));
 }
 
+/* Ссылки в строке организации у вакансии остаются текстом (иначе разделитель отрывается при переносе);
+   у строчного элемента поля по высоте расширяют область нажатия, не сдвигая строки. */
+.vacancy-org a,
+.vacancy-where a {
+  padding-block: var(--s-1);
+}
+
 @media (pointer: coarse) {
   .hero-facts a,
   .section-more,
-  .vacancy-org a,
   .footer-nav a {
     padding-block: var(--s-3);
     margin-block: calc(-1 * var(--s-3));
+  }
+
+  .vacancy-org a,
+  .vacancy-where a {
+    padding-block: var(--s-2);
   }
 }

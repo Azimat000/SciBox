@@ -1,19 +1,28 @@
+/* Режим аккаунта: переключатель из двух сегментов. Он отличается от пунктов меню видом,
+   чтобы жёлтый маркер в шапке означал одно: «вы на этой странице». */
 .role-switch {
   display: inline-flex;
-  gap: var(--s-4);
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--wash);
 }
 
 .role-option {
-  min-height: var(--control-h);
-  padding: 0.25rem 0;
-  border: 0;
-  border-bottom: 3px solid transparent;
+  min-height: 2.25rem;
+  padding: 0 var(--s-3);
+  border: 1px solid transparent;
+  border-radius: 7px;
   background: transparent;
   color: var(--ink-soft);
   font: inherit;
   font-size: var(--text-sm);
+  white-space: nowrap;
   cursor: pointer;
-  transition: color var(--t-fast) var(--ease);
+  transition:
+    color var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
 }
 
 .role-option:hover {
@@ -21,12 +30,9 @@
 }
 
 .role-option[aria-pressed='true'] {
+  background: var(--paper);
+  border-color: var(--line);
   color: var(--ink);
   font-weight: 600;
-  /* маркер под активным режимом */
-  border-bottom-color: var(--mark);
-}
-
-.role-option:focus-visible {
-  border-radius: 0;
+  cursor: default;
 }

@@ -79,6 +79,15 @@
   justify-content: space-between;
 }
 
+/* Пока не работают: тонкая рамка без заливки, чтобы не спорить с кнопкой «Войти» */
+.social-button.btn:disabled {
+  background: var(--paper);
+  border-color: var(--line);
+  color: var(--ink-soft);
+  font-weight: 500;
+  cursor: default;
+}
+
 .social-button .btn-label {
   display: flex;
   width: 100%;

@@ -95,9 +95,14 @@ export function entryFacts(c: Card): string[] {
   if (c.work_format) facts.push(formatLabel(c.work_format))
   const pay = salaryText(c.salary_from, c.salary_to)
   if (pay) facts.push(`${salaryLabel(c.position.type)} ${pay}`)
-  const [first, ...rest] = c.specialties
-  if (first) facts.push(rest.length > 0 ? `${first.name} ${t.vacancies.page.moreSpecialties(rest.length)}` : first.name)
   return facts
+}
+
+/** Научные специальности вакансии одной строкой: первая и «ещё N»; пусто, если их нет. */
+export function entryTopics(c: Card): string {
+  const [first, ...rest] = c.specialties
+  if (!first) return ''
+  return rest.length > 0 ? `${first.name} ${t.vacancies.page.moreSpecialties(rest.length)}` : first.name
 }
 
 /** Город или регион, как показать у вакансии; пусто для удалённой работы без места. */

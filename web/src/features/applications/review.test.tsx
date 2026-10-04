@@ -192,7 +192,8 @@ describe('candidate card: decision panel', () => {
   it('offers to invite, accept and reject while the application is open', async () => {
     stubApi(card(reviewedApplication))
     renderApp(path)
-    const panel = within((await screen.findByRole('heading', { level: 2, name: 'Решение по отклику' })).closest('section')!)
+    // Решение стоит в колонке справа: она подписана своим заголовком
+    const panel = within(await screen.findByRole('complementary', { name: 'Решение по отклику' }))
     expect(panel.getByRole('button', { name: 'Пригласить' })).toBeInTheDocument()
     expect(panel.getByRole('button', { name: 'Принять' })).toBeInTheDocument()
     expect(panel.getByRole('button', { name: 'Отказать' })).toBeInTheDocument()

@@ -14,11 +14,13 @@ export type VacancyEntryProps = {
   abstract?: string
   /** Уровень R1–R4 или «ППС» и его расшифровка: [«R3», «состоявшийся исследователь»]. */
   level?: readonly [string, string]
-  /** Остальные факты: область науки, ставка, срок договора. */
+  /** Остальные факты: должность, ставка, срок договора, деньги. */
   facts?: readonly string[]
+  /** Научные специальности одной строкой: «Физическая химия и ещё 1». */
+  topics?: string
   competition?: boolean
-  /** Срок подачи, `2026-11-14`. */
-  deadline?: string
+  /** Срок подачи, `2026-11-14`; null — срока нет, приём до закрытия; не задан — срок не показываем. */
+  deadline?: string | null
   now?: Date
   /** Уровень заголовка в документе; по умолчанию h3. */
   headingLevel?: 2 | 3 | 4
@@ -36,6 +38,7 @@ export function VacancyEntry({
   abstract,
   level,
   facts = [],
+  topics,
   competition = false,
   deadline,
   now,
@@ -44,6 +47,7 @@ export function VacancyEntry({
   action,
 }: VacancyEntryProps) {
   const Heading = `h${headingLevel}` as const
+  const hasDeadline = deadline !== undefined
   return (
     <article className="entry">
       <Heading className="entry-title">
@@ -52,28 +56,38 @@ export function VacancyEntry({
       <p className="entry-org">
         {organization}, {city}
       </p>
-      {(deadline || action) && (
+      {(hasDeadline || action) && (
         <div className="entry-side">
-          {deadline && <Deadline date={deadline} now={now} align="end" />}
+          {deadline ? (
+            <Deadline date={deadline} now={now} align="end" />
+          ) : (
+            deadline === null && (
+              <p className="deadline deadline-open" data-align="end">
+                <span className="deadline-date">{t.deadline.open}</span>
+                <span className="deadline-rest">{t.deadline.openHint}</span>
+              </p>
+            )
+          )}
           {action && <div className="entry-action">{action}</div>}
         </div>
       )}
       {abstract && <p className="entry-abstract">{abstract}</p>}
       <ul className="entry-facts" aria-label={t.vacancy.facts}>
+        {competition && (
+          <li className="entry-facts-tag">
+            <Tag tone="accent">{t.vacancy.competition}</Tag>
+          </li>
+        )}
         {level && (
           <li>
-            <strong>{level[0]}</strong> · {level[1]}
+            <strong>{level[0]}</strong> {level[1]}
           </li>
         )}
         {facts.map((fact) => (
           <li key={fact}>{fact}</li>
         ))}
-        {competition && (
-          <li>
-            <Tag>{t.vacancy.competition}</Tag>
-          </li>
-        )}
       </ul>
+      {topics && <p className="entry-topics">{topics}</p>}
       {footer && <div className="entry-footer">{footer}</div>}
     </article>
   )

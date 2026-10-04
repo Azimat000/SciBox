@@ -1,9 +1,9 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { reply, stubApi } from '../../test/api'
+import { reply, signedInAs, stubApi } from '../../test/api'
 import { renderApp } from '../../test/render'
-import { isCurrent, navFor } from './nav'
+import { isCurrent, navFor, publicNav } from './nav'
 import { parseRole, ROLE_STORAGE_KEY } from './role-context'
 
 const healthy = { status: 'ok', product: 'SciBox', version: 'dev', database: { schema_version: 1, server_version: '16.15' } }
@@ -26,6 +26,10 @@ describe('parseRole and navFor', () => {
   it('gives each role its own menu', () => {
     expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации', 'Избранное', 'Мои отклики'])
     expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Каталог учёных', 'Организация'])
+  })
+
+  it('gives a guest only the open sections', () => {
+    expect(publicNav().map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации'])
   })
 })
 
@@ -52,7 +56,8 @@ describe('site shell', () => {
     expect(screen.getByRole('link', { name: 'К содержимому' })).toHaveAttribute('href', '#main')
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('main')).toBeInTheDocument()
-    expect(screen.getByRole('contentinfo')).toHaveTextContent('Сервис бесплатный')
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('демонстрационной версии')
+    expect(screen.getByRole('contentinfo')).not.toHaveTextContent(/бесплатн/i)
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Политика конфиденциальности' })).toHaveAttribute('href', '/privacy')
     expect((await screen.findAllByRole('link', { name: 'Войти', hidden: true }))[0]).toHaveAttribute('href', '/login')
     expect(screen.getAllByRole('link', { name: 'Зарегистрироваться', hidden: true })[0]).toHaveAttribute('href', '/register')
@@ -66,9 +71,18 @@ describe('site shell', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
   })
 
+  it('hides personal sections and the mode switch from a guest', async () => {
+    renderApp('/')
+    expect(await screen.findAllByRole('link', { name: 'Войти', hidden: true })).not.toHaveLength(0)
+    expect(within(desktopNav()).queryByRole('link', { name: 'Избранное' })).not.toBeInTheDocument()
+    expect(within(desktopNav()).queryByRole('link', { name: 'Мои отклики' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Режим' })).not.toBeInTheDocument()
+  })
+
   it('switches to the employer menu, remembers the choice and restores it', async () => {
+    stubApi({ 'GET /api/health': reply(200, healthy), ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
     const first = renderApp('/')
-    const switcher = screen.getAllByRole('group', { name: 'Режим' })[0]
+    const switcher = (await screen.findAllByRole('group', { name: 'Режим' }))[0]
     expect(within(switcher).getByRole('button', { name: 'Ищу работу' })).toHaveAttribute('aria-pressed', 'true')
     await userEvent.click(within(switcher).getByRole('button', { name: 'Нанимаю' }))
     expect(within(switcher).getByRole('button', { name: 'Нанимаю' })).toHaveAttribute('aria-pressed', 'true')
@@ -77,7 +91,7 @@ describe('site shell', () => {
     first.unmount()
 
     renderApp('/')
-    expect(within(desktopNav()).getByRole('link', { name: 'Мои вакансии' })).toBeInTheDocument()
+    expect(await within(desktopNav()).findByRole('link', { name: 'Мои вакансии' })).toBeInTheDocument()
   })
 
   it('works when browser storage is blocked', async () => {
@@ -87,8 +101,9 @@ describe('site shell', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked')
     })
+    stubApi({ 'GET /api/health': reply(200, healthy), ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
     renderApp('/')
-    expect(within(desktopNav()).getByRole('link', { name: 'Вакансии' })).toBeInTheDocument()
+    expect(await within(desktopNav()).findByRole('link', { name: 'Избранное' })).toBeInTheDocument()
     await userEvent.click(screen.getAllByRole('button', { name: 'Нанимаю' })[0])
     expect(within(desktopNav()).getByRole('link', { name: 'Отклики' })).toBeInTheDocument()
   })

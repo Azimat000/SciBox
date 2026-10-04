@@ -57,82 +57,96 @@ function Loader({ id }: { id: string }) {
         </p>
       </header>
 
-      {(app.invitations.length > 0 || app.viewer.can_invite) && (
-        <section className="application-section" aria-labelledby="cand-invitations">
-          <h2 id="cand-invitations">{t.applications.invitation.title}</h2>
-          {app.invitations.length === 0 ? (
-            <p className="application-muted">{t.applications.invitation.noneStaff}</p>
-          ) : (
-            <InvitationList appId={app.id} invitations={app.invitations} role="staff" />
+      <div className="split">
+        {/* Решение справа, рядом с письмом и профилем: кнопки видны всё время, пока организация читает отклик */}
+        <aside className="split-aside review-aside" aria-labelledby="cand-decision">
+          <ReviewPanel app={app} />
+        </aside>
+
+        <div className="split-main application-main">
+          {(app.invitations.length > 0 || app.viewer.can_invite) && (
+            <section className="application-section" aria-labelledby="cand-invitations">
+              <h2 id="cand-invitations">{t.applications.invitation.title}</h2>
+              {app.invitations.length === 0 ? (
+                <p className="application-muted">{t.applications.invitation.noneStaff}</p>
+              ) : (
+                <InvitationList appId={app.id} invitations={app.invitations} role="staff" />
+              )}
+            </section>
           )}
-        </section>
-      )}
 
-      <section className="application-section" aria-labelledby="cand-letter">
-        <h2 id="cand-letter">{c.letter}</h2>
-        <p className="application-text">{app.cover_letter}</p>
-        <p className="application-contact">
-          <span>{c.contact}: </span>
-          <a href={`mailto:${app.contact_email}`}>{app.contact_email}</a>
-        </p>
-      </section>
+          <section className="application-section" aria-labelledby="cand-letter">
+            <h2 id="cand-letter">{c.letter}</h2>
+            <p className="application-text">{app.cover_letter}</p>
+            <p className="application-contact">
+              <span>{c.contact}: </span>
+              <a href={`mailto:${app.contact_email}`}>{app.contact_email}</a>
+            </p>
+          </section>
 
-      {/* Решение после письма: сначала кандидат, потом кнопки. Ждущие ответа приглашения стоят выше всего. */}
-      <ReviewPanel app={app} />
+          <section className="application-section" aria-labelledby="cand-files">
+            <h2 id="cand-files">{c.files}</h2>
+            <ul className="file-links">
+              {app.cv && (
+                <li>
+                  <FileLink appId={app.id} file={app.cv} label={`${c.cv}, ${c.letterFile(app.cv.name, sizeText(app.cv.size))}`} />
+                </li>
+              )}
+              {app.files.map((f) => (
+                <li key={f.id}>
+                  <FileLink appId={app.id} file={f} label={c.letterFile(f.name, sizeText(f.size))} />
+                </li>
+              ))}
+            </ul>
+            {app.files.length === 0 && <p className="application-muted">{c.noExtraFiles}</p>}
+          </section>
 
-      <section className="application-section" aria-labelledby="cand-files">
-        <h2 id="cand-files">{c.files}</h2>
-        <ul className="file-links">
-          {app.cv && (
-            <li>
-              <FileLink appId={app.id} file={app.cv} label={`${c.cv}, ${c.letterFile(app.cv.name, sizeText(app.cv.size))}`} />
-            </li>
-          )}
-          {app.files.map((f) => (
-            <li key={f.id}>
-              <FileLink appId={app.id} file={f} label={c.letterFile(f.name, sizeText(f.size))} />
-            </li>
-          ))}
-        </ul>
-        {app.files.length === 0 && <p className="application-muted">{c.noExtraFiles}</p>}
-      </section>
+          <section className="application-section" aria-labelledby="cand-refs">
+            <h2 id="cand-refs">{c.referencesTitle}</h2>
+            <p className="application-muted">{c.referencesText}</p>
+            {refs.length === 0 ? (
+              <p className="application-muted">{c.referencesEmpty}</p>
+            ) : (
+              <ul className="ref-list">
+                {refs.map((r) => (
+                  <li key={r.id} className="ref-row ref-row-letter">
+                    <div className="ref-who">
+                      <p className="ref-name">{r.name}</p>
+                      <p className="ref-sub">{[r.relation, r.email].filter(Boolean).join(' · ')}</p>
+                    </div>
+                    <div className="ref-state">
+                      <Tag tone={r.status === 'received' ? 'accent' : 'neutral'}>
+                        {r.status === 'pending' ? c.waiting : r.status === 'declined' ? c.declined : refStatusLabel(r.status)}
+                      </Tag>
+                      {r.answered_at && <span className="ref-when">{dateTimeText(r.answered_at)}</span>}
+                    </div>
+                    {r.letter && (
+                      <div className="ref-letter">
+                        {r.letter.text && <p className="application-text">{r.letter.text}</p>}
+                        {r.letter.file && (
+                          <FileLink appId={app.id} file={r.letter.file} label={c.letterFile(r.letter.file.name, sizeText(r.letter.file.size))} />
+                        )}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-      <section className="application-section" aria-labelledby="cand-refs">
-        <h2 id="cand-refs">{c.referencesTitle}</h2>
-        <p className="application-muted">{c.referencesText}</p>
-        {refs.length === 0 ? (
-          <p className="application-muted">{c.referencesEmpty}</p>
-        ) : (
-          <ul className="ref-list">
-            {refs.map((r) => (
-              <li key={r.id} className="ref-row ref-row-letter">
-                <div className="ref-who">
-                  <p className="ref-name">{r.name}</p>
-                  <p className="ref-sub">{[r.relation, r.email].filter(Boolean).join(' · ')}</p>
-                </div>
-                <div className="ref-state">
-                  <Tag tone={r.status === 'received' ? 'accent' : 'neutral'}>
-                    {r.status === 'pending' ? c.waiting : r.status === 'declined' ? c.declined : refStatusLabel(r.status)}
-                  </Tag>
-                  {r.answered_at && <span className="ref-when">{dateTimeText(r.answered_at)}</span>}
-                </div>
-                {r.letter && (
-                  <div className="ref-letter">
-                    {r.letter.text && <p className="application-text">{r.letter.text}</p>}
-                    {r.letter.file && <FileLink appId={app.id} file={r.letter.file} label={c.letterFile(r.letter.file.name, sizeText(r.letter.file.size))} />}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="application-section" aria-labelledby="cand-profile">
-        <h2 id="cand-profile">{c.profileTitle}</h2>
-        <p className="application-muted">{c.profileNote}</p>
-        <ProfileView nested page={{ profile: app.profile, viewer: { is_owner: false, can_see_contacts: true } }} />
-      </section>
+          <section className="application-section" aria-labelledby="cand-profile">
+            <h2 id="cand-profile">{c.profileTitle}</h2>
+            <p className="application-muted">{c.profileNote}</p>
+            <ProfileView
+              nested
+              page={{
+                profile: app.profile,
+                viewer: { is_owner: false, can_see_contacts: true },
+              }}
+            />
+          </section>
+        </div>
+      </div>
     </article>
   )
 }
@@ -144,8 +158,10 @@ function ReviewPanel({ app }: { app: Detail }) {
   const { decisions, can_invite: canInvite } = app.viewer
   const open = canInvite || decisions.length > 0
   return (
-    <section className="application-section" aria-labelledby="cand-decision">
-      <h2 id="cand-decision">{r.decisionTitle}</h2>
+    <div className="review-panel">
+      <h2 id="cand-decision" className="review-title">
+        {r.decisionTitle}
+      </h2>
       {open ? (
         <div className="review-actions">
           {canInvite && <Button onClick={() => setDialog('invite')}>{t.applications.invitation.invite}</Button>}
@@ -175,6 +191,6 @@ function ReviewPanel({ app }: { app: Detail }) {
       )}
       {dialog === 'invite' && <InviteModal appId={app.id} onClose={() => setDialog(null)} />}
       {(dialog === 'accepted' || dialog === 'rejected') && <DecisionModal appId={app.id} decision={dialog} onClose={() => setDialog(null)} />}
-    </section>
+    </div>
   )
 }

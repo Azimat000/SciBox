@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { card } from '../../test/vacancies'
-import { contractText, entryFacts, levelParts, placeText, salaryLabel, salaryText, termText, transitionLabel, doneText, statusLabel, positionTypeLabel, formatLabel, housingLabel, fundingLabel, degreeLabel, titleLabel } from './labels'
+import { contractText, entryFacts, entryTopics, levelParts, placeText, salaryLabel, salaryText, termText, transitionLabel, doneText, statusLabel, positionTypeLabel, formatLabel, housingLabel, fundingLabel, degreeLabel, titleLabel } from './labels'
 
 describe('labels', () => {
   it('formats salary ranges with one or both bounds, and says nothing without them', () => {
@@ -44,12 +44,16 @@ describe('labels', () => {
     expect(facts).toContain('Срочный договор, 3 года')
     expect(facts).toContain('Очно')
     expect(facts.find((f) => f.startsWith('Зарплата'))).toContain('95 000')
-    expect(facts.at(-1)).toBe('Физическая химия и ещё 1')
-    const bare = entryFacts({ ...card, rate_percent: null, contract_type: '', work_format: '', salary_from: null, salary_to: null, specialties: [{ code: '1.4.3', name: 'Органическая химия' }] })
-    expect(bare).toEqual(['Старший научный сотрудник', 'Органическая химия'])
+    const bare = entryFacts({ ...card, rate_percent: null, contract_type: '', work_format: '', salary_from: null, salary_to: null })
+    expect(bare).toEqual(['Старший научный сотрудник'])
     expect(entryFacts({ ...card, position: { ...card.position, type: 'early_career' } }).find((f) => f.startsWith('Стипендия'))).toBeDefined()
     expect(entryFacts({ ...card, rate_percent: 50 })).toContain('0,5 ставки')
-    expect(entryFacts({ ...card, specialties: [] }).length).toBeLessThan(facts.length)
+  })
+
+  it('puts the specialties of an entry on their own line', () => {
+    expect(entryTopics(card)).toBe('Физическая химия и ещё 1')
+    expect(entryTopics({ ...card, specialties: [{ code: '1.4.3', name: 'Органическая химия' }] })).toBe('Органическая химия')
+    expect(entryTopics({ ...card, specialties: [] })).toBe('')
   })
 
   it('joins city and region and copes with either missing', () => {

@@ -1,9 +1,9 @@
 /* Каталог учёных (срез 10). Запись наследует вид записи журнала из ui/VacancyEntry.css; здесь только то, чего там нет. */
 
+/* Отметка «Открыт к предложениям» стоит справа вровень с именем, как срок у вакансии */
 .sci-side {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
+  justify-content: flex-start;
+  align-items: flex-end;
 }
 
 .sci-footer {
@@ -30,6 +30,7 @@
 .sci-specs .num {
   margin-inline-end: var(--s-2);
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .catalog-note {
@@ -52,8 +53,10 @@
 
 /* На телефоне «Открыт к предложениям» идёт сразу под должностью, как срок у вакансии */
 @media (max-width: 40rem) {
-  .sci-side {
-    justify-content: flex-start;
+  .sci-side .tag {
+    grid-area: side;
+    justify-self: start;
+    margin-top: var(--s-2);
   }
 
   .sci-footer .btn {
