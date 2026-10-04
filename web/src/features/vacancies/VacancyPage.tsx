@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { t } from '../../i18n'
+import { typo } from '../../lib/typo'
 import { Alert } from '../../ui/Alert'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Deadline } from '../../ui/Deadline'
@@ -81,7 +82,7 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
           {v.is_competition && <Tag tone="accent">{t.vacancy.competition}</Tag>}
           {v.status !== 'published' && <Tag>{statusLabel(v.status)}</Tag>}
         </p>
-        <h1 data-long={longName(v.title)}>{v.title}</h1>
+        <h1 data-long={longName(v.title)}>{typo(v.title)}</h1>
         <p className="vacancy-org">
           <Link to={`/organizations/${v.organization.slug}`}>{v.organization.name}</Link>
           <span>{kindLabel(v.organization.kind)}</span>
@@ -123,7 +124,7 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
           {v.status === 'closed' && <Alert kind="info">{p.closedNotice}</Alert>}
           {v.status === 'archived' && <Alert kind="info">{p.archivedNotice}</Alert>}
 
-          {v.summary && <p className="vacancy-lead">{v.summary}</p>}
+          {v.summary && <p className="vacancy-lead">{typo(v.summary)}</p>}
 
           <section className="vacancy-section" aria-labelledby="vacancy-facts">
             <h2 id="vacancy-facts">{p.facts}</h2>

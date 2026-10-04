@@ -36,59 +36,64 @@
   font-size: var(--text-xl);
 }
 
+/* Режимы видимости строками таблицы, как варианты в анкете: кружок, название, что это значит */
 .privacy-modes {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s-3);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ink);
 }
 
 .privacy-mode {
   position: relative;
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto 9rem minmax(0, 1fr);
+  align-items: baseline;
   gap: var(--s-3);
-  padding: var(--s-3) var(--s-4);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-md);
+  padding: var(--s-3) var(--s-3);
+  border-bottom: 1px solid var(--line);
   background: var(--paper);
   cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 .privacy-mode:hover {
-  border-color: var(--ink);
+  background: var(--wash);
 }
 
 .privacy-mode[data-checked] {
-  border-color: var(--blue);
-  background: var(--blue-wash);
+  background: var(--wash);
 }
 
 .privacy-mode input {
-  margin: 0.2rem 0 0;
+  margin: 0;
+  width: 1.125rem;
+  height: 1.125rem;
   accent-color: var(--blue);
   flex: none;
+  transform: translateY(0.2rem);
 }
 
 .privacy-mode:has(input:focus-visible) {
   outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .privacy-mode-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  min-width: 0;
+  display: contents;
 }
 
 .privacy-mode-label {
   font-weight: 600;
 }
 
+.privacy-mode[data-checked] .privacy-mode-label {
+  color: var(--blue);
+}
+
 .privacy-mode-hint {
-  color: var(--ink-soft);
+  color: var(--ink-body);
   font-size: var(--text-sm);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 /* Пояснение к флажку «Открыт к предложениям» стоит под его подписью, а не отдельным абзацем */
@@ -98,9 +103,14 @@
   max-width: var(--measure);
 }
 
-@media (max-width: 48rem) {
-  .privacy-modes {
-    grid-template-columns: 1fr;
+@media (max-width: 40rem) {
+  .privacy-mode {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: var(--s-1);
+  }
+
+  .privacy-mode-hint {
+    grid-column: 2;
   }
 }
 

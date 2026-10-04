@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { t } from '../../i18n'
 import { plural } from '../../lib/plural'
+import { typo } from '../../lib/typo'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { SearchBar } from '../../ui/SearchBar'
@@ -53,9 +54,9 @@ function Hero({ stats }: { stats: LandingStats | undefined }) {
     <section className="hero" aria-labelledby="landing-title">
       <div className="hero-main">
         <h1 id="landing-title" className="hero-title">
-          <span>{t.landing.titleFirst}</span> <span className="hero-title-second">{t.landing.titleSecond}</span>
+          <span>{typo(t.landing.titleFirst)}</span> <span className="hero-title-second">{typo(t.landing.titleSecond)}</span>
         </h1>
-        <p className="hero-lead">{t.landing.lead}</p>
+        <p className="hero-lead">{typo(t.landing.lead)}</p>
         <div className="hero-search">
           <SearchBar query={q} onQueryChange={setQ} regions={regions} region={region} onRegionChange={setRegion} onSubmit={go} />
         </div>

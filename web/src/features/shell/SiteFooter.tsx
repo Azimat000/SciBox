@@ -9,6 +9,7 @@ export function SiteFooter() {
       <div className="site-footer-inner">
         <div className="footer-about">
           <p className="footer-name">{productName}</p>
+          <p className="footer-tagline">{t.shell.footerTagline}</p>
           <p className="footer-note">{t.shell.footerNote}</p>
         </div>
         <nav className="footer-nav" aria-label={t.shell.footerNav}>

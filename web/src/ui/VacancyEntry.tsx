@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { t } from '../i18n'
+import { typo } from '../lib/typo'
 import { Deadline } from './Deadline'
 import { Tag } from './Tag'
 import './VacancyEntry.css'
@@ -51,7 +52,7 @@ export function VacancyEntry({
   return (
     <article className="entry">
       <Heading className="entry-title">
-        <Link to={to}>{title}</Link>
+        <Link to={to}>{typo(title)}</Link>
       </Heading>
       <p className="entry-org">
         {organization}, {city}
@@ -71,7 +72,7 @@ export function VacancyEntry({
           {action && <div className="entry-action">{action}</div>}
         </div>
       )}
-      {abstract && <p className="entry-abstract">{abstract}</p>}
+      {abstract && <p className="entry-abstract">{typo(abstract)}</p>}
       <ul className="entry-facts" aria-label={t.vacancy.facts}>
         {competition && (
           <li className="entry-facts-tag">

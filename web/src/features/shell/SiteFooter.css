@@ -1,7 +1,8 @@
 .site-footer {
   margin-top: var(--s-8);
-  border-top: 1px solid var(--line);
-  background: var(--wash);
+  /* Выходные данные: жирная линейка сверху, как на последней полосе номера */
+  border-top: var(--rule) solid var(--ink);
+  background: var(--paper);
 }
 
 .site-footer-inner {
@@ -17,12 +18,21 @@
 .footer-name {
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
+  font-variation-settings: 'opsz' 72;
+  letter-spacing: -0.03em;
   color: var(--blue);
 }
 
-.footer-note {
+.footer-tagline {
   margin-top: var(--s-1);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  color: var(--ink);
+}
+
+.footer-note {
+  margin-top: var(--s-3);
   max-width: 34rem;
   font-size: var(--text-sm);
   color: var(--ink-soft);

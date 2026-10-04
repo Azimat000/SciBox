@@ -23,7 +23,7 @@ describe('landing page', () => {
   it('tells both sides what the site is, with the numbers and the fresh vacancies from the server', async () => {
     const { called } = setup()
     renderApp('/')
-    expect(await screen.findByRole('heading', { level: 1, name: /Найдите место в науке/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: /Найдите место в\sнауке/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Или человека в свою лабораторию.')
 
     const facts = await screen.findByRole('list', { name: 'Сейчас на сайте' })

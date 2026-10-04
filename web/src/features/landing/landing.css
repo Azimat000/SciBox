@@ -31,15 +31,14 @@
   letter-spacing: -0.025em;
 }
 
-.hero-title span {
+.hero-title > span {
   display: block;
   text-wrap: pretty;
 }
 
-/* Вторая фраза тише первой: заголовок читается как строка и ответ на неё. */
+/* Вторая фраза тем же голосом: две стороны сайта равны, одна не шепчет за другой. */
 .hero-title-second {
-  font-weight: 400;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 
 .hero-lead {
@@ -105,7 +104,7 @@
   }
 }
 
-.hero-title span:first-child {
+.hero-title > span:first-child {
   animation: landing-rise 640ms var(--ease) backwards;
 }
 
@@ -123,7 +122,7 @@
 
 /* Меньше движения: заголовок и поиск проявляются на месте, без подъёма. */
 @media (prefers-reduced-motion: reduce) {
-  .hero-title span:first-child,
+  .hero-title > span:first-child,
   .hero-title-second,
   .hero-lead,
   .hero-search {
@@ -140,7 +139,7 @@
 }
 
 .hero-browse section {
-  border-top: 1px solid var(--ink);
+  border-top: var(--rule) solid var(--ink);
 }
 
 .browse-title {
@@ -154,16 +153,12 @@
   padding: 0;
 }
 
-.browse-list li + li {
-  border-top: 1px solid var(--line);
-}
-
+/* Строка оглавления журнала: название, отточие, число */
 .browse-list a {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s-4);
-  min-height: var(--control-h);
+  gap: var(--s-2);
+  min-height: 2.5rem;
   padding-block: var(--s-2);
   color: var(--ink);
   text-decoration: none;
@@ -174,10 +169,20 @@
   overflow-wrap: anywhere;
 }
 
+.browse-list a::after {
+  content: '';
+  order: 1;
+  flex: 1 1 var(--s-5);
+  min-width: var(--s-5);
+  border-bottom: 2px dotted var(--edge);
+  transform: translateY(-0.3em);
+}
+
 .browse-count {
+  order: 2;
   flex: none;
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .browse-list a:hover .browse-name {
@@ -206,7 +211,9 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-2) var(--s-5);
+  padding-top: var(--s-3);
   padding-bottom: var(--s-3);
+  border-top: var(--rule) solid var(--ink);
   border-bottom: 1px solid var(--ink);
 }
 
@@ -231,8 +238,8 @@
   grid-row: span 4;
   grid-template-rows: subgrid;
   align-content: start;
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--ink);
+  padding-top: var(--s-3);
+  border-top: var(--rule) solid var(--ink);
 }
 
 .track-text {
@@ -274,9 +281,9 @@
 
 /* ---- «Устроено под науку» ---- */
 
-.science .section-head {
-  border-bottom: 0;
-  padding-bottom: 0;
+.science > h2 {
+  padding-top: var(--s-3);
+  border-top: var(--rule) solid var(--ink);
 }
 
 .science-list {

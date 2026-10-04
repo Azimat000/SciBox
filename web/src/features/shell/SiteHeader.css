@@ -3,7 +3,8 @@
   top: 0;
   z-index: 40;
   background: var(--paper);
-  border-bottom: 1px solid var(--line);
+  /* Двойная линейка под шапкой, как под названием журнала */
+  border-bottom: 3px double var(--ink);
 }
 
 .site-header-bar {
@@ -22,8 +23,9 @@
   color: var(--blue);
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 1.625rem;
-  letter-spacing: -0.02em;
+  font-size: 1.75rem;
+  font-variation-settings: 'opsz' 72;
+  letter-spacing: -0.03em;
   text-decoration: none;
   flex: none;
 }

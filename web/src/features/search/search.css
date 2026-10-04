@@ -148,7 +148,7 @@
   min-height: 2.25rem;
   padding: 0.25rem 0.75rem 0.25rem 0.875rem;
   border: 1px solid var(--line);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: var(--wash);
   color: var(--ink);
   font: inherit;

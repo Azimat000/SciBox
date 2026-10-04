@@ -61,8 +61,8 @@ typography:
     fontWeight: 500
     lineHeight: 1.5
 rounded:
-  sm: "6px"
-  md: "10px"
+  sm: "2px"
+  md: "4px"
   pill: "999px"
 spacing:
   s-1: "4px"
@@ -113,13 +113,13 @@ components:
     rounded: "{rounded.sm}"
     padding: "1px 8px"
   tag-accent:
-    backgroundColor: "{colors.blue-wash}"
+    backgroundColor: "{colors.paper}"
     textColor: "{colors.ink-blue}"
     rounded: "{rounded.sm}"
   chip:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.sm}"
     padding: "4px 14px"
     height: "36px"
   chip-selected:
@@ -150,7 +150,9 @@ Density is calm and readable: generous line height, a 68ch reading measure, a 72
 - Serif for what is read (titles, abstracts, lead paragraphs, wordmark); sans for what is operated (interface, facts, forms).
 - One action color (ink-blue) and one accent (marker yellow), never mixed in roles.
 - Hairlines (1px) between entries and sections; one black rule under the result count.
-- Square-ish corners (6px small, 10px controls and panels); pills only for filter chips.
+- Printed corners: 2px small, 4px controls and panels; no pills (only the avatar and the bell counter are round).
+- Rules carry the hierarchy like a printed journal: a 3px double rule under the masthead, a 3px ink rule above every rubric (section heads, landing table of contents, tracks, footer), 1px ink under a heading, 1px line between entries.
+- Russian typesetting: one- and two-letter words are bound to the next word and a dash to the word before it with a non-breaking space (`lib/typo`) in vacancy titles, abstracts and the landing headline.
 - Shadow only on floating layers (modal, toast, combobox list) and as the focus ring.
 
 ## Colors
@@ -158,14 +160,14 @@ Density is calm and readable: generous line height, a 68ch reading measure, a 72
 A white sheet, warm ink, one blue, one yellow; status colors are muted and used only for state.
 
 ### Primary
-- **Ink Blue** (#1c2c66): primary buttons, links, the wordmark, selected chip text, focus ring, caret. Hover deepens to **Ink Blue Deep** (#121e4d). **Blue Wash** (#eceefa) is its tint for the selected chip, accent tag, active combobox option, and quiet-button hover.
+- **Ink Blue** (#1c2c66): primary buttons, links, the wordmark, selected chip text, focus ring, caret. Hover deepens to **Ink Blue Deep** (#121e4d). **Blue Wash** (#eceefa) is its tint for the active combobox option and quiet-button hover; a selected chip is filled ink-blue.
 
 ### Secondary
 - **Marker Yellow** (#f7d559): the only accent. It highlights an urgent deadline date, underlines the active nav item and active section tab (3px), colors text selection, and tints the info icon on dark toasts.
 
 ### Neutral
 - **Paper** (#ffffff): page, fields, modal, secondary buttons.
-- **Wash** (#f6f4f1) and **Wash Deep** (#ece9e4): footer, tags, hover fills, disabled controls, skeleton shimmer.
+- **Wash** (#f6f4f1) and **Wash Deep** (#ece9e4): tags, hover fills, the selected privacy row, disabled controls, skeleton shimmer.
 - **Ink** (#1f1d1a): headings, key facts, toast background. **Ink Body** (#38352f): abstracts. **Ink Soft** (#5d5a55): secondary lines, placeholders, labels' flags.
 - **Line** (#e4e1dc): hairlines between entries and sections. **Edge** (#85807a): control borders, held at about 3.9:1 on white so fields are findable.
 - **Status:** OK (#1e6b45) with OK Wash (#e6f3ec); Fail (#a3261b), Fail Deep (#7f1c13) and Fail Wash (#fbebe9) for errors and the danger button. On dark toasts: On Ink (#ffffff), On Ink Soft (#d9d6d1), with lighter green (#8fdcb2) and red (#ffb3aa) icon tints defined in tokens.
@@ -197,7 +199,7 @@ A white sheet, warm ink, one blue, one yellow; status colors are muted and used 
 
 Single centered column, max 72rem, with a fluid gutter (1rem to 3.5rem, 4vw). Narrow pages use 44rem. Spacing runs on a 4px-based scale (4, 8, 12, 16, 24, 32, 48, 72) with `s-7` as page top padding (`s-6` on phones) and `s-8` above the footer. Controls are 44px tall (36px small); the search bar is 48px.
 
-**Landing (`/`).** One grid for the whole page: the first row holds the headline and search on the left and a table of contents (open vacancies by field and by position type, hairline rows with tabular counts) on the right; below it, full width: fresh vacancies, two tracks (seeker, employer) on a shared subgrid so headings, steps and buttons align, and a definition list "Устроено под науку". Under 62rem it is one column and the table of contents moves below the fresh vacancies. The headline uses a larger token `--text-hero` (clamp 2.25rem to 3.125rem): first sentence at weight 600 in ink, second at weight 400 in ink-soft. The numbers are a single row of ink-blue links, not big figures. The one authored motion is the rise of headline, lead and search (640ms, staggered).
+**Landing (`/`).** One grid for the whole page: the first row holds the headline and search on the left and a table of contents (open vacancies by field and by position type, rows set like a journal contents page: name, dotted leader, count in ink semibold) on the right; below it, full width: fresh vacancies, two tracks (seeker, employer) on a shared subgrid so headings, steps and buttons align, and a definition list "Устроено под науку". Under 62rem it is one column and the table of contents moves below the fresh vacancies. The headline uses a larger token `--text-hero` (clamp 2.25rem to 3.125rem): both sentences at weight 600 in ink (the two sides of the site speak with one voice; no grey second line). The numbers are a single row of ink-blue links, not big figures. The one authored motion is the rise of headline, lead and search (640ms, staggered).
 
 A vacancy entry is a two-column grid: title, organization, abstract, facts and specialties on the left; deadline on the right in a fixed 11rem column, right-aligned. Under 40rem it collapses to one column with the deadline directly after the organization line. Rows of "Мои вакансии" follow the same grid (deadline and the edit button in the right column).
 
@@ -207,7 +209,7 @@ The header collapses at 72rem into a menu button and a stacked menu; the role sw
 
 ## Elevation & Depth
 
-Flat by default. Structure comes from 1px hairlines, one black rule under the results count, and the warm Wash fill on the footer. A single shadow token (`0 1px 2px rgb(31 29 26 / 0.08), 0 12px 32px -8px rgb(31 29 26 / 0.22)`) belongs to floating layers only: modal, toast, combobox list. Focus is a 2px ink-blue ring with offset; fields use a white inner gap plus the blue ring.
+Flat by default. Structure comes from rules, as in print: the double rule under the masthead, 3px ink rules above rubrics, a 2px ink rule under the results count, 1px hairlines between entries. A single shadow token (`0 1px 2px rgb(31 29 26 / 0.08), 0 12px 32px -8px rgb(31 29 26 / 0.22)`) belongs to floating layers only: modal, toast, combobox list. Focus is a 2px ink-blue ring with offset; fields use a white inner gap plus the blue ring.
 
 ### Named Rules
 **The Hairline Instead of Card Rule.** Group content with a rule and spacing, not a box with a shadow.
@@ -215,29 +217,29 @@ Flat by default. Structure comes from 1px hairlines, one black rule under the re
 
 ## Shapes
 
-Square-ish and quiet: 6px for tags, option rows and skeletons; 10px for buttons, fields, modal and toasts; full pills only for filter chips. Bottom sheets round only the top corners. Active state in navigation is a flat 3px underline, not a pill or a side bar. Icons are inline SVG drawn in currentColor.
+Printed and quiet: 2px for tags, chips, option rows and skeletons; 4px for buttons, fields, the role switch, modal and toasts. No pills. Bottom sheets round only the top corners. Active state in navigation is a flat 3px underline, not a pill or a side bar. Icons are inline SVG drawn in currentColor.
 
 ## Components
 
 ### Buttons
-- **Shape:** 10px corners, 44px minimum height (36px small), semibold.
+- **Shape:** 4px corners, 44px minimum height (36px small), semibold.
 - **Primary:** ink-blue fill, white text, 8px 20px padding; hover deepens to ink-blue-deep; active nudges 1px down.
 - **Secondary:** white with an edge border, wash fill on hover. **Quiet:** transparent, blue text, blue-wash hover. **Danger:** fail fill, deepens on hover.
 - **Disabled:** wash-deep fill, soft text, not-allowed cursor. **Loading:** inline 16px spinner, progress cursor.
 - **Focus:** 2px ink-blue outline, 2px offset.
 
 ### Chips and Tags
-- **Chip:** white pill with an edge border, 36px tall; hover adds ink border and wash fill; pressed state is blue-wash fill, blue border, blue semibold text.
-- **Tag:** 6px corners, wash fill, line border, 0.8125rem; the accent tag is blue-wash with blue text.
+- **Chip:** white with an edge border and 2px corners, 36px tall; hover adds ink border and wash fill; pressed state is an ink-blue fill with white semibold text.
+- **Tag:** 2px corners, wash fill, line border, 0.8125rem; the accent tag ("Конкурс", Q1–Q2) is an ink-blue outline with blue semibold text and no fill, like a rubric stamp.
 
 ### Inputs / Fields
-- **Style:** 1px edge border, white fill, 10px corners, 44px height, label above in semibold 0.875rem, hint and error below in 0.875rem.
+- **Style:** 1px edge border, white fill, 4px corners, 44px height, label above in semibold 0.875rem, hint and error below in 0.875rem.
 - **Hover:** border turns ink. **Focus:** blue border with a double ring (2px white, 2px blue).
 - **Error:** fail border, fail-wash fill, message in fail color. **Disabled:** wash fill, line border.
 - Select is the native element with a drawn chevron; the combobox adds a floating white list (edge border, shadow) with blue-wash active row and a drawn check on the selected option.
 
 ### Navigation
-Sticky white header with a hairline bottom rule, 4.25rem tall. Serif ink-blue wordmark (1.625rem, 700), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: a wash track with a line border and 10px corners, the active segment white with a line border, ink and semibold. In the mobile menu the active link carries an inset 3px marker line over the hairline.
+Sticky white header closed by a 3px double ink rule, like a journal masthead, 4.25rem tall. Serif ink-blue wordmark (1.75rem, 700, display optical size), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: two segments in a 1px ink frame with 4px corners and an ink divider; the active segment is filled ink with white semibold text. In the mobile menu the active link carries an inset 3px marker line over the hairline.
 
 ### Vacancy Entry (signature)
 Serif title (ink, underlined in blue on hover), organization line in ink-soft medium, a 3-line serif abstract, a facts row in 0.875rem ink-body joined by edge-colored middle dots (the accent "Конкурс" tag leads the row, the level code is ink semibold), the specialties on their own ink-soft line, and the deadline column at the right. A vacancy without a deadline says "Без срока подачи / приём до закрытия" in ink-soft, so the column never collapses and the bookmark stays at the same height. Entries separate by a 1px line. On the vacancy page VAK specialties are a list with the code in its own 3.5rem column, never wrapped.
@@ -246,10 +248,10 @@ Serif title (ink, underlined in blue on hover), organization line in ink-soft me
 Date in 0.875rem. Only an urgent deadline gets the marker: a yellow band under the lower 45% of the date, drawn once in 480ms (150ms delay) on appear; with reduced motion it is simply there. Normal deadlines are medium weight ink; expired ones are ink-soft. The remaining-time text sits beneath in ink-soft tabular numerals.
 
 ### Results Header
-Count line in 0.875rem ink-soft above a 1px solid ink rule.
+Count line in 0.875rem ink-soft above a 2px solid ink rule.
 
 ### Modal and Toast
-Modal: white, 10px corners, shadow, scrim of ink at 50%, header with serif title and close button, hairline above actions. Toast: ink background, white text, 10px corners, shadow; the icon carries the kind (green, red, or yellow for info). Both enter with a 240ms ease-out rise (the toast as a transition from `@starting-style`, so quick successive toasts retarget instead of restarting). With reduced motion both only fade.
+Modal: white, 4px corners, shadow, scrim of ink at 50%, header with serif title and close button, hairline above actions. Toast: ink background, white text, 4px corners, shadow; the icon carries the kind (green, red, or yellow for info). Both enter with a 240ms ease-out rise (the toast as a transition from `@starting-style`, so quick successive toasts retarget instead of restarting). With reduced motion both only fade.
 
 ### Skeleton and Empty State
 Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry layout. Empty state is centered, 30rem wide, with an edge-colored (or fail for errors) illustration, text in ink-soft, and actions below.
@@ -273,6 +275,7 @@ Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry
 - **Don't** add shadows to anything that sits in the page flow; shadows are for modal, toast and combobox list.
 - **Don't** use yellow as a button fill, panel background or decoration, and don't highlight non-urgent dates.
 - **Don't** add a kicker or eyebrow above headings, colored side borders, or gradient text.
+- **Don't** bring back pills, tinted option cards or a grey second half of a headline: they are what made the first rendition read as generated (D-132).
 - **Don't** add a dark theme or a second accent color without a new decision.
 - **Don't** invent statistics or logos in demo content.
 - **Don't** advertise the service as free anywhere in the interface, emails or README (D-129).

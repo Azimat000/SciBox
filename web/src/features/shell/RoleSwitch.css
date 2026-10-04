@@ -2,18 +2,17 @@
    чтобы жёлтый маркер в шапке означал одно: «вы на этой странице». */
 .role-switch {
   display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--ink);
   border-radius: var(--r-md);
-  background: var(--wash);
+  background: var(--paper);
+  overflow: hidden;
 }
 
 .role-option {
   min-height: 2.25rem;
   padding: 0 var(--s-3);
-  border: 1px solid transparent;
-  border-radius: 7px;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-soft);
   font: inherit;
@@ -25,14 +24,23 @@
     background-color var(--t-fast) var(--ease);
 }
 
+.role-option + .role-option {
+  border-left: 1px solid var(--ink);
+}
+
 .role-option:hover {
   color: var(--ink);
+  background: var(--wash);
 }
 
 .role-option[aria-pressed='true'] {
-  background: var(--paper);
-  border-color: var(--line);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
   font-weight: 600;
   cursor: default;
+}
+
+.role-option:focus-visible {
+  outline-offset: -4px;
+  outline-color: var(--mark);
 }
