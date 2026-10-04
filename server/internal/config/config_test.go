@@ -54,6 +54,7 @@ func TestLoadOverrides(t *testing.T) {
 		"SCIBOX_MAIL_FROM":       "Команда <team@scibox.example>",
 		"SCIBOX_CROSSREF_URL":    "http://crossref.test/",
 		"SCIBOX_CROSSREF_MAILTO": " ops@scibox.example ",
+		"SCIBOX_WEB_DIR":         " ../web/dist ",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -61,11 +62,55 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.HTTPAddr != ":9999" || cfg.DatabaseURL != "postgres://x@y/z" || cfg.Product.Name != "НаукаРабота" {
 		t.Fatalf("overrides not applied: %+v", cfg)
 	}
+	if cfg.WebDir != "../web/dist" {
+		t.Fatalf("web dir = %q", cfg.WebDir)
+	}
 	if cfg.CrossrefURL != "http://crossref.test" || cfg.CrossrefMailto != "ops@scibox.example" {
 		t.Fatalf("crossref overrides not applied: %+v", cfg)
 	}
 	if cfg.SMTPAddr != "mail.internal:25" || cfg.PublicURL != "https://scibox.example" || cfg.MailFrom != "Команда <team@scibox.example>" {
 		t.Fatalf("mail overrides not applied: %+v", cfg)
+	}
+}
+
+func TestLoadSMTPSecurity(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	cfg, err := Load(envMap(map[string]string{
+		"SCIBOX_PRODUCT_CONFIG": p,
+		"SCIBOX_SMTP_TLS":       " TLS ",
+		"SCIBOX_SMTP_USER":      " no-reply@scibox.example ",
+		"SCIBOX_SMTP_PASSWORD":  " pass word ",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMTPTLS != "tls" || cfg.SMTPUser != "no-reply@scibox.example" || cfg.SMTPPassword != " pass word " {
+		t.Fatalf("smtp security not applied: %+v", cfg)
+	}
+
+	defaults, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaults.SMTPTLS != "off" || defaults.SMTPUser != "" || defaults.SMTPPassword != "" {
+		t.Fatalf("smtp security defaults: %+v", defaults)
+	}
+
+	cases := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"unknown mode", map[string]string{"SCIBOX_SMTP_TLS": "ssl"}, "SCIBOX_SMTP_TLS"},
+		{"login without encryption", map[string]string{"SCIBOX_SMTP_USER": "a@b.ru"}, "unencrypted"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.env["SCIBOX_PRODUCT_CONFIG"] = p
+			if _, err := Load(envMap(tc.env)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want containing %q", err, tc.want)
+			}
+		})
 	}
 }
 

@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -181,6 +183,15 @@ func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
 }
 
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen func(net.Addr)) error {
+	// Сайт проверяется до базы и фоновых задач: несобранный сайт — ошибка запуска, а не пустые страницы.
+	var web http.Handler
+	if cfg.WebDir != "" {
+		if _, err := os.Stat(filepath.Join(cfg.WebDir, "index.html")); err != nil {
+			return fmt.Errorf("site not built in %s (run npm run build in web/): %w", cfg.WebDir, err)
+		}
+		web = httpapi.WebHandler(os.DirFS(cfg.WebDir))
+	}
+
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
@@ -195,17 +206,21 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	}
 
 	// Письма сначала попадают в очередь в базе и уходят оттуда в фоне: они переживают падение сервера и повторяются при сбоях.
-	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom}
+	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom, TLS: cfg.SMTPTLS, Username: cfg.SMTPUser, Password: cfg.SMTPPassword}
 	queue := notifications.NewQueue(pool)
 	accounts := auth.NewService(pool, queue, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	// Фоновые задачи останавливаются отменой cleanupCtx; сервер дожидается их до закрытия базы и выхода.
+	var background sync.WaitGroup
+	defer background.Wait()
 	cleanupCtx, stopCleanup := context.WithCancel(ctx)
 	defer stopCleanup()
-	go accounts.RunCleanup(cleanupCtx, time.Hour)
+	background.Go(func() { accounts.RunCleanup(cleanupCtx, time.Hour) })
 	defer accounts.Flush()
 	organizations := orgs.NewService(pool, queue, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
-	go organizations.RunCleanup(cleanupCtx, time.Hour)
+	background.Go(func() { organizations.RunCleanup(cleanupCtx, time.Hour) })
 	defer organizations.Flush()
-	go notifications.NewWorker(pool, smtp, logger).Run(cleanupCtx, outboxInterval)
+	worker := notifications.NewWorker(pool, smtp, logger)
+	background.Go(func() { worker.Run(cleanupCtx, outboxInterval) })
 	authHandler := auth.NewHandler(accounts, logger)
 
 	notes := notifications.NewService(pool, notifications.Config{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL})
@@ -214,7 +229,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, applications.DefaultConfig())
 	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
 	matchingSvc := matching.NewService(pool, vacancySvc, notes, matching.DefaultConfig(), logger)
-	go matchingSvc.Run(cleanupCtx, matchingInterval)
+	background.Go(func() { matchingSvc.Run(cleanupCtx, matchingInterval) })
 
 	handler := httpapi.NewRouter(httpapi.Deps{
 		ProductName:   cfg.Product.Name,
@@ -233,6 +248,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
 		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
+		Web:           web,
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

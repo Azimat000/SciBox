@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -369,5 +371,43 @@ func TestServeHealthAndShutdown(t *testing.T) {
 	}
 	if landingStatus != http.StatusOK {
 		t.Fatalf("landing numbers answered %d", landingStatus)
+	}
+}
+
+// С SCIBOX_WEB_DIR сервер сам отдаёт собранный сайт с того же порта, что и API (D-131).
+func TestServeWebDir(t *testing.T) {
+	dbURL := testdb.Create(t, true)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<title>site</title>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var page string
+	var apiStatus int
+	r := run(ctx, nil, map[string]string{"DATABASE_URL": dbURL, "SCIBOX_HTTP_ADDR": "127.0.0.1:0", "SCIBOX_WEB_DIR": dir}, func(addr net.Addr) {
+		defer cancel()
+		client := http.Client{Timeout: 5 * time.Second}
+		if resp, err := client.Get(fmt.Sprintf("http://%s/vacancies/42", addr)); err == nil {
+			b, _ := io.ReadAll(resp.Body)
+			page = string(b)
+			_ = resp.Body.Close()
+		}
+		if resp, err := client.Get(fmt.Sprintf("http://%s/api/nope", addr)); err == nil {
+			apiStatus = resp.StatusCode
+			_ = resp.Body.Close()
+		}
+	})
+	if r.code != 0 {
+		t.Fatalf("got %+v", r)
+	}
+	if page != "<title>site</title>" || apiStatus != http.StatusNotFound {
+		t.Fatalf("page %q, api status %d", page, apiStatus)
+	}
+
+	// Сайт не собран — сервер не притворяется, что всё хорошо.
+	r = run(context.Background(), nil, map[string]string{"DATABASE_URL": dbURL, "SCIBOX_HTTP_ADDR": "127.0.0.1:0", "SCIBOX_WEB_DIR": t.TempDir()}, nil)
+	if r.code != 1 || !strings.Contains(r.stderr, "site not built") {
+		t.Fatalf("got %+v", r)
 	}
 }

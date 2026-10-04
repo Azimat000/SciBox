@@ -35,11 +35,19 @@ type Config struct {
 	// SMTPAddr — почтовый сервер (локально Mailpit), MailFrom — отправитель писем целиком.
 	SMTPAddr string
 	MailFrom string
+	// SMTPTLS — шифрование: off (локально), starttls (порт 587) или tls (порт 465).
+	// SMTPUser и SMTPPassword — вход на почтовый сервер; пусто — без входа.
+	SMTPTLS      string
+	SMTPUser     string
+	SMTPPassword string
 	// PublicURL — адрес, по которому человек открывает сайт: из него строятся ссылки в письмах.
 	PublicURL string
 	// CrossrefURL — адрес API Crossref (поиск публикаций по DOI); CrossrefMailto — почта для «вежливого пула» Crossref.
 	CrossrefURL    string
 	CrossrefMailto string
+	// WebDir — папка собранного сайта (web/dist). Если задана, сервер сам отдаёт страницы сайта
+	// по всем адресам вне /api (D-131); пусто — только API, а сайт отдаёт Vite.
+	WebDir string
 }
 
 // Load читает настройки. getenv обычно os.Getenv; в тестах подставляется своя функция.
@@ -48,10 +56,23 @@ func Load(getenv func(string) string) (Config, error) {
 		HTTPAddr:    envOr(getenv, "SCIBOX_HTTP_ADDR", DefaultHTTPAddr),
 		DatabaseURL: envOr(getenv, "DATABASE_URL", DefaultDatabaseURL),
 		SMTPAddr:    envOr(getenv, "SCIBOX_SMTP_ADDR", DefaultSMTPAddr),
-		PublicURL:   strings.TrimRight(envOr(getenv, "SCIBOX_PUBLIC_URL", DefaultPublicURL), "/"),
+		SMTPTLS:     strings.ToLower(envOr(getenv, "SCIBOX_SMTP_TLS", "off")),
+		SMTPUser:    envOr(getenv, "SCIBOX_SMTP_USER", ""),
+		// Пароль не обрезается: пробелы по краям могут быть его частью.
+		SMTPPassword: getenv("SCIBOX_SMTP_PASSWORD"),
+		PublicURL:    strings.TrimRight(envOr(getenv, "SCIBOX_PUBLIC_URL", DefaultPublicURL), "/"),
 
 		CrossrefURL:    strings.TrimRight(envOr(getenv, "SCIBOX_CROSSREF_URL", DefaultCrossrefURL), "/"),
 		CrossrefMailto: envOr(getenv, "SCIBOX_CROSSREF_MAILTO", ""),
+		WebDir:         envOr(getenv, "SCIBOX_WEB_DIR", ""),
+	}
+	switch cfg.SMTPTLS {
+	case "off", "starttls", "tls":
+	default:
+		return Config{}, fmt.Errorf("SCIBOX_SMTP_TLS: want off, starttls or tls, got %q", cfg.SMTPTLS)
+	}
+	if cfg.SMTPUser != "" && cfg.SMTPTLS == "off" {
+		return Config{}, errors.New("SCIBOX_SMTP_USER is set but SCIBOX_SMTP_TLS is off: the password would travel unencrypted")
 	}
 	product, err := LoadProduct(envOr(getenv, "SCIBOX_PRODUCT_CONFIG", DefaultProductConfig))
 	if err != nil {

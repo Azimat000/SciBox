@@ -91,11 +91,14 @@ SciBox/
 ## Порты
 - web (Vite): 5173 · api: 127.0.0.1:8080 · Postgres в Docker: **5433** · Mailpit UI: 8025, SMTP: 1025
 - сквозные тесты (`make e2e`): web 5174 · api 127.0.0.1:8090 · база `scibox_e2e` в том же контейнере
+- показ по ссылке (`make share`, `scripts/share`): сервер вместе с сайтом на 127.0.0.1:8088, туннель tuna или localhost.run (D-131)
 
 ## Переменные окружения сервера
 | Переменная | По умолчанию |
 |---|---|
 | `SCIBOX_SMTP_ADDR` | `localhost:1025` (Mailpit) |
+| `SCIBOX_SMTP_TLS` | `off`; для почтового сервиса `tls` (порт 465) или `starttls` (порт 587) |
+| `SCIBOX_SMTP_USER`, `SCIBOX_SMTP_PASSWORD` | пусто (без входа); вход разрешён только с шифрованием |
 | `SCIBOX_MAIL_FROM` | `SciBox <no-reply@scibox.local>` |
 | `SCIBOX_PUBLIC_URL` | `http://localhost:5173` (из него строятся ссылки в письмах; https включает Secure у cookie) |
 | `SCIBOX_HTTP_ADDR` | `127.0.0.1:8080` |
@@ -103,6 +106,7 @@ SciBox/
 | `SCIBOX_CROSSREF_URL` | `https://api.crossref.org` (поиск публикаций по DOI) |
 | `SCIBOX_CROSSREF_MAILTO` | пусто (почта для «вежливого пула» Crossref, необязательно) |
 | `SCIBOX_PRODUCT_CONFIG` | `../config/product.json` (путь от папки `server/`) |
+| `SCIBOX_WEB_DIR` | пусто; папка собранного сайта (`web/dist`): тогда сервер сам отдаёт страницы по всем адресам вне `/api` (`httpapi.WebHandler`) |
 | `TEST_DATABASE_URL` (тесты) | `postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable` |
 
 ## Таблицы БД

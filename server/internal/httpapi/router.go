@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -61,6 +62,8 @@ type Deps struct {
 	Landing *landing.Handler
 	// Journals подключает поиск по справочнику журналов (/api/journals). Нужен вместе с Auth.
 	Journals *journals.Handler
+	// Web отдаёт страницы сайта по всем адресам вне /api (см. WebHandler); без него там 404.
+	Web http.Handler
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
@@ -73,7 +76,11 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(requestLogger(d.Logger))
 	r.Use(recoverer(d.Logger))
 
-	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
+	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+		if d.Web != nil && !isAPIPath(req.URL.Path) {
+			d.Web.ServeHTTP(w, req)
+			return
+		}
 		WriteError(w, http.StatusNotFound, CodeNotFound, "Такого адреса нет")
 	})
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
@@ -152,6 +159,10 @@ func healthHandler(d Deps) http.HandlerFunc {
 }
 
 // noStore запрещает браузеру и посредникам кешировать ответы API: в них личные данные.
+func isAPIPath(p string) bool {
+	return p == "/api" || strings.HasPrefix(p, "/api/")
+}
+
 func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

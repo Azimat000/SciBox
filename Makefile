@@ -1,11 +1,15 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc
+.PHONY: dev share test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc
 
 SCIBOX = cd server && go run ./cmd/api
 
 ## dev: поднять базу и почту, накатить миграции, запустить сервер и сайт
 dev: install migrate
 	./scripts/dev.sh
+
+## share: показать сайт другому человеку по публичной ссылке, пока он работает на этом Mac (D-131)
+share: install migrate
+	./scripts/share
 
 ## test: все тесты с проверкой порогов покрытия
 test: install db-up test-server test-web

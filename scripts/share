@@ -1,0 +1,101 @@
+#!/bin/sh
+# Показать сайт другому человеку по ссылке, пока он работает на этом Mac (D-131).
+# Сайт и сервер собираются и запускаются одной программой на порту 8088, туннель
+# выдаёт публичную https-ссылку. Mac не засыпает, пока команда работает.
+# Остановка: Ctrl+C. Данные — те же, что у `make dev` (база scibox на порту 5433).
+#
+# Туннель: tuna (tuna.am, российский сервис), если он установлен, иначе localhost.run
+# (ничего ставить не нужно, работает через ssh). Выбрать вручную: SCIBOX_TUNNEL=tuna или
+# SCIBOX_TUNNEL=localhost.run.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+port=${SCIBOX_SHARE_PORT:-8088}
+log=$(mktemp -t scibox-tunnel)
+
+if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Порт $port занят: похоже, сайт уже показывается. Остановите прошлый запуск (Ctrl+C в его окне)." >&2
+  exit 1
+fi
+
+tunnel=${SCIBOX_TUNNEL:-}
+if [ -z "$tunnel" ]; then
+  if command -v tuna >/dev/null 2>&1; then tunnel=tuna; else tunnel=localhost.run; fi
+fi
+
+pids=""
+cleanup() {
+  # shellcheck disable=SC2086
+  [ -n "$pids" ] && kill $pids 2>/dev/null || true
+  rm -f "$log"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+echo "Собираю сайт…"
+if ! (cd "$root/web" && npm run build >"$log" 2>&1); then
+  cat "$log" >&2
+  exit 1
+fi
+echo "Собираю сервер…"
+(cd "$root/server" && go build -o bin/scibox ./cmd/api)
+
+echo "Открываю туннель ($tunnel)…"
+case "$tunnel" in
+  tuna)
+    tuna http "$port" >"$log" 2>&1 &
+    pattern='https://[A-Za-z0-9.-]*tuna\.am'
+    ;;
+  localhost.run)
+    ssh -T -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
+      -R 80:127.0.0.1:"$port" nokey@localhost.run >"$log" 2>&1 &
+    pattern='https://[A-Za-z0-9.-]*\.(lhr\.life|localhost\.run)'
+    ;;
+  *)
+    echo "Неизвестный туннель «$tunnel»: можно tuna или localhost.run." >&2
+    exit 2
+    ;;
+esac
+pids="$pids $!"
+
+url=""
+i=0
+while [ -z "$url" ] && [ $i -lt 60 ]; do
+  sleep 1
+  url=$(grep -Eo "$pattern" "$log" | grep -v 'admin\.localhost\.run' | head -n 1 || true)
+  i=$((i + 1))
+done
+if [ -z "$url" ]; then
+  echo "Туннель не дал ссылку за минуту. Что он ответил:" >&2
+  cat "$log" >&2
+  exit 1
+fi
+
+# Ссылки в письмах и защита от чужих сайтов строятся от публичного адреса.
+(cd "$root/server" && SCIBOX_HTTP_ADDR="127.0.0.1:$port" SCIBOX_WEB_DIR="$root/web/dist" \
+  SCIBOX_PUBLIC_URL="$url" exec ./bin/scibox serve) &
+pids="$pids $!"
+
+i=0
+until curl -fsS "http://127.0.0.1:$port/api/health" >/dev/null 2>&1; do
+  i=$((i + 1))
+  if [ $i -gt 30 ]; then
+    echo "Сервер не запустился за 30 секунд." >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+# Не засыпать, пока работает показ (экран гаснуть может; с закрытой крышкой без зарядки Mac всё равно уснёт).
+caffeinate -ims -w $$ &
+pids="$pids $!"
+
+echo
+echo "  Ссылка для коллеги:  $url"
+echo "  Письма сайта:        http://localhost:8025 (коллеге они не придут, ссылку из письма можно переслать)"
+echo "  Остановить:          Ctrl+C"
+echo
+if [ "$tunnel" = localhost.run ]; then
+  echo "  localhost.run иногда меняет ссылку. Если коллега пишет, что не открывается, перезапустите и пришлите новую."
+  echo
+fi
+wait
