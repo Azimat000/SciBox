@@ -4,8 +4,8 @@
 # выдаёт публичную https-ссылку. Mac не засыпает, пока команда работает.
 # Остановка: Ctrl+C. Данные — те же, что у `make dev` (база scibox на порту 5433).
 #
-# Туннель: tuna (tuna.am, российский сервис), если он установлен, иначе localhost.run
-# (ничего ставить не нужно, работает через ssh). Выбрать вручную: SCIBOX_TUNNEL=tuna или
+# Туннель: tuna (tuna.am, российский сервис), если он установлен и настроен постоянный адрес,
+# иначе localhost.run (ничего ставить не нужно, работает через ssh). Выбрать вручную: SCIBOX_TUNNEL=tuna или
 # SCIBOX_TUNNEL=localhost.run.
 #
 # Постоянная ссылка (D-133): бесплатный аккаунт tuna даёт один постоянный адрес вида
@@ -30,7 +30,8 @@ subdomain=${SCIBOX_TUNA_SUBDOMAIN:-}
 
 tunnel=${SCIBOX_TUNNEL:-}
 if [ -z "$tunnel" ]; then
-  if command -v tuna >/dev/null 2>&1; then tunnel=tuna; else tunnel=localhost.run; fi
+  # tuna без аккаунта не запускается, поэтому выбираем его, только когда постоянный адрес настроен.
+  if [ -n "$subdomain" ] && command -v tuna >/dev/null 2>&1; then tunnel=tuna; else tunnel=localhost.run; fi
 fi
 
 pids=""
