@@ -247,7 +247,7 @@ func catalogParams(r *http.Request) (CatalogParams, error) {
 		Query: q.Get("q"), Fields: q["field"], Region: q.Get("region"), Degrees: q["degree"], Titles: q["title"],
 		OpenOnly: q.Get("open") == "1" || q.Get("open") == "true", Sort: q.Get("sort"),
 	}
-	for name, dst := range map[string]*int{"h_min": &p.HMin, "limit": &p.Limit, "offset": &p.Offset} {
+	for name, dst := range map[string]*int{"h_min": &p.HMin, "q12_min": &p.Q12Min, "limit": &p.Limit, "offset": &p.Offset} {
 		raw := q.Get(name)
 		if raw == "" {
 			continue

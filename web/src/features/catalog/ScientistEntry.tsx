@@ -8,7 +8,14 @@ import { degreeLabel, titleLabel } from './labels'
 import './catalog.css'
 
 /** Учёный в списке каталога, набранный как запись в содержании журнала: имя, должность, ряд фактов, специальности. */
-export function ScientistEntry({ card, headingLevel = 2 }: { card: CatalogCard; headingLevel?: 2 | 3 }) {
+type Props = {
+  card: CatalogCard
+  headingLevel?: 2 | 3
+  /** С какого года считаются «свежие» статьи в Q1–Q2 (из ответа каталога). */
+  recentFrom: number
+}
+
+export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
   const c = t.catalog
   const Heading = `h${headingLevel}` as const
   const place = c.place(card.city, card.region)
@@ -18,6 +25,10 @@ export function ScientistEntry({ card, headingLevel = 2 }: { card: CatalogCard; 
   if (place) facts.push(place)
   if (card.h_index !== null) facts.push(c.hIndex(card.h_index))
   if (card.publications > 0) facts.push(c.publications(card.publications, plural(card.publications, c.publicationForms)))
+  if (card.q12_total > 0) {
+    const total = c.q12(card.q12_total, plural(card.q12_total, c.q12Forms))
+    facts.push(card.q12_recent > 0 ? `${total}, ${c.q12Recent(card.q12_recent, recentFrom)}` : total)
+  }
   return (
     <article className="entry sci-entry">
       <Heading className="entry-title">

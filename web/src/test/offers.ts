@@ -16,6 +16,8 @@ export const catalogCard: CatalogCard = {
   open_to_offers: true,
   h_index: 15,
   publications: 12,
+  q12_total: 5,
+  q12_recent: 3,
   specialties: [
     { code: '1.4.4', name: 'Физическая химия' },
     { code: '1.4.3', name: 'Органическая химия' },
@@ -34,11 +36,13 @@ export const bareCard: CatalogCard = {
   open_to_offers: false,
   h_index: null,
   publications: 0,
+  q12_total: 0,
+  q12_recent: 0,
   specialties: [],
   updated_at: '2026-10-01T12:00:00Z',
 }
 
-export const catalogResult = (items: CatalogCard[] = [catalogCard, bareCard], extra: Partial<CatalogResult> = {}): CatalogResult => ({ items, total: items.length, fuzzy: false, ...extra })
+export const catalogResult = (items: CatalogCard[] = [catalogCard, bareCard], extra: Partial<CatalogResult> = {}): CatalogResult => ({ items, total: items.length, fuzzy: false, recent_from: 2022, ...extra })
 
 const vacancy = { id: VACANCY_ID, title: 'Старший научный сотрудник: сверхпроводящие плёнки', status: 'published', org_name: 'Сибирский институт', org_slug: 'sibirskiy-institut', unit_name: 'Лаборатория катализа', city: 'Новосибирск', deadline: '2099-12-31' }
 

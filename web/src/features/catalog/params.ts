@@ -11,9 +11,13 @@ export type Sort = (typeof sorts)[number]
 /** Значения «h-index от» в выпадающем списке. */
 export const hIndexPresets = [5, 10, 20, 30, 50] as const
 
+/** Значения «статей в Q1–Q2 от» в выпадающем списке. */
+export const q12Presets = [1, 3, 5, 10, 20] as const
+
 const fieldCode = /^[1-9][0-9]*(\.[0-9]+){0,2}$/
 const regionCode = /^[0-9]{2}$/
 const MAX_H = 300
+const MAX_Q12 = 300
 const MAX_VALUES = 30
 const MAX_QUERY = 200
 
@@ -26,13 +30,15 @@ export type CatalogSearch = {
   open: boolean
   /** h-index от; 0 — без ограничения. */
   hMin: number
+  /** Статей в журналах Q1–Q2 от; 0 — без ограничения. */
+  q12Min: number
   /** Явно выбранный порядок; пусто — порядок по умолчанию (см. effectiveSort). */
   sort: Sort | ''
   page: number
 }
 
 export function emptyCatalog(): CatalogSearch {
-  return { q: '', region: '', field: [], degree: [], title: [], open: false, hMin: 0, sort: '', page: 1 }
+  return { q: '', region: '', field: [], degree: [], title: [], open: false, hMin: 0, q12Min: 0, sort: '', page: 1 }
 }
 
 const clean = (raw: string[], ok: (v: string) => boolean) => [...new Set(raw.filter(ok))].slice(0, MAX_VALUES)
@@ -50,6 +56,8 @@ export function parseCatalog(params: URLSearchParams): CatalogSearch {
   s.open = open === '1' || open === 'true'
   const h = Number.parseInt(params.get('h_min') ?? '', 10)
   s.hMin = Number.isFinite(h) && h > 0 && h <= MAX_H ? h : 0
+  const q12 = Number.parseInt(params.get('q12_min') ?? '', 10)
+  s.q12Min = Number.isFinite(q12) && q12 > 0 && q12 <= MAX_Q12 ? q12 : 0
   const sort = params.get('sort') ?? ''
   s.sort = (sorts as readonly string[]).includes(sort) ? (sort as Sort) : ''
   s.page = Math.max(1, Number.parseInt(params.get('page') ?? '', 10) || 1)
@@ -74,6 +82,7 @@ function filterParams(s: CatalogSearch): URLSearchParams {
   if (s.region) out.set('region', s.region)
   if (s.open) out.set('open', '1')
   if (s.hMin > 0) out.set('h_min', String(s.hMin))
+  if (s.q12Min > 0) out.set('q12_min', String(s.q12Min))
   return out
 }
 
@@ -96,8 +105,8 @@ export function toApiParams(s: CatalogSearch): URLSearchParams {
 
 export type ListKey = 'field' | 'degree' | 'title'
 
-/** Фильтры, которые можно убрать по одному: области, степени, звания, регион, «открыт к предложениям», h-index. */
-export type FilterRef = { kind: 'list'; key: ListKey; value: string } | { kind: 'region' } | { kind: 'open' } | { kind: 'hIndex' }
+/** Фильтры, которые можно убрать по одному: области, степени, звания, регион, «открыт к предложениям», h-index, статьи в Q1–Q2. */
+export type FilterRef = { kind: 'list'; key: ListKey; value: string } | { kind: 'region' } | { kind: 'open' } | { kind: 'hIndex' } | { kind: 'q12' }
 
 /** Сколько фильтров включено (слова поиска и порядок не считаются). */
 export const filterCount = (s: CatalogSearch) => activeFilters(s).length
@@ -124,6 +133,8 @@ export function removeFilter(s: CatalogSearch, ref: FilterRef): CatalogSearch {
       return change(s, { open: false })
     case 'hIndex':
       return change(s, { hMin: 0 })
+    case 'q12':
+      return change(s, { q12Min: 0 })
   }
 }
 
@@ -134,5 +145,6 @@ export function activeFilters(s: CatalogSearch): FilterRef[] {
   if (s.region) out.push({ kind: 'region' })
   if (s.open) out.push({ kind: 'open' })
   if (s.hMin > 0) out.push({ kind: 'hIndex' })
+  if (s.q12Min > 0) out.push({ kind: 'q12' })
   return out
 }

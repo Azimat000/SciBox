@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRef, useState, type FormEvent } from 'react'
+import { Fragment, useRef, useState, type FormEvent } from 'react'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -11,6 +11,7 @@ import { describeError, fieldErrorsOf } from '../auth/errors'
 import { useForm } from '../auth/useForm'
 import { ApiError } from '../../api/client'
 import { addItem, lookupDoi, refreshProfile, updateItem, type Item, type ItemKind, type Work } from './api'
+import { JournalPicker, type JournalChoice } from './JournalPicker'
 import { bodyOf, sectionDefs, valuesOf } from './sections'
 import type { FieldDef } from './sections'
 
@@ -23,6 +24,7 @@ export function ItemModal({ kind, item, onClose }: Props) {
   const toast = useToast()
   const formRef = useRef<HTMLFormElement>(null)
   const [source, setSource] = useState<string>(item?.source ?? 'manual')
+  const [journal, setJournal] = useState<JournalChoice>({ issn: item?.issn ?? '', journal: item?.journal ?? null })
   const save = useMutation({
     mutationFn: (fields: Record<string, unknown>) => (item ? updateItem(item.id, kind, fields) : addItem(kind, fields)),
     onSuccess: async () => {
@@ -38,7 +40,10 @@ export function ItemModal({ kind, item, onClose }: Props) {
     e.preventDefault()
     validate({})
     const body = bodyOf(def, values)
-    if (kind === 'publication') body.source = source
+    if (kind === 'publication') {
+      body.source = source
+      if (journal.issn) body.issn = journal.issn
+    }
     save.mutate(body)
   }
 
@@ -52,6 +57,8 @@ export function ItemModal({ kind, item, onClose }: Props) {
     set('pages', work.pages)
     set('doi', work.doi)
     if (work.type) set('pub_type', work.type)
+    // Crossref знает ISSN издания: журнал из справочника подставится сам. Без ISSN выбранный вручную журнал остаётся.
+    if (work.issn) setJournal({ issn: work.issn, journal: work.journal ?? null })
     setSource('crossref')
   }
 
@@ -79,7 +86,21 @@ export function ItemModal({ kind, item, onClose }: Props) {
         {kind === 'publication' && <DoiLookup value={values.doi} onChange={(v) => set('doi', v)} error={errors.doi} onFound={fill} />}
         <div className="profile-fields">
           {fields.map((field) => (
-            <ItemField key={field.name} field={field} value={values[field.name]} error={errors[field.name]} onChange={(v) => set(field.name, v)} />
+            <Fragment key={field.name}>
+              <ItemField field={field} value={values[field.name]} error={errors[field.name]} onChange={(v) => set(field.name, v)} />
+              {kind === 'publication' && field.name === 'venue' && (
+                <JournalPicker
+                  // После «Найти» по DOI журнал мог смениться: поле поиска начинает заново
+                  key={journal.issn}
+                  value={journal}
+                  onChange={setJournal}
+                  onPick={(j) => {
+                    if (values.venue.trim() === '') set('venue', j.title)
+                  }}
+                  error={fieldErrorsOf(save.error).issn}
+                />
+              )}
+            </Fragment>
           ))}
         </div>
       </form>

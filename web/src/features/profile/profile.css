@@ -221,6 +221,40 @@
   overflow-wrap: anywhere;
 }
 
+.profile-quartile {
+  display: inline-block;
+  margin-inline-start: var(--s-1);
+  vertical-align: 0.0625rem;
+}
+
+.profile-quartile .tag {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 600;
+}
+
+/* Счётчик над списком публикаций и подпись источника под ним. */
+.profile-quartiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  margin-top: var(--s-4);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.profile-quartiles strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.profile-source {
+  margin-top: var(--s-3);
+  max-width: var(--measure);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
 .profile-item-links {
   display: flex;
   flex-wrap: wrap;
@@ -348,4 +382,88 @@
 
 .profile-edit h1 {
   overflow-wrap: anywhere;
+}
+
+/* Журнал из справочника в окне публикации (срез 14). */
+.journal-picker {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+}
+
+.journal-picker > .field {
+  justify-self: stretch;
+}
+
+.journal-picker-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.journal-chosen {
+  justify-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  padding-block: var(--s-3);
+  border-block: 1px solid var(--line);
+}
+
+.journal-chosen-body,
+.journal-result-body {
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.journal-chosen-actions {
+  display: flex;
+  gap: var(--s-1);
+}
+
+.journal-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.journal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+  margin-top: var(--s-1);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.journal-meta .profile-quartile {
+  margin-inline-start: 0;
+}
+
+.journal-status {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.journal-status:empty {
+  display: none;
+}
+
+.journal-results {
+  justify-self: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.journal-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--line);
 }

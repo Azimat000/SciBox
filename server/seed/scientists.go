@@ -65,9 +65,39 @@ func job(org, position, desc string, from, to int) prof.ItemInput {
 	return prof.ItemInput{Kind: prof.KindExperience, ItemFields: f}
 }
 
+// journalISSN — настоящие ISSN журналов демо-публикаций из выгрузки SCImago 2025 (срез 14): квартиль берётся из справочника,
+// а не придумывается. У российских журналов SCImago ранжирует переводную версию, поэтому ISSN — её. Журнала
+// «Сверхпроводимость: исследования и разработки» в SCImago нет (одноимённый «Superconductivity» — другой журнал).
+var journalISSN = map[string]string{
+	"Физика твёрдого тела":                                     "1063-7834", // Physics of the Solid State
+	"Журнал экспериментальной и теоретической физики":          "1063-7761", // Journal of Experimental and Theoretical Physics
+	"Physical Review Materials":                                "2475-9953",
+	"Успехи физических наук":                                   "1063-7869", // Physics-Uspekhi
+	"Письма в журнал технической физики":                       "1063-7850", // Technical Physics Letters
+	"Журнал вычислительной математики и математической физики": "0965-5425", // Computational Mathematics and Mathematical Physics
+	"Дифференциальные уравнения":                               "0012-2661", // Differential Equations
+	"Океанология":                                              "0001-4370", // Oceanology
+	"Метеорология и гидрология":                                "1068-3739", // Russian Meteorology and Hydrology
+	"Cold Regions Science and Technology":                      "0165-232X",
+	"Журнал аналитической химии":                               "1061-9348", // Journal of Analytical Chemistry
+	"Bioinformatics": "1367-4803",
+	"Молекулярная биология":       "0026-8933", // Molecular Biology
+	"Информатика и автоматизация": "2713-3192", // Informatics and Automation
+	"Геохимия":                         "0016-7029", // Geochemistry International
+	"Криосфера Земли":                  "1560-7496", // Earth's Cryosphere
+	"Приборы и техника эксперимента":   "0020-4412", // Instruments and Experimental Techniques
+	"Известия вузов. Математика":       "1066-369X", // Russian Mathematics
+	"Микробиология":                    "0026-2617", // Microbiology (Russian Federation)
+	"Extremophiles":                    "1431-0651",
+	"Физика металлов и металловедение": "0031-918X", // Physics of Metals and Metallography
+	"Перспективные материалы":          "2075-1133", // Inorganic Materials: Applied Research
+	"Journal of Alloys and Compounds":  "0925-8388",
+}
+
 func pub(title, authors, venue string, year int, vol, issue, pages, doi string) prof.ItemInput {
 	return prof.ItemInput{Kind: prof.KindPublication, ItemFields: prof.ItemFields{
 		Title: title, Authors: authors, Venue: venue, PubType: "article", Year: ip(year), Volume: vol, Issue: issue, Pages: pages, DOI: doi,
+		ISSN: journalISSN[venue],
 	}}
 }
 

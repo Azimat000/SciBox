@@ -15,6 +15,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/issn"
 	"scibox/server/internal/privacy"
 )
 
@@ -193,6 +194,9 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 		}
 		v.Sections.add(item)
 	}
+	if err := s.attachJournals(ctx, q, &v); err != nil {
+		return Page{}, err
+	}
 	if who.Owner {
 		v.Visibility = p.Visibility
 	}
@@ -201,6 +205,67 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 		v.ContactEmail = p.ContactEmail
 	}
 	return Page{Profile: v, Viewer: ViewerInfo{IsOwner: who.Owner, CanSeeContacts: canContacts}}, nil
+}
+
+// RecentYears — сколько последних лет, считая текущий, входит в «статей в Q1–Q2 за 5 лет».
+const RecentYears = 5
+
+// moscow — «текущий год» для счётчика считается по Москве, как сроки подачи (D-057).
+var moscow = time.FixedZone("MSK", 3*60*60)
+
+// recentFrom — первый год «последних пяти лет».
+func (s *Service) recentFrom() int { return s.now().In(moscow).Year() - (RecentYears - 1) }
+
+// journalsOf находит журналы справочника по ISSN.
+func journalsOf(ctx context.Context, q *dbgen.Queries, issns []string) (map[string]JournalRef, error) {
+	out := map[string]JournalRef{}
+	if len(issns) == 0 {
+		return out, nil
+	}
+	rows, err := q.JournalsByISSN(ctx, issns)
+	if err != nil {
+		return nil, fmt.Errorf("profiles: load journals: %w", err)
+	}
+	for _, r := range rows {
+		out[r.Issn] = JournalRef{Title: r.Title, ISSN: r.Issn, Quartile: intp(r.Quartile), Year: int(r.DataYear)}
+	}
+	return out, nil
+}
+
+// attachJournals подставляет публикациям журналы из справочника и считает «статей в Q1–Q2» (D-127): всего и с года
+// recentFrom. Публикация без года в «последние пять лет» не попадает.
+func (s *Service) attachJournals(ctx context.Context, q *dbgen.Queries, v *View) error {
+	v.Quartiles = QuartileStats{RecentFrom: s.recentFrom()}
+	pubs := v.Sections.Publications
+	var issns []string
+	for _, it := range pubs {
+		if it.ISSN != "" {
+			issns = append(issns, it.ISSN)
+		}
+	}
+	found, err := journalsOf(ctx, q, issns)
+	if err != nil {
+		return err
+	}
+	for i := range pubs {
+		j, ok := found[pubs[i].ISSN]
+		if !ok {
+			continue
+		}
+		pubs[i].Journal = &j
+		if v.Quartiles.Year == nil || *v.Quartiles.Year < j.Year {
+			year := j.Year
+			v.Quartiles.Year = &year
+		}
+		if j.Quartile == nil || *j.Quartile > 2 {
+			continue
+		}
+		v.Quartiles.Q12Total++
+		if y := pubs[i].Year; y != nil && *y >= v.Quartiles.RecentFrom {
+			v.Quartiles.Q12Recent++
+		}
+	}
+	return nil
 }
 
 func intp(v *int16) *int {
@@ -501,8 +566,46 @@ func (s *Service) spend(ctx context.Context, user uuid.UUID) error {
 	return nil
 }
 
-// LookupDOI находит публикацию в Crossref. Если такой DOI уже есть в профиле, Crossref не спрашиваем.
-func (s *Service) LookupDOI(ctx context.Context, user auth.User, raw string) (crossref.Work, error) {
+// FoundWork — публикация, найденная по DOI, и её журнал в справочнике.
+type FoundWork struct {
+	crossref.Work
+	// ISSN — какой ISSN поставить в публикацию: тот, что нашёлся в справочнике, иначе первый годный из Crossref.
+	ISSN string `json:"issn"`
+	// Journal — журнал справочника; nil, если ни один ISSN из Crossref в справочнике не нашёлся.
+	Journal *JournalRef `json:"journal"`
+}
+
+// LookupDOI находит публикацию в Crossref и её журнал в справочнике. Если такой DOI уже есть в профиле, Crossref
+// не спрашиваем.
+func (s *Service) LookupDOI(ctx context.Context, user auth.User, raw string) (FoundWork, error) {
+	work, err := s.lookupWork(ctx, user, raw)
+	if err != nil {
+		return FoundWork{}, err
+	}
+	out := FoundWork{Work: work}
+	var issns []string
+	for _, rawISSN := range work.ISSNs {
+		if n, ok := issn.Normalize(rawISSN); ok {
+			issns = append(issns, n)
+		}
+	}
+	found, err := journalsOf(ctx, s.q, issns)
+	if err != nil {
+		return FoundWork{}, err
+	}
+	for _, issn := range issns {
+		if j, ok := found[issn]; ok {
+			out.ISSN, out.Journal = issn, &j
+			return out, nil
+		}
+	}
+	if len(issns) > 0 {
+		out.ISSN = issns[0]
+	}
+	return out, nil
+}
+
+func (s *Service) lookupWork(ctx context.Context, user auth.User, raw string) (crossref.Work, error) {
 	doi, ok := crossref.NormalizeDOI(raw)
 	if !ok {
 		return crossref.Work{}, &auth.ValidationError{Fields: map[string]string{"doi": msgDOIInvalid}}

@@ -49,6 +49,7 @@ type CatalogParams struct {
 	Titles   []string // none | docent | professor
 	OpenOnly bool     // только «открыт к предложениям»
 	HMin     int      // h-index не меньше (лучшее из четырёх значений); 0 — без ограничения
+	Q12Min   int      // статей в журналах Q1–Q2 не меньше (за всё время); 0 — без ограничения
 	Sort     string
 	Limit    int
 	Offset   int
@@ -66,6 +67,8 @@ type CatalogCard struct {
 	OpenToOffers  bool      `json:"open_to_offers"`
 	HIndex        *int      `json:"h_index"` // лучшее из введённых значений; нет, если ничего не указано
 	Publications  int       `json:"publications"`
+	Q12Total      int       `json:"q12_total"`  // статей в журналах Q1–Q2
+	Q12Recent     int       `json:"q12_recent"` // из них с года RecentFrom ответа
 	Specialties   []Code    `json:"specialties"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
@@ -76,6 +79,8 @@ type CatalogResult struct {
 	Total int           `json:"total"`
 	// Fuzzy — точных совпадений со словами поиска не нашлось, показаны похожие (с опечатками).
 	Fuzzy bool `json:"fuzzy"`
+	// RecentFrom — с какого года считается q12_recent в карточках (последние пять лет по Москве).
+	RecentFrom int `json:"recent_from"`
 }
 
 func (p *CatalogParams) validate() error {
@@ -112,6 +117,9 @@ func (p *CatalogParams) validate() error {
 	}
 	if p.HMin < 0 || p.HMin > maxHIndex {
 		errs["h_min"] = fmt.Sprintf("h-index от 0 до %d", maxHIndex)
+	}
+	if p.Q12Min < 0 || p.Q12Min > maxItemsKind[KindPublication] {
+		errs["q12_min"] = fmt.Sprintf("Число статей от 0 до %d", maxItemsKind[KindPublication])
 	}
 	if p.Sort != "" && !contains(CatalogSorts, p.Sort) {
 		errs["sort"] = "Неизвестный порядок: " + p.Sort
@@ -172,6 +180,7 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	arg := dbgen.SearchScientistsParams{
 		Modes: modes, ExcludeUser: exclude, Q: p.Query, Fields: nonNil(p.Fields), Region: p.Region,
 		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), OpenOnly: p.OpenOnly, HMin: int32(p.HMin),
+		Q12Min: int32(p.Q12Min), RecentFrom: int32(s.recentFrom()),
 		Sort: sort, RowLimit: int32(limit), RowOffset: int32(offset),
 	}
 	rows, total, err := s.catalogPage(ctx, arg)
@@ -199,11 +208,12 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	for _, sp := range specs {
 		byProfile[sp.ProfileID] = append(byProfile[sp.ProfileID], Code{Code: sp.Code, Name: sp.Name})
 	}
-	out := CatalogResult{Items: make([]CatalogCard, 0, len(rows)), Total: total, Fuzzy: fuzzy}
+	out := CatalogResult{Items: make([]CatalogCard, 0, len(rows)), Total: total, Fuzzy: fuzzy, RecentFrom: int(arg.RecentFrom)}
 	for _, r := range rows {
 		c := CatalogCard{
 			ID: r.ID, Name: r.DisplayName, Headline: r.Headline, City: r.City, Degree: r.Degree, AcademicTitle: r.AcademicTitle,
-			OpenToOffers: r.OpenToOffers, Publications: int(r.Publications), Specialties: byProfile[r.ID], UpdatedAt: r.UpdatedAt,
+			OpenToOffers: r.OpenToOffers, Publications: int(r.Publications), Q12Total: int(r.Q12Total), Q12Recent: int(r.Q12Recent),
+			Specialties: byProfile[r.ID], UpdatedAt: r.UpdatedAt,
 		}
 		if c.Specialties == nil {
 			c.Specialties = []Code{}

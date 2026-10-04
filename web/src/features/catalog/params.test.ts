@@ -19,15 +19,18 @@ const parse = (qs: string) => parseCatalog(new URLSearchParams(qs))
 
 describe('parseCatalog', () => {
   it('reads everything from the address', () => {
-    const s = parse('q=катализ&region=54&field=1.4&field=1.4.4&degree=doctor&title=professor&open=1&h_min=20&sort=h_index&page=3')
-    expect(s).toEqual({ q: 'катализ', region: '54', field: ['1.4', '1.4.4'], degree: ['doctor'], title: ['professor'], open: true, hMin: 20, sort: 'h_index', page: 3 })
+    const s = parse('q=катализ&region=54&field=1.4&field=1.4.4&degree=doctor&title=professor&open=1&h_min=20&q12_min=3&sort=h_index&page=3')
+    expect(s).toEqual({ q: 'катализ', region: '54', field: ['1.4', '1.4.4'], degree: ['doctor'], title: ['professor'], open: true, hMin: 20, q12Min: 3, sort: 'h_index', page: 3 })
   })
 
   it('drops what it does not know and keeps defaults', () => {
-    const s = parse('region=5&field=abc&field=1..4&degree=phd&title=king&open=no&h_min=900&sort=best&page=-2&q=%20%20')
+    const s = parse('region=5&field=abc&field=1..4&degree=phd&title=king&open=no&h_min=900&q12_min=301&sort=best&page=-2&q=%20%20')
     expect(s).toEqual(emptyCatalog())
     expect(parse('h_min=x').hMin).toBe(0)
     expect(parse('h_min=0').hMin).toBe(0)
+    expect(parse('q12_min=x').q12Min).toBe(0)
+    expect(parse('q12_min=-1').q12Min).toBe(0)
+    expect(parse('q12_min=300').q12Min).toBe(300)
     expect(parse('page=x').page).toBe(1)
   })
 
@@ -63,8 +66,8 @@ describe('writing the address and the request', () => {
     expect(toParams(emptyCatalog()).toString()).toBe('')
     expect(toParams({ ...emptyCatalog(), q: 'химия', sort: 'relevance' }).toString()).toBe('q=%D1%85%D0%B8%D0%BC%D0%B8%D1%8F')
     expect(toParams({ ...emptyCatalog(), sort: 'name', page: 2 }).toString()).toBe('sort=name&page=2')
-    const all = toParams({ q: 'a', region: '54', field: ['1.4'], degree: ['doctor'], title: ['docent'], open: true, hMin: 5, sort: '', page: 1 })
-    expect(all.toString()).toBe('q=a&field=1.4&degree=doctor&title=docent&region=54&open=1&h_min=5')
+    const all = toParams({ q: 'a', region: '54', field: ['1.4'], degree: ['doctor'], title: ['docent'], open: true, hMin: 5, q12Min: 3, sort: '', page: 1 })
+    expect(all.toString()).toBe('q=a&field=1.4&degree=doctor&title=docent&region=54&open=1&h_min=5&q12_min=3')
   })
 
   it('sends the page size, the offset and the chosen order to the server', () => {
@@ -91,14 +94,15 @@ describe('changing the search', () => {
   })
 
   it('lists the active filters in order and counts them', () => {
-    const s = { ...emptyCatalog(), field: ['1.4'], degree: ['doctor'], title: ['docent'], region: '54', open: true, hMin: 10, q: 'x', sort: 'name' as const }
-    expect(activeFilters(s).map((f) => f.kind)).toEqual(['list', 'list', 'list', 'region', 'open', 'hIndex'])
-    expect(filterCount(s)).toBe(6)
+    const s = { ...emptyCatalog(), field: ['1.4'], degree: ['doctor'], title: ['docent'], region: '54', open: true, hMin: 10, q12Min: 2, q: 'x', sort: 'name' as const }
+    expect(activeFilters(s).map((f) => f.kind)).toEqual(['list', 'list', 'list', 'region', 'open', 'hIndex', 'q12'])
+    expect(filterCount(s)).toBe(7)
     expect(filterCount(emptyCatalog())).toBe(0)
   })
 
   it('removes every kind of filter by itself', () => {
-    const s = { ...emptyCatalog(), field: ['1.4'], degree: ['doctor'], title: ['docent'], region: '54', open: true, hMin: 10 }
+    const s = { ...emptyCatalog(), field: ['1.4'], degree: ['doctor'], title: ['docent'], region: '54', open: true, hMin: 10, q12Min: 5 }
+    expect(removeFilter(s, { kind: 'q12' }).q12Min).toBe(0)
     expect(removeFilter(s, { kind: 'list', key: 'field', value: '1.4' }).field).toEqual([])
     expect(removeFilter(s, { kind: 'list', key: 'title', value: 'docent' }).title).toEqual([])
     expect(removeFilter(s, { kind: 'region' }).region).toBe('')

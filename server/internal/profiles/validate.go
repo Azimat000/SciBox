@@ -11,6 +11,7 @@ import (
 
 	"scibox/server/internal/auth"
 	"scibox/server/internal/crossref"
+	"scibox/server/internal/issn"
 )
 
 // Тексты ошибок полей: показываются человеку как есть.
@@ -35,6 +36,7 @@ const (
 	msgEmailInvalid    = "Похоже на опечатку в адресе почты"
 	msgURLInvalid      = "Ссылка должна начинаться с http:// или https://"
 	msgDOIInvalid      = "DOI записывают так: 10.1038/nature12373"
+	msgISSNInvalid     = "ISSN записывают так: 0028-0836 (последняя цифра проверочная, проверьте номер)"
 	msgDOIDuplicate    = "Публикация с этим DOI уже есть в вашем профиле"
 	msgKindInvalid     = "Неизвестный раздел профиля"
 	msgKindMismatch    = "Вид записи менять нельзя"
@@ -390,6 +392,13 @@ func validateItem(kind string, in ItemFields, now time.Time) (itemFields, fieldE
 				f.DOI = doi
 			} else {
 				errs["doi"] = msgDOIInvalid
+			}
+		}
+		if raw := strings.TrimSpace(in.ISSN); raw != "" {
+			if n, ok := issn.Normalize(raw); ok {
+				f.ISSN = n
+			} else {
+				errs["issn"] = msgISSNInvalid
 			}
 		}
 		if f.Year != nil {

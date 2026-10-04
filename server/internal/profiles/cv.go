@@ -66,7 +66,25 @@ func yearOf(p *int) string {
 func publicationText(it Item) string {
 	biblio := join(", ", strings.TrimRight(it.Venue, "."), yearOf(it.Year))
 	vol := join(", ", prefixed("Т. ", it.Volume), prefixed("№ ", it.Issue), prefixed("С. ", it.Pages))
-	return join(" ", withDot(it.Authors), withDot(biblio), withDot(vol), prefixed("DOI: ", it.DOI), pubTypeNote(it.PubType))
+	return join(" ", withDot(it.Authors), withDot(biblio), withDot(vol), prefixed("DOI: ", it.DOI), pubTypeNote(it.PubType), quartileNote(it.Journal))
+}
+
+// quartileNote: «Q1» у публикации в журнале справочника с квартилем.
+func quartileNote(j *JournalRef) string {
+	if j == nil || j.Quartile == nil {
+		return ""
+	}
+	return fmt.Sprintf("Q%d.", *j.Quartile)
+}
+
+// quartileLine: «Статей в журналах Q1–Q2: 7, из них в 2022–2026: 4 (квартили SCImago Journal Rank 2025)». Без статей
+// в Q1–Q2 строки нет.
+func quartileLine(q QuartileStats) string {
+	if q.Q12Total == 0 || q.Year == nil {
+		return ""
+	}
+	return fmt.Sprintf("Статей в журналах Q1–Q2: %d, из них в %d–%d: %d (квартили SCImago Journal Rank %d)",
+		q.Q12Total, q.RecentFrom, q.RecentFrom+RecentYears-1, q.Q12Recent, *q.Year)
 }
 
 func pubTypeNote(t string) string {
@@ -113,6 +131,9 @@ func cvDocument(page Page, product string, now time.Time) cv.Document {
 	h := v.HIndex
 	if line := join("  ·  ", hLine("РИНЦ", h.RSCI), hLine("Scopus", h.Scopus), hLine("Web of Science", h.WoS), hLine("Google Scholar", h.Scholar)); line != "" {
 		doc.Meta = append(doc.Meta, "h-index: "+line)
+	}
+	if line := quartileLine(v.Quartiles); line != "" {
+		doc.Meta = append(doc.Meta, line)
 	}
 
 	add := func(s cv.Section) {

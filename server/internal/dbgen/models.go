@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Application struct {
@@ -81,6 +82,21 @@ type Favorite struct {
 	UserID    uuid.UUID
 	VacancyID uuid.UUID
 	CreatedAt time.Time
+}
+
+type Journal struct {
+	ID        int64
+	Title     string
+	Publisher string
+	Quartile  *int16
+	Sjr       pgtype.Float4
+	DataYear  int16
+}
+
+type JournalIssn struct {
+	Issn      string
+	JournalID int64
+	Position  int16
 }
 
 type Notification struct {

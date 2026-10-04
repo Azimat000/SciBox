@@ -3,6 +3,8 @@
   inset: 0;
   z-index: 60;
   display: grid;
+  /* Строка ровно в высоту экрана: иначе высокое содержимое растягивает её, и окно уезжает вниз (max-height от неё). */
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: var(--s-4);
   background: var(--scrim);

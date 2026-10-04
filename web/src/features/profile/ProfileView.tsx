@@ -2,7 +2,8 @@ import { createContext, useContext, type ReactNode } from 'react'
 import { t } from '../../i18n'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Tag } from '../../ui/Tag'
-import { itemKinds, sectionOf, type Item, type ItemKind, type ProfilePage } from './api'
+import { plural } from '../../lib/plural'
+import { itemKinds, sectionOf, type Item, type ItemKind, type ProfilePage, type Quartiles } from './api'
 import { degreeLabel, titleLabel } from './labels'
 import { itemTitle, sectionDefs } from './sections'
 
@@ -206,11 +207,15 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
               {items.length === 0 ? (
                 empty(def.empty)
               ) : (
-                <ol className="profile-items">
-                  {items.map((it) => (
-                    <ItemRow key={it.id} item={it} editable={editable} onEdit={onEdit} onRemove={onRemove} />
-                  ))}
-                </ol>
+                <>
+                  {kind === 'publication' && p.quartiles && <QuartileCount q={p.quartiles} />}
+                  <ol className="profile-items">
+                    {items.map((it) => (
+                      <ItemRow key={it.id} item={it} editable={editable} onEdit={onEdit} onRemove={onRemove} />
+                    ))}
+                  </ol>
+                  {kind === 'publication' && p.quartiles?.year != null && <QuartileSource year={p.quartiles.year} />}
+                </>
               )}
             </Section>
           )
@@ -233,6 +238,44 @@ function Section({ title, action, id, children }: { title: string; action?: Reac
   )
 }
 
+const jt = t.profile.journals
+
+/** «4 статьи в журналах Q1–Q2, 2 из них в 2022–2026». Без статей в Q1–Q2 строки нет. */
+function QuartileCount({ q }: { q: Quartiles }) {
+  if (q.q12_total === 0) return null
+  const to = q.recent_from + 4
+  return (
+    <p className="profile-quartiles">
+      <strong className="num">{jt.count(q.q12_total, plural(q.q12_total, jt.countForms))}</strong>
+      <span>{q.q12_recent > 0 ? jt.recent(q.q12_recent, q.recent_from, to) : jt.recentNone(q.recent_from, to)}</span>
+    </p>
+  )
+}
+
+/** Подпись источника квартилей (условие SCImago: указывать источник). */
+function QuartileSource({ year }: { year: number }) {
+  return (
+    <p className="profile-source">
+      {jt.source(year)}{' '}
+      <a href="https://www.scimagojr.com" rel="noreferrer noopener" target="_blank">
+        {jt.sourceLink}
+      </a>
+    </p>
+  )
+}
+
+/** Квартиль журнала у публикации: Q1–Q2 синим, Q3–Q4 нейтрально. */
+export function QuartileMark({ quartile, year }: { quartile: number; year: number }) {
+  return (
+    <span className="profile-quartile" title={jt.quartileTitle(year)}>
+      <Tag tone={quartile <= 2 ? 'accent' : 'neutral'}>
+        <span className="visually-hidden">{jt.quartileHidden}</span>
+        {jt.quartile(quartile)}
+      </Tag>
+    </span>
+  )
+}
+
 function ItemRow({ item, editable, onEdit, onRemove }: { item: Item; editable: boolean; onEdit?: (i: Item) => void; onRemove?: (i: Item) => void }) {
   const s = sectionDefs[item.kind].summary(item)
   return (
@@ -240,11 +283,22 @@ function ItemRow({ item, editable, onEdit, onRemove }: { item: Item; editable: b
       <span className="profile-item-label num">{s.label}</span>
       <div className="profile-item-body">
         <p className="profile-item-lead">{s.lead}</p>
-        {s.lines.map((line) => (
+        {s.lines.map((line, i) => (
           <p key={line} className="profile-item-line">
             {line}
+            {i === 0 && item.journal?.quartile != null && (
+              <>
+                {' '}
+                <QuartileMark quartile={item.journal.quartile} year={item.journal.year} />
+              </>
+            )}
           </p>
         ))}
+        {s.lines.length === 0 && item.journal?.quartile != null && (
+          <p className="profile-item-line">
+            <QuartileMark quartile={item.journal.quartile} year={item.journal.year} />
+          </p>
+        )}
         {(s.doi || s.url) && (
           <p className="profile-item-line profile-item-links">
             {s.doi && (

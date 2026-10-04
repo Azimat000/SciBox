@@ -2,6 +2,8 @@ package profiles
 
 import (
 	"testing"
+
+	"scibox/server/internal/crossref"
 )
 
 // Каждое обращение к базе в операции по очереди «ломается»; ошибка должна дойти до вызывающего.
@@ -18,6 +20,18 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			}
 			w.addItem(p, goodPublication())
 			return func(s *Service) error { _, err := s.Own(bg, p.User); return err }
+		},
+		"own with journals": func(t *testing.T, w *world) func(*Service) error {
+			ensureJournals(t)
+			p := w.user("Елена")
+			w.addItem(p, pubIn(issnQ1, 2025, "10.5555/q14x9-a"))
+			return func(s *Service) error { _, err := s.Own(bg, p.User); return err }
+		},
+		"lookup doi with journal": func(t *testing.T, w *world) func(*Service) error {
+			ensureJournals(t)
+			p := w.user("Елена")
+			w.doi.work = crossref.Work{Title: "Статья", ISSNs: []string{issnQ2}}
+			return func(s *Service) error { _, err := s.LookupDOI(bg, p.User, "10.5555/q14x9-b"); return err }
 		},
 		"get as anonymous": func(t *testing.T, w *world) func(*Service) error {
 			p := w.user("Елена")

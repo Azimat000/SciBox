@@ -111,6 +111,8 @@ describe('catalog page', () => {
     await user.click(within(filters()).getByText('Естественные науки'))
     await user.click(within(filters()).getByRole('checkbox', { name: /Химические науки/ }))
     await user.selectOptions(within(filters()).getByRole('combobox', { name: 'h-index от' }), '30')
+    await user.click(within(filters()).getByText('Статьи в Q1–Q2'))
+    await user.selectOptions(within(filters()).getByRole('combobox', { name: 'Статей в Q1–Q2 от' }), '5')
     await user.selectOptions(screen.getByRole('combobox', { name: 'Регион' }), '77')
 
     await waitFor(() => expect(last().get('region')).toBe('77'))
@@ -118,10 +120,12 @@ describe('catalog page', () => {
     expect(last().getAll('title')).toEqual(['professor'])
     expect(last().getAll('field')).toEqual(['1.4'])
     expect(last().get('h_min')).toBe('30')
+    expect(last().get('q12_min')).toBe('5')
     expect(router.state.location.search).toContain('open=1')
 
     const chips = within(chipsList() as HTMLElement)
-    expect(chips.getAllByRole('button')).toHaveLength(6)
+    expect(chips.getAllByRole('button')).toHaveLength(7)
+    expect(chips.getByRole('button', { name: 'Убрать фильтр: Статей в Q1–Q2 от 5' })).toBeInTheDocument()
     expect(chips.getByRole('button', { name: 'Убрать фильтр: 1.4 Химические науки' })).toBeInTheDocument()
     expect(chips.getByRole('button', { name: 'Убрать фильтр: Москва' })).toBeInTheDocument()
     expect(chips.getByRole('button', { name: 'Убрать фильтр: h-index от 30' })).toBeInTheDocument()
@@ -142,6 +146,26 @@ describe('catalog page', () => {
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Любой', 'h-index от 5', 'h-index от 10', 'h-index от 17', 'h-index от 20', 'h-index от 30', 'h-index от 50'])
     await userEvent.selectOptions(select, '')
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Убрать фильтр: h-index от 17' })).not.toBeInTheDocument())
+  })
+
+  it('keeps an odd Q1–Q2 count from the address among the choices', async () => {
+    setup()
+    renderApp('/scientists?q12_min=7')
+    await screen.findByRole('link', { name: 'Елена Орлова' })
+    const select = within(filters()).getByRole('combobox', { name: 'Статей в Q1–Q2 от' })
+    expect(select).toHaveValue('7')
+    expect(within(select).getAllByRole('option').map((o) => (o as HTMLOptionElement).value)).toEqual(['', '1', '3', '5', '7', '10', '20'])
+    await userEvent.selectOptions(select, '')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Убрать фильтр: Статей в Q1–Q2 от 7' })).not.toBeInTheDocument())
+  })
+
+  it('shows the Q1–Q2 count with the recent part only when there is one', async () => {
+    setup({}, { items: [catalogCard, { ...bareCard, q12_total: 2, q12_recent: 0 }] })
+    renderApp('/scientists')
+    const first = (await screen.findByRole('link', { name: 'Елена Орлова' })).closest('article') as HTMLElement
+    expect(within(first).getByText('5 статей в Q1–Q2, 3 с 2022 г.')).toBeInTheDocument()
+    const second = screen.getByRole('link', { name: 'Борис Лапин' }).closest('article') as HTMLElement
+    expect(within(second).getByText('2 статьи в Q1–Q2')).toBeInTheDocument()
   })
 
   it('puts the chosen order in the address unless it is the default', async () => {

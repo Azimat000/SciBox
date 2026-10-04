@@ -88,7 +88,7 @@ SELECT EXISTS (
 -- name: IsOrgStaff :one
 SELECT EXISTS (SELECT 1 FROM org_members WHERE user_id = $1);
 
--- Каталог учёных (срез 10). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
+-- Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
 -- и с заполненной должностью; сам смотрящий из каталога исключён. Слова ищутся по русской морфологии (имя, должность,
 -- город, регион, организация степени, специальности, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
 -- словам» (@fuzzy, имя и должность).
@@ -96,6 +96,7 @@ SELECT EXISTS (SELECT 1 FROM org_members WHERE user_id = $1);
 SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
        hh.h::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
+       qq.total::int AS q12_total, qq.recent::int AS q12_recent,
        count(*) OVER () AS total
 FROM profiles p
 JOIN users u ON u.id = p.user_id
@@ -108,6 +109,15 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
     SELECT GREATEST(COALESCE(p.h_rsci, 0), COALESCE(p.h_scopus, 0), COALESCE(p.h_wos, 0), COALESCE(p.h_scholar, 0)) AS h
 ) hh ON true
+-- Статьи в журналах Q1–Q2 (срез 14): публикации, чей ISSN есть в справочнике журналов с квартилем 1 или 2.
+LEFT JOIN LATERAL (
+    SELECT count(*) AS total,
+           count(*) FILTER (WHERE (i.data ->> 'year')::int >= @recent_from::int) AS recent
+    FROM profile_items i
+    JOIN journal_issns x ON x.issn = i.data ->> 'issn'
+    JOIN journals j ON j.id = x.journal_id
+    WHERE i.profile_id = p.id AND i.kind = 'publication' AND j.quartile <= 2
+) qq ON true
 LEFT JOIN LATERAL (
     SELECT to_tsvector('russian', u.display_name || ' ' || p.headline || ' ' || p.city || ' ' || COALESCE(r.name, '') || ' '
                                   || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' ' || p.about) AS doc
@@ -126,6 +136,7 @@ WHERE p.visibility = ANY(@modes::text[])
   AND (cardinality(@titles::text[]) = 0 OR p.academic_title = ANY(@titles::text[]))
   AND (NOT @open_only::bool OR p.open_to_offers)
   AND (@h_min::int = 0 OR hh.h >= @h_min::int)
+  AND (@q12_min::int = 0 OR qq.total >= @q12_min::int)
 ORDER BY
   CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN
     CASE WHEN @fuzzy::bool

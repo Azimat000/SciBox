@@ -17,6 +17,12 @@ export const teachLevels = ['bachelor', 'master', 'postgraduate', 'continuing', 
 
 export type Code = { code: string; name: string }
 
+/** Журнал справочника SCImago: квартиль null — у журнала нет квартиля. */
+export type JournalRef = { title: string; issn: string; quartile: number | null; year: number }
+
+/** Счётчик «статей в Q1–Q2»; year null — ни одна публикация не нашлась в справочнике. */
+export type Quartiles = { q12_total: number; q12_recent: number; recent_from: number; year: number | null }
+
 /** Запись любого раздела: у каждого вида заполнены свои поля, остальных в ответе нет. */
 export type Item = {
   id: string
@@ -30,6 +36,10 @@ export type Item = {
   venue?: string
   pub_type?: string
   doi?: string
+  /** ISSN журнала публикации: по нему сервер находит журнал в справочнике. */
+  issn?: string
+  /** Журнал из справочника SCImago; подставляет сервер при чтении. */
+  journal?: JournalRef
   url?: string
   volume?: string
   issue?: string
@@ -74,6 +84,8 @@ export type Profile = {
     patents: Item[]
     teaching: Item[]
   }
+  /** Нет в снимках профиля, отправленных с откликом до среза 14. */
+  quartiles?: Quartiles
   updated_at: string
 }
 
@@ -114,6 +126,17 @@ export type Work = {
   volume: string
   issue: string
   pages: string
+  /** ISSN, который поставить публикации: найденный в справочнике или первый из Crossref; пусто — Crossref не знает. */
+  issn?: string
+  journal?: JournalRef | null
+}
+
+/** Журнал в выдаче поиска по справочнику. */
+export type FoundJournal = { id: number; title: string; publisher: string; issn: string; issns: string[]; quartile: number | null; year: number }
+
+/** Поиск журнала по названию или ISSN (короче двух знаков сервер возвращает пустой список). */
+export async function searchJournals(q: string, signal?: AbortSignal): Promise<FoundJournal[]> {
+  return (await apiGet<{ items: FoundJournal[] }>(`/api/journals?q=${encodeURIComponent(q)}`, { signal })).items
 }
 
 /** Раздел профиля на странице → вид записи (в ответе разделы названы во множественном числе). */

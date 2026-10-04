@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,6 +23,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
+	"scibox/server/internal/journals"
 	"scibox/server/internal/landing"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/matching"
@@ -50,6 +53,7 @@ const usage = `Использование: scibox <команда>
   serve                      запустить HTTP-сервер (по умолчанию)
   migrate up|down|reset|status   миграции базы данных
   seed                       загрузить демо-данные
+  journals load [--force] [файл]  загрузить справочник журналов SCImago (без файла — встроенный в сервер)
   version                    показать версию
 `
 
@@ -78,7 +82,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
-	case "serve", "migrate", "seed":
+	case "serve", "migrate", "seed", "journals":
 	default:
 		fmt.Fprintf(env.Stderr, "неизвестная команда %q\n\n%s", cmd, usage)
 		return 2
@@ -101,6 +105,8 @@ func Run(ctx context.Context, args []string, env Env) int {
 			return 1
 		}
 		return 0
+	case "journals":
+		return runJournals(ctx, cfg.DatabaseURL, args, env, logger)
 	case "seed":
 		if err := runSeed(ctx, cfg.DatabaseURL, env.Stdout); err != nil {
 			logger.Error("seed", "err", err)
@@ -114,6 +120,49 @@ func Run(ctx context.Context, args []string, env Env) int {
 		}
 		return 0
 	}
+}
+
+// runJournals: `journals load [--force] [файл]`. Тот же файл второй раз не загружается (без --force).
+func runJournals(ctx context.Context, databaseURL string, args []string, env Env, logger *slog.Logger) int {
+	if len(args) == 0 || args[0] != "load" {
+		fmt.Fprint(env.Stderr, usage)
+		return 2
+	}
+	src, force := journals.Embedded(), false
+	for _, a := range args[1:] {
+		switch {
+		case a == "--force":
+			force = true
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprint(env.Stderr, usage)
+			return 2
+		default:
+			data, err := os.ReadFile(a)
+			if err != nil {
+				logger.Error("journals", "err", err)
+				return 1
+			}
+			info, _ := os.Stat(a) // файл только что прочитан
+			src = journals.Source{Data: data, Downloaded: info.ModTime().UTC()}
+		}
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		logger.Error("journals", "err", fmt.Errorf("connect database: %w", err))
+		return 1
+	}
+	defer pool.Close()
+	res, err := journals.Load(ctx, pool, src, force)
+	if err != nil {
+		logger.Error("journals", "err", err)
+		return 1
+	}
+	if res.Unchanged {
+		fmt.Fprintf(env.Stdout, "Справочник журналов уже загружен (%s).\n", res.Edition)
+		return 0
+	}
+	fmt.Fprintf(env.Stdout, "Справочник журналов загружен (%s): журналов %d, ISSN %d, пропущено без ISSN %d.\n", res.Edition, res.Journals, res.ISSNs, res.Skipped)
+	return 0
 }
 
 func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
@@ -183,6 +232,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Matching:      matching.NewHandler(matchingSvc, logger, authHandler.RequireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
+		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
 	})
 
 	ln, err := net.Listen("tcp", cfg.HTTPAddr)

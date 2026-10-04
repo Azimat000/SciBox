@@ -17,12 +17,15 @@ export type CatalogCard = {
   open_to_offers: boolean
   h_index: number | null
   publications: number
+  /** Статей в журналах Q1–Q2 (по справочнику SCImago) и из них с года recent_from выдачи. */
+  q12_total: number
+  q12_recent: number
   specialties: Code[]
   updated_at: string
 }
 
 /** Страница выдачи; fuzzy — точных совпадений со словами нет, показаны похожие (с опечатками). */
-export type CatalogResult = { items: CatalogCard[]; total: number; fuzzy: boolean }
+export type CatalogResult = { items: CatalogCard[]; total: number; fuzzy: boolean; recent_from: number }
 
 /**
  * Поиск по каталогу. Что видно, зависит от того, кто смотрит (организациям открыто больше), поэтому кеш лежит под ключом

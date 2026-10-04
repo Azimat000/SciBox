@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,12 @@ func TestCommandsWithoutDatabase(t *testing.T) {
 		{"migrate without subcommand", []string{"migrate"}, map[string]string{}, 2, "", "Использование"},
 		{"migrate bad url", []string{"migrate", "up"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "parse database url"},
 		{"serve bad url", []string{"serve"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "connect database"},
+		{"journals without subcommand", []string{"journals"}, map[string]string{}, 2, "", "Использование"},
+		{"journals unknown subcommand", []string{"journals", "drop"}, map[string]string{}, 2, "", "Использование"},
+		{"journals unknown flag", []string{"journals", "load", "--fast"}, map[string]string{}, 2, "", "Использование"},
+		{"journals missing file", []string{"journals", "load", "/nope.csv"}, map[string]string{}, 1, "", "no such file"},
+		{"journals bad url", []string{"journals", "load"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "connect database"},
+		{"journals without migrations", []string{"journals", "load"}, map[string]string{"DATABASE_URL": testdb.Create(t, false)}, 1, "", "journals"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -71,6 +78,39 @@ func TestMigrateUp(t *testing.T) {
 	r := run(context.Background(), []string{"migrate", "up"}, map[string]string{"DATABASE_URL": dbURL}, nil)
 	if r.code != 0 || !strings.Contains(r.stdout, "00001_extensions.sql") {
 		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestJournalsLoad(t *testing.T) {
+	dbURL := testdb.Create(t, true)
+	env := map[string]string{"DATABASE_URL": dbURL}
+	first := run(context.Background(), []string{"journals", "load"}, env, nil)
+	if first.code != 0 || !strings.Contains(first.stdout, "Справочник журналов загружен (SJR 2025") {
+		t.Fatalf("first: %+v", first)
+	}
+	again := run(context.Background(), []string{"journals", "load"}, env, nil)
+	if again.code != 0 || !strings.Contains(again.stdout, "уже загружен") {
+		t.Fatalf("again: %+v", again)
+	}
+	forced := run(context.Background(), []string{"journals", "load", "--force"}, env, nil)
+	if forced.code != 0 || !strings.Contains(forced.stdout, "загружен (SJR") {
+		t.Fatalf("forced: %+v", forced)
+	}
+	// Свой файл (новый выпуск SCImago): справочник заменяется им.
+	file := t.TempDir() + "/sjr.csv"
+	csv := "Rank;Sourceid;Title;Type;Issn;SJR;SJR Best Quartile;Total Docs. (2026)\n1;7;\"Nature\";journal;\"00280836\";18,1;Q1\n"
+	if err := os.WriteFile(file, []byte(csv), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	own := run(context.Background(), []string{"journals", "load", file}, env, nil)
+	if own.code != 0 || !strings.Contains(own.stdout, "SJR 2026") || !strings.Contains(own.stdout, "журналов 1,") {
+		t.Fatalf("own file: %+v", own)
+	}
+	if err := os.WriteFile(file, []byte("not a csv"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if bad := run(context.Background(), []string{"journals", "load", file}, env, nil); bad.code != 1 || !strings.Contains(bad.stderr, "not a SCImago") {
+		t.Fatalf("bad file: %+v", bad)
 	}
 }
 
@@ -165,6 +205,23 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	}
 	if n := count("SELECT count(*) FROM profiles p WHERE headline = '' OR NOT EXISTS (SELECT 1 FROM profile_specialties s WHERE s.profile_id = p.id) OR NOT EXISTS (SELECT 1 FROM profile_items i WHERE i.profile_id = p.id)"); n != 0 {
 		t.Errorf("%d demo profiles are empty", n)
+	}
+	// Журналы демо-публикаций (срез 14): у статей настоящие ISSN из SCImago; после загрузки справочника все находятся,
+	// у нескольких учёных есть статьи в Q1–Q2.
+	if n := count("SELECT count(*) FROM profile_items WHERE kind = 'publication' AND data ->> 'issn' IS NOT NULL"); n < 20 {
+		t.Errorf("%d demo publications with an ISSN, want at least 20", n)
+	}
+	if r := run(context.Background(), []string{"journals", "load"}, env, nil); r.code != 0 {
+		t.Fatalf("journals: %+v", r)
+	}
+	if n := count("SELECT count(*) FROM profile_items i WHERE kind = 'publication' AND data ->> 'issn' IS NOT NULL AND NOT EXISTS (SELECT 1 FROM journal_issns x WHERE x.issn = i.data ->> 'issn')"); n != 0 {
+		t.Errorf("%d demo ISSNs are not in the journal catalog", n)
+	}
+	if n := count("SELECT count(DISTINCT i.profile_id) FROM profile_items i JOIN journal_issns x ON x.issn = i.data ->> 'issn' JOIN journals j ON j.id = x.journal_id WHERE j.quartile <= 2"); n < 5 {
+		t.Errorf("%d demo scientists with Q1–Q2 articles, want at least 5", n)
+	}
+	if n := count("SELECT count(DISTINCT j.quartile) FROM profile_items i JOIN journal_issns x ON x.issn = i.data ->> 'issn' JOIN journals j ON j.id = x.journal_id"); n != 4 {
+		t.Errorf("demo journals cover %d quartiles, want all 4", n)
 	}
 	if n := count("SELECT count(*) FROM org_invitations"); n != 1 {
 		t.Errorf("%d invitations, want 1", n)

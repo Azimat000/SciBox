@@ -80,6 +80,7 @@ type ItemFields struct {
 	Venue   string `json:"venue,omitempty"`
 	PubType string `json:"pub_type,omitempty"`
 	DOI     string `json:"doi,omitempty"`
+	ISSN    string `json:"issn,omitempty"` // ISSN журнала («1234-567X»): по нему публикация связана со справочником журналов
 	URL     string `json:"url,omitempty"`
 	Volume  string `json:"volume,omitempty"`
 	Issue   string `json:"issue,omitempty"`
@@ -114,6 +115,27 @@ type Item struct {
 	ID   uuid.UUID `json:"id"`
 	Kind string    `json:"kind"`
 	ItemFields
+	// Journal — журнал публикации из справочника (по ISSN). Не хранится в записи: подставляется при чтении, поэтому
+	// новый выпуск справочника сразу меняет квартили. nil — ISSN нет или журнала с таким ISSN в справочнике нет.
+	Journal *JournalRef `json:"journal,omitempty"`
+}
+
+// JournalRef — журнал из справочника SCImago (срез 14).
+type JournalRef struct {
+	Title    string `json:"title"`
+	ISSN     string `json:"issn"`
+	Quartile *int   `json:"quartile"` // 1–4; nil — у журнала нет квартиля
+	Year     int    `json:"year"`     // за какой год квартиль
+}
+
+// QuartileStats — счётчик «статей в Q1–Q2» (срез 14): публикации в журналах первого и второго квартиля.
+type QuartileStats struct {
+	Q12Total  int `json:"q12_total"`
+	Q12Recent int `json:"q12_recent"` // с года RecentFrom включительно (последние пять лет, считая текущий)
+	// RecentFrom — первый год «последних пяти лет» по Москве.
+	RecentFrom int `json:"recent_from"`
+	// Year — год квартилей справочника; nil, если ни одна публикация не нашлась в справочнике.
+	Year *int `json:"year"`
 }
 
 // CoreInput — основные поля профиля, как их прислал человек.
@@ -184,23 +206,24 @@ type Sections struct {
 
 // View — профиль так, как его видит смотрящий: чего ему видеть не положено, в ответе нет.
 type View struct {
-	ID                uuid.UUID   `json:"id"`
-	Name              string      `json:"name"`
-	Visibility        string      `json:"visibility,omitempty"` // только владельцу
-	OpenToOffers      bool        `json:"open_to_offers"`
-	Headline          string      `json:"headline"`
-	City              string      `json:"city"`
-	Region            *Code       `json:"region"`
-	About             string      `json:"about"`
-	Degree            DegreeInfo  `json:"degree"`
-	AcademicTitle     string      `json:"academic_title"`
-	AcademicTitleYear *int        `json:"academic_title_year"`
-	Identifiers       Identifiers `json:"identifiers"`
-	HIndex            HIndex      `json:"h_index"`
-	Specialties       []Code      `json:"specialties"`
-	ContactEmail      string      `json:"contact_email,omitempty"` // только владельцу и сотрудникам организаций
-	Sections          Sections    `json:"sections"`
-	UpdatedAt         time.Time   `json:"updated_at"`
+	ID                uuid.UUID     `json:"id"`
+	Name              string        `json:"name"`
+	Visibility        string        `json:"visibility,omitempty"` // только владельцу
+	OpenToOffers      bool          `json:"open_to_offers"`
+	Headline          string        `json:"headline"`
+	City              string        `json:"city"`
+	Region            *Code         `json:"region"`
+	About             string        `json:"about"`
+	Degree            DegreeInfo    `json:"degree"`
+	AcademicTitle     string        `json:"academic_title"`
+	AcademicTitleYear *int          `json:"academic_title_year"`
+	Identifiers       Identifiers   `json:"identifiers"`
+	HIndex            HIndex        `json:"h_index"`
+	Specialties       []Code        `json:"specialties"`
+	ContactEmail      string        `json:"contact_email,omitempty"` // только владельцу и сотрудникам организаций
+	Sections          Sections      `json:"sections"`
+	Quartiles         QuartileStats `json:"quartiles"`
+	UpdatedAt         time.Time     `json:"updated_at"`
 }
 
 // ViewerInfo — что смотрящему можно: страница сама решает, какие кнопки показать.

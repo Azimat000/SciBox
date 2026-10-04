@@ -39,14 +39,17 @@ db-down:
 
 migrate: db-up
 	$(SCIBOX) migrate up
+	$(SCIBOX) journals load
 
 seed: migrate
 	$(SCIBOX) seed
 
-## db-reset: откатить всё, накатить заново и загрузить демо-данные
+## migrate также загружает справочник журналов SCImago (тот же файл второй раз не грузится).
+## db-reset: откатить всё, накатить заново, загрузить справочник журналов и демо-данные
 db-reset: db-up
 	$(SCIBOX) migrate reset
 	$(SCIBOX) migrate up
+	$(SCIBOX) journals load
 	$(SCIBOX) seed
 
 ## sqlc: пересобрать код запросов из server/db/queries

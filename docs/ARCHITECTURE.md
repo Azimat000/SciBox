@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 13 (финальная проверка: сквозные тесты Playwright, README, правки по аудиту). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 14 (квартили журналов: справочник SCImago, квартиль у публикаций, счётчик и фильтр «статей в Q1–Q2»). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -19,13 +19,13 @@ SciBox/
 │                         сценарии scientist-and-organization и new-organization, каждый на компьютере и телефоне (Pixel 7)
 ├── PRODUCT.md            описание продукта для impeccable (ведёт impeccable)
 ├── server/               Go 1.26, модуль scibox/server
-│   ├── cmd/api/          точка входа: команды serve | migrate up|down|reset|status | seed | version
+│   ├── cmd/api/          точка входа: команды serve | migrate up|down|reset|status | journals load [--force] [файл] | seed | version
 │   ├── cmd/covercheck/   проверка порогов покрытия (логика в internal/covercheck)
 │   ├── db/migrations/    goose, встроены в бинарник (db/embed.go)
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
-│   ├── seed/             демо-данные (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов; `matching.go` — избранное и сохранённые поиски через сервис подбора); вне покрытия, проверяется тестом в internal/cli
+│   ├── seed/             демо-данные (у демо-публикаций настоящие ISSN журналов из SCImago, `journalISSN` в `scientists.go`) (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов; `matching.go` — избранное и сохранённые поиски через сервис подбора); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
@@ -37,6 +37,8 @@ SciBox/
 │       ├── files/        файлы откликов (критичная зона): проверка PDF, имена, multipart-запрос, таблица «вид файла → кто видит», безопасная выдача
 │       ├── offers/       приглашения учёных на вакансии (критичная зона): отправка (права `ManageVacancies`, приватность профиля, лимит), ответ «Интересно / Не сейчас», отзыв, списки обеих сторон, «куда можно пригласить», тексты уведомлений (`notices.go`), HTTP
 │       ├── matching/     избранное, сохранённые поиски, подбор, календарь сроков (критичная зона): правила подбора (`rules.go`, без базы), расписание (`schedule.go`), сервис (`service.go`), фоновая рассылка по поискам (`digest.go`) и напоминания о сроках (`reminders.go`), тексты писем (`notices.go`), HTTP
+│       ├── journals/     справочник журналов SCImago (срез 14): разбор выгрузки (`parse.go`), загрузка заменой целиком (`load.go`, файл `data/scimagojr.csv.gz` встроен в сервер), поиск по названию и ISSN (`search.go`), HTTP
+│       ├── issn/         проверка и запись ISSN (`1234-567X`, контрольная цифра); общий для журналов и профилей
 │       ├── landing/      числа для главной (`GET /api/landing`): открытые вакансии, организации, учёные для гостя, разбивка по областям и видам позиций; HTTP
 │       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, переключатели писем (`settings.go`), HTTP
 │       ├── testkit/      помощники для тестов с базой (временная база, сервисы, люди, организация со всеми ролями, «поломка» n-го запроса); вне покрытия
@@ -144,6 +146,7 @@ SciBox/
   - `saved_searches` (id, user_id `CASCADE`, name до 120, query до 2000 знаков в каноническом виде, frequency `instant|daily|weekly|off`, checked_at (граница «всё до неё учтено»), next_run_at, last_sent_at, created_at, updated_at; индекс по `next_run_at` для включённых);
   - `deadline_reminders` (user_id, vacancy_id, stage 1 или 7, deadline, sent_at; ключ из четырёх полей: одно напоминание на человека, вакансию, ступень и срок);
   - `notification_settings` (user_id, email_new_vacancies, email_deadlines, updated_at).
+- Миграция `00012_journals.sql`: `journals` (id = Sourceid SCImago, title, publisher, quartile 1–4 или NULL, sjr, data_year; индекс pg_trgm по названию), `journal_issns` (issn `1234-567X` → journal_id, position — порядок в файле); индекс по `profile_items.data->>'issn'` у публикаций. Строки кладёт `scibox journals load` (D-127), источник и выпуск — строка `journals` в `reference_sources`.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
@@ -184,13 +187,14 @@ SciBox/
 | `DELETE /api/vacancies/{id}` | только черновик; иначе 409 `vacancy_not_draft` |
 | `GET /api/my/vacancies?status=&limit=&offset=` | «Мои вакансии»: `{items,total,counts по статусам}` в пределах прав |
 | `GET /api/my/vacancy-targets` | где человек может создать вакансию: `[{organization, whole_org, units}]` |
-| `GET /api/profile` | вошедший: свой профиль (создаётся пустым и скрытым): `{profile, viewer:{is_owner, can_see_contacts}}`; в `profile` есть `visibility`, `contact_email`, разделы `sections` (всегда списки) |
+| `GET /api/profile` | вошедший: свой профиль (создаётся пустым и скрытым): `{profile, viewer:{is_owner, can_see_contacts}}`; в `profile` есть `visibility`, `contact_email`, разделы `sections` (всегда списки; у публикации `issn` и подставленный `journal {title,issn,quartile,year}`), `quartiles {q12_total, q12_recent, recent_from, year}` (то же у `/api/scientists/{id}` и в снимке отклика) |
 | `PUT /api/profile` | основные поля целиком (`headline, city, region_code, about, degree, degree_specialty_code, degree_year, degree_institution, dissertation_title, academic_title, academic_title_year, orcid, spin, scopus_id, wos_id, h_rsci, h_scopus, h_wos, h_scholar, contact_email, specialties`); 422 с полями; приватность и записи не трогает |
 | `PUT /api/profile/privacy` `{visibility, open_to_offers}` | 200 `{profile, viewer}`; 422 при неизвестном режиме |
 | `POST /api/profile/items` `{kind, …поля вида}` | 201 `{item}`; виды `education, experience, publication, grant, patent, teaching`; 422 с полями; 409 `too_many_items` |
 | `PUT /api/profile/items/{id}` `{kind?, …поля}` | 200 `{item}`; чужая или несуществующая запись 404; сменить вид нельзя (422) |
 | `DELETE /api/profile/items/{id}` | 204; чужая запись 404 |
-| `GET /api/profile/doi?doi=` | 200 `{work:{doi,title,authors,venue,year,type,volume,issue,pages}}` из Crossref; 422 неверный или уже добавленный DOI; 404 `doi_not_found`; 502 `doi_unavailable`; 429 после 60 в час |
+| `GET /api/profile/doi?doi=` | 200 `{work:{doi,title,authors,venue,year,type,volume,issue,pages,issns,issn,journal}}` из Crossref; `issn` — найденный в справочнике журналов или первый годный, `journal` `{title,issn,quartile,year}` или null; 422 неверный или уже добавленный DOI; 404 `doi_not_found`; 502 `doi_unavailable`; 429 после 60 в час |
+| `GET /api/journals?q=&limit=` | вошедший: `{items:[{id,title,publisher,issn,issns,quartile,year}]}` — поиск по справочнику журналов: по ISSN (с дефисом и без) или по словам названия (все слова, без учёта регистра); короче 2 знаков — пустой список; `limit` до 20, по умолчанию 10; без входа 401 |
 | `GET /api/profile/cv` | PDF собственного резюме (`Content-Disposition: attachment`) |
 | `GET /api/scientists/{id}` | публично, с учётом приватности: `{profile, viewer}`; скрытый или неизвестный 404; контакты только владельцу и сотрудникам организаций, `visibility` только владельцу |
 | `GET /api/scientists/{id}/cv` | PDF резюме по тем же правилам (нужен вход) |
@@ -215,7 +219,7 @@ SciBox/
 | `GET /api/notifications?limit=&offset=&unread=1` | `{items:[{id,kind,title,body,link,created_at,read}], total, unread}` (только свои) |
 | `GET /api/notifications/unread-count` | `{unread}` |
 | `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` | 204; чужое уведомление 404 |
-| `GET /api/scientists?q=&field=&region=&degree=&title=&open=1&h_min=&sort=&limit=&offset=` | публично, с учётом приватности (D-098): `{items:[{id,name,headline,city,region,degree,academic_title,open_to_offers,h_index,publications,specialties,updated_at}], total, fuzzy}`; повторяющиеся `field`, `degree`, `title` значат «или»; `sort`: `relevance`, `updated`, `h_index`, `name`; `limit` до 50, по умолчанию 20; неизвестное значение и не число 422 с `fields`; контактов в ответе нет |
+| `GET /api/scientists?q=&field=&region=&degree=&title=&open=1&h_min=&q12_min=&sort=&limit=&offset=` | публично, с учётом приватности (D-098): `{items:[{id,name,headline,city,region,degree,academic_title,open_to_offers,h_index,publications,q12_total,q12_recent,specialties,updated_at}], total, fuzzy, recent_from}`; `q12_min` — статей в Q1–Q2 от (0–300); повторяющиеся `field`, `degree`, `title` значат «или»; `sort`: `relevance`, `updated`, `h_index`, `name`; `limit` до 50, по умолчанию 20; неизвестное значение и не число 422 с `fields`; контактов в ответе нет |
 | `GET /api/scientists/{id}/offer-targets` | вошедший: `{items:[{id,title,org_name,org_slug,unit_name,deadline,offered,applied}]}` — вакансии, на которые он может пригласить этого учёного (опубликованные, срок не прошёл, в пределах `ManageVacancies`); закрытый приватностью профиль 404; не сотрудник организации получает пустой список |
 | `POST /api/offers` `{vacancy_id, profile_id, message}` | 201 `{offer}`; 404 (нет прав на вакансию или профиль закрыт: неотличимо от «нет такого»); 409 `vacancy_closed`, `deadline_passed`, `already_offered`, `already_applied`, `invitee_is_staff`; 422 `message`; 429 после 20 в сутки |
 | `GET /api/offers?status=&limit=&offset=` | «Приглашения» учёного: `{items:[offer], total, counts:{pending,interested,declined}, pending}`; отозванные не показываются; 422 на неизвестное состояние |
@@ -251,6 +255,7 @@ SciBox/
 | `/my-vacancies` (`?status=`, `?page=`) | Мои вакансии: вкладки по статусам со счётчиками, срок подачи у опубликованных, вакансию открывает название, «Править» спокойной кнопкой; без входа ведёт на `/login?next=` |
 | `/my-vacancies/new` (`?org=&unit=`), `/my-vacancies/:id/edit` | Форма вакансии; поля зависят от типа позиции |
 | `/vacancies/:id` | Страница вакансии (статья); тем, кто ведёт вакансию, сверху управление: править, сменить статус, удалить черновик; остальным «Откликнуться» под заголовком и ещё раз после требований |
+| `/profile` (раздел «Публикации», срез 14) | Квартиль у публикации, строка «N статей в журналах Q1–Q2, из них M за …», подпись источника SCImago; в окне публикации блок «Журнал из справочника» (`JournalPicker`) |
 | `/profile` | Мой профиль: имя и должность, под ними кнопки «Изменить основное», «Скачать резюме», «Как видят другие», затем блок приватности и разделы с «Добавить / Изменить / Удалить»; без входа ведёт на `/login?next=` |
 | `/profile/edit` | Форма основного: кто вы, степень и звание, специальности, ORCID/SPIN/Scopus/WoS, h-index, контактная почта |
 | `/scientists/:id` | Страница учёного для других (приватность решает сервер; «нет профиля» и «скрыт» выглядят одинаково); у вошедшего в режиме «Нанимаю» кнопка «Пригласить на вакансию» |
@@ -260,7 +265,7 @@ SciBox/
 | `/candidates/:id` | Карточка отклика для организации: ссылка «Все отклики на эту вакансию», приглашения, письмо, решение (пригласить, принять, отказать), файлы, письма рекомендателей, снимок профиля; если открыл автор отклика — переход на `/applications/:id` |
 | `/recommend?token=` | Страница рекомендателя без входа: письмо текстом и/или PDF, отказ |
 | `/notifications` | Все уведомления страницами; колокольчик в шапке у вошедших |
-| `/scientists` (`?q=&field=&region=&degree=&title=&open=&h_min=&sort=&page=`) | Каталог учёных (срез 10): строка поиска и регион, фильтры, чипы, порядок, страницы по 20; у вошедшего в режиме «Нанимаю» на каждой записи «Пригласить на вакансию» |
+| `/scientists` (`?q=&field=&region=&degree=&title=&open=&h_min=&q12_min=&sort=&page=`) | Каталог учёных (срез 10; «статей в Q1–Q2» в записи и фильтр — срез 14): строка поиска и регион, фильтры, чипы, порядок, страницы по 20; у вошедшего в режиме «Нанимаю» на каждой записи «Пригласить на вакансию» |
 | `/offers`, `/offers/:id` | «Приглашения» учёного: список; страница приглашения с ответом «Интересно / Не сейчас» (один раз, с запиской), вакансия и кнопка «Откликнуться»; без входа ведут на `/login?next=` |
 | `/sent-offers` (`?status=&page=`) | «Отправленные приглашения» организации: вкладки по состояниям со счётчиками, ответы и записки учёных, «Отозвать» |
 | `/favorites` (`?page=`) | «Избранное» (срез 11): вакансии с отметками «набор закончен» / «срок прошёл» / «вы откликнулись», «Убрать» с кнопкой «Вернуть», страницы по 20; вкладки раздела |

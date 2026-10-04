@@ -241,7 +241,7 @@ describe('publication by DOI', () => {
     expect(await dialog.findByText('Нашли. Проверьте поля ниже и сохраните.')).toBeInTheDocument()
     expect(dialog.getByLabelText(/Название/)).toHaveValue('Nanometre-scale thermometry')
     expect(dialog.getByLabelText(/Авторы/)).toHaveValue('Kucsko G., Maurer P. C.')
-    expect(dialog.getByLabelText(/Журнал/)).toHaveValue('Nature')
+    expect(dialog.getByLabelText(/Журнал, сборник/)).toHaveValue('Nature')
     expect(dialog.getByLabelText(/Год/)).toHaveValue(2013)
     expect(dialog.getByLabelText(/Тип/)).toHaveValue('article')
     expect(api.called('GET', '/api/profile/doi?doi=https%3A%2F%2Fdoi.org%2F10.1038%2Fnature12373')).toHaveLength(1)

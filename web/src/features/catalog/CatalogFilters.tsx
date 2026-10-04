@@ -4,7 +4,7 @@ import { FilterGroup, ScienceFilter } from '../../ui/FilterGroup'
 import { Select } from '../../ui/Select'
 import type { Reference } from '../vacancies/api'
 import { degreeOptions, titleOptions } from './labels'
-import { change, hIndexPresets, toggleList, type CatalogSearch, type ListKey } from './params'
+import { change, hIndexPresets, q12Presets, toggleList, type CatalogSearch, type ListKey } from './params'
 
 type Props = { search: CatalogSearch; onChange: (next: CatalogSearch) => void; reference: Reference | undefined }
 
@@ -24,6 +24,9 @@ export function CatalogFilters({ search, onChange, reference }: Props) {
   const presets = [...hIndexPresets] as number[]
   if (search.hMin > 0 && !presets.includes(search.hMin)) presets.push(search.hMin)
   presets.sort((a, b) => a - b)
+  const q12 = [...q12Presets] as number[]
+  if (search.q12Min > 0 && !q12.includes(search.q12Min)) q12.push(search.q12Min)
+  q12.sort((a, b) => a - b)
   return (
     <div className="filter-panel">
       <FilterGroup title={g.offers} selected={search.open ? 1 : 0} defaultOpen>
@@ -46,6 +49,16 @@ export function CatalogFilters({ search, onChange, reference }: Props) {
           value={search.hMin > 0 ? String(search.hMin) : ''}
           options={presets.map((v) => ({ value: String(v), label: t.catalog.hIndexFrom(v) }))}
           onChange={(e) => onChange(change(search, { hMin: Number(e.target.value) || 0 }))}
+        />
+      </FilterGroup>
+      <FilterGroup title={g.q12} selected={search.q12Min > 0 ? 1 : 0}>
+        <Select
+          label={t.catalog.q12Label}
+          hint={t.catalog.q12Note}
+          placeholder={t.catalog.q12Any}
+          value={search.q12Min > 0 ? String(search.q12Min) : ''}
+          options={q12.map((v) => ({ value: String(v), label: t.catalog.q12From(v) }))}
+          onChange={(e) => onChange(change(search, { q12Min: Number(e.target.value) || 0 }))}
         />
       </FilterGroup>
     </div>

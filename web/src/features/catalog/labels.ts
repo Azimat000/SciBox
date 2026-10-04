@@ -25,5 +25,7 @@ export function filterLabel(ref: FilterRef, search: CatalogSearch, names: Map<st
       return t.catalog.openOnly
     case 'hIndex':
       return t.catalog.hIndexFrom(search.hMin)
+    case 'q12':
+      return t.catalog.q12From(search.q12Min)
   }
 }

@@ -57,6 +57,8 @@ type Work struct {
 	Volume  string `json:"volume"`
 	Issue   string `json:"issue"`
 	Pages   string `json:"pages"`
+	// ISSNs — ISSN издания, как их отдал Crossref (печатный и электронный); проверяет и выбирает пакет profiles.
+	ISSNs []string `json:"issns"`
 }
 
 // Client — клиент Crossref. Нулевое значение не годится: нужен BaseURL; NewClient подставляет настройки по умолчанию.
@@ -197,6 +199,7 @@ type response struct {
 		Volume         string     `json:"volume"`
 		Issue          string     `json:"issue"`
 		Page           string     `json:"page"`
+		ISSN           stringList `json:"ISSN"`
 		Author         []struct {
 			Given  string `json:"given"`
 			Family string `json:"family"`
@@ -226,6 +229,12 @@ func parse(raw []byte) (Work, error) {
 		Volume: clean(m.Volume),
 		Issue:  clean(m.Issue),
 		Pages:  clean(m.Page),
+		ISSNs:  []string{},
+	}
+	for _, issn := range m.ISSN {
+		if issn = clean(issn); issn != "" {
+			w.ISSNs = append(w.ISSNs, issn)
+		}
 	}
 	for _, d := range []dateParts{m.Issued, m.PublishedPrint, m.PublishedOnline, m.Created} {
 		if y := d.year(); y > 0 {

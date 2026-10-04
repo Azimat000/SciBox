@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -91,7 +92,7 @@ func newClient(t *testing.T, f *fake, mailto string) *Client {
 const fullBody = `{"status":"ok","message":{
   "DOI":"10.1038/NATURE12373","type":"journal-article",
   "title":["Nanometre-scale thermometry in a <i>living</i> cell &amp; more"],
-  "container-title":["Nature"],"volume":"500","issue":"7460","page":"54-58",
+  "container-title":["Nature"],"volume":"500","issue":"7460","page":"54-58","ISSN":["0028-0836"," 1476-4687 ",""],
   "author":[{"given":"G.","family":"Kucsko"},{"given":"Peter C.","family":"Maurer"},{"name":"Harvard Collaboration"},{"given":"","family":""},{"given":"Jean-Paul","family":"Sartre"}],
   "issued":{"date-parts":[[2013,8,1]]}
 }}`
@@ -106,9 +107,9 @@ func TestLookupFull(t *testing.T) {
 	want := Work{
 		DOI: "10.1038/nature12373", Title: "Nanometre-scale thermometry in a living cell & more",
 		Authors: "Kucsko G., Maurer P. C., Harvard Collaboration, Sartre J.-P.", Venue: "Nature", Year: 2013, Type: TypeArticle,
-		Volume: "500", Issue: "7460", Pages: "54-58",
+		Volume: "500", Issue: "7460", Pages: "54-58", ISSNs: []string{"0028-0836", "1476-4687"},
 	}
-	if w != want {
+	if !reflect.DeepEqual(w, want) {
 		t.Errorf("получили %+v\nожидали %+v", w, want)
 	}
 	if f.paths[0] != "/works/10.1038/nature12373" {
@@ -149,7 +150,7 @@ func TestLookupSparse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Title != "Только строка" || w.Year != 2020 || w.Type != TypeOther || w.Authors != "" || w.Venue != "" || w.DOI != "10.5555/sparse" {
+	if w.Title != "Только строка" || w.Year != 2020 || w.Type != TypeOther || w.Authors != "" || w.Venue != "" || w.DOI != "10.5555/sparse" || w.ISSNs == nil || len(w.ISSNs) != 0 {
 		t.Errorf("получили %+v", w)
 	}
 }
@@ -158,13 +159,13 @@ func TestLookupWeirdValues(t *testing.T) {
 	// title странного вида считается пустым; год берётся из печатной даты; автор только с именем / только с фамилией.
 	body := `{"message":{"DOI":"10.5555/w","title":{"x":1},"container-title":["", "  Журнал  "],
 	  "author":[{"given":"Анна"},{"family":"Иванова"},{"given":"- .","family":"Петров"}],
-	  "published-print":{"date-parts":[[2018]]},"published-online":{"date-parts":[[2017]]}}}`
+	  "published-print":{"date-parts":[[2018]]},"published-online":{"date-parts":[[2017]]},"ISSN":"2041-1723"}}`
 	c := newClient(t, &fake{status: 200, body: body}, "")
 	w, err := c.Lookup(context.Background(), "10.5555/w")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Title != "" || w.Venue != "Журнал" || w.Year != 2018 || w.Authors != "Анна, Иванова, Петров " {
+	if w.Title != "" || w.Venue != "Журнал" || w.Year != 2018 || w.Authors != "Анна, Иванова, Петров " || len(w.ISSNs) != 1 || w.ISSNs[0] != "2041-1723" {
 		t.Errorf("получили %+v", w)
 	}
 }

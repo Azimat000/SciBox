@@ -183,7 +183,7 @@ export function CatalogPage() {
                 <ul className="sci-list" aria-busy={result.isPlaceholderData}>
                   {result.data.items.map((card) => (
                     <li key={card.id}>
-                      <ScientistEntry card={card} headingLevel={2} />
+                      <ScientistEntry card={card} headingLevel={2} recentFrom={result.data.recent_from} />
                     </li>
                   ))}
                 </ul>
