@@ -181,7 +181,7 @@ function EditForm({ profile, reference }: { profile: Profile; reference: NonNull
 
         <fieldset className="form-block">
           <legend>{e.groups.specialties}</legend>
-          <SpecialtiesPicker science={reference.science} value={values.specialties === '' ? [] : values.specialties.split(',')} onChange={(codes) => set('specialties', codes.join(','))} error={errors.specialties} optional />
+          <SpecialtiesPicker science={reference.science} value={values.specialties === '' ? [] : values.specialties.split(',')} onChange={(codes) => set('specialties', codes.join(','))} error={errors.specialties} hint={e.specialtiesHint} optional />
         </fieldset>
 
         <fieldset className="form-block">

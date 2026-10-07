@@ -517,6 +517,8 @@ describe('profile edit page', () => {
     await userEvent.selectOptions(field(/Учёная степень/), 'doctor')
     await userEvent.type(screen.getByRole('combobox', { name: /Научная специальность диссертации/ }), 'Теоретическая')
     await userEvent.click(await screen.findByRole('option', { name: '1.3.3 Теоретическая физика' }))
+    expect(screen.getByText('До пяти. По ним вас найдут организации и подберут вам подходящие вакансии.')).toBeInTheDocument()
+    expect(screen.queryByText(/По ним вакансию найдут/)).not.toBeInTheDocument()
     await userEvent.type(screen.getByRole('combobox', { name: /Научные специальности/ }), 'Органическая')
     await userEvent.click(await screen.findByRole('option', { name: /1.4.3 Органическая химия/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))

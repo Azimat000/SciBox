@@ -15,10 +15,12 @@ type Props = {
   error?: string
   /** Необязательно ли поле для этого типа позиции. */
   optional?: boolean
+  /** Подсказка под полем; по умолчанию — для вакансии. */
+  hint?: string
 }
 
 /** Выбор до пяти научных специальностей: поиск по названию и коду, выбранные стоят списком под полем. */
-export function SpecialtiesPicker({ science, value, onChange, error, optional }: Props) {
+export function SpecialtiesPicker({ science, value, onChange, error, optional, hint = t.vacancies.form.specialtiesHint }: Props) {
   const all = useMemo(
     () => science.flatMap((f) => f.groups.flatMap((g) => g.specialties.map((s) => ({ code: s.code, name: s.name })))),
     [science],
@@ -35,7 +37,7 @@ export function SpecialtiesPicker({ science, value, onChange, error, optional }:
       {!full && (
         <Combobox
           label={t.vacancies.form.specialties}
-          hint={t.vacancies.form.specialtiesHint}
+          hint={hint}
           placeholder={t.vacancies.form.specialtyPlaceholder}
           options={options}
           value={null}
@@ -47,7 +49,7 @@ export function SpecialtiesPicker({ science, value, onChange, error, optional }:
       {full && (
         <p className="field-label" id="specialties-full">
           {t.vacancies.form.specialties}
-          <span className="field-hint"> {t.vacancies.form.specialtiesHint}</span>
+          <span className="field-hint"> {hint}</span>
         </p>
       )}
       {value.length === 0 ? (
