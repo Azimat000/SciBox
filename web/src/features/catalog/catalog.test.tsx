@@ -32,7 +32,7 @@ describe('catalog page', () => {
   it('lists scientists as journal entries: name, post, facts, specialties, open-to-offers mark', async () => {
     const { last } = setup()
     renderApp('/scientists')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Каталог учёных' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Соискатели' })).toBeInTheDocument()
     const link = await screen.findByRole('link', { name: 'Елена Орлова' })
     expect(link).toHaveAttribute('href', `/scientists/${catalogCard.id}`)
     const entry = link.closest('article') as HTMLElement
@@ -45,7 +45,7 @@ describe('catalog page', () => {
     expect(e.getByText('12 публикаций')).toBeInTheDocument()
     expect(e.getByText('Открыт к предложениям')).toBeInTheDocument()
     expect(within(e.getByRole('list', { name: 'Научные специальности' })).getAllByRole('listitem')).toHaveLength(2)
-    expect(screen.getByText('Найдено 2 учёных')).toBeInTheDocument()
+    expect(screen.getByText('Найдено 2 соискателя')).toBeInTheDocument()
     expect(last().get('limit')).toBe('20')
     expect(last().has('q')).toBe(false)
     expect(chipsList()).not.toBeInTheDocument()
@@ -58,7 +58,7 @@ describe('catalog page', () => {
     expect(within(entry).queryByRole('list', { name: 'Основные сведения' })).not.toBeInTheDocument()
     expect(within(entry).queryByRole('list', { name: 'Научные специальности' })).not.toBeInTheDocument()
     expect(within(entry).queryByText('Открыт к предложениям')).not.toBeInTheDocument()
-    expect(screen.getByText('Найден 1 учёный')).toBeInTheDocument()
+    expect(screen.getByText('Найден 1 соискатель')).toBeInTheDocument()
   })
 
   it('shows only the facts that exist, even when the degree is missing', async () => {
@@ -188,7 +188,7 @@ describe('catalog page', () => {
     renderApp('/scientists?q=Орлвоа')
     expect(await screen.findByText('Точных совпадений нет')).toBeInTheDocument()
     expect(screen.getByText(/Проверьте, как написан запрос «Орлвоа»/)).toBeInTheDocument()
-    expect(screen.getByText('Похожих: 2 учёных')).toBeInTheDocument()
+    expect(screen.getByText('Похожих: 2 соискателя')).toBeInTheDocument()
   })
 
   it('explains an empty result for filters, for words and for an empty catalog', async () => {
@@ -205,7 +205,7 @@ describe('catalog page', () => {
 
     setup({}, { items: [] })
     renderApp('/scientists')
-    expect(await screen.findByText(/В каталоге пока никого нет/)).toBeInTheDocument()
+    expect(await screen.findByText(/Пока здесь никого нет/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сбросить всё' })).not.toBeInTheDocument()
   })
 
@@ -239,7 +239,7 @@ describe('catalog page', () => {
     setup({ 'GET /api/scientists?*': () => (fail ? apiError(500, 'internal', 'Что-то сломалось на сервере') : reply(200, catalogResult())) })
     renderApp('/scientists')
     expect(screen.getAllByRole('status', { name: 'Загрузка' }).length).toBeGreaterThan(0)
-    expect(await screen.findByRole('heading', { level: 2, name: 'Не удалось загрузить каталог' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: 'Не удалось загрузить список соискателей' })).toBeInTheDocument()
     expect(screen.getByText('Что-то сломалось на сервере')).toBeInTheDocument()
     fail = false
     await user.click(screen.getByRole('button', { name: 'Проверить ещё раз' }))
@@ -255,7 +255,7 @@ describe('catalog page', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    await user.click(screen.getByRole('button', { name: 'Показать 2 учёных' }))
+    await user.click(screen.getByRole('button', { name: 'Показать 2 соискателя' }))
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
   })
 
@@ -307,12 +307,12 @@ describe('catalog intro', () => {
     localStorage.setItem('scibox.role', 'employer')
     setup()
     const employer = renderApp('/scientists')
-    expect(await screen.findByText(/пригласите его на свою вакансию/)).toBeInTheDocument()
+    expect(await screen.findByText(/пригласите на свою вакансию/)).toBeInTheDocument()
     employer.unmount()
     localStorage.setItem('scibox.role', 'seeker')
     setup()
     renderApp('/scientists')
-    expect(await screen.findByText(/Учёные, открывшие свой профиль/)).toBeInTheDocument()
+    expect(await screen.findByText(/Люди, открывшие свой профиль/)).toBeInTheDocument()
     expect(screen.queryByText(/пригласите его/)).not.toBeInTheDocument()
     localStorage.removeItem('scibox.role')
   })

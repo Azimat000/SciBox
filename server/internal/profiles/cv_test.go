@@ -16,6 +16,7 @@ func fullPage() Page {
 			Identifiers: Identifiers{ORCID: "0000-0002-1825-0097", SPIN: "12345678", ScopusID: "57190123456", WosID: "A-1234-2008"},
 			HIndex:      HIndex{RSCI: ptr(12), Scopus: ptr(9), WoS: ptr(7), Scholar: ptr(15)},
 			Specialties: []Code{{"1.4.1", "Неорганическая химия"}, {"1.4.4", "Физическая химия"}},
+			Skills:      Skills{Research: []string{"ИК-спектроскопия", "XRD"}, General: []string{"Английский B2"}},
 			Sections: Sections{
 				Education:    []Item{{Kind: KindEducation, ItemFields: ItemFields{Institution: "НГУ", Program: "Аспирантура", YearFrom: ptr(2010), YearTo: ptr(2014)}}},
 				Experience:   []Item{{Kind: KindExperience, ItemFields: ItemFields{Organization: "Институт катализа", Position: "СНС", YearFrom: ptr(2018), Description: "Группа"}}},
@@ -46,7 +47,7 @@ func TestCVDocumentFull(t *testing.T) {
 	for _, s := range doc.Sections {
 		heads = append(heads, s.Heading)
 	}
-	want := "О себе|Степень и звание|Научные специальности|Образование|Опыт работы|Публикации|Гранты|Патенты и программы|Преподавание"
+	want := "О себе|Степень и звание|Научные специальности|Научные навыки|Общие навыки|Образование|Опыт работы|Публикации|Гранты|Патенты и программы|Преподавание"
 	if strings.Join(heads, "|") != want {
 		t.Errorf("разделы: %v", heads)
 	}
@@ -87,6 +88,12 @@ func TestCVDocumentFull(t *testing.T) {
 	}
 	if got := doc.Sections[sec["Научные специальности"]].Paragraph; got != "1.4.1 Неорганическая химия\n1.4.4 Физическая химия" {
 		t.Errorf("специальности: %q", got)
+	}
+	if got := doc.Sections[sec["Научные навыки"]].Paragraph; got != "ИК-спектроскопия, XRD" {
+		t.Errorf("научные навыки: %q", got)
+	}
+	if got := doc.Sections[sec["Общие навыки"]].Paragraph; got != "Английский B2" {
+		t.Errorf("общие навыки: %q", got)
 	}
 }
 

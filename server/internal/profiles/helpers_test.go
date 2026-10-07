@@ -180,6 +180,7 @@ func goodCore() CoreInput {
 		ORCID: "0000-0002-1825-0097", SPIN: "1234-5678", ScopusID: "57190123456", WosID: "a-1234-2008",
 		HRsci: ptr(12), HScopus: ptr(9), HWos: ptr(7), HScholar: ptr(15),
 		ContactEmail: "Orlova@Example.ru", Specialties: []string{"1.4.4", "1.4.1"},
+		ResearchSkills: []string{"ИК-спектроскопия", "  рентгеновская   дифракция "}, GeneralSkills: []string{"Английский B2", "Excel"},
 	}
 }
 

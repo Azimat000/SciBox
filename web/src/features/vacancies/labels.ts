@@ -10,6 +10,7 @@ import {
   housings,
   positionTypes,
   rates,
+  rulesOf,
   workFormats,
   type Card,
   type PositionType,
@@ -81,8 +82,8 @@ export function contractText(type: string, months: number | null): string {
   return type === '' ? '' : lookup(t.vacancies.contracts, type)
 }
 
-/** Стипендия у аспирантуры, постдока и стажировки, зарплата у остальных. */
-export const salaryLabel = (type: PositionType | string) => (type === 'early_career' ? t.vacancies.page.stipend : t.vacancies.page.salary)
+/** Стипендия у аспирантуры, магистратуры и стажировки, зарплата у остальных. */
+export const salaryLabel = (type: PositionType | string) => (rulesOf(type).stipend ? t.vacancies.page.stipend : t.vacancies.page.salary)
 
 export const focusLabel = (type: string) => lookup(t.vacancies.page.focusLabels, type)
 

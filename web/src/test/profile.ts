@@ -28,6 +28,7 @@ export const profile: Profile = {
   identifiers: { orcid: '0000-0002-1825-0097', spin: '12345678', scopus_id: '57190123456', wos_id: 'A-1234-2008' },
   h_index: { rsci: 12, scopus: 9, wos: null, scholar: 15 },
   specialties: [{ code: '1.4.4', name: 'Физическая химия' }],
+  skills: { research: ['ИК-спектроскопия', 'Рентгеновская дифракция'], general: ['Английский B2'] },
   contact_email: 'orlova@example.ru',
   sections: { education: [education], experience: [experience], publications: [publication, book], grants: [grant], patents: [patent], teaching: [teaching] },
   updated_at: '2026-10-03T12:00:00Z',

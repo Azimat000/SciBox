@@ -5,8 +5,34 @@ import { useMe } from '../auth/api'
 export const statuses = ['draft', 'published', 'closed', 'archived'] as const
 export type Status = (typeof statuses)[number]
 
-export const positionTypes = ['research', 'teaching', 'early_career', 'management'] as const
+export const positionTypes = ['research', 'teaching', 'admin', 'phd', 'masters', 'project', 'internship'] as const
 export type PositionType = (typeof positionTypes)[number]
+
+/** Что требуется от вакансии каждого вида и что для неё допустимо (как в internal/vacancies/validate.go, D-134). */
+export type TypeRules = {
+  rate: boolean // ставка обязательна
+  level: boolean // уровень R1–R4 обязателен
+  specialties: boolean // нужна хотя бы одна научная специальность
+  focus: boolean // нужно поле «что предстоит делать»
+  competition: boolean // можно отметить «конкурс»
+  title: boolean // можно требовать учёное звание
+  stipend: boolean // деньги называются стипендией
+}
+
+const none: TypeRules = { rate: false, level: false, specialties: false, focus: false, competition: false, title: false, stipend: false }
+
+export const typeRules: Record<PositionType, TypeRules> = {
+  research: { ...none, rate: true, level: true, specialties: true, competition: true },
+  teaching: { ...none, rate: true, level: true, specialties: true, focus: true, competition: true, title: true },
+  admin: { ...none, rate: true },
+  phd: { ...none, specialties: true, focus: true, stipend: true },
+  masters: { ...none, specialties: true, focus: true, stipend: true },
+  project: { ...none, focus: true },
+  internship: { ...none, focus: true, stipend: true },
+}
+
+/** Правила вида; для пустого или незнакомого вида ничего не обязательно. */
+export const rulesOf = (type: string): TypeRules => typeRules[type as PositionType] ?? none
 
 export const workFormats = ['onsite', 'hybrid', 'remote'] as const
 export const housings = ['none', 'dormitory', 'service', 'compensation'] as const

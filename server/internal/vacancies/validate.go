@@ -61,8 +61,8 @@ const (
 	msgFundingNoteLong  = "Слишком длинно: не больше 200 знаков"
 	msgDegreeInvalid    = "Выберите степень из списка"
 	msgTitleReqInvalid  = "Выберите звание из списка"
-	msgTitleReqTeaching = "Звание можно требовать только для должностей ППС"
-	msgCompetitionOnly  = "Отметка «конкурс» только для научных должностей и ППС"
+	msgTitleReqTeaching = "Звание можно требовать только у преподавателей"
+	msgCompetitionOnly  = "Отметка «конкурс» только для научных работников и преподавателей"
 	msgDeadlineInvalid  = "Дата должна быть вида 2026-11-14"
 	msgDeadlineRequired = "Для конкурса укажите срок подачи документов"
 	msgDeadlinePast     = "Срок подачи уже прошёл: укажите сегодняшнюю или более позднюю дату"
@@ -87,10 +87,12 @@ func rulesFor(positionType string) typeRules {
 		return typeRules{needRate: true, needLevel: true, needSpecialties: true, allowCompetition: true}
 	case TypeTeaching:
 		return typeRules{needRate: true, needLevel: true, needSpecialties: true, needFocus: true, allowCompetition: true, allowTitle: true}
-	case TypeEarlyCareer:
-		return typeRules{needLevel: true, needSpecialties: true, needFocus: true}
-	case TypeManagement:
+	case TypeAdmin:
 		return typeRules{needRate: true}
+	case TypePhD, TypeMasters:
+		return typeRules{needSpecialties: true, needFocus: true}
+	case TypeProject, TypeInternship:
+		return typeRules{needFocus: true}
 	}
 	return typeRules{}
 }

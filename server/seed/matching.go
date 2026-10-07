@@ -46,10 +46,10 @@ var demoSearches = []demoSearch{
 	{"lebedeva", "Геология, Иркутская область", "field=1.6&region=38", matching.FreqDaily},
 	{"lebedeva", "Геология с жильём", "field=1.6&housing=1", matching.FreqWeekly},
 	{"korolev", "Биология: конкурсы", "field=1.5&competition=1", matching.FreqDaily},
-	{"korolev", "Постдок и аспирантура в биологии", "field=1.5&type=early_career", matching.FreqInstant},
+	{"korolev", "Аспирантура и стажировки в биологии", "field=1.5&type=phd&type=internship", matching.FreqInstant},
 	{"guseva", "Молекулярная биология", "q=молекулярная+биология", matching.FreqDaily},
 	{"zhukova", "Математика: преподавание", "field=1.1&type=teaching", matching.FreqWeekly},
-	{"morozov", "Химия: аспирантура", "field=1.3&type=early_career", matching.FreqOff},
+	{"morozov", "Химия: аспирантура", "field=1.3&type=phd", matching.FreqOff},
 }
 
 func seedMatching(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid.UUID, now time.Time) (favorites, searches int, err error) {

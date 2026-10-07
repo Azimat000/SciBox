@@ -1,4 +1,4 @@
-import type { Reference, VacancyFields } from './api'
+import { rulesOf, type Reference, type VacancyFields } from './api'
 
 /** Значения полей формы: имена совпадают с полями сервера, чтобы его ошибки попадали точно в нужное поле. */
 export type FormValues = {
@@ -114,8 +114,8 @@ export function toFields(v: FormValues): VacancyFields {
     funding_source: v.funding_source,
     funding_note: v.funding_note,
     degree_required: v.degree_required,
-    title_required: v.position_type === 'teaching' ? v.title_required : 'none',
-    is_competition: v.position_type === 'research' || v.position_type === 'teaching' ? v.is_competition : false,
+    title_required: rulesOf(v.position_type).title ? v.title_required : 'none',
+    is_competition: rulesOf(v.position_type).competition ? v.is_competition : false,
     deadline: v.deadline,
     specialties: v.specialties === '' ? [] : v.specialties.split(','),
   }

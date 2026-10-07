@@ -23,13 +23,13 @@ describe('landing page', () => {
   it('tells both sides what the site is, with the numbers and the fresh vacancies from the server', async () => {
     const { called } = setup()
     renderApp('/')
-    expect(await screen.findByRole('heading', { level: 1, name: /Найдите место в\sнауке/ })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Или человека в свою лабораторию.')
+    expect(await screen.findByRole('heading', { level: 1, name: /Найдите место в\sнаучно-образовательной сфере/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Или человека в ваш коллектив.')
 
     const facts = await screen.findByRole('list', { name: 'Сейчас на сайте' })
     expect(within(facts).getByRole('link', { name: '188 открытых вакансий' })).toHaveAttribute('href', '/vacancies')
     expect(within(facts).getByRole('link', { name: '30 организаций ищут людей' })).toHaveAttribute('href', '/organizations')
-    expect(within(facts).getByRole('link', { name: '7 учёных в каталоге' })).toHaveAttribute('href', '/scientists')
+    expect(within(facts).getByRole('link', { name: '7 соискателей открыли профиль' })).toHaveAttribute('href', '/scientists')
 
     expect(await link(card.title)).toHaveAttribute('href', `/vacancies/${card.id}`)
     expect(await link('Все вакансии: 188')).toHaveAttribute('href', '/vacancies')
@@ -37,7 +37,7 @@ describe('landing page', () => {
 
     expect(screen.getByRole('heading', { level: 2, name: 'Если вы ищете место' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Если вы набираете людей' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Устроено под науку' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Устроено под науку и образование' })).toBeInTheDocument()
     expect(screen.getAllByRole('term')).toHaveLength(6)
   })
 
@@ -46,10 +46,10 @@ describe('landing page', () => {
     renderApp('/')
     const nav = await screen.findByRole('navigation', { name: 'Обзор вакансий' })
     expect(within(nav).getByRole('link', { name: 'Естественные науки: 138 вакансий' })).toHaveAttribute('href', '/vacancies?field=1')
-    expect(within(nav).getByRole('link', { name: 'Научная должность: 94 вакансии' })).toHaveAttribute('href', '/vacancies?type=research')
-    expect(within(nav).getByRole('link', { name: 'Аспирантура, постдок, стажировка: 55 вакансий' })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Научный работник: 94 вакансии' })).toHaveAttribute('href', '/vacancies?type=research')
+    expect(within(nav).getByRole('link', { name: 'Аспирантура: 55 вакансий' })).toHaveAttribute(
       'href',
-      '/vacancies?type=early_career',
+      '/vacancies?type=phd',
     )
     // Название области, которого нет в справочнике, не пропадает.
     expect(within(nav).getByRole('link', { name: 'Область 2: 52 вакансии' })).toBeInTheDocument()
@@ -83,10 +83,10 @@ describe('landing page', () => {
     setup()
     const guest = renderApp('/')
     expect(await link('Создать профиль')).toHaveAttribute('href', '/register')
-    const tracks = within(screen.getByRole('region', { name: 'Для учёных и для организаций' }))
+    const tracks = within(screen.getByRole('region', { name: 'Для соискателей и для организаций' }))
     expect(tracks.getByRole('link', { name: 'Создать организацию' })).toHaveAttribute('href', '/organizations/new')
     expect(tracks.getByRole('link', { name: 'Организации' })).toHaveAttribute('href', '/organizations')
-    expect(tracks.getByRole('link', { name: 'Каталог учёных' })).toHaveAttribute('href', '/scientists')
+    expect(tracks.getByRole('link', { name: 'Соискатели' })).toHaveAttribute('href', '/scientists')
     guest.unmount()
 
     setup(signedInAs())
@@ -144,7 +144,7 @@ describe('landing page', () => {
   it('shows only the types when there are no fields', async () => {
     setup({ 'GET /api/landing': reply(200, { ...stats, fields: [] }) })
     renderApp('/')
-    await screen.findByText('По видам позиций')
+    await screen.findByText('По видам вакансий')
     expect(screen.queryByText('По областям науки')).not.toBeInTheDocument()
   })
 

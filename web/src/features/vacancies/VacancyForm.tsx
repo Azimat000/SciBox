@@ -10,7 +10,7 @@ import { TextArea, TextField } from '../../ui/TextField'
 import { describeError, fieldErrorsOf } from '../auth/errors'
 import { useForm } from '../auth/useForm'
 import { compact } from '../auth/validation'
-import { positionTypes, type PositionType, type Reference, type Target, type VacancyFields } from './api'
+import { positionTypes, rulesOf, typeRules, type PositionType, type Reference, type Target, type VacancyFields } from './api'
 import {
   contractOptions,
   degreeOptions,
@@ -52,8 +52,7 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
   const type = values.position_type as PositionType | ''
   const target = targets.find((x) => x.organization.slug === values.organization)
   const remote = values.work_format === 'remote'
-  const management = type === 'management'
-  const early = type === 'early_career'
+  const rules = rulesOf(type)
 
   const positionOptions: Option[] = useMemo(
     () => reference.positions.filter((p) => p.type === type).map((p) => ({ value: p.code, label: p.name })),
@@ -76,8 +75,8 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
   function pickType(next: PositionType) {
     set('position_type', next)
     if (typeOfPosition(reference, values.position_code) !== next) set('position_code', '')
-    if (next !== 'teaching') set('title_required', 'none')
-    if (next !== 'research' && next !== 'teaching') set('is_competition', false)
+    if (!typeRules[next].title) set('title_required', 'none')
+    if (!typeRules[next].competition) set('is_competition', false)
   }
 
   const submit = (e: FormEvent) => {
@@ -142,7 +141,7 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
         <TextArea label={f.description} name="description" hint={f.descriptionHint} rows={8} value={values.description} onChange={(e) => set('description', e.target.value)} error={errors.description} />
         <TextArea label={f.requirements} name="requirements" optional rows={4} value={values.requirements} onChange={(e) => set('requirements', e.target.value)} error={errors.requirements} />
         {type !== '' && (
-          <TextField label={f.focusLabels[type]} name="focus" optional={type === 'research' || type === 'management'} value={values.focus} onChange={(e) => set('focus', e.target.value)} error={errors.focus} />
+          <TextField label={f.focusLabels[type]} name="focus" optional={!rules.focus} value={values.focus} onChange={(e) => set('focus', e.target.value)} error={errors.focus} />
         )}
       </fieldset>
 
@@ -153,11 +152,11 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
           value={values.specialties === '' ? [] : values.specialties.split(',')}
           onChange={(codes) => set('specialties', codes.join(','))}
           error={errors.specialties}
-          optional={management}
+          optional={!rules.specialties}
         />
-        <Select label={f.level} hint={levelHint(values.career_level)} name="career_level" placeholder={f.levelPlaceholder} options={levelOptions} value={values.career_level} onChange={(e) => set('career_level', e.target.value)} error={errors.career_level} optional={management} />
+        <Select label={f.level} hint={levelHint(values.career_level)} name="career_level" placeholder={f.levelPlaceholder} options={levelOptions} value={values.career_level} onChange={(e) => set('career_level', e.target.value)} error={errors.career_level} optional={!rules.level} />
         <Select label={f.degree} name="degree_required" options={degreeOptions} value={values.degree_required} onChange={(e) => set('degree_required', e.target.value)} error={errors.degree_required} />
-        {type === 'teaching' && (
+        {rules.title && (
           <Select label={f.academicTitle} name="title_required" options={titleOptions} value={values.title_required} onChange={(e) => set('title_required', e.target.value)} error={errors.title_required} />
         )}
       </fieldset>
@@ -167,10 +166,10 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
         <Select label={f.format} name="work_format" placeholder={f.formatPlaceholder} options={formatOptions} value={values.work_format} onChange={(e) => set('work_format', e.target.value)} error={errors.work_format} />
         <Combobox label={f.region} placeholder={f.regionPlaceholder} options={regionOptions} value={values.region_code === '' ? null : values.region_code} onChange={(code) => set('region_code', code ?? '')} error={errors.region_code} optional={remote} />
         <TextField label={f.city} name="city" value={values.city} onChange={(e) => set('city', e.target.value)} error={errors.city} optional={remote} />
-        <Select label={f.rate} name="rate_percent" placeholder={f.ratePlaceholder} options={rateOptions} value={values.rate_percent} onChange={(e) => set('rate_percent', e.target.value)} error={errors.rate_percent} optional={early} />
+        <Select label={f.rate} name="rate_percent" placeholder={f.ratePlaceholder} options={rateOptions} value={values.rate_percent} onChange={(e) => set('rate_percent', e.target.value)} error={errors.rate_percent} optional={!rules.rate} />
         <div className="field-pair">
-          <TextField label={early ? f.stipendFrom : f.salaryFrom} name="salary_from" type="number" inputMode="numeric" min={1} step={1000} value={values.salary_from} onChange={(e) => set('salary_from', e.target.value)} error={errors.salary_from} optional />
-          <TextField label={early ? f.stipendTo : f.salaryTo} name="salary_to" type="number" inputMode="numeric" min={1} step={1000} value={values.salary_to} onChange={(e) => set('salary_to', e.target.value)} error={errors.salary_to} optional />
+          <TextField label={rules.stipend ? f.stipendFrom : f.salaryFrom} name="salary_from" type="number" inputMode="numeric" min={1} step={1000} value={values.salary_from} onChange={(e) => set('salary_from', e.target.value)} error={errors.salary_from} optional />
+          <TextField label={rules.stipend ? f.stipendTo : f.salaryTo} name="salary_to" type="number" inputMode="numeric" min={1} step={1000} value={values.salary_to} onChange={(e) => set('salary_to', e.target.value)} error={errors.salary_to} optional />
         </div>
         <p className="field-hint">{f.salaryHint}</p>
         <Select label={f.contract} name="contract_type" placeholder={f.contractPlaceholder} options={contractOptions} value={values.contract_type} onChange={(e) => set('contract_type', e.target.value)} error={errors.contract_type} />
@@ -186,10 +185,10 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
 
       <fieldset className="form-block">
         <legend>{f.sections.deadline}</legend>
-        {(type === 'research' || type === 'teaching') && (
+        {rules.competition && (
           <Checkbox label={f.competition} checked={values.is_competition} onChange={(e) => set('is_competition', e.target.checked)} error={errors.is_competition} />
         )}
-        {(type === 'research' || type === 'teaching') && <p className="field-hint">{f.competitionHint}</p>}
+        {rules.competition && <p className="field-hint">{f.competitionHint}</p>}
         <TextField label={f.deadline} name="deadline" type="date" hint={f.deadlineHint} value={values.deadline} onChange={(e) => set('deadline', e.target.value)} error={errors.deadline} optional={!values.is_competition} required={values.is_competition} />
       </fieldset>
 

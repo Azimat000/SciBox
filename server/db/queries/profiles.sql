@@ -32,7 +32,8 @@ UPDATE profiles SET
     academic_title = @academic_title, academic_title_year = @academic_title_year,
     orcid = @orcid, spin = @spin, scopus_id = @scopus_id, wos_id = @wos_id,
     h_rsci = @h_rsci, h_scopus = @h_scopus, h_wos = @h_wos, h_scholar = @h_scholar,
-    contact_email = @contact_email, updated_at = @now
+    contact_email = @contact_email, research_skills = @research_skills::text[], general_skills = @general_skills::text[],
+    updated_at = @now
 WHERE id = @id;
 
 -- name: UpdateProfilePrivacy :execrows
@@ -90,7 +91,7 @@ SELECT EXISTS (SELECT 1 FROM org_members WHERE user_id = $1);
 
 -- Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
 -- и с заполненной должностью; сам смотрящий из каталога исключён. Слова ищутся по русской морфологии (имя, должность,
--- город, регион, организация степени, специальности, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
+-- город, регион, организация степени, специальности, навыки, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
 -- словам» (@fuzzy, имя и должность).
 -- name: SearchScientists :many
 SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
@@ -120,7 +121,9 @@ LEFT JOIN LATERAL (
 ) qq ON true
 LEFT JOIN LATERAL (
     SELECT to_tsvector('russian', u.display_name || ' ' || p.headline || ' ' || p.city || ' ' || COALESCE(r.name, '') || ' '
-                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' ' || p.about) AS doc
+                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' '
+                                  || array_to_string(p.research_skills, ' ') || ' ' || array_to_string(p.general_skills, ' ') || ' '
+                                  || p.about) AS doc
 ) d ON true
 WHERE p.visibility = ANY(@modes::text[])
   AND p.headline <> ''

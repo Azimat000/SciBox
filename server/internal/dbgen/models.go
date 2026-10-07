@@ -198,6 +198,8 @@ type Profile struct {
 	ContactEmail        string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	ResearchSkills      []string
+	GeneralSkills       []string
 }
 
 type ProfileItem struct {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -86,6 +87,9 @@ func TestSaveCoreRoundTrip(t *testing.T) {
 	if v.Visibility != "hidden" {
 		t.Errorf("сохранение основных полей не должно менять приватность: %q", v.Visibility)
 	}
+	if !slices.Equal(v.Skills.Research, []string{"ИК-спектроскопия", "рентгеновская дифракция"}) || !slices.Equal(v.Skills.General, []string{"Английский B2", "Excel"}) {
+		t.Errorf("навыки: %+v", v.Skills)
+	}
 
 	// Вторая правка заменяет всё, в том числе специальности; степень «нет» стирает подробности.
 	next := CoreInput{Headline: "Профессор", Degree: DegreeNone, Specialties: []string{"1.4.4"}}
@@ -99,6 +103,9 @@ func TestSaveCoreRoundTrip(t *testing.T) {
 	}
 	if len(v.Specialties) != 1 {
 		t.Errorf("специальности после замены: %+v", v.Specialties)
+	}
+	if v.Skills.Research == nil || v.Skills.General == nil || len(v.Skills.Research)+len(v.Skills.General) != 0 {
+		t.Errorf("навыки после замены — пустые списки, не null: %#v", v.Skills)
 	}
 	// Совсем без специальностей.
 	page, err = w.svc.SaveCore(bg, p.User, CoreInput{})

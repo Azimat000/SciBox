@@ -42,8 +42,8 @@ func cancelledNotice(vacancy, org string) (title, body string) {
 // answeredNotice — что получают сотрудники организации, когда учёный ответил.
 func answeredNotice(name, vacancy, org, action, note string) (title, body string) {
 	if action == ActionInterested {
-		return "Приглашение: ответ «Интересно»", lines(vacancyLine(vacancy, org), "Учёный: "+name+". Ответил «Интересно».",
+		return "Приглашение: ответ «Интересно»", lines(vacancyLine(vacancy, org), "Соискатель: "+name+". Ответил «Интересно».",
 			withNote("Записка", note))
 	}
-	return "Приглашение: ответ «Не сейчас»", lines(vacancyLine(vacancy, org), "Учёный: "+name+". Ответил «Не сейчас».", withNote("Записка", note))
+	return "Приглашение: ответ «Не сейчас»", lines(vacancyLine(vacancy, org), "Соискатель: "+name+". Ответил «Не сейчас».", withNote("Записка", note))
 }

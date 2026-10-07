@@ -75,7 +75,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 			Code: apierr.CodeRateLimited, Message: "Вы отправили много приглашений за сутки. Продолжите завтра", RetryAfter: secs,
 		}})
 	case errors.Is(err, ErrNotFound):
-		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, "Такого приглашения, вакансии или учёного нет")
+		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, "Такого приглашения, вакансии или соискателя нет")
 	case errors.Is(err, ErrVacancyClosed):
 		apierr.WriteError(w, http.StatusConflict, CodeVacancyClosed, "Вакансия не опубликована или закрыта: приглашать на неё нельзя")
 	case errors.Is(err, ErrDeadlinePassed):

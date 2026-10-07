@@ -354,7 +354,7 @@ describe('sent offers', () => {
     stubApi(signedIn({ [route]: reply(200, sentList([])) }))
     renderApp('/sent-offers')
     expect(await screen.findByRole('heading', { level: 2, name: 'Вы пока никого не приглашали' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Открыть каталог' })).toHaveAttribute('href', '/scientists')
+    expect(screen.getByRole('link', { name: 'Перейти к соискателям' })).toHaveAttribute('href', '/scientists')
     expect(screen.getByRole('navigation', { name: 'Отклики и приглашения' })).toBeInTheDocument()
   })
 

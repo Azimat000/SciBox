@@ -18,7 +18,7 @@ export const terms = ['permanent', 'short', 'medium', 'long'] as const
 
 /** Допустимые значения фильтров с фиксированным набором. Область науки проверяется по форме кода. */
 export const allowed: Record<Exclude<MultiKey, 'field'>, readonly string[]> = {
-  type: ['research', 'teaching', 'early_career', 'management'],
+  type: ['research', 'teaching', 'admin', 'phd', 'masters', 'project', 'internship'],
   level: ['1', '2', '3', '4'],
   format: ['onsite', 'hybrid', 'remote'],
   degree: ['none', 'candidate', 'doctor'],

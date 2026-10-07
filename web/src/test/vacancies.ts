@@ -37,8 +37,8 @@ export const reference: Reference = {
     { code: 'senior_researcher', type: 'research', name: 'Старший научный сотрудник' },
     { code: 'researcher', type: 'research', name: 'Научный сотрудник' },
     { code: 'docent', type: 'teaching', name: 'Доцент' },
-    { code: 'postdoc', type: 'early_career', name: 'Постдок' },
-    { code: 'grant_manager', type: 'management', name: 'Грант-менеджер' },
+    { code: 'phd_student', type: 'phd', name: 'Аспирантура' },
+    { code: 'grant_manager', type: 'admin', name: 'Грант-менеджер' },
   ],
   sources: [],
 }

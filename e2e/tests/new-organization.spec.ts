@@ -25,7 +25,7 @@ test('новая организация публикует вакансию, г�
 
   await test.step('вакансия: заполнить и опубликовать', async () => {
     await page.goto('/my-vacancies/new')
-    await page.getByRole('button', { name: 'Научная должность' }).click()
+    await page.getByRole('button', { name: 'Научный работник' }).click()
     await page.getByLabel(/^Должность/).selectOption({ label: 'Научный сотрудник' })
     await page.getByLabel('Название вакансии').fill(title)
     await page.getByLabel('Аннотация').fill('Ищем сотрудника для разбора кернов озёрных отложений Сибири и реконструкции климата голоцена.')

@@ -26,7 +26,7 @@ type FieldCount struct {
 	Vacancies int64  `json:"vacancies"`
 }
 
-// TypeCount — открытые вакансии одного вида позиции (research, teaching, early_career, management).
+// TypeCount — открытые вакансии одного вида позиции (research, teaching, admin, phd, masters, project, internship).
 type TypeCount struct {
 	Type      string `json:"type"`
 	Vacancies int64  `json:"vacancies"`

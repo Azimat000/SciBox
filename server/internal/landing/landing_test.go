@@ -121,7 +121,7 @@ func TestByFieldAndType(t *testing.T) {
 	e := tm.Published(nil) // 1.4.4, но уже в архиве
 	tm.Status(e.ID, "closed")
 	tm.Status(e.ID, "archived")
-	exec(t, `UPDATE vacancies SET position_code = 'postdoc' WHERE id = $1`, a.ID)
+	exec(t, `UPDATE vacancies SET position_code = 'phd_student' WHERE id = $1`, a.ID)
 	exec(t, `UPDATE vacancies SET position_code = 'professor' WHERE id IN ($1, $2)`, b.ID, c.ID)
 	exec(t, `UPDATE vacancies SET position_code = 'dean' WHERE id = $1`, d.ID)
 
@@ -135,8 +135,8 @@ func TestByFieldAndType(t *testing.T) {
 			t.Errorf("fields[%d] = %+v, want %+v", i, s.Fields[i], f)
 		}
 	}
-	// Виды позиций идут по алфавиту кода.
-	wantTypes := []TypeCount{{"early_career", 1}, {"management", 1}, {"teaching", 2}}
+	// Виды идут в порядке справочника должностей.
+	wantTypes := []TypeCount{{"teaching", 2}, {"admin", 1}, {"phd", 1}}
 	if len(s.Types) != len(wantTypes) {
 		t.Fatalf("types = %+v, want %+v", s.Types, wantTypes)
 	}

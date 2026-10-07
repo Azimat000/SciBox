@@ -3,7 +3,7 @@ import { t } from '../../i18n'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Tag } from '../../ui/Tag'
 import { plural } from '../../lib/plural'
-import { itemKinds, sectionOf, type Item, type ItemKind, type ProfilePage, type Quartiles } from './api'
+import { itemKinds, sectionOf, skillsOf, type Item, type ItemKind, type ProfilePage, type Quartiles } from './api'
 import { degreeLabel, titleLabel } from './labels'
 import { itemTitle, sectionDefs } from './sections'
 
@@ -39,7 +39,20 @@ const spinText = (spin: string) => (/^\d{8}$/.test(spin) ? `${spin.slice(0, 4)}-
 
 const longName = (s: string) => (s.length > 40 ? 'true' : undefined)
 
-/** Профиль учёного как страница журнала. Одна разметка и для владельца (с кнопками правки), и для остальных (без них). */
+/** Навыки строкой меток. */
+function SkillTags({ skills }: { skills: readonly string[] }) {
+  return (
+    <ul className="profile-tags">
+      {skills.map((s) => (
+        <li key={s}>
+          <Tag>{s}</Tag>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Профиль как страница журнала. Одна разметка и для владельца (с кнопками правки), и для остальных (без них). */
 export function ProfileView({ page, nested = false, editable = false, onAdd, onEdit, onRemove, actions, afterHead }: Props) {
   const p = page.profile
   const place = t.profile.place(p.city, p.region?.name ?? '')
@@ -56,6 +69,7 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
     [t.profile.identifiers.scopus, p.identifiers.scopus_id, 'scopus'],
     [t.profile.identifiers.wos, p.identifiers.wos_id, 'wos'],
   ].filter((r) => r[1] !== '')
+  const skills = skillsOf(p)
   const degreeLine = p.degree.level !== 'none'
   const titleLine = p.academic_title !== 'none'
 
@@ -93,6 +107,18 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
         {(p.about || editable) && (
           <Section title={t.profile.sections.about} action={editCore(t.profile.sections.about)} id="about">
             {p.about ? <p className="profile-text">{p.about}</p> : empty(t.profile.empty.about)}
+          </Section>
+        )}
+
+        {(skills.research.length > 0 || editable) && (
+          <Section title={t.profile.sections.researchSkills} action={editCore(t.profile.sections.researchSkills)} id="research-skills">
+            {skills.research.length > 0 ? <SkillTags skills={skills.research} /> : empty(t.profile.empty.researchSkills)}
+          </Section>
+        )}
+
+        {(skills.general.length > 0 || editable) && (
+          <Section title={t.profile.sections.generalSkills} action={editCore(t.profile.sections.generalSkills)} id="general-skills">
+            {skills.general.length > 0 ? <SkillTags skills={skills.general} /> : empty(t.profile.empty.generalSkills)}
           </Section>
         )}
 

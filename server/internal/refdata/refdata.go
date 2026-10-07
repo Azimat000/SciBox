@@ -40,7 +40,7 @@ type Region struct {
 	Name string `json:"name"`
 }
 
-// Position — должность и её тип (research, teaching, early_career, management).
+// Position — должность и её тип (research, teaching, admin, phd, masters, project, internship).
 type Position struct {
 	Code string `json:"code"`
 	Type string `json:"type"`

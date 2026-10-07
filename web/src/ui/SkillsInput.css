@@ -1,0 +1,72 @@
+/* Список навыков: строка ввода с кнопкой и метки печатными углами, как метки специальностей. Только токены. */
+.skills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.skills-entry {
+  display: flex;
+  gap: var(--s-2);
+  align-items: stretch;
+}
+
+.skills-entry .control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.skills-entry .btn {
+  flex: none;
+}
+
+.skills-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  max-width: 100%;
+  min-height: 2.25rem;
+  padding: 0 0 0 var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--wash);
+  font-size: var(--text-sm);
+}
+
+.skill-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skill-remove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.skill-remove:hover {
+  background: var(--wash-deep);
+  color: var(--ink);
+}
+
+.skills-count {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}

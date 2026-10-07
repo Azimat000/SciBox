@@ -30,7 +30,7 @@ describe('search page', () => {
   it('opens on /vacancies with the newest first', async () => {
     const { last } = setup()
     renderApp('/vacancies')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Вакансии в науке и образовании' })).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: card.title })).toHaveAttribute('href', `/vacancies/${card.id}`)
     expect(screen.getByText('Найдено 2 вакансии')).toBeInTheDocument()
     expect(last().get('limit')).toBe('20')
@@ -70,7 +70,7 @@ describe('search page', () => {
     const { router } = renderApp('/vacancies')
     await screen.findByRole('link', { name: card.title })
 
-    await user.click(within(filters()).getByRole('checkbox', { name: 'Научная должность' }))
+    await user.click(within(filters()).getByRole('checkbox', { name: 'Научный работник' }))
     await waitFor(() => expect(last().getAll('type')).toEqual(['research']))
     await user.click(within(filters()).getByRole('button', { name: 'Гибрид' }))
     await user.click(within(filters()).getByRole('button', { name: 'В ближайшие 7 дней' }))
@@ -87,7 +87,7 @@ describe('search page', () => {
     expect(last().get('salary_min')).toBe('100000')
 
     const tags = within(chipsList()!)
-    for (const label of ['Научная должность', 'Гибрид', 'В ближайшие 7 дней', 'Только конкурсы', 'Предоставляется жильё', 'от 100 000 ₽', 'Москва']) {
+    for (const label of ['Научный работник', 'Гибрид', 'В ближайшие 7 дней', 'Только конкурсы', 'Предоставляется жильё', 'от 100 000 ₽', 'Москва']) {
       expect(tags.getByText(label)).toBeInTheDocument()
     }
 
@@ -129,7 +129,7 @@ describe('search page', () => {
     expect(within(list).getByText('НИИ / институт РАН')).toBeInTheDocument()
     expect(within(list).getByText('Грант')).toBeInTheDocument()
     expect(within(list).getByText('Срочный, от года до трёх лет')).toBeInTheDocument()
-    expect(within(list).getByText('ППС')).toBeInTheDocument()
+    expect(within(list).getByText('Преподаватель')).toBeInTheDocument()
     // Группа со сделанным выбором открыта, и выбор виден в её заголовке.
     expect(within(filters()).getByRole('checkbox', { name: /Химические науки/ })).toBeChecked()
     await user.click(within(list).getByRole('button', { name: 'Убрать фильтр: 1.4 Химические науки' }))
@@ -193,7 +193,7 @@ describe('search page', () => {
     await user.click(within(pager).getByRole('button', { name: 'Назад' }))
     await screen.findByText('Страница 2 из 3')
     // Смена фильтра возвращает на первую страницу.
-    await user.click(within(filters()).getByRole('checkbox', { name: 'ППС' }))
+    await user.click(within(filters()).getByRole('checkbox', { name: 'Преподаватель' }))
     await waitFor(() => expect(router.state.location.search).not.toContain('page'))
   })
 
@@ -273,7 +273,7 @@ describe('search page', () => {
     })
     renderApp('/vacancies')
     await screen.findByRole('link', { name: card.title })
-    await user.click(within(filters()).getByRole('checkbox', { name: 'ППС' }))
+    await user.click(within(filters()).getByRole('checkbox', { name: 'Преподаватель' }))
     await waitFor(() => expect(document.querySelector('.vacancy-list')).toHaveAttribute('aria-busy', 'true'))
     expect(screen.getByRole('link', { name: card.title })).toBeInTheDocument()
     release()

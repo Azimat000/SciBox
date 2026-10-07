@@ -56,7 +56,7 @@ var vacanciesByOrg = map[string][]vacSeed{
 			summary:      "Год-два работы над расчётами электронной структуры квантовых материалов и методами машинного обучения для потенциалов.",
 			description:  "Вы будете развивать собственные коды на основе теории функционала плотности, обучать машинные потенциалы и сопоставлять расчёты с экспериментом соседних лабораторий. Кластер института: 2000 ядер, 16 графических карт.",
 			requirements: "Степень PhD или кандидата наук (можно в процессе защиты), опыт работы с VASP, Quantum ESPRESSO или аналогами.",
-			focus:        "Теория функционала плотности, машинные потенциалы", level: 2, format: "hybrid", region: nsk, city: "Новосибирск", housing: "compensation",
+			focus:        "Теория функционала плотности, машинные потенциалы", level: 2, rate: 100, format: "hybrid", region: nsk, city: "Новосибирск", housing: "compensation",
 			salaryFrom: 110000, salaryTo: 140000, contract: "fixed", months: 24, funding: "grant", degree: "candidate", daysLeft: 9,
 			specialties: []string{"1.3.8", "1.3.3", "1.2.2"}},
 		{unit: 2, position: "research_engineer", title: "Инженер-исследователь на просвечивающий микроскоп",
@@ -126,7 +126,7 @@ var vacanciesByOrg = map[string][]vacSeed{
 		{unit: 0, position: "postdoc", title: "Постдок: морской лёд (набор закрыт)",
 			summary:     "Позиция занята: постдок по дистанционному зондированию морского льда.",
 			description: "Набор завершён в сентябре, позиция сохранена на странице организации для истории.",
-			focus:       "Спутниковые данные о морском льде", level: 2, format: "hybrid", region: arh, city: "Архангельск", salaryFrom: 100000, contract: "fixed", months: 24, funding: "grant",
+			focus:       "Спутниковые данные о морском льде", level: 2, rate: 100, format: "hybrid", region: arh, city: "Архангельск", salaryFrom: 100000, contract: "fixed", months: 24, funding: "grant",
 			specialties: []string{"1.6.19", "1.6.8"}, status: vacancies.StatusClosed},
 	},
 	"neurofotonika": {
@@ -197,7 +197,7 @@ var vacanciesByOrg = map[string][]vacSeed{
 		{unit: 1, position: "postdoc", title: "Постдок: терагерцовая фотоника",
 			summary:     "Два года исследований терагерцовых волноводов и метаповерхностей.",
 			description: "Вы будете вести один из проектов лаборатории, руководить двумя студентами и публиковаться в международных журналах.",
-			focus:       "Терагерцовые метаповерхности", level: 2, format: "onsite", region: nnv, city: "Нижний Новгород", housing: "compensation", salaryFrom: 100000, salaryTo: 130000,
+			focus:       "Терагерцовые метаповерхности", level: 2, rate: 100, format: "onsite", region: nnv, city: "Нижний Новгород", housing: "compensation", salaryFrom: 100000, salaryTo: 130000,
 			contract: "fixed", months: 24, funding: "grant", degree: "candidate", daysLeft: 38, specialties: []string{"1.3.6", "2.2.7"}},
 	},
 }

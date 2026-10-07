@@ -22,10 +22,11 @@ FROM (
 ) f
 ORDER BY f.field_code::int;
 
--- Открытые вакансии по видам позиций (научная, ППС, аспирантура и постдок, управление).
+-- Открытые вакансии по видам (научный работник, преподаватель, административный сотрудник, аспирантура, магистратура,
+-- проектная работа, стажировка) в порядке справочника должностей.
 -- name: LandingVacanciesByType :many
 SELECT p.position_type AS position_type, count(*)::bigint AS vacancies
 FROM vacancies v JOIN positions p ON p.code = v.position_code
 WHERE v.status = 'published' AND (v.deadline IS NULL OR v.deadline >= @today::date)
 GROUP BY 1
-ORDER BY 1;
+ORDER BY min(p.sort);

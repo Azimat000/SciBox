@@ -180,12 +180,17 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 			t.Errorf("no %s vacancies", status)
 		}
 	}
-	if n := count("SELECT count(DISTINCT p.position_type) FROM vacancies v JOIN positions p ON p.code = v.position_code"); n != 4 {
-		t.Errorf("%d position types among vacancies, want 4", n)
+	// Все семь видов вакансий (D-134).
+	if n := count("SELECT count(DISTINCT p.position_type) FROM vacancies v JOIN positions p ON p.code = v.position_code"); n != 7 {
+		t.Errorf("%d position types among vacancies, want 7", n)
 	}
+	// Опубликованное заполнено по правилам своего вида (internal/vacancies, rulesFor).
 	if n := count(`SELECT count(*) FROM vacancies v JOIN positions p ON p.code = v.position_code WHERE v.status <> 'draft' AND (
 		v.summary = '' OR v.description = '' OR v.work_format IS NULL OR v.contract_type IS NULL
-		OR (p.position_type <> 'management' AND (v.career_level IS NULL OR NOT EXISTS (SELECT 1 FROM vacancy_specialties s WHERE s.vacancy_id = v.id)))
+		OR (p.position_type IN ('research', 'teaching') AND v.career_level IS NULL)
+		OR (p.position_type IN ('research', 'teaching', 'admin') AND v.rate_percent IS NULL)
+		OR (p.position_type IN ('research', 'teaching', 'phd', 'masters') AND NOT EXISTS (SELECT 1 FROM vacancy_specialties s WHERE s.vacancy_id = v.id))
+		OR (p.position_type IN ('teaching', 'phd', 'masters', 'project', 'internship') AND v.focus = '')
 		OR (v.work_format <> 'remote' AND (v.city = '' OR v.region_code IS NULL))
 		OR (v.is_competition AND v.deadline IS NULL))`); n != 0 {
 		t.Errorf("%d published vacancies are not complete", n)

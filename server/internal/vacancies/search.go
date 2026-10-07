@@ -126,7 +126,7 @@ func validateSearch(p *SearchParams) error {
 		}
 	}
 	check("format", p.Formats, WorkFormats)
-	check("type", p.Types, []string{TypeResearch, TypeTeaching, TypeEarlyCareer, TypeManagement})
+	check("type", p.Types, PositionTypes)
 	check("degree", p.Degrees, Degrees)
 	check("org_kind", p.OrgKinds, orgs.OrgKinds)
 	check("funding", p.Fundings, FundingSources)

@@ -102,13 +102,14 @@ var generatedOrgs = []genOrg{
 // Цели и порядок: должности по типам организаций. Повтор в списке — вес.
 var positionsByKind = map[string][]string{
 	orgs.KindUniversity: {"docent", "docent", "docent", "senior_lecturer", "senior_lecturer", "lecturer", "assistant", "assistant", "professor",
-		"department_head", "phd_student", "phd_student", "master_student", "postdoc", "senior_researcher", "researcher", "junior_researcher", "research_engineer"},
+		"department_head", "phd_student", "phd_student", "master_student", "postdoc", "senior_researcher", "researcher", "junior_researcher", "research_engineer",
+		"methodist", "student_intern"},
 	orgs.KindInstitute: {"junior_researcher", "junior_researcher", "researcher", "researcher", "senior_researcher", "senior_researcher", "leading_researcher",
 		"chief_researcher", "lab_head", "research_engineer", "research_engineer", "research_lab_assistant", "phd_student", "phd_student", "postdoc", "postdoc", "master_student", "intern_researcher"},
 	orgs.KindScienceCenter: {"junior_researcher", "researcher", "researcher", "senior_researcher", "senior_researcher", "leading_researcher", "lab_head",
 		"research_engineer", "research_engineer", "phd_student", "postdoc", "postdoc", "intern_researcher"},
-	orgs.KindRDCompany:  {"researcher", "researcher", "senior_researcher", "research_engineer", "research_engineer", "research_engineer", "intern_researcher", "postdoc", "lab_head"},
-	orgs.KindTechnopark: {"grant_manager", "grant_manager", "tech_transfer", "tech_transfer", "shared_facility_head", "research_engineer", "intern_researcher"},
+	orgs.KindRDCompany:  {"researcher", "researcher", "senior_researcher", "research_engineer", "research_engineer", "research_engineer", "intern_researcher", "postdoc", "lab_head", "project_specialist"},
+	orgs.KindTechnopark: {"grant_manager", "grant_manager", "tech_transfer", "tech_transfer", "shared_facility_head", "research_engineer", "intern_researcher", "project_specialist", "grant_executor"},
 }
 
 type positionInfo struct {
@@ -141,6 +142,10 @@ var positionInfos = map[string]positionInfo{
 	"grant_manager":          {"Грант-менеджер научных проектов", "", 0, []string{"none"}, [2]int{80, 120}, false},
 	"tech_transfer":          {"Специалист по трансферу технологий", "", 0, []string{"none"}, [2]int{90, 130}, false},
 	"shared_facility_head":   {"Руководитель ЦКП", "", 0, []string{"candidate"}, [2]int{120, 170}, false},
+	"methodist":              {"Методист", "", 0, []string{"none"}, [2]int{45, 65}, false},
+	"student_intern":         {"Стажировка для студентов", "", 0, []string{"none"}, [2]int{15, 25}, false},
+	"project_specialist":     {"Специалист проекта", "", 0, []string{"none"}, [2]int{70, 110}, false},
+	"grant_executor":         {"Исполнитель по гранту", "", 0, []string{"none", "candidate"}, [2]int{50, 90}, false},
 }
 
 // cityFactor — во сколько раз зарплата в городе выше, чем в среднем по списку.
@@ -160,6 +165,8 @@ func unitFor(o genOrg, code string, i int) int {
 		match = func(k string) bool { return k == orgs.UnitLaboratory }
 	case code == "shared_facility_head":
 		match = func(k string) bool { return k == orgs.UnitSharedFacility }
+	case code == "methodist":
+		match = func(k string) bool { return k == orgs.UnitDepartment }
 	case code == "grant_manager" || code == "tech_transfer":
 		match = func(k string) bool { return k != orgs.UnitSharedFacility }
 	default:
@@ -262,7 +269,7 @@ func generatedVacancy(o genOrg, rng *rand.Rand, i int) vacSeed {
 		case code == "docent" && chance(rng, 30):
 			v.academicTitle = vacancies.TitleDocent
 		}
-	case code == "phd_student" || code == "master_student" || code == "postdoc" || code == "intern_researcher":
+	case code == "phd_student" || code == "master_student" || code == "intern_researcher" || code == "student_intern":
 		v.title = fmt.Sprintf("%s: %s", info.name, topic)
 		v.focus = capitalize(topic)
 		switch code {
@@ -272,20 +279,32 @@ func generatedVacancy(o genOrg, rng *rand.Rand, i int) vacSeed {
 		case "master_student":
 			v.summary = fmt.Sprintf("%s принимает магистрантов на тему «%s».", subject, topic)
 			v.contract, v.months, v.funding = vacancies.ContractFixed, 24, vacancies.FundingBudget
-		case "postdoc":
-			v.summary = fmt.Sprintf("%s приглашает постдока для работы над темой «%s».", subject, topic)
-			v.contract, v.months, v.funding = vacancies.ContractFixed, pick(rng, []int{12, 24, 36}), pick(rng, []string{vacancies.FundingGrant, vacancies.FundingGrant, vacancies.FundingBudget})
+		case "student_intern":
+			v.summary = fmt.Sprintf("%s берёт студентов на стажировку по теме «%s».", subject, topic)
+			v.contract, v.months, v.funding = vacancies.ContractFixed, pick(rng, []int{1, 2, 3}), vacancies.FundingOwn
 		default:
 			v.summary = fmt.Sprintf("%s принимает стажёров-исследователей на тему «%s».", subject, topic)
 			v.contract, v.months, v.funding = vacancies.ContractFixed, pick(rng, []int{3, 6, 12}), vacancies.FundingOwn
 		}
 		v.description = fmt.Sprintf("Вы будете работать над темой «%s» под руководством опытного исследователя, участвовать в семинарах подразделения и готовить публикации. %s %s", topic, p.work, conditions(v.format))
-	case code == "grant_manager" || code == "tech_transfer" || code == "shared_facility_head":
+	case code == "project_specialist" || code == "grant_executor":
+		v.level, v.contract, v.months = 0, vacancies.ContractFixed, pick(rng, []int{6, 12, 24})
+		v.funding = pick(rng, []string{vacancies.FundingGrant, vacancies.FundingContract})
+		v.rate = pickRate(rng, 50)
+		v.title = fmt.Sprintf("%s: %s", info.name, topic)
+		v.focus = capitalize(topic)
+		v.summary = fmt.Sprintf("%s набирает людей в проект «%s» на срок проекта.", subject, topic)
+		v.description = fmt.Sprintf("Работа в проектной группе: эксперименты, обработка данных, отчёты заказчику или фонду. %s", conditions(v.format))
+	case code == "grant_manager" || code == "tech_transfer" || code == "shared_facility_head" || code == "methodist":
 		v.level, v.contract, v.funding = 0, vacancies.ContractPermanent, pick(rng, []string{vacancies.FundingBudget, vacancies.FundingOwn})
 		v.rate = pickRate(rng, 15)
-		v.focus = map[string]string{"grant_manager": "Сопровождение научных проектов", "tech_transfer": "Трансфер технологий", "shared_facility_head": "Руководство центром коллективного пользования"}[code]
+		v.focus = map[string]string{"grant_manager": "Сопровождение научных проектов", "tech_transfer": "Трансфер технологий", "shared_facility_head": "Руководство центром коллективного пользования", "methodist": "Учебно-методическая работа"}[code]
 		v.title = info.name
 		switch code {
+		case "methodist":
+			v.title = fmt.Sprintf("%s: %s", info.name, p.name)
+			v.summary = fmt.Sprintf("%s ищет методиста: расписание, учебные планы, документы для студентов и преподавателей.", subject)
+			v.description = "Вы будете составлять расписание и учебные планы, готовить документы к аккредитации, помогать студентам и преподавателям с учебными вопросами."
 		case "grant_manager":
 			v.title = fmt.Sprintf("%s: %s", info.name, p.name)
 			v.summary = fmt.Sprintf("%s ищет грант-менеджера для сопровождения проектов в области «%s».", subject, p.name)
@@ -324,7 +343,7 @@ func generatedVacancy(o genOrg, rng *rand.Rand, i int) vacSeed {
 	if o.kind == orgs.KindRDCompany && v.funding == vacancies.FundingBudget {
 		v.funding = vacancies.FundingContract
 	}
-	if v.rate == 0 && v.level != 0 && code != "phd_student" && code != "master_student" && code != "postdoc" && code != "intern_researcher" {
+	if v.rate == 0 && v.level != 0 && code != "phd_student" && code != "master_student" && code != "intern_researcher" {
 		v.rate = 100
 	}
 	if v.contract == vacancies.ContractFixed && v.months == 0 {
@@ -341,7 +360,7 @@ func generatedVacancy(o genOrg, rng *rand.Rand, i int) vacSeed {
 		factor = f
 	}
 	show := 70
-	if code == "phd_student" || code == "master_student" || code == "intern_researcher" || code == "postdoc" {
+	if code == "phd_student" || code == "master_student" || code == "intern_researcher" || code == "student_intern" || code == "postdoc" {
 		show = 90
 	}
 	if chance(rng, show) {
@@ -355,7 +374,7 @@ func generatedVacancy(o genOrg, rng *rand.Rand, i int) vacSeed {
 
 	// Жильё и срок подачи.
 	switch {
-	case !remote && (code == "phd_student" || code == "master_student" || code == "intern_researcher") && chance(rng, 55):
+	case !remote && (code == "phd_student" || code == "master_student" || code == "intern_researcher" || code == "student_intern") && chance(rng, 55):
 		v.housing = vacancies.HousingDormitory
 	case !remote && chance(rng, 18):
 		v.housing = pick(rng, []string{vacancies.HousingService, vacancies.HousingCompensation})
@@ -424,8 +443,14 @@ func requirements(degree, title, code, skills string) string {
 		parts = append(parts, "Не менее пяти публикаций в рецензируемых журналах за последние пять лет.")
 	case "docent", "professor", "department_head", "senior_lecturer":
 		parts = append(parts, "Опыт преподавания в вузе не менее трёх лет.")
-	case "phd_student", "master_student":
+	case "phd_student":
 		parts = append(parts, "Диплом специалиста или магистра по профильному направлению.")
+	case "master_student":
+		parts = append(parts, "Диплом бакалавра или специалиста.")
+	case "student_intern":
+		return "Студенты старших курсов профильных направлений. " + skills
+	case "methodist":
+		return "Высшее образование, уверенное владение компьютером (Word, Excel), аккуратность в документах."
 	case "grant_manager", "tech_transfer", "shared_facility_head":
 		return "Опыт работы в научной организации или университете не менее двух лет. Умение вести документы и сроки."
 	}

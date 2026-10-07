@@ -20,7 +20,7 @@ describe('StatusPage', () => {
   it('shows a pending state while the check runs', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
     renderApp('/status')
-    expect(screen.getByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Вакансии в науке и образовании' })).toBeInTheDocument()
     expect(row('Сервер')).toHaveAttribute('data-kind', 'pending')
     expect(within(row('База данных')).getByText('Проверяем…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Проверить ещё раз' })).not.toBeInTheDocument()

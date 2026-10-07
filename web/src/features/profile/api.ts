@@ -74,6 +74,8 @@ export type Profile = {
   identifiers: { orcid: string; spin: string; scopus_id: string; wos_id: string }
   h_index: { rsci: number | null; scopus: number | null; wos: number | null; scholar: number | null }
   specialties: Code[]
+  /** Навыки (D-136). Нет в снимках профиля, отправленных с откликом раньше; в них же списки бывают null. */
+  skills?: { research: string[] | null; general: string[] | null }
   /** Только владельцу и сотрудникам организаций. */
   contact_email?: string
   sections: {
@@ -114,7 +116,16 @@ export type CoreFields = {
   h_scholar: number | null
   contact_email: string
   specialties: string[]
+  research_skills: string[]
+  general_skills: string[]
 }
+
+/** Сколько навыков в каждом списке и сколько знаков в навыке (как в internal/profiles). */
+export const MAX_SKILLS = 30
+export const MAX_SKILL_LENGTH = 60
+
+/** Навыки профиля без null: старые снимки откликов их не содержат. */
+export const skillsOf = (p: Pick<Profile, 'skills'>) => ({ research: p.skills?.research ?? [], general: p.skills?.general ?? [] })
 
 export type Work = {
   doi: string

@@ -61,13 +61,16 @@ func TestCatalogContents(t *testing.T) {
 	if seen["1.3.14"] || seen["2.5.9"] {
 		t.Error("repealed specialties must not be listed")
 	}
-	// Положения о должностях: четыре типа, у каждого есть позиции.
+	// Должности: семь видов вакансий (D-134), у каждого есть позиции; у учебных программ по одной.
 	types := map[string]int{}
 	for _, p := range cat.Positions {
 		types[p.Type]++
 	}
-	for _, typ := range []string{"research", "teaching", "early_career", "management"} {
-		if types[typ] < 4 {
+	if len(types) != 7 {
+		t.Errorf("types: %v", types)
+	}
+	for typ, min := range map[string]int{"research": 4, "teaching": 4, "admin": 4, "phd": 1, "masters": 1, "project": 3, "internship": 3} {
+		if types[typ] < min {
 			t.Errorf("type %s has %d positions", typ, types[typ])
 		}
 	}
@@ -75,7 +78,11 @@ func TestCatalogContents(t *testing.T) {
 		t.Fatalf("sources: %+v", cat.Sources)
 	}
 	for _, s := range cat.Sources {
-		if !strings.HasPrefix(s.URL, "https://") || s.Edition == "" || s.CheckedOn != "2026-10-03" {
+		want := "2026-10-03"
+		if s.Catalog == "positions" {
+			want = "2026-10-07" // виды вакансий изменены (D-134)
+		}
+		if !strings.HasPrefix(s.URL, "https://") || s.Edition == "" || s.CheckedOn != want {
 			t.Errorf("source %+v", s)
 		}
 	}

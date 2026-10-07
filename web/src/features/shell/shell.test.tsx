@@ -24,12 +24,12 @@ describe('parseRole and navFor', () => {
   })
 
   it('gives each role its own menu', () => {
-    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации', 'Избранное', 'Мои отклики'])
-    expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Каталог учёных', 'Организация'])
+    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Соискатели', 'Организации', 'Избранное', 'Мои отклики'])
+    expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Соискатели', 'Организация'])
   })
 
   it('gives a guest only the open sections', () => {
-    expect(publicNav().map((i) => i.label)).toEqual(['Вакансии', 'Учёные', 'Организации'])
+    expect(publicNav().map((i) => i.label)).toEqual(['Вакансии', 'Соискатели', 'Организации'])
   })
 })
 
@@ -67,8 +67,8 @@ describe('site shell', () => {
     renderApp('/vacancies')
     const link = within(desktopNav()).getByRole('link', { name: 'Вакансии' })
     expect(link).toHaveAttribute('aria-current', 'page')
-    expect(within(desktopNav()).getByRole('link', { name: 'Учёные' })).not.toHaveAttribute('aria-current')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Вакансии в науке' })).toBeInTheDocument()
+    expect(within(desktopNav()).getByRole('link', { name: 'Соискатели' })).not.toHaveAttribute('aria-current')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Вакансии в науке и образовании' })).toBeInTheDocument()
   })
 
   it('hides personal sections and the mode switch from a guest', async () => {

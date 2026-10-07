@@ -50,10 +50,19 @@ func TestStrictRequiredFieldsByType(t *testing.T) {
 	teaching := func(in *Input) {
 		in.PositionCode, in.Focus = "docent", "Общая физика, электродинамика"
 	}
-	early := func(in *Input) {
-		in.PositionCode, in.Focus, in.RatePercent = "phd_student", "Операндо-спектроскопия катализаторов", nil
+	phd := func(in *Input) {
+		in.PositionCode, in.Focus, in.RatePercent, in.CareerLevel = "phd_student", "Операндо-спектроскопия катализаторов", nil, nil
 	}
-	mgmt := func(in *Input) { in.PositionCode, in.CareerLevel, in.Specialties = "grant_manager", nil, nil }
+	masters := func(in *Input) {
+		in.PositionCode, in.Focus, in.RatePercent, in.CareerLevel = "master_student", "Программа «Физическая химия»", nil, nil
+	}
+	project := func(in *Input) {
+		in.PositionCode, in.Focus, in.RatePercent, in.CareerLevel, in.Specialties = "grant_executor", "Проект РНФ по катализу", nil, nil, nil
+	}
+	intern := func(in *Input) {
+		in.PositionCode, in.Focus, in.RatePercent, in.CareerLevel, in.Specialties = "student_intern", "Летняя практика в лаборатории", nil, nil, nil
+	}
+	admin := func(in *Input) { in.PositionCode, in.CareerLevel, in.Specialties = "grant_manager", nil, nil }
 	rows := []row{
 		{TypeResearch, "", func(in *Input) { in.Summary = "" }, "summary"},
 		{TypeResearch, "", func(in *Input) { in.Summary = "Коротко" }, "summary"},
@@ -70,20 +79,29 @@ func TestStrictRequiredFieldsByType(t *testing.T) {
 		{TypeTeaching, "", func(in *Input) { teaching(in); in.Focus = "" }, "focus"},
 		{TypeTeaching, "", func(in *Input) { teaching(in); in.RatePercent = nil }, "rate_percent"},
 		{TypeTeaching, "", func(in *Input) { teaching(in); in.Specialties = nil }, "specialties"},
-		{TypeEarlyCareer, "", func(in *Input) { early(in); in.Focus = "" }, "focus"},
-		{TypeEarlyCareer, "", func(in *Input) { early(in); in.CareerLevel = nil }, "career_level"},
-		{TypeEarlyCareer, "", func(in *Input) { early(in); in.Specialties = nil }, "specialties"},
-		{TypeManagement, "", func(in *Input) { mgmt(in); in.RatePercent = nil }, "rate_percent"},
+		{TypePhD, "", func(in *Input) { phd(in); in.Focus = "" }, "focus"},
+		{TypePhD, "", func(in *Input) { phd(in); in.Specialties = nil }, "specialties"},
+		{TypeMasters, "", func(in *Input) { masters(in); in.Focus = "" }, "focus"},
+		{TypeMasters, "", func(in *Input) { masters(in); in.Specialties = nil }, "specialties"},
+		{TypeProject, "", func(in *Input) { project(in); in.Focus = "" }, "focus"},
+		{TypeInternship, "", func(in *Input) { intern(in); in.Focus = "" }, "focus"},
+		{TypeAdmin, "", func(in *Input) { admin(in); in.RatePercent = nil }, "rate_percent"},
 	}
 	for i, r := range rows {
 		in := goodInput()
 		switch r.typ {
 		case TypeTeaching:
 			teaching(&in)
-		case TypeEarlyCareer:
-			early(&in)
-		case TypeManagement:
-			mgmt(&in)
+		case TypePhD:
+			phd(&in)
+		case TypeMasters:
+			masters(&in)
+		case TypeProject:
+			project(&in)
+		case TypeInternship:
+			intern(&in)
+		case TypeAdmin:
+			admin(&in)
 		}
 		// Сначала убеждаемся, что без правки вакансия проходит, затем правим.
 		if _, errs := check(t, in, r.typ, modeStrict); len(errs) != 0 {
@@ -100,11 +118,11 @@ func TestStrictRequiredFieldsByType(t *testing.T) {
 	}
 }
 
-// Для вакансии без обязательных полей управления (грант-менеджер) уровень и специальности не нужны, зато ставка нужна.
-func TestManagementNeedsNoLevelNoSpecialties(t *testing.T) {
+// Административному сотруднику (грант-менеджер) уровень и специальности не нужны, зато ставка нужна.
+func TestAdminNeedsNoLevelNoSpecialties(t *testing.T) {
 	in := goodInput()
 	in.PositionCode, in.CareerLevel, in.Specialties = "grant_manager", nil, nil
-	if _, errs := check(t, in, TypeManagement, modeStrict); len(errs) != 0 {
+	if _, errs := check(t, in, TypeAdmin, modeStrict); len(errs) != 0 {
 		t.Errorf("%v", errs)
 	}
 }
@@ -117,11 +135,20 @@ func TestRemoteNeedsNoPlace(t *testing.T) {
 	}
 }
 
-func TestEarlyCareerNeedsNoRate(t *testing.T) {
-	in := goodInput()
-	in.PositionCode, in.Focus, in.RatePercent = "postdoc", "Нейровизуализация", nil
-	if _, errs := check(t, in, TypeEarlyCareer, modeStrict); len(errs) != 0 {
-		t.Errorf("%v", errs)
+// Аспирантуре, магистратуре, проектной работе и стажировке не нужны ставка и уровень R; проекту и стажировке — и специальности.
+func TestStudyAndProjectNeedNoRateNoLevel(t *testing.T) {
+	for _, c := range []struct {
+		typ, code string
+		noSpecs   bool
+	}{{TypePhD, "phd_student", false}, {TypeMasters, "master_student", false}, {TypeProject, "project_specialist", true}, {TypeInternship, "intern_researcher", true}} {
+		in := goodInput()
+		in.PositionCode, in.Focus, in.RatePercent, in.CareerLevel = c.code, "Нейровизуализация", nil, nil
+		if c.noSpecs {
+			in.Specialties = nil
+		}
+		if _, errs := check(t, in, c.typ, modeStrict); len(errs) != 0 {
+			t.Errorf("%s: %v", c.typ, errs)
+		}
 	}
 }
 
@@ -136,13 +163,15 @@ func TestTypeRestrictions(t *testing.T) {
 	}{
 		{"competition for research", TypeResearch, func(in *Input) { in.IsCompetition = true }, "is_competition", true},
 		{"competition for teaching", TypeTeaching, func(in *Input) { in.IsCompetition = true }, "is_competition", true},
-		{"competition for early career", TypeEarlyCareer, func(in *Input) { in.IsCompetition = true }, "is_competition", false},
-		{"competition for management", TypeManagement, func(in *Input) { in.IsCompetition = true }, "is_competition", false},
+		{"competition for phd", TypePhD, func(in *Input) { in.IsCompetition = true }, "is_competition", false},
+		{"competition for admin", TypeAdmin, func(in *Input) { in.IsCompetition = true }, "is_competition", false},
+		{"competition for internship", TypeInternship, func(in *Input) { in.IsCompetition = true }, "is_competition", false},
 		{"title for teaching", TypeTeaching, func(in *Input) { in.AcademicTitle = TitleProfessor }, "title_required", true},
 		{"title for research", TypeResearch, func(in *Input) { in.AcademicTitle = TitleDocent }, "title_required", false},
-		{"title for early career", TypeEarlyCareer, func(in *Input) { in.AcademicTitle = TitleDocent }, "title_required", false},
-		{"title for management", TypeManagement, func(in *Input) { in.AcademicTitle = TitleDocent }, "title_required", false},
-		{"no title is fine everywhere", TypeManagement, func(in *Input) { in.AcademicTitle = TitleNone }, "title_required", true},
+		{"title for masters", TypeMasters, func(in *Input) { in.AcademicTitle = TitleDocent }, "title_required", false},
+		{"title for project", TypeProject, func(in *Input) { in.AcademicTitle = TitleDocent }, "title_required", false},
+		{"title for admin", TypeAdmin, func(in *Input) { in.AcademicTitle = TitleDocent }, "title_required", false},
+		{"no title is fine everywhere", TypeAdmin, func(in *Input) { in.AcademicTitle = TitleNone }, "title_required", true},
 	}
 	for _, c := range cases {
 		in := goodInput()

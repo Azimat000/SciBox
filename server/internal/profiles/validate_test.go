@@ -1,6 +1,8 @@
 package profiles
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -314,5 +316,45 @@ func TestValidateYearBoundsFollowTheClock(t *testing.T) {
 	in.Year = ptr(2028)
 	if _, errs := validateItem(KindPublication, in, later); errs["year"] != "" {
 		t.Errorf("через год следующий — уже 2028: %v", errs)
+	}
+}
+
+// Навыки (D-136): пробелы убираются, пустые и повторы (без учёта регистра) отбрасываются, порядок сохраняется.
+func TestValidateSkills(t *testing.T) {
+	long := strings.Repeat("я", MaxSkillLen+1)
+	many := make([]string, MaxSkills+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("навык %d", i)
+	}
+	exact := many[:MaxSkills]
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+		msg  string
+	}{
+		{"нет навыков", nil, []string{}, ""},
+		{"чистка", []string{"  ПЦР  в реальном   времени ", "", "  ", "Python", "python", "ПЦР в реальном времени"}, []string{"ПЦР в реальном времени", "Python"}, ""},
+		{"ровно предел длины", []string{strings.Repeat("я", MaxSkillLen)}, []string{strings.Repeat("я", MaxSkillLen)}, ""},
+		{"слишком длинный", []string{"Excel", long}, []string{}, fmt.Sprintf(msgSkillLong, long, MaxSkillLen)},
+		{"управляющие символы", []string{"Word\x00"}, []string{}, msgSkillInvalid},
+		{"ровно предел числа", exact, exact, ""},
+		{"слишком много", many, []string{}, fmt.Sprintf(msgSkillsMany, MaxSkills)},
+		{"повторы не считаются в предел", append(slices.Clone(exact), "НАВЫК 0"), exact, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := fieldErrors{}
+			got := errs.skills("general_skills", tc.in)
+			if !slices.Equal(got, tc.want) || errs["general_skills"] != tc.msg {
+				t.Errorf("получили %q, %q; ожидали %q, %q", got, errs["general_skills"], tc.want, tc.msg)
+			}
+		})
+	}
+	// Ошибка привязана к своему списку.
+	in := goodCore()
+	in.ResearchSkills = many
+	if _, errs := validateCore(in, testNow); errs["research_skills"] == "" || errs["general_skills"] != "" {
+		t.Errorf("ошибки: %v", errs)
 	}
 }

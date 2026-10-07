@@ -62,6 +62,12 @@ var (
 // MaxSpecialties — сколько научных специальностей можно указать в профиле.
 const MaxSpecialties = 5
 
+// Навыки (D-136): в каждом из двух списков не больше MaxSkills коротких фраз по MaxSkillLen знаков.
+const (
+	MaxSkills   = 30
+	MaxSkillLen = 60
+)
+
 // sortOngoing — год для сортировки незавершённых записей: они идут первыми.
 const sortOngoing = 9999
 
@@ -161,6 +167,8 @@ type CoreInput struct {
 	HScholar          *int     `json:"h_scholar"`
 	ContactEmail      string   `json:"contact_email"`
 	Specialties       []string `json:"specialties"`
+	ResearchSkills    []string `json:"research_skills"`
+	GeneralSkills     []string `json:"general_skills"`
 }
 
 // Code — запись справочника: номер и название.
@@ -184,6 +192,13 @@ type Identifiers struct {
 	SPIN     string `json:"spin"`
 	ScopusID string `json:"scopus_id"`
 	WosID    string `json:"wos_id"`
+}
+
+// Skills — навыки: научные (методы, приборы, программы для исследований) и общие (компьютер, языки, работа с людьми).
+// Пустые списки — пустые массивы, не null.
+type Skills struct {
+	Research []string `json:"research"`
+	General  []string `json:"general"`
 }
 
 // HIndex — h-index по базам, введённый вручную.
@@ -220,6 +235,7 @@ type View struct {
 	Identifiers       Identifiers   `json:"identifiers"`
 	HIndex            HIndex        `json:"h_index"`
 	Specialties       []Code        `json:"specialties"`
+	Skills            Skills        `json:"skills"`
 	ContactEmail      string        `json:"contact_email,omitempty"` // только владельцу и сотрудникам организаций
 	Sections          Sections      `json:"sections"`
 	Quartiles         QuartileStats `json:"quartiles"`

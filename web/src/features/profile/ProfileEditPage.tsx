@@ -6,6 +6,7 @@ import { Alert } from '../../ui/Alert'
 import { Button, ButtonLink } from '../../ui/Button'
 import { Combobox } from '../../ui/Combobox'
 import { Select, type Option } from '../../ui/Select'
+import { SkillsInput } from '../../ui/SkillsInput'
 import { TextArea, TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
 import { describeError, fieldErrorsOf } from '../auth/errors'
@@ -15,7 +16,7 @@ import { RequireUser } from '../orgs/RequireUser'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { SpecialtiesPicker } from '../vacancies/SpecialtiesPicker'
 import { useReference } from '../vacancies/api'
-import { refreshProfile, saveCore, useOwnProfile, type CoreFields, type Profile } from './api'
+import { MAX_SKILL_LENGTH, MAX_SKILLS, refreshProfile, saveCore, skillsOf, useOwnProfile, type CoreFields, type Profile } from './api'
 import { degreeOptions, titleOptions } from './labels'
 import '../vacancies/vacancies.css'
 import './profile.css'
@@ -34,10 +35,12 @@ function Loader() {
   return <EditForm profile={profile.data.profile} reference={reference.data} />
 }
 
-type Values = Record<'headline' | 'city' | 'region_code' | 'about' | 'degree' | 'degree_specialty_code' | 'degree_year' | 'degree_institution' | 'dissertation_title' | 'academic_title' | 'academic_title_year' | 'orcid' | 'spin' | 'scopus_id' | 'wos_id' | 'h_rsci' | 'h_scopus' | 'h_wos' | 'h_scholar' | 'contact_email' | 'specialties', string>
+type Values = Record<'headline' | 'city' | 'region_code' | 'about' | 'degree' | 'degree_specialty_code' | 'degree_year' | 'degree_institution' | 'dissertation_title' | 'academic_title' | 'academic_title_year' | 'orcid' | 'spin' | 'scopus_id' | 'wos_id' | 'h_rsci' | 'h_scopus' | 'h_wos' | 'h_scholar' | 'contact_email' | 'specialties' | 'research_skills' | 'general_skills', string>
 
 const str = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n))
 const num = (s: string): number | null => (s.trim() === '' ? null : Number(s))
+// Навыки в форме лежат одной строкой через перевод строки: в самих навыках переводов строк не бывает.
+const list = (s: string): string[] => (s === '' ? [] : s.split('\n'))
 
 function initialOf(p: Profile): Values {
   return {
@@ -62,6 +65,8 @@ function initialOf(p: Profile): Values {
     h_scholar: str(p.h_index.scholar),
     contact_email: p.contact_email ?? '',
     specialties: p.specialties.map((s) => s.code).join(','),
+    research_skills: skillsOf(p).research.join('\n'),
+    general_skills: skillsOf(p).general.join('\n'),
   }
 }
 
@@ -88,6 +93,8 @@ function fieldsOf(v: Values): CoreFields {
     h_scholar: num(v.h_scholar),
     contact_email: v.contact_email,
     specialties: v.specialties === '' ? [] : v.specialties.split(','),
+    research_skills: list(v.research_skills),
+    general_skills: list(v.general_skills),
   }
 }
 
@@ -146,6 +153,13 @@ function EditForm({ profile, reference }: { profile: Profile; reference: NonNull
             <Combobox label={e.region} placeholder={e.regionPlaceholder} options={regionOptions} value={values.region_code === '' ? null : values.region_code} onChange={(code) => set('region_code', code ?? '')} error={errors.region_code} optional />
           </div>
           <TextArea label={e.about} name="about" optional hint={e.aboutHint} rows={6} value={values.about} onChange={(ev) => set('about', ev.target.value)} error={errors.about} />
+        </fieldset>
+
+        <fieldset className="form-block">
+          <legend>{e.groups.skills}</legend>
+          <p className="field-hint">{e.skillsLead}</p>
+          <SkillsInput label={e.researchSkills} hint={e.researchSkillsHint} placeholder={e.researchSkillsPlaceholder} value={list(values.research_skills)} onChange={(next) => set('research_skills', next.join('\n'))} error={errors.research_skills} max={MAX_SKILLS} maxLength={MAX_SKILL_LENGTH} />
+          <SkillsInput label={e.generalSkills} hint={e.generalSkillsHint} placeholder={e.generalSkillsPlaceholder} value={list(values.general_skills)} onChange={(next) => set('general_skills', next.join('\n'))} error={errors.general_skills} max={MAX_SKILLS} maxLength={MAX_SKILL_LENGTH} />
         </fieldset>
 
         <fieldset className="form-block">

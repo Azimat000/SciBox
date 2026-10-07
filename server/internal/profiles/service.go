@@ -175,6 +175,7 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 		Identifiers: Identifiers{ORCID: p.Orcid, SPIN: p.Spin, ScopusID: p.ScopusID, WosID: p.WosID},
 		HIndex:      HIndex{RSCI: intp(p.HRsci), Scopus: intp(p.HScopus), WoS: intp(p.HWos), Scholar: intp(p.HScholar)},
 		Specialties: make([]Code, 0, len(specs)),
+		Skills:      Skills{Research: nonNil(p.ResearchSkills), General: nonNil(p.GeneralSkills)},
 		Sections:    emptySections(),
 		UpdatedAt:   p.UpdatedAt,
 	}
@@ -362,7 +363,7 @@ func (s *Service) SaveCore(ctx context.Context, user auth.User, in CoreInput) (P
 			DissertationTitle: f.dissertation, AcademicTitle: f.academicTitle, AcademicTitleYear: f.academicTitleYear,
 			Orcid: f.orcid, Spin: f.spin, ScopusID: f.scopusID, WosID: f.wosID,
 			HRsci: f.hRsci, HScopus: f.hScopus, HWos: f.hWos, HScholar: f.hScholar,
-			ContactEmail: f.contactEmail, Now: s.now(),
+			ContactEmail: f.contactEmail, ResearchSkills: f.researchSkills, GeneralSkills: f.generalSkills, Now: s.now(),
 		})
 		if err != nil {
 			return fmt.Errorf("profiles: update profile: %w", err)

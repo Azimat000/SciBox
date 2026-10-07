@@ -21,13 +21,19 @@ const (
 // Statuses — все статусы в порядке жизненного цикла.
 var Statuses = []string{StatusDraft, StatusPublished, StatusClosed, StatusArchived}
 
-// Типы позиций (D-006). Тип определяет должность из справочника positions.
+// Виды вакансий (D-006, D-134). Вид определяет должность из справочника positions.
 const (
-	TypeResearch    = "research"     // научные должности
-	TypeTeaching    = "teaching"     // ППС
-	TypeEarlyCareer = "early_career" // аспирантура, постдок, стажировка, магистратура
-	TypeManagement  = "management"   // управление и инновационная инфраструктура
+	TypeResearch   = "research"   // научный работник (и постдок)
+	TypeTeaching   = "teaching"   // преподаватель (ППС)
+	TypeAdmin      = "admin"      // административный сотрудник: методисты, отделы, грант-менеджеры, ЦКП, руководство
+	TypePhD        = "phd"        // аспирантура
+	TypeMasters    = "masters"    // магистратура
+	TypeProject    = "project"    // проектная работа: исполнители по грантам, специалисты проектов
+	TypeInternship = "internship" // стажировка
 )
+
+// PositionTypes — все виды вакансий в порядке показа.
+var PositionTypes = []string{TypeResearch, TypeTeaching, TypeAdmin, TypePhD, TypeMasters, TypeProject, TypeInternship}
 
 // Формат работы.
 const (

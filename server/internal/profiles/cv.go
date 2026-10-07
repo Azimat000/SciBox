@@ -150,6 +150,8 @@ func cvDocument(page Page, product string, now time.Time) cv.Document {
 		}
 		add(cv.Section{Heading: "Научные специальности", Paragraph: strings.Join(names, "\n")})
 	}
+	add(cv.Section{Heading: "Научные навыки", Paragraph: strings.Join(v.Skills.Research, ", ")})
+	add(cv.Section{Heading: "Общие навыки", Paragraph: strings.Join(v.Skills.General, ", ")})
 
 	s := v.Sections
 	var edu, exp, pubs, grants, patents, teach []cv.Entry

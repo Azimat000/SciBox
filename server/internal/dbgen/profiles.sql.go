@@ -81,7 +81,7 @@ func (q *Queries) EnsureProfile(ctx context.Context, arg EnsureProfileParams) er
 }
 
 const getProfileByID = `-- name: GetProfileByID :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -126,6 +126,8 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 		&i.Profile.ContactEmail,
 		&i.Profile.CreatedAt,
 		&i.Profile.UpdatedAt,
+		&i.Profile.ResearchSkills,
+		&i.Profile.GeneralSkills,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -134,7 +136,7 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 }
 
 const getProfileByUser = `-- name: GetProfileByUser :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -179,6 +181,8 @@ func (q *Queries) GetProfileByUser(ctx context.Context, userID uuid.UUID) (GetPr
 		&i.Profile.ContactEmail,
 		&i.Profile.CreatedAt,
 		&i.Profile.UpdatedAt,
+		&i.Profile.ResearchSkills,
+		&i.Profile.GeneralSkills,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -416,7 +420,9 @@ LEFT JOIN LATERAL (
 ) qq ON true
 LEFT JOIN LATERAL (
     SELECT to_tsvector('russian', u.display_name || ' ' || p.headline || ' ' || p.city || ' ' || COALESCE(r.name, '') || ' '
-                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' ' || p.about) AS doc
+                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' '
+                                  || array_to_string(p.research_skills, ' ') || ' ' || array_to_string(p.general_skills, ' ') || ' '
+                                  || p.about) AS doc
 ) d ON true
 WHERE p.visibility = ANY($2::text[])
   AND p.headline <> ''
@@ -482,7 +488,7 @@ type SearchScientistsRow struct {
 
 // Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
 // и с заполненной должностью; сам смотрящий из каталога исключён. Слова ищутся по русской морфологии (имя, должность,
-// город, регион, организация степени, специальности, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
+// город, регион, организация степени, специальности, навыки, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
 // словам» (@fuzzy, имя и должность).
 // Статьи в журналах Q1–Q2 (срез 14): публикации, чей ISSN есть в справочнике журналов с квартилем 1 или 2.
 func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsParams) ([]SearchScientistsRow, error) {
@@ -558,8 +564,9 @@ UPDATE profiles SET
     academic_title = $10, academic_title_year = $11,
     orcid = $12, spin = $13, scopus_id = $14, wos_id = $15,
     h_rsci = $16, h_scopus = $17, h_wos = $18, h_scholar = $19,
-    contact_email = $20, updated_at = $21
-WHERE id = $22
+    contact_email = $20, research_skills = $21::text[], general_skills = $22::text[],
+    updated_at = $23
+WHERE id = $24
 `
 
 type UpdateProfileCoreParams struct {
@@ -583,6 +590,8 @@ type UpdateProfileCoreParams struct {
 	HWos                *int16
 	HScholar            *int16
 	ContactEmail        string
+	ResearchSkills      []string
+	GeneralSkills       []string
 	Now                 time.Time
 	ID                  uuid.UUID
 }
@@ -609,6 +618,8 @@ func (q *Queries) UpdateProfileCore(ctx context.Context, arg UpdateProfileCorePa
 		arg.HWos,
 		arg.HScholar,
 		arg.ContactEmail,
+		arg.ResearchSkills,
+		arg.GeneralSkills,
 		arg.Now,
 		arg.ID,
 	)

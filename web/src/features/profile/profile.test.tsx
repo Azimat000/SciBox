@@ -42,6 +42,8 @@ describe('own profile page', () => {
     expect(degree.getByText('2016')).toBeInTheDocument()
     expect(degree.getByText('Доцент')).toBeInTheDocument()
     expect((await section('Научные специальности')).getByText('Физическая химия')).toBeInTheDocument()
+    expect((await section('Научные навыки')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['ИК-спектроскопия', 'Рентгеновская дифракция'])
+    expect((await section('Общие навыки')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Английский B2'])
 
     const ids = await section('Идентификаторы и метрики')
     expect(ids.getByRole('link', { name: 'Профиль ORCID 0000-0002-1825-0097 на orcid.org' })).toHaveAttribute('href', 'https://orcid.org/0000-0002-1825-0097')
@@ -67,7 +69,9 @@ describe('own profile page', () => {
     renderApp('/profile')
     expect(await screen.findByText('Профиль скрыт: эту страницу видите только вы.')).toBeInTheDocument()
     for (const hint of [
-      'Расскажите о своих исследованиях в нескольких предложениях.',
+      'Расскажите о себе и своей работе в нескольких предложениях.',
+      'Методы, приборы и программы, с которыми вы работаете в исследованиях.',
+      'То, что пригодится не только в науке: компьютер, языки, работа с людьми.',
       'Степень и звание пока не указаны.',
       'Выберите до пяти специальностей: по ним вас найдут организации.',
       'Идентификаторы и h-index пока не указаны.',
@@ -386,7 +390,7 @@ describe('profile of another person', () => {
     let fail = true
     stubApi({ [`GET /api/scientists/${PROFILE_ID}`]: () => (fail ? apiError(500, 'internal', 'Сбой') : reply(200, otherPage())) })
     renderApp(path)
-    expect(await screen.findByRole('heading', { name: 'Не удалось загрузить страницу учёного' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Не удалось загрузить профиль' })).toBeInTheDocument()
     fail = false
     await click('Проверить ещё раз')
     expect(await screen.findByRole('heading', { level: 1, name: 'Елена Орлова' })).toBeInTheDocument()
@@ -439,7 +443,51 @@ describe('profile edit page', () => {
       dissertation_title: 'Активные центры оксидных катализаторов', academic_title: 'docent', academic_title_year: 2021,
       orcid: '0000-0002-1825-0097', spin: '12345678', scopus_id: '57190123456', wos_id: 'A-1234-2008',
       h_rsci: 12, h_scopus: 9, h_wos: null, h_scholar: 15, contact_email: 'orlova@example.ru', specialties: ['1.4.4'],
+      research_skills: ['ИК-спектроскопия', 'Рентгеновская дифракция'], general_skills: ['Английский B2'],
     })
+  })
+
+  it('adds skills by Enter, comma, button, paste and leaving the field, drops repeats and removes by the cross', async () => {
+    const api = stubApi(base(ownPage(emptyProfile), { 'PUT /api/profile': reply(200, ownPage(emptyProfile)) }))
+    renderApp('/profile/edit')
+    await screen.findByRole('heading', { level: 1, name: 'Основное в профиле' })
+    const research = field(/^Научные навыки ·/)
+    const general = field(/^Общие навыки ·/)
+    await userEvent.type(research, '  ПЦР   в реальном времени {Enter}')
+    await userEvent.type(research, 'Python,')
+    await userEvent.type(research, 'python{Enter}')
+    expect(research).toHaveValue('')
+    await userEvent.type(research, 'COMSOL')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Добавить' })[0])
+    expect(screen.getByRole('list', { name: 'Научные навыки: добавлено' }).textContent).toBe('ПЦР в реальном времениPythonCOMSOL')
+    expect(screen.getAllByText('3 из 30')).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Убрать навык «Python»' }))
+
+    await userEvent.click(general)
+    await userEvent.paste('Word, Excel; английский B2\nWord')
+    await userEvent.type(general, 'Водительские права')
+    await userEvent.tab() // недописанное не теряется, когда поле теряет фокус
+    expect(within(screen.getByRole('list', { name: 'Общие навыки: добавлено' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Word', 'Excel', 'английский B2', 'Водительские права'])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await screen.findByText('Профиль сохранён')
+    expect(api.called('PUT', '/api/profile')[0].body).toMatchObject({
+      research_skills: ['ПЦР в реальном времени', 'COMSOL'],
+      general_skills: ['Word', 'Excel', 'английский B2', 'Водительские права'],
+    })
+  })
+
+  it('pastes plain text into a skill as usual and shows the server problem under the list', async () => {
+    stubApi(base(ownPage(), { 'PUT /api/profile': apiError(422, 'validation_failed', 'Проверьте поля формы', { fields: { general_skills: 'Навыков в списке не больше 30' } }) }))
+    renderApp('/profile/edit')
+    await screen.findByRole('heading', { level: 1, name: 'Основное в профиле' })
+    const general = field(/^Общие навыки ·/)
+    await userEvent.click(general)
+    await userEvent.paste('Публичные выступления')
+    expect(general).toHaveValue('Публичные выступления')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText('Навыков в списке не больше 30')).toBeInTheDocument()
+    expect(field(/^Общие навыки ·/)).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('changes fields, hides degree details when there is no degree, and sends empty as empty', async () => {

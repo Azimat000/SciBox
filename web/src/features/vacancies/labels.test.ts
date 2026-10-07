@@ -33,7 +33,7 @@ describe('labels', () => {
   })
 
   it('shows a stipend for early career positions and a salary for the rest', () => {
-    expect(salaryLabel('early_career')).toBe('Стипендия')
+    expect(salaryLabel('phd')).toBe('Стипендия')
     expect(salaryLabel('research')).toBe('Зарплата')
   })
 
@@ -46,7 +46,7 @@ describe('labels', () => {
     expect(facts.find((f) => f.startsWith('Зарплата'))).toContain('95 000')
     const bare = entryFacts({ ...card, rate_percent: null, contract_type: '', work_format: '', salary_from: null, salary_to: null })
     expect(bare).toEqual(['Старший научный сотрудник'])
-    expect(entryFacts({ ...card, position: { ...card.position, type: 'early_career' } }).find((f) => f.startsWith('Стипендия'))).toBeDefined()
+    expect(entryFacts({ ...card, position: { ...card.position, type: 'phd' } }).find((f) => f.startsWith('Стипендия'))).toBeDefined()
     expect(entryFacts({ ...card, rate_percent: 50 })).toContain('0,5 ставки')
   })
 

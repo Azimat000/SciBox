@@ -46,7 +46,7 @@ func (w *world) searchTeam() *searchTeam {
 	w.published(tm, math)
 
 	gen := goodInput()
-	gen.Title, gen.PositionCode, gen.Summary = st.gen, "postdoc", "Анализ геномов и транскриптомов, работа с данными секвенирования."
+	gen.Title, gen.PositionCode, gen.Summary = st.gen, "phd_student", "Анализ геномов и транскриптомов, работа с данными секвенирования."
 	gen.Focus, gen.WorkFormat, gen.RegionCode, gen.City = "Геномика растений", FormatRemote, "", ""
 	gen.CareerLevel, gen.RatePercent, gen.ContractMonth, gen.Specialties = ptr(2), nil, ptr(12), []string{"1.5.7"}
 	gen.SalaryFrom, gen.SalaryTo, gen.FundingSource, gen.Degree, gen.Deadline = ptr(90000), ptr(110000), FundingGrant, DegreeDoctor, "2026-10-06"
@@ -118,7 +118,7 @@ func TestSearchFilters(t *testing.T) {
 		{"format onsite", SearchParams{Formats: []string{FormatOnsite}}, []string{st.chem, st.ckp}},
 		{"format remote or hybrid", SearchParams{Formats: []string{FormatRemote, FormatHybrid}}, []string{st.math, st.gen}},
 		{"type teaching", SearchParams{Types: []string{TypeTeaching}}, []string{st.math}},
-		{"type research or management", SearchParams{Types: []string{TypeResearch, TypeManagement}}, []string{st.chem, st.ckp}},
+		{"type research or admin", SearchParams{Types: []string{TypeResearch, TypeAdmin}}, []string{st.chem, st.ckp}},
 		{"level 3", SearchParams{Levels: []int{3}}, []string{st.chem, st.math}},
 		{"level 2 or 4", SearchParams{Levels: []int{2, 4}}, []string{st.gen}},
 		{"degree doctor", SearchParams{Degrees: []string{DegreeDoctor}}, []string{st.gen}},
@@ -142,7 +142,7 @@ func TestSearchFilters(t *testing.T) {
 		{"deadline week", SearchParams{Deadline: DeadlineWeek}, []string{st.gen}},
 		{"deadline month", SearchParams{Deadline: DeadlineMonth}, []string{st.chem, st.gen, st.ckp}},
 		{"deadline none", SearchParams{Deadline: DeadlineNone}, []string{st.math}},
-		{"filters combine with AND", SearchParams{Types: []string{TypeResearch, TypeEarlyCareer}, Fundings: []string{FundingGrant}, Levels: []int{2}}, []string{st.gen}},
+		{"filters combine with AND", SearchParams{Types: []string{TypeResearch, TypePhD}, Fundings: []string{FundingGrant}, Levels: []int{2}}, []string{st.gen}},
 		{"unit", SearchParams{UnitID: &st.unitA.ID}, []string{st.chem}},
 	}
 	for _, c := range cases {
@@ -458,7 +458,7 @@ func TestHTTPSearch(t *testing.T) {
 		return out
 	}
 
-	r := get(url.Values{"type": {"research", "management"}, "format": {"onsite"}, "level": {"3"}, "rate": {"100"}, "term": {"medium", "permanent"}})
+	r := get(url.Values{"type": {"research", "admin"}, "format": {"onsite"}, "level": {"3"}, "rate": {"100"}, "term": {"medium", "permanent"}})
 	if r.Code != http.StatusOK || !reflect.DeepEqual(titlesOf(r), []string{st.chem}) || r.json(t)["total"].(float64) != 1 || r.json(t)["fuzzy"] != false {
 		t.Errorf("filters over HTTP: %d %s", r.Code, r.Raw)
 	}

@@ -9,7 +9,7 @@ export const stats: LandingStats = {
     { code: '2', vacancies: 52 },
   ],
   types: [
-    { type: 'early_career', vacancies: 55 },
     { type: 'research', vacancies: 94 },
+    { type: 'phd', vacancies: 55 },
   ],
 }

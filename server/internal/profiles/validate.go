@@ -40,6 +40,9 @@ const (
 	msgDOIDuplicate    = "Публикация с этим DOI уже есть в вашем профиле"
 	msgKindInvalid     = "Неизвестный раздел профиля"
 	msgKindMismatch    = "Вид записи менять нельзя"
+	msgSkillsMany      = "Навыков в списке не больше %d"
+	msgSkillLong       = "Навык «%s» длинноват: не больше %d знаков"
+	msgSkillInvalid    = "В навыке есть недопустимые символы"
 	maxHIndex          = 300
 	yearMin            = 1900
 	maxHeadline        = 200
@@ -175,6 +178,8 @@ type coreFields struct {
 	hWos, hScholar    *int16
 	contactEmail      string
 	specialties       []string
+	researchSkills    []string
+	generalSkills     []string
 }
 
 func int16p(v *int) *int16 {
@@ -310,7 +315,37 @@ func validateCore(in CoreInput, now time.Time) (coreFields, fieldErrors) {
 	if len(f.specialties) > MaxSpecialties {
 		errs["specialties"] = msgSpecsMany
 	}
+	f.researchSkills = errs.skills("research_skills", in.ResearchSkills)
+	f.generalSkills = errs.skills("general_skills", in.GeneralSkills)
 	return f, errs
+}
+
+// skills проверяет список навыков: лишние пробелы убираются, пустые и повторы (без учёта регистра) отбрасываются,
+// порядок человека сохраняется.
+func (e fieldErrors) skills(name string, in []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		v := collapse(raw)
+		key := strings.ToLower(v)
+		switch {
+		case v == "" || seen[key]:
+			continue
+		case hasControl(v, false):
+			e[name] = msgSkillInvalid
+			return []string{}
+		case utf8.RuneCountInString(v) > MaxSkillLen:
+			e[name] = fmt.Sprintf(msgSkillLong, v, MaxSkillLen)
+			return []string{}
+		}
+		seen[key] = true
+		out = append(out, v)
+	}
+	if len(out) > MaxSkills {
+		e[name] = fmt.Sprintf(msgSkillsMany, MaxSkills)
+		return []string{}
+	}
+	return out
 }
 
 func hIndex(errs fieldErrors, name string, v *int) *int {
