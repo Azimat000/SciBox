@@ -142,3 +142,121 @@ func TestRepositoryProductConfig(t *testing.T) {
 		t.Fatal("empty product name")
 	}
 }
+
+// Боевой режим (T-08): с безопасными настройками сервер стартует, а каждая опасная настройка
+// по отдельности не даёт ему запуститься и называет, что исправить.
+func TestProductionRefusesUnsafeSettings(t *testing.T) {
+	for _, k := range []string{"PGHOST", "PGPORT", "PGPASSWORD", "PGSSLMODE", "PGSERVICE", "PGSERVICEFILE"} {
+		t.Setenv(k, "")
+	}
+	p := writeFile(t, `{"name":"SciBox"}`)
+	safe := func() map[string]string {
+		return map[string]string{
+			"SCIBOX_PRODUCT_CONFIG": p,
+			"SCIBOX_ENV":            " Production ",
+			"SCIBOX_PUBLIC_URL":     "https://scibox.example",
+			"DATABASE_URL":          "postgres://app:Long-Random-Secret@db.internal:5432/scibox?sslmode=verify-full",
+			"SCIBOX_SMTP_TLS":       "starttls",
+			"SCIBOX_MAIL_FROM":      "SciBox <no-reply@scibox.example>",
+		}
+	}
+	cfg, err := Load(envMap(safe()))
+	if err != nil {
+		t.Fatalf("safe production settings refused: %v", err)
+	}
+	if cfg.Env != EnvProduction || !cfg.HTTPS() {
+		t.Fatalf("env = %q, https = %v", cfg.Env, cfg.HTTPS())
+	}
+
+	// Те же безопасные настройки, но база на этой машине: шифрование не требуется.
+	for _, db := range []string{
+		"postgres://app:Long-Random-Secret@localhost:5432/scibox?sslmode=disable",
+		"postgres://app:Long-Random-Secret@127.0.0.1/scibox?sslmode=disable",
+		"postgres://app:Long-Random-Secret@[::1]/scibox?sslmode=disable",
+		"host=/var/run/postgresql user=app password=Long-Random-Secret dbname=scibox sslmode=disable",
+		"postgres://app:Long-Random-Secret@db.internal/scibox?sslmode=require",
+		"postgres://app:Long-Random-Secret@db.internal/scibox?sslmode=verify-ca",
+	} {
+		env := safe()
+		env["DATABASE_URL"] = db
+		if _, err := Load(envMap(env)); err != nil {
+			t.Errorf("%s refused: %v", db, err)
+		}
+	}
+
+	cases := []struct {
+		name string
+		key  string
+		val  string
+		want string
+	}{
+		{"http site", "SCIBOX_PUBLIC_URL", "http://scibox.example", "SCIBOX_PUBLIC_URL must be the https://"},
+		{"default site", "SCIBOX_PUBLIC_URL", "", "SCIBOX_PUBLIC_URL must be the https://"},
+		{"site without host", "SCIBOX_PUBLIC_URL", "https://", "SCIBOX_PUBLIC_URL must be the https://"},
+		{"broken site address", "SCIBOX_PUBLIC_URL", "https://%zz", "SCIBOX_PUBLIC_URL must be the https://"},
+		{"default database", "DATABASE_URL", "", "development password"},
+		{"development password", "DATABASE_URL", "postgres://scibox:scibox@db.internal/scibox?sslmode=verify-full", "development password"},
+		{"remote database without tls", "DATABASE_URL", "postgres://app:Long-Random-Secret@db.internal/scibox?sslmode=disable", "connects to db.internal without encryption"},
+		{"remote database with optional tls", "DATABASE_URL", "postgres://app:Long-Random-Secret@db.internal/scibox?sslmode=prefer", "without encryption"},
+		{"remote database with tls allowed", "DATABASE_URL", "postgres://app:Long-Random-Secret@10.0.0.5/scibox?sslmode=allow", "without encryption"},
+		{"remote database, sslmode not set", "DATABASE_URL", "postgres://app:Long-Random-Secret@db.internal/scibox", "without encryption"},
+		{"broken database address", "DATABASE_URL", "postgres://app:x@db.internal:notaport/scibox", "DATABASE_URL cannot be parsed"},
+		{"mail without encryption", "SCIBOX_SMTP_TLS", "off", "SCIBOX_SMTP_TLS is off"},
+		{"default sender", "SCIBOX_MAIL_FROM", "", "SCIBOX_MAIL_FROM must be a real address"},
+		{"broken sender", "SCIBOX_MAIL_FROM", "not an address", "SCIBOX_MAIL_FROM must be a real address"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := safe()
+			env[tc.key] = tc.val
+			_, err := Load(envMap(env))
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "SCIBOX_ENV=production") {
+				t.Fatalf("err = %v, want containing %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "Long-Random-Secret") {
+				t.Fatalf("database password leaked into the error: %v", err)
+			}
+		})
+	}
+
+	// Все проблемы видны сразу, а не по одной за запуск.
+	_, err = Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p, "SCIBOX_ENV": "production"}))
+	for _, want := range []string{"SCIBOX_PUBLIC_URL", "development password", "SCIBOX_SMTP_TLS", "SCIBOX_MAIL_FROM"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("all-defaults production: err = %v, want containing %q", err, want)
+		}
+	}
+
+	// В режиме разработки те же значения по умолчанию разрешены.
+	if _, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p})); err != nil {
+		t.Fatalf("development defaults refused: %v", err)
+	}
+}
+
+func TestLoadEnvAndProxies(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	cfg, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p, "SCIBOX_TRUSTED_PROXIES": "127.0.0.1, 10.0.0.0/8"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env != EnvDevelopment || cfg.TrustedProxies.Empty() || cfg.HTTPS() {
+		t.Fatalf("env = %q, proxies empty = %v, https = %v", cfg.Env, cfg.TrustedProxies.Empty(), cfg.HTTPS())
+	}
+	cases := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"unknown env", map[string]string{"SCIBOX_ENV": "prod"}, "SCIBOX_ENV"},
+		{"bad proxy", map[string]string{"SCIBOX_TRUSTED_PROXIES": "10.0.0.300"}, "SCIBOX_TRUSTED_PROXIES"},
+		{"proxy trusts everyone", map[string]string{"SCIBOX_TRUSTED_PROXIES": "0.0.0.0/0"}, "trusts every address"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.env["SCIBOX_PRODUCT_CONFIG"] = p
+			if _, err := Load(envMap(tc.env)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}

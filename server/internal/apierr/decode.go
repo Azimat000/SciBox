@@ -2,6 +2,7 @@ package apierr
 
 import (
 	"encoding/json"
+	"errors"
 	"mime"
 	"net/http"
 )
@@ -20,6 +21,10 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64)
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
+		if _, tooBig := errors.AsType[*http.MaxBytesError](err); tooBig {
+			WriteError(w, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "Запрос слишком большой")
+			return false
+		}
 		WriteError(w, http.StatusBadRequest, CodeBadRequest, "Не удалось прочитать запрос")
 		return false
 	}

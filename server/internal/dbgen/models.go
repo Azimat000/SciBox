@@ -217,6 +217,13 @@ type ProfileSpecialty struct {
 	SpecialtyCode string
 }
 
+type RateCounter struct {
+	Kind        string
+	Key         string
+	WindowStart time.Time
+	Hits        int32
+}
+
 type RateEvent struct {
 	ID   int64
 	Kind string

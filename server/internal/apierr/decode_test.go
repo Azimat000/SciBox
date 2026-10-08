@@ -25,7 +25,7 @@ func TestDecodeJSON(t *testing.T) {
 		{"form", "application/x-www-form-urlencoded", `name=x`, false, http.StatusUnsupportedMediaType, CodeUnsupportedMedia},
 		{"broken", "application/json", `{`, false, http.StatusBadRequest, CodeBadRequest},
 		{"unknown field", "application/json", `{"name":"x","extra":1}`, false, http.StatusBadRequest, CodeBadRequest},
-		{"too big", "application/json", `{"name":"` + strings.Repeat("я", 100) + `"}`, false, http.StatusBadRequest, CodeBadRequest},
+		{"too big", "application/json", `{"name":"` + strings.Repeat("я", 100) + `"}`, false, http.StatusRequestEntityTooLarge, CodePayloadTooLarge},
 	}
 	for _, c := range cases {
 		req := httptest.NewRequest("POST", "/", strings.NewReader(c.body))

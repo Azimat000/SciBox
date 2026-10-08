@@ -87,7 +87,10 @@ func TestUpDownUp(t *testing.T) {
 	matchingTables := append(slices.Clone(offerTables), "deadline_reminders", "favorites", "notification_settings", "saved_searches")
 	slices.Sort(matchingTables)
 	// Справочник журналов (00012).
-	allTables := append(slices.Clone(matchingTables), "journal_issns", "journals")
+	journalTables := append(slices.Clone(matchingTables), "journal_issns", "journals")
+	slices.Sort(journalTables)
+	// Счётчики ограничения частоты (00015).
+	allTables := append(slices.Clone(journalTables), "rate_counters")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -96,12 +99,13 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00014_profile_skills.sql", 2, allTables},
+		{"up", "00015_rate_counters.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		{"down", "00015_rate_counters.sql", 2, journalTables},
 		// Виды вакансий и навыки (00013, 00014) таблиц не добавляют.
-		{"down", "00014_profile_skills.sql", 2, allTables},
-		{"down", "00013_vacancy_kinds.sql", 2, allTables},
+		{"down", "00014_profile_skills.sql", 2, journalTables},
+		{"down", "00013_vacancy_kinds.sql", 2, journalTables},
 		{"down", "00012_journals.sql", 2, matchingTables},
 		{"down", "00011_matching.sql", 2, offerTables},
 		{"down", "00010_offers.sql", 2, reviewTables},
@@ -114,7 +118,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00014_profile_skills.sql", 2, allTables},
+		{"up", "00015_rate_counters.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

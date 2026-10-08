@@ -173,7 +173,7 @@ func Serve(w http.ResponseWriter, name string, data []byte) {
 	h.Set("Content-Type", "application/pdf")
 	h.Set("Content-Disposition", `attachment; filename="file.pdf"; filename*=UTF-8''`+url.PathEscape(name))
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'")
 	h.Set("Content-Length", strconv.Itoa(len(data)))
 	_, _ = w.Write(data)
 }

@@ -413,7 +413,7 @@ func TestHTTPRequestBodyRules(t *testing.T) {
 		{"empty body", "", nil, 400, "bad_request"},
 		{"unknown field", `{"email":"a@b.ru","password":"x","admin":true}`, nil, 400, "bad_request"},
 		{"wrong type", `{"email":5}`, nil, 400, "bad_request"},
-		{"too large", `{"email":"` + strings.Repeat("a", 20000) + `"}`, nil, 400, "bad_request"},
+		{"too large", `{"email":"` + strings.Repeat("a", 20000) + `"}`, nil, 413, "payload_too_large"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

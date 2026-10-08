@@ -19,6 +19,7 @@ const (
 	CodeUnauthorized        = "unauthorized"
 	CodeForbidden           = "forbidden"
 	CodeRateLimited         = "rate_limited"
+	CodePayloadTooLarge     = "payload_too_large"
 )
 
 // ErrorBody — единый формат ошибки: {"error": {"code": "...", "message": "..."}}.

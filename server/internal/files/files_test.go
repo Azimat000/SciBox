@@ -150,7 +150,7 @@ func TestServe(t *testing.T) {
 	checks := map[string]string{
 		"Content-Type":            "application/pdf",
 		"X-Content-Type-Options":  "nosniff",
-		"Content-Security-Policy": "sandbox; default-src 'none'",
+		"Content-Security-Policy": "sandbox; default-src 'none'; frame-ancestors 'none'",
 		"Content-Length":          "30",
 	}
 	for k, want := range checks {

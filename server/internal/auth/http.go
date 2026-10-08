@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"math"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"scibox/server/internal/apierr"
+	"scibox/server/internal/httpguard"
 )
 
 // CookieName — имя cookie с сессией.
@@ -161,12 +161,10 @@ func (h *Handler) clearCookie(w http.ResponseWriter) {
 	})
 }
 
+// meta — адрес и браузер человека. Адрес с учётом доверенных прокси решает периметр (httpguard, T-06):
+// без доверенных прокси это адрес соединения, заголовки X-Forwarded-* не принимаются.
 func meta(r *http.Request) Meta {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
-	return Meta{IP: ip, UserAgent: r.UserAgent()}
+	return Meta{IP: httpguard.ClientIP(r), UserAgent: r.UserAgent()}
 }
 
 // decode читает JSON-тело запроса; при ошибке сам отвечает и возвращает false.

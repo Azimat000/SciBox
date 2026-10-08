@@ -11,7 +11,8 @@ import (
 // Так сайт и сервер помещаются на один порт: это нужно туннелю и серверу в интернете.
 // Адреса без файла (/vacancies/42, /profile) получают index.html: страницы рисует сам сайт.
 // Файлы из /assets/ с хешем в имени кешируются надолго, index.html не кешируется,
-// чтобы после обновления сайта браузер сразу взял новую версию.
+// чтобы после обновления сайта браузер сразу взял новую версию. Заголовки защиты (CSP и другие)
+// ставит периметр роутера (httpguard).
 func WebHandler(site fs.FS) http.Handler {
 	files := http.FileServerFS(site)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,8 +20,6 @@ func WebHandler(site fs.FS) http.Handler {
 			WriteError(w, http.StatusMethodNotAllowed, CodeMethodNotAllowed, "Этот метод здесь не поддерживается")
 			return
 		}
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
 		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 		if name != "" && name != "index.html" {

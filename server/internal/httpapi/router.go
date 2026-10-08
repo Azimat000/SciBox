@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,6 +14,7 @@ import (
 	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
+	"scibox/server/internal/httpguard"
 	"scibox/server/internal/journals"
 	"scibox/server/internal/landing"
 	"scibox/server/internal/matching"
@@ -65,20 +65,33 @@ type Deps struct {
 	Journals *journals.Handler
 	// Web отдаёт страницы сайта по всем адресам вне /api (см. WebHandler); без него там 404.
 	Web http.Handler
+	// Perimeter — прокси, https, хранилище счётчиков частоты. Периметр работает всегда; нулевое значение —
+	// без доверенных прокси, без HSTS, счётчики в памяти.
+	Perimeter Perimeter
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
 const healthTimeout = 2 * time.Second
 
-// NewRouter собирает маршруты API.
+// NewRouter собирает маршруты API. Периметр (httpguard) стоит перед всеми обработчиками: адрес человека,
+// заголовки защиты, лимит тела и сроки; ограничение частоты — после проверки входа.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
+	guard, err := httpguard.New(httpguard.Config{
+		Proxies: d.Perimeter.Proxies, HTTPS: d.Perimeter.HTTPS, Routes: PerimeterRoutes(),
+		Store: d.Perimeter.Store, Logger: d.Logger, Now: d.Perimeter.Now,
+	}, r)
+	if err != nil {
+		// Таблица PerimeterRoutes() постоянная: ошибка в ней — ошибка в коде, её ловит TestPerimeter в internal/cli.
+		panic(err)
+	}
 	r.Use(middleware.RequestID)
 	r.Use(requestLogger(d.Logger))
 	r.Use(recoverer(d.Logger))
+	r.Use(guard.Perimeter)
 
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
-		if d.Web != nil && !isAPIPath(req.URL.Path) {
+		if d.Web != nil && !httpguard.IsAPIPath(req.URL.Path) {
 			d.Web.ServeHTTP(w, req)
 			return
 		}
@@ -91,8 +104,10 @@ func NewRouter(d Deps) http.Handler {
 	r.Route("/api", func(r chi.Router) {
 		r.Use(noStore)
 		if d.Auth != nil {
-			r.Use(d.Auth.SameOrigin, d.Auth.Authenticate)
+			r.Use(d.Auth.SameOrigin, d.Auth.Authenticate, guard.Throttle(whoIsSignedIn))
 			d.Auth.Mount(r)
+		} else {
+			r.Use(guard.Throttle(nil))
 		}
 		if d.Orgs != nil {
 			d.Orgs.Mount(r)
@@ -160,10 +175,6 @@ func healthHandler(d Deps) http.HandlerFunc {
 }
 
 // noStore запрещает браузеру и посредникам кешировать ответы API: в них личные данные.
-func isAPIPath(p string) bool {
-	return p == "/api" || strings.HasPrefix(p, "/api/")
-}
-
 func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")

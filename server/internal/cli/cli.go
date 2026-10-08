@@ -25,6 +25,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
+	"scibox/server/internal/httpguard"
 	"scibox/server/internal/journals"
 	"scibox/server/internal/landing"
 	"scibox/server/internal/mail"
@@ -209,61 +210,30 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	}
 
-	// Письма сначала попадают в очередь в базе и уходят оттуда в фоне: они переживают падение сервера и повторяются при сбоях.
-	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom, TLS: cfg.SMTPTLS, Username: cfg.SMTPUser, Password: cfg.SMTPPassword}
-	queue := notifications.NewQueue(pool)
-	accounts := auth.NewService(pool, queue, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	a := newApp(cfg, pool, logger, health.Checker{Queries: dbgen.New(pool), Migrations: migrations}, web, time.Now)
 	// Фоновые задачи останавливаются отменой cleanupCtx; сервер дожидается их до закрытия базы и выхода.
 	var background sync.WaitGroup
 	defer background.Wait()
 	cleanupCtx, stopCleanup := context.WithCancel(ctx)
 	defer stopCleanup()
-	background.Go(func() { accounts.RunCleanup(cleanupCtx, time.Hour) })
-	defer accounts.Flush()
-	organizations := orgs.NewService(pool, queue, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
-	background.Go(func() { organizations.RunCleanup(cleanupCtx, time.Hour) })
-	defer organizations.Flush()
-	worker := notifications.NewWorker(pool, smtp, logger)
-	background.Go(func() { worker.Run(cleanupCtx, outboxInterval) })
-	authHandler := auth.NewHandler(accounts, logger)
-
-	notes := notifications.NewService(pool, notifications.Config{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL})
-	profileSvc := profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name))
-	refSvc := references.NewService(pool, notes, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
-	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, applications.DefaultConfig())
-	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
-	matchingSvc := matching.NewService(pool, vacancySvc, notes, matching.DefaultConfig(), logger)
-	background.Go(func() { matchingSvc.Run(cleanupCtx, matchingInterval) })
-
-	handler := httpapi.NewRouter(httpapi.Deps{
-		ProductName:   cfg.Product.Name,
-		Version:       Version,
-		Health:        health.Checker{Queries: dbgen.New(pool), Migrations: migrations},
-		Logger:        logger,
-		Auth:          authHandler,
-		Orgs:          orgs.NewHandler(organizations, logger, authHandler.RequireUser),
-		Vacancies:     vacancies.NewHandler(vacancySvc, logger, authHandler.RequireUser),
-		Profiles:      profiles.NewHandler(profileSvc, logger, authHandler.RequireUser),
-		Applications:  applications.NewHandler(appSvc, logger, authHandler.RequireUser),
-		References:    references.NewHandler(refSvc, logger, authHandler.RequireUser),
-		Notifications: notifications.NewHandler(notes, logger, authHandler.RequireUser),
-		Offers:        offers.NewHandler(offers.NewService(pool, notes, offers.DefaultConfig()), logger, authHandler.RequireUser),
-		Matching:      matching.NewHandler(matchingSvc, logger, authHandler.RequireUser),
-		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
-		Landing:       landing.NewHandler(landing.NewService(pool), logger),
-		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
-		Web:           web,
-	})
+	for _, flush := range a.flush {
+		defer flush()
+	}
+	for _, run := range a.background {
+		background.Go(func() { run(cleanupCtx) })
+	}
+	handler := a.handler
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", cfg.HTTPAddr, err)
 	}
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	srv := httpguard.NewServer(handler, httpguard.DefaultTimeouts())
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()
-	logger.Info("server started", "addr", ln.Addr().String(), "product", cfg.Product.Name)
+	logger.Info("server started", "addr", ln.Addr().String(), "product", cfg.Product.Name, "env", cfg.Env,
+		"trusted_proxies", !cfg.TrustedProxies.Empty())
 	if onListen != nil {
 		onListen(ln.Addr())
 	}
@@ -283,4 +253,66 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	}
 	logger.Info("server stopped")
 	return nil
+}
+
+// app — собранный сервер: обработчик всех адресов и фоновые задачи, которые запускает serve.
+type app struct {
+	handler http.Handler
+	// background — фоновые циклы; каждый работает, пока не отменят ctx.
+	background []func(ctx context.Context)
+	// flush дожидается писем, которые сервисы отправляют в фоне, перед выходом.
+	flush []func()
+}
+
+// newApp собирает сервисы и роутер так же, как в работе. Отдельно от serve, чтобы тесты проверяли
+// настоящую сборку (например, что каждый адрес ограничивает тело запроса). now — часы ограничения частоты.
+func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker httpapi.HealthChecker, web http.Handler, now func() time.Time) app {
+	// Письма сначала попадают в очередь в базе и уходят оттуда в фоне: они переживают падение сервера и повторяются при сбоях.
+	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom, TLS: cfg.SMTPTLS, Username: cfg.SMTPUser, Password: cfg.SMTPPassword}
+	queue := notifications.NewQueue(pool)
+	accounts := auth.NewService(pool, queue, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	organizations := orgs.NewService(pool, queue, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
+	worker := notifications.NewWorker(pool, smtp, logger)
+	authHandler := auth.NewHandler(accounts, logger)
+
+	notes := notifications.NewService(pool, notifications.Config{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL})
+	profileSvc := profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name))
+	refSvc := references.NewService(pool, notes, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
+	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, applications.DefaultConfig())
+	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
+	matchingSvc := matching.NewService(pool, vacancySvc, notes, matching.DefaultConfig(), logger)
+	// Счётчики частоты в базе: лимит общий для всех копий сервера (D-141).
+	counters := httpguard.NewPostgresStore(pool)
+
+	handler := httpapi.NewRouter(httpapi.Deps{
+		ProductName:   cfg.Product.Name,
+		Version:       Version,
+		Health:        checker,
+		Logger:        logger,
+		Auth:          authHandler,
+		Orgs:          orgs.NewHandler(organizations, logger, authHandler.RequireUser),
+		Vacancies:     vacancies.NewHandler(vacancySvc, logger, authHandler.RequireUser),
+		Profiles:      profiles.NewHandler(profileSvc, logger, authHandler.RequireUser),
+		Applications:  applications.NewHandler(appSvc, logger, authHandler.RequireUser),
+		References:    references.NewHandler(refSvc, logger, authHandler.RequireUser),
+		Notifications: notifications.NewHandler(notes, logger, authHandler.RequireUser),
+		Offers:        offers.NewHandler(offers.NewService(pool, notes, offers.DefaultConfig()), logger, authHandler.RequireUser),
+		Matching:      matching.NewHandler(matchingSvc, logger, authHandler.RequireUser),
+		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
+		Landing:       landing.NewHandler(landing.NewService(pool), logger),
+		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
+		Web:           web,
+		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: counters, Now: now},
+	})
+	return app{
+		handler: handler,
+		background: []func(ctx context.Context){
+			func(ctx context.Context) { accounts.RunCleanup(ctx, time.Hour) },
+			func(ctx context.Context) { organizations.RunCleanup(ctx, time.Hour) },
+			func(ctx context.Context) { worker.Run(ctx, outboxInterval) },
+			func(ctx context.Context) { matchingSvc.Run(ctx, matchingInterval) },
+			func(ctx context.Context) { counters.RunCleanup(ctx, time.Hour, logger) },
+		},
+		flush: []func(){accounts.Flush, organizations.Flush},
+	}
 }
