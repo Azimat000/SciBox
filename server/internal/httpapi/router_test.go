@@ -122,7 +122,7 @@ func TestRecovererRepanicsAbort(t *testing.T) {
 		panic(http.ErrAbortHandler)
 	}))
 	defer func() {
-		if rec := recover(); rec != http.ErrAbortHandler {
+		if rec, _ := recover().(error); !errors.Is(rec, http.ErrAbortHandler) {
 			t.Fatalf("recovered %v, want ErrAbortHandler", rec)
 		}
 	}()

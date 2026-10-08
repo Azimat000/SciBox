@@ -139,7 +139,7 @@ func runJournals(ctx context.Context, databaseURL string, args []string, env Env
 			fmt.Fprint(env.Stderr, usage)
 			return 2
 		default:
-			data, err := os.ReadFile(a)
+			data, err := os.ReadFile(a) //nolint:gosec // G304: файл указывает администратор в командной строке
 			if err != nil {
 				logger.Error("journals", "err", err)
 				return 1
@@ -199,7 +199,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	defer pool.Close()
 
 	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer sqlDB.Close()
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			logger.Warn("close database handle", "err", err)
+		}
+	}()
 	migrations, err := migrate.NewProvider(sqlDB)
 	if err != nil {
 		return err
@@ -251,7 +255,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		Web:           web,
 	})
 
-	ln, err := net.Listen("tcp", cfg.HTTPAddr)
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", cfg.HTTPAddr, err)
 	}

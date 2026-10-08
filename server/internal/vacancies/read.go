@@ -17,9 +17,10 @@ import (
 
 const (
 	dateLayout = "2006-01-02"
-	// DefaultLimit и MaxLimit — сколько вакансий отдаёт один запрос списка.
+	// DefaultLimit — сколько вакансий отдаёт запрос списка, если размер страницы не указан.
 	DefaultLimit = 50
-	MaxLimit     = 100
+	// MaxLimit — больше этого запрос списка не отдаёт.
+	MaxLimit = 100
 )
 
 func deref(s *string) string {

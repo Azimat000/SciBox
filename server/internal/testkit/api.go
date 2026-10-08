@@ -77,7 +77,7 @@ func (a *API) Do(who *Person, method, path string, body any) Reply {
 		b, _ := json.Marshal(body)
 		rd = bytes.NewReader(b)
 	}
-	req := httptest.NewRequest(method, path, rd)
+	req := httptest.NewRequestWithContext(a.T.Context(), method, path, rd)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -106,7 +106,7 @@ func (a *API) DoForm(who *Person, method, path string, data any, files ...FilePa
 		_, _ = pw.Write(f.Data)
 	}
 	_ = mw.Close()
-	req := httptest.NewRequest(method, path, &buf)
+	req := httptest.NewRequestWithContext(a.T.Context(), method, path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	return a.send(who, req)
 }
@@ -114,7 +114,7 @@ func (a *API) DoForm(who *Person, method, path string, data any, files ...FilePa
 func (a *API) send(who *Person, req *http.Request) Reply {
 	a.T.Helper()
 	if who != nil {
-		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: who.Token})
+		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: who.Token}) //nolint:gosec // G124: cookie запроса в тесте, атрибуты Secure и HttpOnly бывают только у ответа
 	}
 	rec := httptest.NewRecorder()
 	a.H.ServeHTTP(rec, req)

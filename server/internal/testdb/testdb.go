@@ -21,7 +21,7 @@ import (
 )
 
 // DefaultAdminURL — служебная база контейнера из docker-compose.yml.
-const DefaultAdminURL = "postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable"
+const DefaultAdminURL = "postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable" //nolint:gosec // G101: служебная база тестового контейнера, пароль известен всем
 
 // TB — часть testing.TB, которой пользуется пакет (удобно подменять в своих тестах).
 type TB interface {
@@ -73,7 +73,7 @@ func create(ctx context.Context, adminURL string, migrated bool, cleanup func(fu
 	if err != nil {
 		return "", fmt.Errorf("connect admin database: %w", err)
 	}
-	defer admin.Close(context.Background())
+	defer func() { _ = admin.Close(context.Background()) }() // служебное соединение тестов: ошибка закрытия ни на что не влияет
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
 		return "", fmt.Errorf("create database: %w", err)
 	}
@@ -98,7 +98,7 @@ func drop(adminURL, name string) error {
 	if err != nil {
 		return err
 	}
-	defer admin.Close(context.Background())
+	defer func() { _ = admin.Close(context.Background()) }() // служебное соединение тестов: ошибка закрытия ни на что не влияет
 	_, err = admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)")
 	return err
 }

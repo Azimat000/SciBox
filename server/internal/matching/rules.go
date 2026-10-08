@@ -139,11 +139,11 @@ func Score(p Profile, o Opening) (Match, bool) {
 	}
 	m := Match{Score: field, Reasons: []string{reason}}
 	if o.CareerLevel != nil {
-		switch diff := *o.CareerLevel - p.Level(); {
-		case diff == 0:
+		switch *o.CareerLevel - p.Level() {
+		case 0:
 			m.Score += pointsLevel
 			m.Reasons = append(m.Reasons, ReasonLevel)
-		case diff == 1 || diff == -1:
+		case 1, -1:
 			m.Score += pointsLevelNear
 			m.Reasons = append(m.Reasons, ReasonLevelNear)
 		}

@@ -241,7 +241,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			p, _ := e.svc.Authenticate(bg, sess.Token)
 			return func(s *Service) error {
 				err := s.ChangePassword(bg, p, "wrong password!!", "a good new passphrase")
-				if _, ok := err.(*ValidationError); ok {
+				if _, ok := errors.AsType[*ValidationError](err); ok {
 					return nil
 				}
 				return err

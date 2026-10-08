@@ -320,7 +320,7 @@ func TestServeListenError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	r := run(context.Background(), []string{"serve"}, map[string]string{
 		"DATABASE_URL":     testdb.Create(t, true),
 		"SCIBOX_HTTP_ADDR": ln.Addr().String(), // порт уже занят
@@ -361,7 +361,7 @@ func TestServeHealthAndShutdown(t *testing.T) {
 			reqErr = err
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		status = resp.StatusCode
 		reqErr = json.NewDecoder(resp.Body).Decode(&got)
 	})

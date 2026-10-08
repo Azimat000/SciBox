@@ -24,7 +24,7 @@ const maxBody = 16 << 10
 
 // Коды ошибок аккаунтов.
 const (
-	CodeInvalidCredentials = "invalid_credentials"
+	CodeInvalidCredentials = "invalid_credentials" //nolint:gosec // G101: код ошибки для сайта, а не пароль
 	CodeEmailNotConfirmed  = "email_not_confirmed"
 	CodeInvalidToken       = "invalid_token"
 	CodeUnsupportedMedia   = apierr.CodeUnsupportedMedia
@@ -146,7 +146,8 @@ func (h *Handler) RequireUser(next http.Handler) http.Handler {
 // ---- вспомогательное ----
 
 func (h *Handler) setCookie(w http.ResponseWriter, token string, expires time.Time) {
-	http.SetCookie(w, &http.Cookie{
+	// Secure зависит от адреса сайта (https), проверено TestHTTPCookieIsSecureOverHTTPS.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
 		Name: CookieName, Value: token, Path: "/", Expires: expires,
 		MaxAge:   int(time.Until(expires).Seconds()),
 		HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode,
@@ -154,7 +155,7 @@ func (h *Handler) setCookie(w http.ResponseWriter, token string, expires time.Ti
 }
 
 func (h *Handler) clearCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
 		Name: CookieName, Value: "", Path: "/", MaxAge: -1,
 		HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode,
 	})

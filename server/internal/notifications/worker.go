@@ -65,7 +65,7 @@ func NewWorker(db DB, sender mail.Sender, logger *slog.Logger) *Worker {
 	}
 }
 
-// DefaultBackoff: 1 минута, 5 минут, 15 минут, час, 3 часа, 6 часов, 12 часов.
+// DefaultBackoff — 1 минута, 5 минут, 15 минут, час, 3 часа, 6 часов, 12 часов.
 func DefaultBackoff(attempt int) time.Duration {
 	steps := []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour, 3 * time.Hour, 6 * time.Hour, 12 * time.Hour}
 	i := max(attempt-1, 0)

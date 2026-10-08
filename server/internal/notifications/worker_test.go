@@ -13,6 +13,7 @@ import (
 
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/mail"
+	"scibox/server/internal/num"
 	"scibox/server/internal/testkit"
 )
 
@@ -404,7 +405,7 @@ func TestRunKeepsGoingAfterBatchIsFull(t *testing.T) {
 }
 
 func claimParams(now time.Time, w *Worker) dbgen.ClaimOutboxParams {
-	return dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: int32(w.Batch)}
+	return dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: num.Int32(w.Batch)}
 }
 
 func contextWithTimeout(d time.Duration) (context.Context, context.CancelFunc) {

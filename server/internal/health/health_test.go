@@ -17,7 +17,7 @@ import (
 func TestCheckDatabaseReal(t *testing.T) {
 	pool := testdb.New(t)
 	sqlDB := stdlib.OpenDBFromPool(pool)
-	t.Cleanup(func() { sqlDB.Close() })
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	prov, err := migrate.NewProvider(sqlDB)
 	if err != nil {
 		t.Fatal(err)

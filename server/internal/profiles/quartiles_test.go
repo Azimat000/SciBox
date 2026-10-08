@@ -3,6 +3,7 @@ package profiles
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -210,7 +211,7 @@ func TestLookupDOIFindsTheJournal(t *testing.T) {
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			w.doi.work = crossref.Work{Title: "Статья", Type: "article", ISSNs: c.issns}
-			got, err := w.svc.LookupDOI(bg, p.User, "10.5555/q14x4-"+string(rune('a'+i)))
+			got, err := w.svc.LookupDOI(bg, p.User, "10.5555/q14x4-"+strconv.Itoa(i))
 			if err != nil {
 				t.Fatal(err)
 			}

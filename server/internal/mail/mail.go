@@ -90,7 +90,7 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return fmt.Errorf("mail: connect %s: %w", s.Addr, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // уборка: письмо считается принятым по ответу на DATA и QUIT, а не по закрытию
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
 		return fmt.Errorf("mail: set deadline: %w", err)
@@ -127,7 +127,7 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return fmt.Errorf("mail: smtp greeting: %w", err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }() // после QUIT соединение уже закрыто сервером, ошибка здесь ожидаема
 	if mode == TLSStartTLS {
 		if err := c.StartTLS(tlsCfg); err != nil {
 			return fmt.Errorf("mail: STARTTLS: %w", err)

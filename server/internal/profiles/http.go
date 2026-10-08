@@ -235,7 +235,7 @@ func (h *Handler) sendCV(w http.ResponseWriter, r *http.Request, id *uuid.UUID) 
 	w.Header().Set("Content-Disposition", `attachment; filename="cv.pdf"; filename*=UTF-8''`+url.PathEscape(name))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Length", strconv.Itoa(len(pdf)))
-	_, _ = w.Write(pdf)
+	_, _ = w.Write(pdf) //nolint:gosec // G705: это PDF-вложение с nosniff, браузер не исполняет его как страницу
 }
 
 // catalogParams переводит строку запроса в параметры каталога. Ошибку формата (не число) отдаёт как ошибку поля;

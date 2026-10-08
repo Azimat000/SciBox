@@ -17,7 +17,7 @@ var staffMoves = map[string][]string{
 // decisions — статусы, которые организация ставит сама кнопкой (остальные получаются как следствие: просмотр, приглашение).
 var decisions = []string{StatusRejected, StatusAccepted}
 
-// CanStaffMove: может ли организация перевести отклик из from в to.
+// CanStaffMove — может ли организация перевести отклик из from в to.
 func CanStaffMove(from, to string) bool {
 	for _, s := range staffMoves[from] {
 		if s == to {
@@ -27,7 +27,7 @@ func CanStaffMove(from, to string) bool {
 	return false
 }
 
-// CanDecide: можно ли поставить решение to (отказ или принят) отклику в статусе from.
+// CanDecide — можно ли поставить решение to (отказ или принят) отклику в статусе from.
 func CanDecide(from, to string) bool {
 	return isOneOf(to, decisions) && CanStaffMove(from, to)
 }
@@ -43,7 +43,7 @@ func DecisionsFrom(from string) []string {
 	return out
 }
 
-// CanInvite: можно ли отправить приглашение отклику в статусе from (в том числе повторное, когда он уже «приглашён»).
+// CanInvite — можно ли отправить приглашение отклику в статусе from (в том числе повторное, когда он уже «приглашён»).
 func CanInvite(from string) bool { return from == StatusInvited || CanStaffMove(from, StatusInvited) }
 
 // fromStatuses — из каких статусов разрешён переход в to; нужно запросу, который меняет статус только из ожидаемых.
@@ -101,10 +101,10 @@ const (
 // openInvitation — состояния, из которых приглашение можно отменить (организацией или решением по отклику).
 var openInvitation = []string{InvPending, InvProposed, InvConfirmed}
 
-// CanCancelInvitation: можно ли отменить приглашение в таком состоянии.
+// CanCancelInvitation — можно ли отменить приглашение в таком состоянии.
 func CanCancelInvitation(status string) bool { return isOneOf(status, openInvitation) }
 
-// InitialInvitationStatus: с какого состояния начинается приглашение вида kind (пусто — вида нет).
+// InitialInvitationStatus — с какого состояния начинается приглашение вида kind (пусто — вида нет).
 func InitialInvitationStatus(kind string) string {
 	switch kind {
 	case InvInterview, InvRequest:
@@ -115,7 +115,7 @@ func InitialInvitationStatus(kind string) string {
 	return ""
 }
 
-// AnswerTarget: в какое состояние приглашение вида kind переходит от ответа action; ok == false, если такой ответ
+// AnswerTarget — в какое состояние приглашение вида kind переходит от ответа action; ok == false, если такой ответ
 // этому виду не положен. Отвечать можно один раз, пока приглашение ждёт ответа (InvPending): это защита
 // организации от потока писем (каждый ответ уведомляет всех, кто разбирает отклики).
 func AnswerTarget(kind, action string) (status string, ok bool) {
@@ -130,10 +130,10 @@ func AnswerTarget(kind, action string) (status string, ok bool) {
 	return "", false
 }
 
-// CanAnswerInvitation: ждёт ли приглашение ответа соискателя.
+// CanAnswerInvitation — ждёт ли приглашение ответа соискателя.
 func CanAnswerInvitation(status string) bool { return status == InvPending }
 
-// CanAcceptProposal: можно ли принять предложенное время (только собеседование, где соискатель предложил своё).
+// CanAcceptProposal — можно ли принять предложенное время (только собеседование, где соискатель предложил своё).
 func CanAcceptProposal(kind, status string) bool {
 	return kind == InvInterview && status == InvProposed
 }

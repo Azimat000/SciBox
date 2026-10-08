@@ -31,7 +31,7 @@ var Statuses = []string{StatusSent, StatusViewed, StatusInvited, StatusRejected,
 // withdrawable — из каких статусов соискатель может отозвать отклик: пока решения нет.
 var withdrawable = []string{StatusSent, StatusViewed, StatusInvited}
 
-// CanWithdraw: можно ли отозвать отклик в таком статусе.
+// CanWithdraw — можно ли отозвать отклик в таком статусе.
 func CanWithdraw(status string) bool {
 	for _, s := range withdrawable {
 		if s == status {

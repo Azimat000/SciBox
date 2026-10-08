@@ -3,7 +3,6 @@ package migrate_test
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"errors"
 	"slices"
 	"strings"
@@ -25,7 +24,7 @@ func extensions(t *testing.T, dbURL string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 	rows, err := conn.Query(ctx, `SELECT extname FROM pg_extension WHERE extname IN ('citext','pg_trgm') ORDER BY extname`)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +44,7 @@ func appTables(t *testing.T, dbURL string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close(ctx)
+	defer func() { _ = conn.Close(ctx) }()
 	rows, err := conn.Query(ctx, `SELECT table_name FROM information_schema.tables
 		WHERE table_schema = 'public' AND table_name <> 'goose_db_version' ORDER BY table_name`)
 	if err != nil {
@@ -166,10 +165,10 @@ func TestCommandErrors(t *testing.T) {
 
 func TestNewProviderWithoutMigrations(t *testing.T) {
 	db := stdlib.OpenDB(pgx.ConnConfig{})
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, err := migrate.NewProviderFS(db, fstest.MapFS{})
 	if !errors.Is(err, goose.ErrNoMigrations) {
 		t.Fatalf("err = %v, want ErrNoMigrations", err)
 	}
-	var _ *sql.DB = db
+	_ = db
 }

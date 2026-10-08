@@ -127,7 +127,7 @@ func (s *Service) findNew(ctx context.Context, row dbgen.SavedSearch, until time
 	values, err := url.ParseQuery(row.Query)
 	if err != nil {
 		s.log.Warn("saved search has unreadable query", "search", row.ID)
-		return vacancies.SearchResult{}, nil
+		return vacancies.SearchResult{}, nil //nolint:nilerr // намеренно: испорченный поиск даёт «ничего нового», иначе он застрянет навсегда (см. комментарий к функции)
 	}
 	p, err := vacancies.ParseSearchQuery(values)
 	if err != nil {

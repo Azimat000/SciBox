@@ -16,7 +16,7 @@ func TestWriteInternal(t *testing.T) {
 	cancel()
 	cases := []struct {
 		name       string
-		ctx        context.Context
+		ctx        context.Context //nolint:containedctx // строка таблицы тестов: контекст и есть проверяемый вход
 		wantStatus int
 		wantLog    string
 		wantLevel  string

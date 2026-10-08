@@ -71,7 +71,7 @@ func fakeSecureSMTP(t *testing.T, implicit bool, wantPassword string) (addr stri
 		if err != nil {
 			return
 		}
-		var conn net.Conn = raw
+		conn := raw
 		defer func() { _ = conn.Close() }()
 		res := secureSMTPResult{}
 		if implicit {

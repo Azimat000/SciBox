@@ -87,7 +87,7 @@ func (a Actor) heads(unit uuid.UUID) bool {
 	return false
 }
 
-// IsMember: у человека есть роль в организации.
+// IsMember — у человека есть роль в организации.
 func (a Actor) IsMember() bool {
 	_, ok := ParseRole(string(a.Role))
 	return ok

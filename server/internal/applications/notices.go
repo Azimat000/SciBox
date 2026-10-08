@@ -77,10 +77,10 @@ func kindWord(kind string) string {
 // не попадают: их видно в карточке отклика, а письмо остаётся коротким.
 func answerNotice(applicant, vacancy string, inv dbgen.ApplicationInvitation, v validAnswer) (title, body string) {
 	head := fmt.Sprintf("Кандидат: %s. Вакансия «%s».", applicant, vacancy)
-	switch {
-	case v.Status == InvConfirmed:
+	switch v.Status {
+	case InvConfirmed:
 		return "Кандидат подтвердил собеседование", lines(head, "Когда: "+momentText(*inv.StartsAt))
-	case v.Status == InvProposed:
+	case InvProposed:
 		return "Кандидат предложил другое время", lines(head, "Предложено: "+momentText(*v.ProposedAt),
 			withNote("Сообщение", v.Note), "Принять это время или отправить новое приглашение можно в карточке отклика.")
 	default:

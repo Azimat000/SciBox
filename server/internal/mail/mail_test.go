@@ -3,6 +3,7 @@ package mail
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"mime/quotedprintable"
@@ -27,7 +28,7 @@ func fakeSMTP(t *testing.T, failAt string) (addr string, got <-chan string) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		r := bufio.NewReader(conn)
 		write := func(s string) { _, _ = io.WriteString(conn, s+"\r\n") }
 		write("220 fake ready")
@@ -180,7 +181,7 @@ func TestMemory(t *testing.T) {
 		t.Fatal("Sent must return a copy")
 	}
 	m.Err = io.ErrClosedPipe
-	if err := m.Send(context.Background(), Message{}); err != io.ErrClosedPipe {
+	if err := m.Send(context.Background(), Message{}); !errors.Is(err, io.ErrClosedPipe) {
 		t.Fatalf("err = %v", err)
 	}
 	if len(m.Sent()) != 1 {

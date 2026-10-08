@@ -632,7 +632,7 @@ func (s *Service) lookupWork(ctx context.Context, user auth.User, raw string) (c
 	case errors.Is(err, crossref.ErrNotFound):
 		return crossref.Work{}, ErrDOINotFound
 	case err != nil:
-		return crossref.Work{}, fmt.Errorf("%w: %v", ErrDOIUnavailable, err)
+		return crossref.Work{}, fmt.Errorf("%w: %w", ErrDOIUnavailable, err)
 	}
 	work.DOI = doi
 	return work, nil

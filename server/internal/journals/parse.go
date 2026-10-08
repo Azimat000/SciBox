@@ -94,7 +94,7 @@ func Parse(r io.Reader) (Parsed, error) {
 	cr.ReuseRecord = true
 	head, err := cr.Read()
 	if err != nil {
-		return Parsed{}, fmt.Errorf("%w: read header: %v", ErrFormat, err)
+		return Parsed{}, fmt.Errorf("%w: read header: %w", ErrFormat, err)
 	}
 	c, err := header(head)
 	if err != nil {
@@ -109,11 +109,11 @@ func Parse(r io.Reader) (Parsed, error) {
 			break
 		}
 		if err != nil {
-			return Parsed{}, fmt.Errorf("%w: line %d: %v", ErrFormat, line, err)
+			return Parsed{}, fmt.Errorf("%w: line %d: %w", ErrFormat, line, err)
 		}
 		j, err := journalOf(row, c)
 		if err != nil {
-			return Parsed{}, fmt.Errorf("%w: line %d: %v", ErrFormat, line, err)
+			return Parsed{}, fmt.Errorf("%w: line %d: %w", ErrFormat, line, err)
 		}
 		if seenID[j.ID] {
 			return Parsed{}, fmt.Errorf("%w: line %d: repeated Sourceid %d", ErrFormat, line, j.ID)

@@ -196,7 +196,7 @@ func chance(rng *rand.Rand, percent int) bool { return rng.IntN(100) < percent }
 func seedFor(slug string) *rand.Rand {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(slug))
-	return rand.New(rand.NewPCG(h.Sum64(), 2026))
+	return rand.New(rand.NewPCG(h.Sum64(), 2026)) //nolint:gosec // G404: демо-данные должны быть одинаковыми при каждом запуске, тайны здесь нет
 }
 
 // roundTo округляет рубли до пяти тысяч.

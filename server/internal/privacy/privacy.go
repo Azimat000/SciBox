@@ -35,7 +35,7 @@ type Viewer struct {
 	Staff bool
 }
 
-// CanView: может ли этот человек открыть профиль в таком режиме. Неизвестный режим закрыт для всех, кроме владельца
+// CanView — может ли этот человек открыть профиль в таком режиме. Неизвестный режим закрыт для всех, кроме владельца
 // (лучше спрятать лишнее, чем показать скрытое).
 func (v Visibility) CanView(who Viewer) bool {
 	if who.Owner {
@@ -50,7 +50,7 @@ func (v Visibility) CanView(who Viewer) bool {
 	return false
 }
 
-// CanSeeContacts: контактную почту видит владелец и сотрудники организаций, если профиль им вообще виден.
+// CanSeeContacts — контактную почту видит владелец и сотрудники организаций, если профиль им вообще виден.
 // Аноним и вошедший без организации контактов не видят даже у публичного профиля: их нельзя собрать парсером.
 func (v Visibility) CanSeeContacts(who Viewer) bool {
 	return v.CanView(who) && (who.Owner || who.Staff)

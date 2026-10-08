@@ -1,8 +1,10 @@
 version: "2"
-# Проверки сервера: ошибки в логике и безопасность (D-137).
+# Проверки сервера: ошибки в логике и безопасность (D-137, срез 18).
 # Основа: шаблон скилла golang-lint (samber/cc-skills-golang), оставлены только правила
 # про корректность, безопасность и утечки ресурсов. Правила оформления (wsl, godot, funlen и т.п.)
 # сознательно не включены: на готовом коде они дают тысячи замечаний без пользы.
+# Замечаний должно быть 0: make lint входит в make test. Ложное срабатывание помечается
+# //nolint:правило // причина (nolintlint не пропустит пометку без правила или причины).
 run:
   timeout: 5m
   tests: true
@@ -24,6 +26,8 @@ linters:
     - ineffassign
     - durationcheck
     - reassign
+    - gocritic
+    - revive
     # безопасность и ресурсы
     - gosec
     - bidichk
@@ -34,11 +38,42 @@ linters:
     - rowserrcheck
     - fatcontext
     - containedctx
+    # пометки //nolint
+    - nolintlint
   settings:
+    errcheck:
+      # Вывод команд (scibox migrate, journals, seed, covercheck) в терминал: если терминал
+      # не принимает текст, исправить нечего. Запись в файлы и сеть по-прежнему проверяется.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
     gosec:
       excludes:
         # G104 повторяет errcheck.
         - G104
+    gocritic:
+      # Только диагностические проверки (вероятные ошибки), без стиля и скорости.
+      enabled-tags:
+        - diagnostic
+      disabled-tags:
+        - style
+        - performance
+        - experimental
+        - opinionated
+    revive:
+      # Только правила об ошибках и экспорте.
+      enable-all-rules: false
+      rules:
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: errorf
+        - name: exported
+        - name: unexported-return
+    nolintlint:
+      require-explanation: true
+      require-specific: true
   exclusions:
     generated: lax
     paths:
@@ -48,3 +83,10 @@ linters:
       - path: _test\.go
         linters: [gosec]
         text: "G101"
+      # Cookie в тестах — это cookie запроса: Secure и HttpOnly бывают только у ответа сервера.
+      - path: _test\.go
+        linters: [gosec]
+        text: "G124"
+      # Тесты живут секунды, запросы идут в httptest и локальные заглушки: контекст запроса ничего не отменяет.
+      - path: _test\.go
+        linters: [noctx]

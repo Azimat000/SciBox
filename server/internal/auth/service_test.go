@@ -973,7 +973,7 @@ func TestHashingTimeoutIsReportedNotSwallowed(t *testing.T) {
 	}
 	for name, call := range calls {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(bg, 300*time.Millisecond)
+		ctx, cancel = context.WithTimeout(bg, 300*time.Millisecond) //nolint:fatcontext // намеренно: замыкания выше читают ctx, у каждого вызова свой срок от bg
 		if err := call(); !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("%s: err = %v, want deadline exceeded", name, err)
 		}

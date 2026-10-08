@@ -184,7 +184,7 @@ type orgBody struct {
 }
 
 func (b orgBody) input() OrgInput {
-	return OrgInput{Name: b.Name, Kind: b.Kind, City: b.City, Website: b.Website, Description: b.Description}
+	return OrgInput(b)
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +237,7 @@ type unitBody struct {
 }
 
 func (b unitBody) input() UnitInput {
-	return UnitInput{Name: b.Name, Kind: b.Kind, Description: b.Description, Topics: b.Topics}
+	return UnitInput(b)
 }
 
 func (h *Handler) createUnit(w http.ResponseWriter, r *http.Request) {

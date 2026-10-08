@@ -10,11 +10,15 @@ const (
 	CodeDatabaseUnavailable = apierr.CodeDatabaseUnavailable
 )
 
+// Общий формат ошибок из apierr: обработчики пакета httpapi пишут ответы тем же форматом.
 type (
-	ErrorBody   = apierr.ErrorBody
+	// ErrorBody — тело ответа с ошибкой.
+	ErrorBody = apierr.ErrorBody
+	// ErrorDetail — сама ошибка: код, сообщение, поля.
 	ErrorDetail = apierr.ErrorDetail
 )
 
+// WriteError и WriteJSON — те же функции, что в apierr.
 var (
 	WriteError = apierr.WriteError
 	WriteJSON  = apierr.WriteJSON

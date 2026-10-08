@@ -11,24 +11,30 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 3 {
+	os.Exit(run(os.Args[1:]))
+}
+
+// run отделён от main, чтобы отложенные Close выполнялись до os.Exit.
+func run(args []string) int {
+	if len(args) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: covercheck <coverage.conf> <coverage.out>")
-		os.Exit(2)
+		return 2
 	}
-	rules, err := os.Open(os.Args[1])
+	rules, err := os.Open(args[0]) //nolint:gosec // G304/G703: путь задаёт разработчик в scripts/coverage-check, а не посетитель сайта
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
-	defer rules.Close()
-	profile, err := os.Open(os.Args[2])
+	defer func() { _ = rules.Close() }() // файл только читали
+	profile, err := os.Open(args[1])     //nolint:gosec // G304/G703: путь задаёт разработчик в scripts/coverage-check, а не посетитель сайта
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
-	defer profile.Close()
+	defer func() { _ = profile.Close() }() // файл только читали
 	if err := covercheck.Run(rules, profile, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

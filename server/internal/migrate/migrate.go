@@ -4,6 +4,7 @@ package migrate
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -32,7 +33,7 @@ func newProvider(db *sql.DB, files fs.FS) (*goose.Provider, error) {
 
 // Command выполняет команду миграций по адресу базы: up, down, reset или status.
 // Итоги пишутся в out.
-func Command(ctx context.Context, databaseURL, command string, out io.Writer) error {
+func Command(ctx context.Context, databaseURL, command string, out io.Writer) (err error) {
 	switch command {
 	case "up", "down", "reset", "status":
 	default:
@@ -43,7 +44,7 @@ func Command(ctx context.Context, databaseURL, command string, out io.Writer) er
 		return fmt.Errorf("parse database url: %w", err)
 	}
 	db := stdlib.OpenDB(*connCfg)
-	defer db.Close()
+	defer func() { err = errors.Join(err, db.Close()) }()
 	p, err := NewProvider(db)
 	if err != nil {
 		return err

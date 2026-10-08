@@ -70,11 +70,11 @@ func unpack(data []byte) ([]byte, error) {
 	}
 	zr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return nil, fmt.Errorf("%w: gzip: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: gzip: %w", ErrFormat, err)
 	}
 	out, err := io.ReadAll(zr)
 	if err != nil {
-		return nil, fmt.Errorf("%w: gzip: %v", ErrFormat, err)
+		return nil, fmt.Errorf("%w: gzip: %w", ErrFormat, err)
 	}
 	return out, nil
 }

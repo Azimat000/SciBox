@@ -122,7 +122,7 @@ func escapeDOI(doi string) string {
 func (c *Client) Lookup(ctx context.Context, doi string) (Work, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/works/"+escapeDOI(doi), nil)
 	if err != nil {
-		return Work{}, fmt.Errorf("%w: build request: %v", ErrUnavailable, err)
+		return Work{}, fmt.Errorf("%w: build request: %w", ErrUnavailable, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	agent := "SciBox/1.0 (profile import)"
@@ -133,9 +133,9 @@ func (c *Client) Lookup(ctx context.Context, doi string) (Work, error) {
 
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return Work{}, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return Work{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() // тело только читали: ошибка закрытия ничего не меняет
 	switch {
 	case res.StatusCode == http.StatusNotFound:
 		return Work{}, ErrNotFound
@@ -144,7 +144,7 @@ func (c *Client) Lookup(ctx context.Context, doi string) (Work, error) {
 	}
 	raw, err := io.ReadAll(io.LimitReader(res.Body, maxBody+1))
 	if err != nil {
-		return Work{}, fmt.Errorf("%w: read body: %v", ErrUnavailable, err)
+		return Work{}, fmt.Errorf("%w: read body: %w", ErrUnavailable, err)
 	}
 	if len(raw) > maxBody {
 		return Work{}, fmt.Errorf("%w: response is too large", ErrUnavailable)
@@ -163,8 +163,8 @@ func (l *stringList) UnmarshalJSON(b []byte) error {
 	}
 	var many []string
 	if err := json.Unmarshal(b, &many); err != nil {
-		*l = nil // непонятное значение считаем пустым
-		return nil
+		*l = nil   // непонятное значение считаем пустым
+		return nil //nolint:nilerr // намеренно: одно странное поле Crossref не должно ломать весь импорт публикации
 	}
 	*l = many
 	return nil
@@ -215,7 +215,7 @@ type response struct {
 func parse(raw []byte) (Work, error) {
 	var r response
 	if err := json.Unmarshal(raw, &r); err != nil {
-		return Work{}, fmt.Errorf("%w: parse response: %v", ErrUnavailable, err)
+		return Work{}, fmt.Errorf("%w: parse response: %w", ErrUnavailable, err)
 	}
 	m := r.Message
 	if m.DOI == "" {

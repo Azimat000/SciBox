@@ -11,8 +11,8 @@ dev: install migrate
 share: install migrate
 	./scripts/share
 
-## test: все тесты с проверкой порогов покрытия
-test: install db-up test-server test-web
+## test: линтер, проверка уязвимостей и все тесты с проверкой порогов покрытия (срез 18)
+test: install db-up lint vulncheck test-server test-web
 
 test-server:
 	./scripts/coverage-check

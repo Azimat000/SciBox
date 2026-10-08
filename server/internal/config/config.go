@@ -14,7 +14,7 @@ import (
 // Значения по умолчанию рассчитаны на локальный запуск из папки server/.
 const (
 	DefaultHTTPAddr      = "127.0.0.1:8080"
-	DefaultDatabaseURL   = "postgres://scibox:scibox@localhost:5433/scibox?sslmode=disable"
+	DefaultDatabaseURL   = "postgres://scibox:scibox@localhost:5433/scibox?sslmode=disable" //nolint:gosec // G101: пароль локальной базы из docker-compose.yml; в бою адрес задаёт SCIBOX_DATABASE_URL (запрет пароля по умолчанию — срез 19, T-08)
 	DefaultProductConfig = "../config/product.json"
 	DefaultSMTPAddr      = "localhost:1025" // Mailpit из docker-compose.yml
 	DefaultPublicURL     = "http://localhost:5173"
@@ -85,7 +85,7 @@ func Load(getenv func(string) string) (Config, error) {
 
 // LoadProduct читает и проверяет файл продукта.
 func LoadProduct(path string) (Product, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: путь из настройки сервера (SCIBOX_PRODUCT_CONFIG), а не от посетителя
 	if err != nil {
 		return Product{}, fmt.Errorf("read product config %q: %w", path, err)
 	}

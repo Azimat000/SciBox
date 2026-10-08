@@ -242,10 +242,9 @@ func TestReadFormErrors(t *testing.T) {
 		}, ErrTooBig, "огромный.pdf"},
 		{"truncated body", func() *http.Request {
 			r := formRequest(t, data, file)
-			b := make([]byte, 0)
 			buf := new(bytes.Buffer)
 			_, _ = buf.ReadFrom(r.Body)
-			b = buf.Bytes()
+			b := buf.Bytes()
 			r.Body = http.NoBody
 			r2 := httptest.NewRequest("POST", "/", bytes.NewReader(b[:len(b)/2]))
 			r2.Header = r.Header

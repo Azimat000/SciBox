@@ -910,7 +910,7 @@ func newListWorld(t *testing.T) *listWorld {
 	l := &listWorld{world: w}
 	l.vacA = w.vacancy
 	l.vacB = w.tm.Published(&w.tm.UnitB.ID)
-	l.other = w.World.Team()
+	l.other = w.Team()
 	l.vacOth = l.other.Published(&l.other.UnitA.ID)
 	for _, name := range []string{"Анна", "Борис", "Вера"} {
 		p := w.Applicant(name)
