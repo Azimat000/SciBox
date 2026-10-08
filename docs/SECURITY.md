@@ -23,7 +23,7 @@
 ## Границы доверия
 
 1. Браузер → сервер (`/api`): всё входящее недоверенное. Проверки: `auth.SameOrigin`, `auth.Authenticate`, лимиты тела, разбор JSON (`apierr.DecodeJSON`).
-2. Прокси → сервер: заголовки `X-Forwarded-*` не принимаются, IP берётся из соединения (`TestMetaTakesTheIPFromTheConnectionNotFromHeaders`). Срез 19 добавит доверенные прокси явным списком.
+2. Прокси → сервер: `X-Forwarded-For` принимается только от адресов из `SCIBOX_TRUSTED_PROXIES` и читается справа налево до первого недоверенного; без списка IP берётся из соединения (`TestMetaTakesTheIPFromTheConnectionNotFromHeaders`, `TestClientAddr`).
 3. Сервер → PostgreSQL: только параметризованные запросы sqlc.
 4. Сервер → Crossref, SMTP: ответы внешних сервисов недоверенные.
 5. Письма → человек: ссылки с одноразовыми токенами, в базе только хеш.
@@ -51,6 +51,13 @@
 | I-15 | Публичные страницы организаций не содержат почт и номеров аккаунтов | тесты `orgs` (срез 4) |
 | I-16 | Число из запроса не переворачивается при переводе в меньший тип: огромный номер страницы даёт пустой список, а не 500 | `internal/num`: `TestInt16`, `TestInt32`, `TestUint32`; HTTP: huge offset в `orgs`, `vacancies`, `notifications`, `applications`, `matching` |
 | I-17 | Каждый `//nolint` называет правило и причину; в коде 0 замечаний линтера | `nolintlint` в `server/.golangci.yml`, `make lint` в `make test` и CI |
+| I-18 | Ни один адрес не читает тело больше своего лимита (1 МиБ, загрузки 64 МиБ); заявленная длина больше лимита — 413 до обработчика | `TestPerimeter/every_route_limits_the_request_body` (все адреса роутера), `TestBodyLimits` |
+| I-19 | Каждый ответ сервера несёт CSP с `frame-ancestors 'none'` и `nosniff`; у сайта нет `unsafe-inline` и чужих адресов | `TestSecurityHeaders`, `TestPerimeter/security_headers_on_every_kind_of_response` |
+| I-20 | X-Forwarded-For принимается только от доверенных прокси; доверять всему интернету (`/0`) нельзя | `TestClientAddr`, `TestParseProxies` |
+| I-21 | Ограничение частоты общее для всех копий сервера; сбой счётчиков не пропускает запрос | `TestPostgresStore`, `TestPerimeter/public_reads…` (вторая копия видит тот же счёт), `TestThrottleStoreFailure` |
+| I-22 | Нулевой или отрицательный срок соединения не означает «без срока» | `TestNewServerSetsEveryTimeout` |
+| I-23 | Боевой режим не стартует с настройками для локальной работы и не печатает пароль базы | `TestProductionRefusesUnsafeSettings` |
+| I-24 | Каждый адрес из таблицы периметра существует в роутере и находится по адресу запроса | `TestPerimeter/every_listed_route_exists_in_the_router`, `TestThrottleSubrouterRoots` |
 
 ## Реестр угроз
 
@@ -61,12 +68,12 @@
 | T-01 | Уязвимости стандартной библиотеки Go 1.26.5 на путях кода (6 шт., `make vulncheck`) | 18 | закрыта (срез 18: `toolchain go1.26.6`, `make vulncheck` = 0 на путях кода, входит в `make test` и CI) |
 | T-02 | 81 замечание линтера в рабочем коде (29 × G115 переполнение при переводе чисел, непроверенные `Close`, `%v` вместо `%w`) | 18 | закрыта (срез 18: `make lint` = 0 при 164 исходных замечаниях, плюс gocritic, revive, nolintlint; входит в `make test` и CI; `TestInt32`, huge offset в `TestHTTPPublicPages`, `TestHTTPErrors`) |
 | T-03 | Нет автоматических проверок при отправке в GitHub: уязвимость или красный тест могут попасть в main | 18 | закрыта частично (срез 18: `.github/workflows/ci.yml`, `.github/dependabot.yml` в репозитории; прогон на GitHub — после отправки с разрешения пользователя; правило защиты ветки main включает пользователь в настройках GitHub) |
-| T-04 | У HTTP-сервера только `ReadHeaderTimeout`: медленный клиент держит соединение (slowloris), нет `MaxHeaderBytes` | 19 | открыта |
-| T-05 | Нет заголовков защиты у сайта и API: CSP, HSTS, `frame-ancestors` (кликджекинг), `Permissions-Policy` | 19 | открыта |
-| T-06 | За прокси все запросы придут с одного IP: лимиты по IP начнут блокировать всех сразу | 19 | открыта |
-| T-07 | Публичные и тяжёлые адреса без ограничения частоты: `/api/landing`, `/api/scientists`, поиск вакансий, `/api/recommendations/*`, `/api/journals`, поиск по DOI | 19 | открыта |
-| T-08 | Сервер стартует с опасными настройками в бою: http-адрес сайта, пароль базы по умолчанию, `sslmode=disable` к удалённой базе | 19 | открыта |
-| T-09 | Не проверено, что каждый адрес ограничивает размер тела | 19 | открыта |
+| T-04 | У HTTP-сервера только `ReadHeaderTimeout`: медленный клиент держит соединение (slowloris), нет `MaxHeaderBytes` | 19 | закрыта (срез 19: `httpguard.NewServer`; `TestSlowHeadersAreCut`, `TestHugeHeadersAreRefused`, `TestSlowTransferGetsItsOwnDeadline`, `TestNewServerSetsEveryTimeout`) |
+| T-05 | Нет заголовков защиты у сайта и API: CSP, HSTS, `frame-ancestors` (кликджекинг), `Permissions-Policy` | 19 | закрыта (срез 19: `httpguard.Perimeter`; `TestSecurityHeaders`, `TestPerimeter/security_headers_on_every_kind_of_response` — API, ошибка, страница сайта, файл отклика, PDF; сайт с CSP проверен в браузере) |
+| T-06 | За прокси все запросы придут с одного IP: лимиты по IP начнут блокировать всех сразу | 19 | закрыта (срез 19: `SCIBOX_TRUSTED_PROXIES`; `TestParseProxies`, `TestClientAddr`, `TestThrottleBehindProxy`, `TestPerimeter/client_address_behind_a_trusted_proxy_reaches_sessions`) |
+| T-07 | Публичные и тяжёлые адреса без ограничения частоты: `/api/landing`, `/api/scientists`, поиск вакансий, `/api/recommendations/*`, `/api/journals`, поиск по DOI | 19 | закрыта (срез 19: `httpguard.Throttle`, `httpapi.PerimeterRoutes`, счётчики в `rate_counters`; `TestThrottle`, `TestThrottleConcurrent`, `TestThrottleStoreFailure`, `TestPostgresStore`, `TestPerimeter/public_reads_are_rate_limited_in_the_database`) |
+| T-08 | Сервер стартует с опасными настройками в бою: http-адрес сайта, пароль базы по умолчанию, `sslmode=disable` к удалённой базе | 19 | закрыта (срез 19: `SCIBOX_ENV=production`, `config.checkProduction`; `TestProductionRefusesUnsafeSettings`) |
+| T-09 | Не проверено, что каждый адрес ограничивает размер тела | 19 | закрыта (срез 19: `httpguard.Perimeter`; `TestBodyLimits`, `TestPerimeter/every_route_limits_the_request_body` — все адреса настоящей сборки, гостем и вошедшим) |
 | T-10 | Нет списка сессий и «выйти везде»; смена и сброс пароля не завершают другие сессии (проверить) | 20 | открыта |
 | T-11 | Нельзя сменить почту и удалить аккаунт (право по 152-ФЗ) | 20 | открыта |
 | T-12 | Опасные действия (смена почты, удаление, передача владения) без повторного ввода пароля | 20 | открыта |
@@ -86,6 +93,8 @@
 | T-26 | Нет резервных копий и проверенного восстановления | 28 | открыта |
 | T-27 | Образ для выкладки ещё не существует: нужен без root, с файловой системой только для чтения, без лишних программ | 28 | открыта |
 | T-28 | Не было полного аудита: статический анализ (semgrep), фаззинг разборщиков, DAST (OWASP ZAP), ASVS L2 | 29 | открыта |
+| T-30 | Множество сетей IPv6 /64 у одного злоумышленника создают много строк `rate_counters` (по строке на сеть в минуту, живут 2 часа) | 27 | открыта (замерить рост таблицы под нагрузкой; при необходимости считать гостей IPv6 по /56) |
+| T-31 | Доверенный прокси, который не дописывает адрес в X-Forwarded-For, а передаёт заголовок посетителя как есть, позволяет подделать адрес. Для tuna и localhost.run (`make share`) поведение не документировано | 28 | открыта (при выборе хостинга проверить прокси на живом запросе; для показа по ссылке последствие — обход своего лимита) |
 | T-29 | `golang.org/x/crypto/openpgp` (GO-2026-5932) в модуле x/crypto: пакет не поддерживается, исправления нет; наш код его не вызывает (govulncheck: «модули», не «код») | 29 | принята (код не импортирует openpgp, исправления нет; проверить при аудите, D-140) |
 
 ## Карта персональных данных

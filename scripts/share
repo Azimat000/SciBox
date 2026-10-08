@@ -118,8 +118,10 @@ if [ -z "$url" ]; then
 fi
 
 # Ссылки в письмах и защита от чужих сайтов строятся от публичного адреса.
+# Все запросы приходят от программы туннеля на этом же Mac (127.0.0.1): ей доверяем X-Forwarded-For,
+# чтобы гости считались по своим адресам, а не одним на всех (срез 19, D-141).
 (cd "$root/server" && SCIBOX_HTTP_ADDR="127.0.0.1:$port" SCIBOX_WEB_DIR="$root/web/dist" \
-  SCIBOX_PUBLIC_URL="$url" exec ./bin/scibox serve) &
+  SCIBOX_PUBLIC_URL="$url" SCIBOX_TRUSTED_PROXIES="127.0.0.1,::1" exec ./bin/scibox serve) &
 pids="$pids $!"
 
 i=0

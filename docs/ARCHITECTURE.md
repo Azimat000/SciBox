@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 14 (квартили журналов: справочник SCImago, квартиль у публикаций, счётчик и фильтр «статей в Q1–Q2»). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 19 (периметр HTTP: сроки, заголовки защиты, настоящий IP, лимиты тела и частоты, боевой режим). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -51,12 +51,13 @@ SciBox/
 │       ├── apierr/       единый формат ответов и ошибок API (D-032), коды, DecodeJSON; `WriteInternal` (500 или 499, если запрос оборвал сам человек, D-119)
 │       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin
 │       ├── mail/         отправка писем по SMTP (Mailpit) и `Memory` для тестов
-│       ├── cli/          разбор команд, запуск HTTP-сервера, мягкая остановка
-│       ├── config/       переменные окружения + config/product.json
+│       ├── cli/          разбор команд, запуск HTTP-сервера, мягкая остановка; `newApp` собирает все сервисы и роутер (его же проверяет `TestPerimeter`)
+│       ├── config/       переменные окружения + config/product.json; боевой режим `SCIBOX_ENV=production` (`checkProduction`, критичная зона)
 │       ├── covercheck/   чтение профиля покрытия и сверка с coverage.conf
 │       ├── dbgen/        код sqlc (сгенерирован, не править руками)
 │       ├── health/       проверка базы для /api/health
-│       ├── httpapi/      роутер chi, обработчики, единый формат ошибок
+│       ├── httpapi/      роутер chi, обработчики, единый формат ошибок; `perimeter.go` — таблица особых адресов периметра (`PerimeterRoutes`: лимиты тела, долгие передачи, политики частоты)
+│       ├── httpguard/    периметр HTTP (срез 19, критичная зона): `NewServer` (сроки соединения, `MaxHeaderBytes`), `Perimeter` (настоящий IP за доверенными прокси, заголовки защиты с CSP, лимит тела, сроки долгих передач), `Throttle` (ограничение частоты: гость по IP, вошедший по аккаунту), счётчики `PostgresStore` (таблица `rate_counters`) и `MemoryStore`
 │       ├── migrate/      обёртка над goose
 │       └── testdb/       временные базы для тестов (D-031)
 └── web/                  Vite 8 + React 19 + TypeScript 6
@@ -110,6 +111,8 @@ SciBox/
 | `SCIBOX_CROSSREF_MAILTO` | пусто (почта для «вежливого пула» Crossref, необязательно) |
 | `SCIBOX_PRODUCT_CONFIG` | `../config/product.json` (путь от папки `server/`) |
 | `SCIBOX_WEB_DIR` | пусто; папка собранного сайта (`web/dist`): тогда сервер сам отдаёт страницы по всем адресам вне `/api` (`httpapi.WebHandler`) |
+| `SCIBOX_ENV` | `development`; `production` — сервер не стартует с http-адресом сайта, паролем базы из docker-compose, базой в сети без `sslmode=require/verify-*`, SMTP без шифрования, отправителем `.local` (срез 19, T-08) |
+| `SCIBOX_TRUSTED_PROXIES` | пусто (никому); сети и адреса через запятую (`127.0.0.1, 10.0.0.0/8`), от которых сервер принимает `X-Forwarded-For`; `/0` запрещено (срез 19, T-06). `make share` ставит `127.0.0.1,::1` |
 | `TEST_DATABASE_URL` (тесты) | `postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable` |
 
 ## Таблицы БД
@@ -155,11 +158,14 @@ SciBox/
   - `notification_settings` (user_id, email_new_vacancies, email_deadlines, updated_at).
 - Миграция `00012_journals.sql`: `journals` (id = Sourceid SCImago, title, publisher, quartile 1–4 или NULL, sjr, data_year; индекс pg_trgm по названию), `journal_issns` (issn `1234-567X` → journal_id, position — порядок в файле); индекс по `profile_items.data->>'issn'` у публикаций. Строки кладёт `scibox journals load` (D-127), источник и выпуск — строка `journals` в `reference_sources`.
 - Миграция `00014_profile_skills.sql` (D-136): `profiles.research_skills`, `profiles.general_skills` (`text[]`, до 30 строк; длину и повторы проверяет сервис).
+- Миграция `00015_rate_counters.sql` (срез 19, D-141): `rate_counters` (kind, key, window_start, hits; ключ из трёх первых), таблица UNLOGGED. Счётчики ограничения частоты публичных и тяжёлых адресов по окнам; удаляются через 2 часа после начала окна (фоновая очистка раз в час).
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
-Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415), `payload_too_large` (413, запрос с файлами больше предела). Все ответы `/api/*` с `Cache-Control: no-store`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
+Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`.
+
+Периметр (срез 19, `httpguard`): у всех ответов заголовки защиты (CSP: у API `default-src 'none'`, у сайта только свои скрипты, стили, шрифты и картинки; `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP и CORP `same-origin`; HSTS только при https). Ограничение частоты (`rate_limited`, 429): поиск, каталоги, главная, страницы вакансий, людей, организаций и подразделений, справочник журналов, поиск по DOI — гость 300, вошедший 120 запросов в минуту (`public_read`); резюме PDF — 20 в минуту (`pdf_build`); ссылки из писем (рекомендатель, приглашение в организацию) — 30 в минуту (`link_page`). Таблица адресов: `httpapi.PerimeterRoutes`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
 
 | Метод и адрес | Ответ |
 |---|---|
@@ -294,4 +300,4 @@ SciBox/
 - Подробное описание визуальной системы: `DESIGN.md` (ведёт impeccable).
 
 ## Фоновая работа в процессе сервера
-`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), очистку аккаунтов и организаций (раз в час) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).
+`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), очистку аккаунтов и организаций (раз в час), очистку счётчиков частоты `rate_counters` (раз в час) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).
