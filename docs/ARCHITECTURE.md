@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 20 (аккаунты: список сеансов, свежий пароль, смена почты с откатом, удаление аккаунта, письмо о новом устройстве, список частых паролей). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 21 (журнал действий и таблица доступа на каждом адресе; до этого срез 20: аккаунты, сеансы, смена почты, удаление аккаунта). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -52,6 +52,8 @@ SciBox/
 │       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin; срез 20: `sessions.go` (список и завершение сеансов, свежий пароль `Reauth`), `devices.go` (User-Agent, знакомые браузеры), `email_change.go` (смена почты и откат), `deletion.go` (удаление со сроком отмены, фоновое стирание), `breached.go` + `data/` (список частых паролей NCSC, README с источником)
 │       ├── mail/         отправка писем по SMTP (Mailpit) и `Memory` для тестов
 │       ├── cli/          разбор команд, запуск HTTP-сервера, мягкая остановка; `newApp` собирает все сервисы и роутер (его же проверяет `TestPerimeter`)
+│       ├── audit/        журнал действий (срез 21, критичная зона): действия и область (`audit.go`: `Record` в транзакции действия, адрес из контекста запроса, скрытая почта), чтение страницами для владельца (`list.go`)
+│       ├── testaudit/    помощники тестов журнала (прочитать записи, «сломать» журнал); вне покрытия
 │       ├── erasure/      что стирается и обезличивается при удалении аккаунта, проверка «единственный владелец» (срез 20, критичная зона)
 │       ├── config/       переменные окружения + config/product.json; боевой режим `SCIBOX_ENV=production` (`checkProduction`, критичная зона)
 │       ├── covercheck/   чтение профиля покрытия и сверка с coverage.conf
@@ -161,6 +163,7 @@ SciBox/
 - Миграция `00014_profile_skills.sql` (D-136): `profiles.research_skills`, `profiles.general_skills` (`text[]`, до 30 строк; длину и повторы проверяет сервис).
 - Миграция `00015_rate_counters.sql` (срез 19, D-141): `rate_counters` (kind, key, window_start, hits; ключ из трёх первых), таблица UNLOGGED. Счётчики ограничения частоты публичных и тяжёлых адресов по окнам; удаляются через 2 часа после начала окна (фоновая очистка раз в час).
 - Миграция `00016_account_security.sql` (срез 20, D-142…D-146): `sessions.reauth_at` (когда в сеансе последний раз вводили пароль); `auth_tokens.new_email` и назначения `change_email`, `revert_email`; `known_devices` (user_id, device_hash, first_seen_at, last_seen_at; ключ из двух первых) — знакомые браузеры, удаляются через 400 дней без входа; `users.deletion_due_at` (когда сотрутся данные), `users.deleted_at` (стёрт, строка-«надгробие»); `profiles.visibility_before_deletion`; `applications.anonymized_at` (письмо и почта могут быть пустыми только у обезличенного отклика).
+- Миграция `00017_audit_log.sql` (срез 21, D-147, D-148): `audit_log` (id bigint, at, org_id → `organizations` (пусто у личных действий аккаунта), actor_id и subject_id → `users`, action `вид.действие`, target_kind, target_id, target_label ≤300, details jsonb ≤2000 байт, ip ≤45); индексы `(org_id, id DESC)`, `(actor_id, id DESC)`, `(at)`; триггеры запрещают `UPDATE`, `DELETE` и `TRUNCATE`, кроме обнуления `ip` при прочих равных полях.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
@@ -197,11 +200,12 @@ SciBox/
 | `POST /api/organizations` | 201, создатель становится владельцем; 422 с полями; 429 при пятой в сутки |
 | `PATCH /api/organizations/{slug}` | владелец |
 | `POST /api/organizations/{slug}/units`, `PATCH …/units/{id}`, `DELETE …/units/{id}`, `PUT …/units/{id}/head {user_id|null}` | создание, удаление и назначение руководителя: владелец; правка: владелец или руководитель этого подразделения |
+| `GET /api/organizations/{slug}/audit?before=&limit=` | владелец (иначе 403; нет входа 401): журнал действий организации `{items:[{id, at, action, actor:{id,name}|null, subject:{id,name}|null, target:{kind,id,label}, details}], next}`, от новых к старым, до 100 записей на страницу (по умолчанию 30), `before` — номер записи, с которой продолжать; адреса в ответе нет |
 | `GET /api/organizations/{slug}/members` | владелец: сотрудники с почтами и ожидающие приглашения |
 | `PATCH …/members/{userId} {role}`, `DELETE …/members/{userId}` | владелец; уйти (DELETE себя) может любой сотрудник; последний владелец 409 `last_owner` |
 | `POST …/invitations {email,role,unit_id}`, `DELETE …/invitations/{id}` | владелец; письмо в фоне |
 | `POST /api/invitations/lookup {token}` | без входа: что за приглашение (и совпадает ли почта с вошедшим) |
-| `POST /api/invitations/accept {token}`, `POST /api/invitations/{id}/accept` | вошедший; чужая почта 403 `invitation_wrong_email`, устарело 400 `invalid_invitation`, уже в организации 409 `already_member` |
+| `POST /api/invitations/accept {token}`, `POST /api/invitations/{id}/accept` | вошедший; по ссылке из письма с чужой почтой 403 `invitation_wrong_email`; по номеру чужое приглашение неотличимо от выдуманного (400 `invalid_invitation`, срез 21); устарело 400 `invalid_invitation`, уже в организации 409 `already_member` |
 | `GET /api/my/organizations` | `{organizations:[…с ролью], invitations:[…на почту человека]}` |
 | `GET /api/reference` | публично: `{science:[область → группы → специальности], regions, positions:[{code,type,name}], sources}` |
 | `GET /api/vacancies?q=&field=&region=&format=&type=&level=&degree=&org_kind=&funding=&rate=&term=&salary_min=&housing=&competition=&deadline=&sort=&org=&unit=&limit=&offset=` | публичный поиск: опубликованные вакансии без прошедшего срока: `{items:[карточка], total, fuzzy}`; все параметры необязательны, повторяющиеся (`field`, `format`, `type`, `level`, `degree`, `org_kind`, `funding`, `rate`, `term`) значат «или»; неизвестное значение 422 с `fields`; `limit` до 100, по умолчанию 50 |
@@ -276,7 +280,7 @@ SciBox/
 | `/account/security`, `/confirm-email-change?token=`, `/revert-email-change?token=` | Срез 20: вкладка «Безопасность» (пароль, почта для входа, «Где вы вошли», удаление аккаунта); подтверждение новой почты (при открытии); откат почты (по кнопке). Окно «Подтвердите, что это вы» одно на сайт (`ReauthProvider` в `Layout`, хук `useReauth`), полоса `DeletionBanner` под шапкой, пока назначено удаление |
 | `/organizations` (поиск и тип в адресе, страницы по 20), `/organizations/new`, `/organizations/:slug`, `/organizations/:slug/units/:unitId` | Каталог, создание, публичные страницы организации и подразделения (срез 4) |
 | `/my-organization` | Мои организации и приглашения; без входа ведёт на `/login?next=` |
-| `/my-organization/:slug` (+ `/units`, `/units/new`, `/units/:unitId`, `/members`) | Управление: данные, подразделения, сотрудники и приглашения (вкладка «Сотрудники» только владельцу) |
+| `/my-organization/:slug` (+ `/units`, `/units/new`, `/units/:unitId`, `/members`, `/audit`) | Управление: данные, подразделения, сотрудники и приглашения, журнал действий (вкладки «Сотрудники» и «Журнал» только владельцу; у `viewer` поля `can_manage_members` и `can_view_audit`) |
 | `/invitations/accept?token=` | Страница по ссылке из письма |
 | `/my-vacancies` (`?status=`, `?page=`) | Мои вакансии: вкладки по статусам со счётчиками, срок подачи у опубликованных, вакансию открывает название, «Править» спокойной кнопкой; без входа ведёт на `/login?next=` |
 | `/my-vacancies/new` (`?org=&unit=`), `/my-vacancies/:id/edit` | Форма вакансии; поля зависят от типа позиции |
