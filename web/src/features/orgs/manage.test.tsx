@@ -27,7 +27,7 @@ describe('management frame', () => {
     expect(header.getByText('Владелец')).toBeInTheDocument()
     expect(header.getByRole('link', { name: 'Открыть публичную страницу' })).toHaveAttribute('href', `/organizations/${SLUG}`)
     const tabs = within(screen.getByRole('navigation', { name: 'Разделы управления' }))
-    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Данные', 'Подразделения', 'Сотрудники'])
+    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Данные', 'Подразделения', 'Сотрудники', 'Журнал'])
     expect(tabs.getByRole('link', { name: 'Данные' })).toHaveAttribute('aria-current', 'page')
   })
 

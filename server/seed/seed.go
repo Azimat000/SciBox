@@ -218,6 +218,11 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 	if res.Applications, err = seedApplications(ctx, pool, ids, now); err != nil {
 		return Result{}, err
 	}
+	// История действий в журнале организаций строится по уже загруженным людям, вакансиям и откликам; она старше приглашений ниже,
+	// поэтому пишется раньше них (журнал листается по номеру записи).
+	if _, err = seedAudit(ctx, pool, now); err != nil {
+		return Result{}, err
+	}
 	// Приглашения из каталога идут последними: им нужны и профили, и открытые вакансии.
 	if res.Offers, err = seedOffers(ctx, pool, ids, now); err != nil {
 		return Result{}, err

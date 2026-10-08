@@ -15,6 +15,7 @@ import (
 
 	"scibox/server/internal/audit"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/orgs"
 	"scibox/server/internal/testkit"
 )
 
@@ -81,6 +82,8 @@ func TestRecordAndList(t *testing.T) {
 	tm := w.Team()
 	other := w.Team()
 	target := uuid.New()
+	// Команда уже назначила двух руководителей подразделений: эти записи в журнале есть с самого начала.
+	base := len(list(t, tm.OrgID, 0, 0).Items)
 	record(t, testkit.BG,
 		audit.Event{Action: audit.MemberRoleChanged, OrgID: tm.OrgID, Actor: tm.Owner.ID, Subject: tm.HR.ID,
 			Details: map[string]string{"from": "hr", "to": "unit_head"}},
@@ -91,8 +94,8 @@ func TestRecordAndList(t *testing.T) {
 	)
 
 	got := list(t, tm.OrgID, 0, 0)
-	if len(got.Items) != 2 || got.Next != nil {
-		t.Fatalf("items = %d, next = %v; want the two events of this organization only", len(got.Items), got.Next)
+	if len(got.Items) != base+2 || got.Next != nil {
+		t.Fatalf("items = %d, next = %v; want the two events of this organization only (and %d from the start)", len(got.Items), got.Next, base)
 	}
 	// Новые записи первыми.
 	pub, role := got.Items[0], got.Items[1]
@@ -115,7 +118,7 @@ func TestRecordAndList(t *testing.T) {
 		t.Errorf("at = %v, ids %d %d", pub.At, pub.ID, role.ID)
 	}
 
-	if theirs := list(t, other.OrgID, 0, 10); len(theirs.Items) != 1 || theirs.Items[0].Action != audit.OfferSent {
+	if theirs := list(t, other.OrgID, 0, 10); len(theirs.Items) != 3 || theirs.Items[0].Action != audit.OfferSent {
 		t.Errorf("other organization sees %+v", theirs.Items)
 	}
 	if none := list(t, uuid.New(), 0, 10); len(none.Items) != 0 || none.Items == nil {
@@ -125,7 +128,13 @@ func TestRecordAndList(t *testing.T) {
 
 func TestListPages(t *testing.T) {
 	w := testkit.NewWorld(t)
-	tm := w.Team()
+	// Организация без команды: в её журнале только то, что записал сам тест.
+	owner := w.User("Владелец")
+	org, err := w.Orgs.CreateOrganization(bg, owner.User, orgs.OrgInput{Name: "Институт страниц", Kind: orgs.KindInstitute, City: "Томск"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm := &testkit.Team{OrgID: org.ID, Owner: owner}
 	for i := range 7 {
 		record(t, bg, audit.Event{Action: audit.VacancyClosed, OrgID: tm.OrgID, Actor: tm.Owner.ID, TargetLabel: string(rune('A' + i))})
 	}
@@ -183,7 +192,7 @@ func TestRecordRollsBackWithTheAction(t *testing.T) {
 	if err := tx.Rollback(bg); err != nil {
 		t.Fatal(err)
 	}
-	if n := testkit.Count(t, `SELECT count(*) FROM audit_log WHERE org_id = $1`, tm.OrgID); n != 0 {
+	if n := testkit.Count(t, `SELECT count(*) FROM audit_log WHERE org_id = $1 AND action = 'member.left'`, tm.OrgID); n != 0 {
 		t.Fatalf("%d entries survived a rolled back transaction", n)
 	}
 }
@@ -214,7 +223,7 @@ func TestRecordRejectsMistakes(t *testing.T) {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); !ok || pgErr.Code != "23503" {
 		t.Errorf("unknown organization: %v", err)
 	}
-	if n := testkit.Count(t, `SELECT count(*) FROM audit_log WHERE org_id = $1`, tm.OrgID); n != 0 {
+	if n := testkit.Count(t, `SELECT count(*) FROM audit_log WHERE org_id = $1 AND action NOT LIKE 'unit.%'`, tm.OrgID); n != 0 {
 		t.Errorf("%d entries were written by rejected events", n)
 	}
 }
@@ -346,11 +355,12 @@ func TestTheLogIsAppendOnly(t *testing.T) {
 	}
 
 	// Адрес стирается запросом, который вызывает стирание аккаунта.
+	withAddress := int64(testkit.Count(t, `SELECT count(*) FROM audit_log WHERE actor_id = $1 AND ip IS NOT NULL`, tm.Owner.ID))
 	n, err := dbgen.New(testkit.Pool).ScrubAuditIP(bg, &tm.Owner.ID)
-	if err != nil || n != 1 {
-		t.Fatalf("scrub: %d, %v", n, err)
+	if err != nil || n != withAddress || n == 0 {
+		t.Fatalf("scrub: %d of %d, %v", n, withAddress, err)
 	}
-	e := list(t, tm.OrgID, 0, 1).Items[0]
+	e := list(t, tm.OrgID, 0, 100).Items[0]
 	if e.Action != audit.MemberRemoved || e.Target.Label != "x" || e.Details["a"] != "b" || e.Actor == nil || e.Subject == nil {
 		t.Errorf("scrubbing changed more than the address: %+v", e)
 	}

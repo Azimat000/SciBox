@@ -277,6 +277,19 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 			t.Errorf("no %s demo offers", status)
 		}
 	}
+	// Журнал действий: у первой демо-организации история из разных действий, а по всем организациям есть и решения по откликам.
+	if n := count("SELECT count(DISTINCT action) FROM audit_log WHERE org_id = (SELECT id FROM organizations WHERE slug = 'sibirskiy-institut-kvantovykh-materialov')"); n < 4 {
+		t.Errorf("the first organization has %d kinds of journal entries, want at least 4", n)
+	}
+	if n := count("SELECT count(DISTINCT action) FROM audit_log WHERE details ? 'demo'"); n < 8 {
+		t.Errorf("the demo journal has %d kinds of entries, want at least 8", n)
+	}
+	if n := count("SELECT count(*) FROM audit_log WHERE details ? 'demo' AND at > now()"); n != 0 {
+		t.Errorf("%d demo journal entries from the future", n)
+	}
+	if n := count("SELECT count(*) FROM audit_log WHERE details ? 'demo' AND org_id IS NULL"); n != 0 {
+		t.Errorf("%d demo journal entries without an organization", n)
+	}
 	if n := count("SELECT count(*) FROM vacancy_offers o JOIN applications a ON a.vacancy_id = o.vacancy_id AND a.user_id = o.user_id"); n != 0 {
 		t.Errorf("%d demo offers on vacancies the person already applied to", n)
 	}

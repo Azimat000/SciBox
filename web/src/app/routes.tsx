@@ -13,6 +13,7 @@ import { AcceptInvitationPage } from '../features/orgs/AcceptInvitationPage'
 import { CreateOrganizationPage } from '../features/orgs/CreateOrganizationPage'
 import { ManageDataPage } from '../features/orgs/ManageDataPage'
 import { ManageLayout } from '../features/orgs/ManageLayout'
+import { AuditPage } from '../features/orgs/AuditPage'
 import { ManageMembersPage } from '../features/orgs/ManageMembersPage'
 import { ManageUnitsPage } from '../features/orgs/ManageUnitsPage'
 import { MyOrganizationsPage } from '../features/orgs/MyOrganizationsPage'
@@ -82,6 +83,7 @@ export const routes: RouteObject[] = [
           { path: 'units/new', element: <UnitEditPage /> },
           { path: 'units/:unitId', element: <UnitEditPage /> },
           { path: 'members', element: <ManageMembersPage /> },
+          { path: 'audit', element: <AuditPage /> },
         ],
       },
       { path: 'my-vacancies', handle: { title: t.pageTitles.myVacancies }, element: <MyVacanciesPage /> },

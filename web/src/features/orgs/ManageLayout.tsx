@@ -67,6 +67,11 @@ function Manage() {
             {t.orgs.manage.tabMembers}
           </NavLink>
         )}
+        {viewer.can_view_audit && (
+          <NavLink className="manage-tab" to={`/my-organization/${org.slug}/audit`}>
+            {t.orgs.manage.tabAudit}
+          </NavLink>
+        )}
       </nav>
       <div className="manage-body">
         <Outlet context={{ slug: org.slug, view, viewer }} />

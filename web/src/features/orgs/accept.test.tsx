@@ -43,7 +43,7 @@ describe('invitation page', () => {
       ...signedInAs(),
       'POST /api/invitations/lookup': lookup({ email_matches: true }),
       'POST /api/invitations/accept': reply(200, { slug: SLUG, name: org.name, role: 'unit_head' }),
-      [`GET /api/organizations/${SLUG}`]: reply(200, { organization: org, units: [], viewer: { role: 'unit_head', can_edit_organization: false, can_manage_members: false, can_manage_units: false, editable_units: [] } }),
+      [`GET /api/organizations/${SLUG}`]: reply(200, { organization: org, units: [], viewer: { role: 'unit_head', can_edit_organization: false, can_manage_members: false, can_manage_units: false, can_view_audit: false, editable_units: [] } }),
       'GET /api/my/organizations': mine(),
     })
     const { router } = renderApp('/invitations/accept?token=secret-token')

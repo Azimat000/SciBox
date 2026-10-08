@@ -165,6 +165,7 @@ type Viewer struct {
 	CanEditOrganization bool        `json:"can_edit_organization"`
 	CanManageMembers    bool        `json:"can_manage_members"`
 	CanManageUnits      bool        `json:"can_manage_units"`
+	CanViewAudit        bool        `json:"can_view_audit"`
 	EditableUnits       []uuid.UUID `json:"editable_units"`
 }
 
@@ -216,6 +217,7 @@ func (s *Service) viewerOf(ctx context.Context, q *dbgen.Queries, orgID uuid.UUI
 		CanEditOrganization: actor.Can(access.EditOrganization, access.NoUnit),
 		CanManageMembers:    actor.Can(access.ManageMembers, access.NoUnit),
 		CanManageUnits:      actor.Can(access.ManageUnits, access.NoUnit),
+		CanViewAudit:        actor.Can(access.ViewAudit, access.NoUnit),
 		EditableUnits:       []uuid.UUID{},
 	}
 	for _, u := range units {

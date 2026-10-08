@@ -145,7 +145,7 @@ describe('create an organization', () => {
     const api = stubApi({
       ...signedInAs(),
       'POST /api/organizations': reply(201, { organization: org }),
-      [`GET /api/organizations/${SLUG}`]: reply(200, { organization: org, units: [], viewer: { role: 'owner', can_edit_organization: true, can_manage_members: true, can_manage_units: true, editable_units: [] } }),
+      [`GET /api/organizations/${SLUG}`]: reply(200, { organization: org, units: [], viewer: { role: 'owner', can_edit_organization: true, can_manage_members: true, can_manage_units: true, can_view_audit: true, editable_units: [] } }),
     })
     const { router } = renderApp('/organizations/new')
     await screen.findByRole('heading', { level: 1, name: 'Новая организация' })

@@ -36,10 +36,10 @@ export const org = {
 }
 
 export const viewers: Record<'owner' | 'hr' | 'head' | 'stranger', Viewer> = {
-  owner: { role: 'owner', can_edit_organization: true, can_manage_members: true, can_manage_units: true, editable_units: [lab.id, dept.id] },
-  hr: { role: 'hr', can_edit_organization: false, can_manage_members: false, can_manage_units: false, editable_units: [] },
-  head: { role: 'unit_head', can_edit_organization: false, can_manage_members: false, can_manage_units: false, editable_units: [lab.id] },
-  stranger: { role: '', can_edit_organization: false, can_manage_members: false, can_manage_units: false, editable_units: [] },
+  owner: { role: 'owner', can_edit_organization: true, can_manage_members: true, can_manage_units: true, can_view_audit: true, editable_units: [lab.id, dept.id] },
+  hr: { role: 'hr', can_edit_organization: false, can_manage_members: false, can_manage_units: false, can_view_audit: false, editable_units: [] },
+  head: { role: 'unit_head', can_edit_organization: false, can_manage_members: false, can_manage_units: false, can_view_audit: false, editable_units: [lab.id] },
+  stranger: { role: '', can_edit_organization: false, can_manage_members: false, can_manage_units: false, can_view_audit: false, editable_units: [] },
 }
 
 export const orgView = (viewer: Viewer | null, units: Unit[] = [lab, dept]): OrgView => ({ organization: org, units, viewer })

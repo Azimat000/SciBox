@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/react-query'
 import { ApiError, apiGet, apiSend } from '../../api/client'
 import { useMe } from '../auth/api'
 
@@ -40,6 +40,7 @@ export type Viewer = {
   can_edit_organization: boolean
   can_manage_members: boolean
   can_manage_units: boolean
+  can_view_audit: boolean
   editable_units: string[]
 }
 
@@ -112,6 +113,7 @@ export const keys = {
   orgAll: (slug: string) => ['organization', slug] as const,
   unit: (slug: string, id: string, userId: string | null | undefined) => ['organization', slug, who(userId), 'unit', id] as const,
   members: (slug: string) => ['members', slug] as const,
+  audit: (slug: string) => ['audit', slug] as const,
   mine: ['my-organizations'] as const,
   invitation: (token: string, userId: string | null | undefined) => ['invitation', token, who(userId)] as const,
 }
@@ -255,3 +257,35 @@ export function refreshOrganizations(client: QueryClient, slug: string) {
 
 /** Сервер ответил «такой страницы нет». */
 export const isNotFound = (error: unknown) => error instanceof ApiError && error.code === 'not_found'
+
+/** Человек в записи журнала: имя берётся из аккаунта, у стёртого это «Аккаунт удалён». */
+export type AuditPerson = { id: string; name: string }
+
+export type AuditEntry = {
+  id: number
+  at: string
+  /** Код действия вида «vacancy.published». Сервер может прислать код, которого на сайте ещё нет. */
+  action: string
+  actor: AuditPerson | null
+  subject: AuditPerson | null
+  target: { kind: string; id: string | null; label: string }
+  details: Record<string, string>
+}
+
+export type AuditPage = { items: AuditEntry[]; next: number | null }
+
+/** Журнал действий организации страницами по 30 записей (только владелец). */
+export function useAudit(slug: string, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.audit(slug),
+    queryFn: ({ signal, pageParam }) => {
+      const qs = new URLSearchParams({ limit: '30' })
+      if (pageParam) qs.set('before', String(pageParam))
+      return apiGet<AuditPage>(`/api/organizations/${encodeURIComponent(slug)}/audit?${qs}`, { signal })
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.next ?? undefined,
+    enabled,
+    retry: false,
+  })
+}

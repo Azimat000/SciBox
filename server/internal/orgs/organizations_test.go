@@ -180,7 +180,7 @@ func TestGetOrganization(t *testing.T) {
 	// Вошедший чужой: viewer есть, прав нет.
 	stranger := w.user("Чужой")
 	page, _ = w.svc.GetOrganization(bg, org.Slug, &stranger.User)
-	if page.Viewer == nil || page.Viewer.Role != "" || page.Viewer.CanEditOrganization || page.Viewer.CanManageMembers || page.Viewer.CanManageUnits || len(page.Viewer.EditableUnits) != 0 {
+	if page.Viewer == nil || page.Viewer.Role != "" || page.Viewer.CanEditOrganization || page.Viewer.CanManageMembers || page.Viewer.CanManageUnits || page.Viewer.CanViewAudit || len(page.Viewer.EditableUnits) != 0 {
 		t.Fatalf("stranger viewer: %+v", page.Viewer)
 	}
 	if page.Units[0].HeadUserID != nil || page.Units[1].HeadUserID != nil {
@@ -189,7 +189,7 @@ func TestGetOrganization(t *testing.T) {
 
 	// Владелец: всё можно, все подразделения редактируемые, номера руководителей видны.
 	page, _ = w.svc.GetOrganization(bg, org.Slug, &owner.User)
-	if v := page.Viewer; v.Role != "owner" || !v.CanEditOrganization || !v.CanManageMembers || !v.CanManageUnits || len(v.EditableUnits) != 2 {
+	if v := page.Viewer; v.Role != "owner" || !v.CanEditOrganization || !v.CanManageMembers || !v.CanManageUnits || !v.CanViewAudit || len(v.EditableUnits) != 2 {
 		t.Fatalf("owner viewer: %+v", v)
 	}
 	var withHeadID bool
@@ -204,7 +204,7 @@ func TestGetOrganization(t *testing.T) {
 
 	// Руководитель: только своё подразделение.
 	page, _ = w.svc.GetOrganization(bg, org.Slug, &head.User)
-	if v := page.Viewer; v.Role != "unit_head" || v.CanEditOrganization || v.CanManageMembers || v.CanManageUnits || len(v.EditableUnits) != 1 || v.EditableUnits[0] != lab.ID {
+	if v := page.Viewer; v.Role != "unit_head" || v.CanEditOrganization || v.CanManageMembers || v.CanManageUnits || v.CanViewAudit || len(v.EditableUnits) != 1 || v.EditableUnits[0] != lab.ID {
 		t.Fatalf("head viewer: %+v", v)
 	}
 

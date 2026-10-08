@@ -507,3 +507,85 @@
     flex: 1;
   }
 }
+
+/* ---- журнал действий ---- */
+
+.audit-day {
+  margin-top: var(--s-6);
+}
+
+.audit-day-title {
+  font-family: var(--font-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.audit-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: var(--s-4);
+  padding-block: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.audit-time {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.125rem;
+}
+
+.audit-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-what {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.audit-target {
+  margin-top: var(--s-1);
+  font-family: var(--font-serif);
+  line-height: 1.4;
+}
+
+.audit-target a {
+  color: var(--ink);
+  text-decoration-color: var(--edge);
+  text-underline-offset: 0.2em;
+}
+
+.audit-target a:hover {
+  color: var(--blue);
+}
+
+.audit-facts,
+.audit-who {
+  margin-top: var(--s-1);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.audit-more {
+  margin-top: var(--s-5);
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 30rem) {
+  .audit-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
+  }
+}
