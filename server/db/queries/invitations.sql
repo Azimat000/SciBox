@@ -47,7 +47,9 @@ ORDER BY i.created_at DESC, i.id;
 DELETE FROM org_invitations WHERE expires_at <= $1;
 
 -- То же по номеру приглашения: так принимают приглашение из списка «Мои приглашения», где ссылки нет.
+-- Чужое приглашение (почта другая) для запроса «не существует»: по номеру нельзя узнать, что приглашение есть (T-16).
 -- name: ConsumeInvitationByID :one
 UPDATE org_invitations SET accepted_at = sqlc.arg(now)::timestamptz
-WHERE id = sqlc.arg(id) AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > sqlc.arg(now)::timestamptz
+WHERE id = sqlc.arg(id) AND email = sqlc.arg(email)::citext
+  AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > sqlc.arg(now)::timestamptz
 RETURNING id, org_id, role, unit_id, email::text AS email;

@@ -12,6 +12,18 @@ WHERE m.user_id = sqlc.arg(user_id) AND m.role = 'owner'
   AND NOT EXISTS (SELECT 1 FROM org_members y WHERE y.org_id = o.id AND y.role = 'owner' AND y.user_id <> sqlc.arg(user_id))
 ORDER BY o.name, o.id;
 
+-- Организации, где человек владелец, под блокировкой строки (по порядку номеров, чтобы два стирания не ждали друг друга).
+-- Приём приглашения блокирует ту же строку: сотрудник не войдёт в организацию, пока решается, остаётся ли у неё владелец (T-34).
+-- name: LockOrganizationsOwnedBy :many
+SELECT o.id FROM organizations o
+WHERE o.id IN (SELECT m.org_id FROM org_members m WHERE m.user_id = $1 AND m.role = 'owner')
+ORDER BY o.id
+FOR UPDATE OF o;
+
+-- Одна организация под блокировкой (приём приглашения).
+-- name: LockOrganization :one
+SELECT id FROM organizations WHERE id = $1 FOR UPDATE;
+
 -- Строка аккаунта человека под блокировкой: удаление, отмена и вход по ссылкам не идут одновременно.
 -- name: LockUserRow :one
 SELECT * FROM users WHERE id = $1 FOR UPDATE;

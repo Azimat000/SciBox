@@ -61,6 +61,20 @@ type ApplicationInvitation struct {
 	UpdatedAt     time.Time
 }
 
+type AuditLog struct {
+	ID          int64
+	At          time.Time
+	OrgID       *uuid.UUID
+	ActorID     *uuid.UUID
+	SubjectID   *uuid.UUID
+	Action      string
+	TargetKind  string
+	TargetID    *uuid.UUID
+	TargetLabel string
+	Details     []byte
+	Ip          *string
+}
+
 type AuthToken struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID

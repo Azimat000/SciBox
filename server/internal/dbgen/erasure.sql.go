@@ -253,6 +253,47 @@ func (q *Queries) HideProfileForDeletion(ctx context.Context, arg HideProfileFor
 	return err
 }
 
+const lockOrganization = `-- name: LockOrganization :one
+SELECT id FROM organizations WHERE id = $1 FOR UPDATE
+`
+
+// Одна организация под блокировкой (приём приглашения).
+func (q *Queries) LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockOrganization, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const lockOrganizationsOwnedBy = `-- name: LockOrganizationsOwnedBy :many
+SELECT o.id FROM organizations o
+WHERE o.id IN (SELECT m.org_id FROM org_members m WHERE m.user_id = $1 AND m.role = 'owner')
+ORDER BY o.id
+FOR UPDATE OF o
+`
+
+// Организации, где человек владелец, под блокировкой строки (по порядку номеров, чтобы два стирания не ждали друг друга).
+// Приём приглашения блокирует ту же строку: сотрудник не войдёт в организацию, пока решается, остаётся ли у неё владелец (T-34).
+func (q *Queries) LockOrganizationsOwnedBy(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockOrganizationsOwnedBy, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockUserRow = `-- name: LockUserRow :one
 SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at FROM users WHERE id = $1 FOR UPDATE
 `

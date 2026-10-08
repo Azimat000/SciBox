@@ -47,13 +47,15 @@ func (q *Queries) ConsumeInvitation(ctx context.Context, arg ConsumeInvitationPa
 
 const consumeInvitationByID = `-- name: ConsumeInvitationByID :one
 UPDATE org_invitations SET accepted_at = $1::timestamptz
-WHERE id = $2 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > $1::timestamptz
+WHERE id = $2 AND email = $3::citext
+  AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > $1::timestamptz
 RETURNING id, org_id, role, unit_id, email::text AS email
 `
 
 type ConsumeInvitationByIDParams struct {
-	Now time.Time
-	ID  uuid.UUID
+	Now   time.Time
+	ID    uuid.UUID
+	Email string
 }
 
 type ConsumeInvitationByIDRow struct {
@@ -65,8 +67,9 @@ type ConsumeInvitationByIDRow struct {
 }
 
 // То же по номеру приглашения: так принимают приглашение из списка «Мои приглашения», где ссылки нет.
+// Чужое приглашение (почта другая) для запроса «не существует»: по номеру нельзя узнать, что приглашение есть (T-16).
 func (q *Queries) ConsumeInvitationByID(ctx context.Context, arg ConsumeInvitationByIDParams) (ConsumeInvitationByIDRow, error) {
-	row := q.db.QueryRow(ctx, consumeInvitationByID, arg.Now, arg.ID)
+	row := q.db.QueryRow(ctx, consumeInvitationByID, arg.Now, arg.ID, arg.Email)
 	var i ConsumeInvitationByIDRow
 	err := row.Scan(
 		&i.ID,
