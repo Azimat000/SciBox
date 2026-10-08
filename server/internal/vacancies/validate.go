@@ -1,6 +1,7 @@
 package vacancies
 
 import (
+	"scibox/server/internal/num"
 	"strings"
 	"time"
 	"unicode"
@@ -242,8 +243,7 @@ func validate(in Input, positionType string, mode checkMode, today time.Time) (f
 	case in.CareerLevel != nil && !intIn(in.CareerLevel, 1, 4):
 		errs["career_level"] = msgLevelInvalid
 	case in.CareerLevel != nil:
-		v := int16(*in.CareerLevel)
-		f.careerLevel = &v
+		f.careerLevel = num.Int16Ptr(in.CareerLevel)
 	case strict && rules.needLevel:
 		errs["career_level"] = msgLevelRequired
 	}
@@ -286,8 +286,7 @@ func validate(in Input, positionType string, mode checkMode, today time.Time) (f
 	case in.RatePercent != nil && !isOneOfInt(*in.RatePercent, Rates):
 		errs["rate_percent"] = msgRateInvalid
 	case in.RatePercent != nil:
-		v := int16(*in.RatePercent)
-		f.rate = &v
+		f.rate = num.Int16Ptr(in.RatePercent)
 	case strict && rules.needRate:
 		errs["rate_percent"] = msgRateRequired
 	}
@@ -312,8 +311,7 @@ func validate(in Input, positionType string, mode checkMode, today time.Time) (f
 	case in.ContractMonth != nil && in.ContractType != ContractFixed:
 		errs["contract_months"] = msgMonthsOnlyFixed
 	case in.ContractMonth != nil:
-		v := int16(*in.ContractMonth)
-		f.contractMonths = &v
+		f.contractMonths = num.Int16Ptr(in.ContractMonth)
 	case strict && in.ContractType == ContractFixed:
 		errs["contract_months"] = msgMonthsRequired
 	}

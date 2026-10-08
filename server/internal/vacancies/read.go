@@ -11,6 +11,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
 )
 
@@ -50,7 +51,7 @@ func pageOf(limit, offset int) (int32, int32) {
 		limit = DefaultLimit
 	}
 	limit = min(limit, MaxLimit)
-	return int32(limit), int32(max(offset, 0))
+	return num.Int32(limit), num.Int32(max(offset, 0))
 }
 
 func cardFrom(v dbgen.VacancyView, specialties []Ref) Card {

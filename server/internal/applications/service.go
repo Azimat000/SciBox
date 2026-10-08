@@ -19,6 +19,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/references"
@@ -259,7 +260,7 @@ func (s *Service) Apply(ctx context.Context, user auth.User, in Input, ups []fil
 
 func (s *Service) saveFile(ctx context.Context, q *dbgen.Queries, appID uuid.UUID, kind files.Kind, pos int, up files.Upload, now time.Time) error {
 	if _, err := q.InsertApplicationFile(ctx, dbgen.InsertApplicationFileParams{
-		ApplicationID: appID, Kind: string(kind), Name: files.CleanName(up.Name), Size: int32(len(up.Data)), Position: int16(pos), Data: up.Data, Now: now,
+		ApplicationID: appID, Kind: string(kind), Name: files.CleanName(up.Name), Size: num.Int32(len(up.Data)), Position: num.Int16(pos), Data: up.Data, Now: now,
 	}); err != nil {
 		return fmt.Errorf("applications: save file: %w", err)
 	}
@@ -303,7 +304,7 @@ func (s *Service) Mine(ctx context.Context, user auth.User, limit, offset int) (
 	}
 	limit = min(limit, 50)
 	offset = max(offset, 0)
-	rows, err := s.q.ListMyApplications(ctx, dbgen.ListMyApplicationsParams{UserID: user.ID, Lim: int32(limit), Off: int32(offset)})
+	rows, err := s.q.ListMyApplications(ctx, dbgen.ListMyApplicationsParams{UserID: user.ID, Lim: num.Int32(limit), Off: num.Int32(offset)})
 	if err != nil {
 		return List{}, fmt.Errorf("applications: list: %w", err)
 	}

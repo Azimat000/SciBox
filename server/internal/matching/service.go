@@ -18,6 +18,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/vacancies"
 )
@@ -102,7 +103,7 @@ func pageOf(limit, offset int) (int32, int32) {
 	if limit <= 0 {
 		limit = 20
 	}
-	return int32(min(limit, 50)), int32(max(offset, 0))
+	return num.Int32(min(limit, 50)), num.Int32(max(offset, 0))
 }
 
 // ---- избранное ----

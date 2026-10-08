@@ -20,6 +20,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	mailer "scibox/server/internal/mail"
+	"scibox/server/internal/num"
 )
 
 // ErrNotFound — уведомления нет или оно чужое.
@@ -191,7 +192,7 @@ func (s *Service) List(ctx context.Context, user auth.User, limit, offset int, u
 	}
 	limit = min(limit, MaxLimit)
 	offset = max(offset, 0)
-	rows, err := s.q.ListNotifications(ctx, dbgen.ListNotificationsParams{UserID: user.ID, UnreadOnly: unreadOnly, Lim: int32(limit), Off: int32(offset)})
+	rows, err := s.q.ListNotifications(ctx, dbgen.ListNotificationsParams{UserID: user.ID, UnreadOnly: unreadOnly, Lim: num.Int32(limit), Off: num.Int32(offset)})
 	if err != nil {
 		return List{}, fmt.Errorf("notifications: list: %w", err)
 	}

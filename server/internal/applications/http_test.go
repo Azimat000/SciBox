@@ -78,6 +78,9 @@ func TestHTTPApplyAndRead(t *testing.T) {
 	if r := a.api.Do(&me, "GET", "/api/applications?limit=abc&offset=zz", nil); r.Code != 200 {
 		t.Errorf("mine with bad paging: %d", r.Code)
 	}
+	if r := a.api.Do(&me, "GET", "/api/applications?offset=2147483648", nil); r.Code != 200 || len(r.JSON(t)["items"].([]any)) != 0 {
+		t.Errorf("mine with huge offset: %d %s", r.Code, r.Raw)
+	}
 	if r := a.api.Do(&me, "GET", "/api/applications/for-vacancy/"+a.vacancy.ID.String(), nil); r.Code != 200 || r.JSON(t)["reason"] != "applied" {
 		t.Errorf("for-vacancy: %d %s", r.Code, r.Raw)
 	}

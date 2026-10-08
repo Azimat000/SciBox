@@ -9,6 +9,7 @@ import (
 
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/mail"
+	"scibox/server/internal/num"
 )
 
 // Queue кладёт письма в очередь outbox вместо немедленной отправки. Годится везде, где нужен mail.Sender:
@@ -78,7 +79,7 @@ type Stats struct{ Sent, Retry, Failed int }
 // одного письма нет: оно будет повторено позже, остальные идут дальше.
 func (w *Worker) RunOnce(ctx context.Context) (Stats, error) {
 	now := w.now()
-	rows, err := w.q.ClaimOutbox(ctx, dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: int32(w.Batch)})
+	rows, err := w.q.ClaimOutbox(ctx, dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: num.Int32(w.Batch)})
 	if err != nil {
 		return Stats{}, fmt.Errorf("notifications: claim outbox: %w", err)
 	}

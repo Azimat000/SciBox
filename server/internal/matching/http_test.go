@@ -67,6 +67,9 @@ func TestHTTPFavorites(t *testing.T) {
 	if r := a.api.Do(&anna, "GET", "/api/favorites?limit=1&offset=5", nil); r.Code != 200 || len(r.JSON(t)["items"].([]any)) != 0 {
 		t.Errorf("страница за пределами: %d %s", r.Code, r.Raw)
 	}
+	if r := a.api.Do(&anna, "GET", "/api/favorites?offset=2147483648", nil); r.Code != 200 || len(r.JSON(t)["items"].([]any)) != 0 {
+		t.Errorf("страница больше int32: %d %s", r.Code, r.Raw)
+	}
 	// Чужое избранное пусто, чужое не убирается.
 	if r := a.api.Do(&boris, "GET", "/api/favorites/ids", nil); len(r.JSON(t)["ids"].([]any)) != 0 {
 		t.Errorf("чужое: %s", r.Raw)

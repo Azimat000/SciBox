@@ -7,6 +7,7 @@ import (
 
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/num"
 )
 
 // SendReminders делает один проход напоминаний о сроках (D-105) и возвращает, сколько отправлено. Напоминание уходит не
@@ -22,7 +23,7 @@ func (s *Service) SendReminders(ctx context.Context) (int, error) {
 	var errs []error
 	for pass := 0; pass < maxPasses; pass++ {
 		rows, err := s.q.ListReminderCandidates(ctx, dbgen.ListReminderCandidatesParams{
-			Today: today, Horizon: today.AddDate(0, 0, reminderHorizonDays), Batch: int32(s.cfg.Batch),
+			Today: today, Horizon: today.AddDate(0, 0, reminderHorizonDays), Batch: num.Int32(s.cfg.Batch),
 		})
 		if err != nil {
 			return sent, errors.Join(append(errs, fmt.Errorf("matching: list reminders: %w", err))...)

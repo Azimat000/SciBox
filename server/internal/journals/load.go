@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/num"
 )
 
 // DB — то, что пакету нужно от базы: запросы и транзакции (в транзакции ещё и COPY).
@@ -125,10 +126,9 @@ func store(ctx context.Context, db DB, p Parsed, ed string, downloaded time.Time
 	for _, j := range p.Journals {
 		var quartile *int16
 		if j.Quartile > 0 {
-			v := int16(j.Quartile)
-			quartile = &v
+			quartile = new(num.Int16(j.Quartile))
 		}
-		rows = append(rows, []any{j.ID, j.Title, j.Publisher, quartile, j.SJR, int16(p.Year)})
+		rows = append(rows, []any{j.ID, j.Title, j.Publisher, quartile, j.SJR, num.Int16(p.Year)})
 		for i, issn := range j.ISSNs {
 			issns = append(issns, []any{issn, j.ID, int16(i)})
 		}

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"scibox/server/internal/num"
 	"strings"
 	"unicode/utf8"
 
@@ -93,7 +94,7 @@ func (h *Hasher) Verify(ctx context.Context, password, encoded string) (bool, er
 		return false, err
 	}
 	defer h.release()
-	got := argon2.IDKey([]byte(password), salt, p.Iterations, p.MemoryKiB, p.Parallelism, uint32(len(want)))
+	got := argon2.IDKey([]byte(password), salt, p.Iterations, p.MemoryKiB, p.Parallelism, num.Uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/num"
 	"scibox/server/internal/privacy"
 )
 
@@ -179,9 +180,9 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	}
 	arg := dbgen.SearchScientistsParams{
 		Modes: modes, ExcludeUser: exclude, Q: p.Query, Fields: nonNil(p.Fields), Region: p.Region,
-		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), OpenOnly: p.OpenOnly, HMin: int32(p.HMin),
-		Q12Min: int32(p.Q12Min), RecentFrom: int32(s.recentFrom()),
-		Sort: sort, RowLimit: int32(limit), RowOffset: int32(offset),
+		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), OpenOnly: p.OpenOnly, HMin: num.Int32(p.HMin),
+		Q12Min: num.Int32(p.Q12Min), RecentFrom: num.Int32(s.recentFrom()),
+		Sort: sort, RowLimit: num.Int32(limit), RowOffset: num.Int32(offset),
 	}
 	rows, total, err := s.catalogPage(ctx, arg)
 	if err != nil {

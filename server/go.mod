@@ -2,6 +2,8 @@ module scibox/server
 
 go 1.26.5
 
+toolchain go1.26.6
+
 require (
 	codeberg.org/go-pdf/fpdf v0.12.0
 	github.com/go-chi/chi/v5 v5.3.2

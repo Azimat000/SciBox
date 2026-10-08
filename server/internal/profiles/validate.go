@@ -12,6 +12,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/issn"
+	"scibox/server/internal/num"
 )
 
 // Тексты ошибок полей: показываются человеку как есть.
@@ -182,14 +183,6 @@ type coreFields struct {
 	generalSkills     []string
 }
 
-func int16p(v *int) *int16 {
-	if v == nil {
-		return nil
-	}
-	n := int16(*v)
-	return &n
-}
-
 func strp(s string) *string {
 	if s == "" {
 		return nil
@@ -261,7 +254,7 @@ func validateCore(in CoreInput, now time.Time) (coreFields, fieldErrors) {
 	}
 	if f.degree != DegreeNone {
 		f.degreeSpecialty = strp(strings.TrimSpace(in.DegreeSpecialty))
-		f.degreeYear = int16p(errs.year("degree_year", in.DegreeYear, 1950, thisYear, ""))
+		f.degreeYear = num.Int16Ptr(errs.year("degree_year", in.DegreeYear, 1950, thisYear, ""))
 		f.degreeInstitution = errs.line("degree_institution", in.DegreeInstitution, textSpec{max: maxInstitution})
 		f.dissertation = errs.line("dissertation_title", in.Dissertation, textSpec{max: maxDissertation})
 	}
@@ -270,7 +263,7 @@ func validateCore(in CoreInput, now time.Time) (coreFields, fieldErrors) {
 		f.academicTitle = TitleNone
 	}
 	if f.academicTitle != TitleNone {
-		f.academicTitleYear = int16p(errs.year("academic_title_year", in.AcademicTitleYear, 1950, thisYear, ""))
+		f.academicTitleYear = num.Int16Ptr(errs.year("academic_title_year", in.AcademicTitleYear, 1950, thisYear, ""))
 	}
 
 	var msg string
@@ -298,10 +291,10 @@ func validateCore(in CoreInput, now time.Time) (coreFields, fieldErrors) {
 			errs["wos_id"] = msgWosInvalid
 		}
 	}
-	f.hRsci = int16p(hIndex(errs, "h_rsci", in.HRsci))
-	f.hScopus = int16p(hIndex(errs, "h_scopus", in.HScopus))
-	f.hWos = int16p(hIndex(errs, "h_wos", in.HWos))
-	f.hScholar = int16p(hIndex(errs, "h_scholar", in.HScholar))
+	f.hRsci = num.Int16Ptr(hIndex(errs, "h_rsci", in.HRsci))
+	f.hScopus = num.Int16Ptr(hIndex(errs, "h_scopus", in.HScopus))
+	f.hWos = num.Int16Ptr(hIndex(errs, "h_wos", in.HWos))
+	f.hScholar = num.Int16Ptr(hIndex(errs, "h_scholar", in.HScholar))
 
 	if raw := strings.TrimSpace(in.ContactEmail); raw != "" {
 		if email, msg := auth.NormalizeEmail(raw); msg != "" {
@@ -437,7 +430,7 @@ func validateItem(kind string, in ItemFields, now time.Time) (itemFields, fieldE
 			}
 		}
 		if f.Year != nil {
-			sort = int16(*f.Year)
+			sort = num.Int16(*f.Year)
 		}
 	case KindGrant:
 		f.Title = errs.line("title", in.Title, reqPubTitle)
@@ -455,7 +448,7 @@ func validateItem(kind string, in ItemFields, now time.Time) (itemFields, fieldE
 		f.PatentType = errs.choice("patent_type", in.PatentType, patentTypes, "Выберите вид охранного документа")
 		f.Year = errs.year("year", in.Year, yearMin, thisYear+1, "Укажите год")
 		if f.Year != nil {
-			sort = int16(*f.Year)
+			sort = num.Int16(*f.Year)
 		}
 	case KindTeaching:
 		f.Course = errs.line("course", in.Course, reqCourse)
@@ -489,7 +482,7 @@ func periodSort(f ItemFields) int16 {
 	case f.YearTo == nil:
 		return sortOngoing
 	}
-	return int16(*f.YearTo)
+	return num.Int16(*f.YearTo)
 }
 
 // link проверяет необязательную ссылку: только http и https, с адресом сайта.

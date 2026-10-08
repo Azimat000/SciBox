@@ -17,6 +17,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
 )
 
@@ -413,7 +414,7 @@ func (s *Service) answer(ctx context.Context, token, status, text string, up *fi
 		if up != nil {
 			if _, err := q.InsertApplicationFile(ctx, dbgen.InsertApplicationFileParams{
 				ApplicationID: row.ApplicationID, ReferenceID: &row.ID, Kind: string(files.KindReferenceLetter),
-				Name: files.CleanName(up.Name), Size: int32(len(up.Data)), Position: 0, Data: up.Data, Now: now,
+				Name: files.CleanName(up.Name), Size: num.Int32(len(up.Data)), Position: 0, Data: up.Data, Now: now,
 			}); err != nil {
 				return fmt.Errorf("references: save letter: %w", err)
 			}

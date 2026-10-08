@@ -15,6 +15,7 @@ import (
 
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
 )
 
@@ -170,14 +171,6 @@ func validateSearch(p *SearchParams) error {
 	return nil
 }
 
-func ints32(in []int) []int32 {
-	out := make([]int32, len(in))
-	for i, n := range in {
-		out[i] = int32(n)
-	}
-	return out
-}
-
 func nonNil(in []string) []string {
 	if in == nil {
 		return []string{}
@@ -221,8 +214,8 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 	arg := dbgen.SearchVacanciesParams{
 		Today: today, OrgID: orgID, UnitID: p.UnitID, Q: p.Query,
 		Fields: nonNil(p.Fields), Region: p.Region, Formats: nonNil(p.Formats), Types: nonNil(p.Types),
-		Levels: ints32(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds), Fundings: nonNil(p.Fundings),
-		Rates: ints32(p.Rates), Terms: nonNil(p.Terms), SalaryMin: int32(p.SalaryMin), Housing: p.Housing,
+		Levels: num.Int32s(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds), Fundings: nonNil(p.Fundings),
+		Rates: num.Int32s(p.Rates), Terms: nonNil(p.Terms), SalaryMin: num.Int32(p.SalaryMin), Housing: p.Housing,
 		Competition: p.Competition, NoDeadline: p.Deadline == DeadlineNone, Sort: sort, RowLimit: limit, RowOffset: offset,
 		PublishedAfter: p.PublishedAfter, PublishedUntil: p.PublishedUntil,
 	}

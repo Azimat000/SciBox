@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/num"
 	"scibox/server/internal/vacancies"
 )
 
@@ -311,14 +312,12 @@ func int16Ptr(n int) *int16 {
 	if n == 0 {
 		return nil
 	}
-	v := int16(n)
-	return &v
+	return new(num.Int16(n))
 }
 
 func int32Ptr(n int) *int32 {
 	if n == 0 {
 		return nil
 	}
-	v := int32(n)
-	return &v
+	return new(num.Int32(n))
 }

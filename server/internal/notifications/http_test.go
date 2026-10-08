@@ -86,6 +86,9 @@ func TestHTTPListReadAndCounts(t *testing.T) {
 	if r := a.Do(&me, "GET", "/api/notifications?limit=abc&offset=x", nil); r.Code != 200 {
 		t.Errorf("bad paging: %d", r.Code)
 	}
+	if r := a.Do(&me, "GET", "/api/notifications?offset=2147483648", nil); r.Code != 200 || len(r.JSON(t)["items"].([]any)) != 0 {
+		t.Errorf("huge offset: %d %s", r.Code, r.Raw)
+	}
 }
 
 func TestHTTPInternalErrorsAreHidden(t *testing.T) {

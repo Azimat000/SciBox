@@ -13,6 +13,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/num"
 )
 
 // Organization — организация целиком (публичная страница).
@@ -143,7 +144,7 @@ func (s *Service) ListOrganizations(ctx context.Context, f ListFilter) (OrgList,
 	if err != nil {
 		return OrgList{}, fmt.Errorf("orgs: count organizations: %w", err)
 	}
-	rows, err := s.q.ListOrganizations(ctx, dbgen.ListOrganizationsParams{Kind: f.Kind, Pattern: pattern, RowLimit: int32(f.Limit), RowOffset: int32(f.Offset)})
+	rows, err := s.q.ListOrganizations(ctx, dbgen.ListOrganizationsParams{Kind: f.Kind, Pattern: pattern, RowLimit: num.Int32(f.Limit), RowOffset: num.Int32(f.Offset)})
 	if err != nil {
 		return OrgList{}, fmt.Errorf("orgs: list organizations: %w", err)
 	}

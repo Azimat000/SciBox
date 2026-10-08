@@ -257,6 +257,11 @@ func TestHTTPPublicPages(t *testing.T) {
 	if r.Code != 200 || r.json(t)["total"] == nil {
 		t.Errorf("list: %d %s", r.Code, r.Raw)
 	}
+	// Номер страницы больше int32 не переворачивается в отрицательный (раньше база отвечала ошибкой и сайт получал 500).
+	r = a.do(nil, "GET", "/api/organizations?offset=2147483648", nil)
+	if r.Code != 200 || len(r.json(t)["items"].([]any)) != 0 {
+		t.Errorf("huge offset: %d %s", r.Code, r.Raw)
+	}
 	// Неизвестное.
 	for _, path := range []string{"/api/organizations/no-such-org", "/api/organizations/" + org.Slug + "/units/not-a-uuid", "/api/organizations/" + org.Slug + "/units/" + uuid.NewString()} {
 		if r = a.do(nil, "GET", path, nil); r.Code != 404 || r.errCode(t) != "not_found" {

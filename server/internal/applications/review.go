@@ -15,6 +15,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
 )
 
@@ -348,7 +349,7 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 	}
 	limit, offset = min(limit, 50), max(offset, 0)
 	list, err := s.q.ListCandidates(ctx, dbgen.ListCandidatesParams{
-		WholeOrgs: sc.WholeOrgs, Units: sc.Units, VacancyID: f.VacancyID, Status: f.Status, RowLimit: int32(limit), RowOffset: int32(offset),
+		WholeOrgs: sc.WholeOrgs, Units: sc.Units, VacancyID: f.VacancyID, Status: f.Status, RowLimit: num.Int32(limit), RowOffset: num.Int32(offset),
 	})
 	if err != nil {
 		return CandidateList{}, fmt.Errorf("applications: list candidates: %w", err)

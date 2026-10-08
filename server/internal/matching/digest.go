@@ -13,6 +13,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/notifications"
+	"scibox/server/internal/num"
 	"scibox/server/internal/vacancies"
 )
 
@@ -49,7 +50,7 @@ func (s *Service) SendDigests(ctx context.Context) (int, error) {
 	sent := 0
 	var errs []error
 	for pass := 0; pass < maxPasses; pass++ {
-		ids, err := s.q.ListDueSavedSearches(ctx, dbgen.ListDueSavedSearchesParams{Now: s.now(), Batch: int32(s.cfg.Batch)})
+		ids, err := s.q.ListDueSavedSearches(ctx, dbgen.ListDueSavedSearchesParams{Now: s.now(), Batch: num.Int32(s.cfg.Batch)})
 		if err != nil {
 			return sent, errors.Join(append(errs, fmt.Errorf("matching: list due searches: %w", err))...)
 		}
