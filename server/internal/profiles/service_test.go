@@ -14,6 +14,7 @@ import (
 
 	"scibox/server/internal/auth"
 	"scibox/server/internal/crossref"
+	"scibox/server/internal/dbgen"
 )
 
 func fieldsOf(t *testing.T, err error) map[string]string {
@@ -603,7 +604,16 @@ func TestCVFileName(t *testing.T) {
 
 func TestProfileIsRemovedWithAccount(t *testing.T) {
 	w := newWorld(t)
-	p := w.user("Елена")
+	// Аккаунт заведён напрямую, без входа: запись входа в журнале действий не даёт удалить строку аккаунта (на неё ссылается журнал,
+	// который только дописывается). В работе аккаунты не удаляются, а стираются (internal/erasure); здесь проверяется связь таблиц.
+	q := dbgen.New(sharedPool)
+	u, err := q.CreateUser(bg, dbgen.CreateUserParams{
+		Email: fmt.Sprintf("bare%d@example.ru", seq.Add(1)), DisplayName: "Елена", PasswordHash: "x", PrivacyConsentAt: time.Now().UTC(), PrivacyPolicyVersion: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := person{User: auth.User{ID: u.ID, Email: u.Email, Name: u.DisplayName}}
 	w.addItem(p, goodPublication())
 	if _, err := w.svc.SaveCore(bg, p.User, goodCore()); err != nil {
 		t.Fatal(err)

@@ -17,6 +17,11 @@ export function auditTime(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : timeFormat.format(d)
 }
 
+/** Название в кавычках-ёлочках; ёлочки внутри названия становятся лапками, как принято в русской типографике. */
+export function quoted(label: string): string {
+  return `«${label.replaceAll('«', '„').replaceAll('»', '“')}»`
+}
+
 export type AuditLine = {
   /** Что произошло, одной фразой без рода («Вакансия опубликована»). */
   what: string

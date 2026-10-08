@@ -6,7 +6,7 @@ import { press } from '../../test/forms'
 import { lab, members, orgRoutes, SLUG, viewers } from '../../test/orgs'
 import { renderApp } from '../../test/render'
 import type { AuditEntry } from './api'
-import { auditDay, auditTime, describeAudit } from './auditText'
+import { auditDay, auditTime, describeAudit, quoted } from './auditText'
 
 const path = `/my-organization/${SLUG}/audit`
 const api = `/api/organizations/${SLUG}/audit`
@@ -175,6 +175,11 @@ describe('describeAudit', () => {
     expect(describeAudit(entry({ action: 'invitation.sent', details: {} }), slug).detail).toBeNull()
     expect(describeAudit(entry({ action: 'member.role_changed', details: { from: 'hr' } }), slug).detail).toBeNull()
     expect(describeAudit(entry({ action: 'member.joined', details: { role: 'weird' } }), slug).detail).toBe('weird')
+  })
+
+  it('turns the guillemets inside a title into low quotation marks', () => {
+    expect(quoted('Руководитель ЦКП «Электронная микроскопия»')).toBe('«Руководитель ЦКП „Электронная микроскопия“»')
+    expect(quoted('Простое название')).toBe('«Простое название»')
   })
 
   it('formats a broken time as empty', () => {

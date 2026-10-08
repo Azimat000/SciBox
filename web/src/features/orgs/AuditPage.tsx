@@ -6,7 +6,7 @@ import { Tag } from '../../ui/Tag'
 import { useMe } from '../auth/api'
 import { Link } from 'react-router'
 import { useAudit, type AuditEntry } from './api'
-import { auditDay, auditTime, describeAudit } from './auditText'
+import { auditDay, auditTime, describeAudit, quoted } from './auditText'
 import { useManageContext } from './manageContext'
 import { LoadFailed, PageSkeleton } from './states'
 
@@ -96,7 +96,7 @@ function AuditRow({ entry, slug, youId }: { entry: AuditEntry; slug: string; you
         <p className="audit-what">{line.what}</p>
         {line.target && (
           <p className="audit-target">
-            {line.target.to ? <Link to={line.target.to}>«{line.target.label}»</Link> : <>«{line.target.label}»</>}
+            {line.target.to ? <Link to={line.target.to}>{quoted(line.target.label)}</Link> : <>{quoted(line.target.label)}</>}
           </p>
         )}
         {facts.length > 0 && <p className="audit-facts">{facts.join(' · ')}</p>}
