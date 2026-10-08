@@ -94,7 +94,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"digests": func(t *testing.T, w *world) func(*Service) error {
 			p := w.User("Анна")
 			mark := marker()
-			w.clock.Set(time.Now().UTC())
+			w.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 			if _, err := w.svc.CreateSearch(bg, p.User, SearchInput{Name: "х", Query: "q=" + mark, Frequency: FreqInstant}); err != nil {
 				t.Fatal(err)
 			}

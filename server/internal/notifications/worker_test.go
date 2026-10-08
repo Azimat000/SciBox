@@ -148,7 +148,7 @@ func TestWorkerRetriesWithBackoffAndGivesUp(t *testing.T) {
 		}
 		return nil
 	}}
-	clock := time.Now().UTC()
+	clock := time.Now().UTC().Truncate(time.Microsecond)
 	w := newWorker(f, &clock)
 
 	for attempt := 1; attempt <= w.MaxAttempts; attempt++ {
@@ -196,7 +196,7 @@ func TestWorkerRetryThenSuccess(t *testing.T) {
 		}
 		return nil
 	}}
-	clock := time.Now().UTC()
+	clock := time.Now().UTC().Truncate(time.Microsecond)
 	w := newWorker(f, &clock)
 	drain(t, w)
 	if _, sent, _, _, _ := rowOf(t, addr); sent {
@@ -266,7 +266,7 @@ func TestTwoSendersShareTheQueueWithoutDuplicates(t *testing.T) {
 func TestExpiredLeaseReturnsMailToQueue(t *testing.T) {
 	// Отправитель взял письмо и «упал»: аренда истекает, и письмо уходит со следующим проходом.
 	addr := queueMails(t, "crash", 1)[0]
-	clock := time.Now().UTC()
+	clock := time.Now().UTC().Truncate(time.Microsecond)
 	crashed := newWorker(&flaky{err: func(m mail.Message) error {
 		if m.To == addr {
 			return errors.New("process died")

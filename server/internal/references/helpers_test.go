@@ -54,7 +54,7 @@ func testConfig() Config {
 func newWorld(t *testing.T) *world {
 	t.Helper()
 	k := testkit.NewWorld(t)
-	w := &world{World: k, clock: &clock{t: time.Now().UTC()}}
+	w := &world{World: k, clock: &clock{t: time.Now().UTC().Truncate(time.Microsecond)}}
 	w.notes = notifications.NewService(testkit.Pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
 	w.svc = NewService(testkit.Pool, w.notes, testConfig())
 	w.svc.now = w.clock.Now

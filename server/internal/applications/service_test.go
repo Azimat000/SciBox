@@ -795,11 +795,11 @@ func TestForVacancy(t *testing.T) {
 		t.Errorf("closed: %+v", s)
 	}
 	// Срок прошёл.
-	w.clock.Set(time.Now().UTC().AddDate(1, 0, 0))
+	w.clock.Set(time.Now().UTC().Truncate(time.Microsecond).AddDate(1, 0, 0))
 	if s := state(me, w.vacancy.ID); s.CanApply || s.Reason != ReasonExpired {
 		t.Errorf("expired: %+v", s)
 	}
-	w.clock.Set(time.Now().UTC())
+	w.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 	for name, id := range map[string]uuid.UUID{"draft": draft.ID, "unknown": uuid.New()} {
 		if _, err := w.svc.ForVacancy(bg, me.User, id); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: %v", name, err)

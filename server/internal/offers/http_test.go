@@ -210,7 +210,7 @@ func TestHTTPErrorCodes(t *testing.T) {
 	if r := invite(a.vacancy.ID, profile2); r.Code != 409 || r.ErrCode(t) != "deadline_passed" {
 		t.Errorf("срок: %d %s", r.Code, r.Raw)
 	}
-	a.clock.Set(time.Now().UTC())
+	a.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 	if r := invite(a.vacancy.ID, profile2); r.Code != 201 {
 		t.Fatalf("приглашение: %d %s", r.Code, r.Raw)
 	}

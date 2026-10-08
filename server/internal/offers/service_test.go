@@ -219,7 +219,7 @@ func TestInviteWithoutDeadline(t *testing.T) {
 	if _, err := w.Vac.SetStatus(bg, w.tm.Owner.User, d.ID, vacancies.StatusPublished); err != nil {
 		t.Fatal(err)
 	}
-	w.clock.Set(time.Now().UTC().AddDate(5, 0, 0))
+	w.clock.Set(time.Now().UTC().Truncate(time.Microsecond).AddDate(5, 0, 0))
 	_, profile := w.scientist("Учёный", "public")
 	w.mustInvite(w.tm.HR, d.ID, profile, "")
 }

@@ -30,7 +30,7 @@ func newDigestWorld(t *testing.T, freq string) *digestWorld {
 	t.Helper()
 	w := newWorld(t)
 	d := &digestWorld{world: w, who: w.User("Анна"), mark: marker()}
-	d.t0 = time.Now().UTC()
+	d.t0 = time.Now().UTC().Truncate(time.Microsecond)
 	w.clock.Set(d.t0)
 	s, err := w.svc.CreateSearch(bg, d.who.User, SearchInput{Name: "Поиск " + d.mark, Query: "q=" + d.mark, Frequency: freq})
 	if err != nil {
@@ -168,7 +168,7 @@ func TestDigestIgnoresVacanciesPublishedBeforeTheSearch(t *testing.T) {
 	p := w.User("Анна")
 	mark := marker()
 	w.publish(vacancyOpts{title: "Старая " + mark})
-	w.clock.Set(time.Now().UTC())
+	w.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 	if _, err := w.svc.CreateSearch(bg, p.User, SearchInput{Name: "х", Query: "q=" + mark, Frequency: FreqInstant}); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestDigestFrequencies(t *testing.T) {
 		w := newWorld(t)
 		p := w.User("Анна")
 		mark := marker()
-		w.clock.Set(time.Now().UTC())
+		w.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 		start := w.clock.Now()
 		if _, err := w.svc.CreateSearch(bg, p.User, SearchInput{Name: "х", Query: "q=" + mark, Frequency: FreqWeekly}); err != nil {
 			t.Fatal(err)
@@ -311,7 +311,7 @@ func TestDigestOnlyGoesToTheOwner(t *testing.T) {
 func TestDigestDoesNotUseFuzzySearch(t *testing.T) {
 	w := newWorld(t)
 	p := w.User("Анна")
-	w.clock.Set(time.Now().UTC())
+	w.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 	if _, err := w.svc.CreateSearch(bg, p.User, SearchInput{Name: "х", Query: "q=спектрскопия", Frequency: FreqInstant}); err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestDigestHandlesMoreSearchesThanOneBatch(t *testing.T) {
 	w := newWorld(t)
 	w.svc.cfg.Batch = 2
 	mark := marker()
-	w.clock.Set(time.Now().UTC())
+	w.clock.Set(time.Now().UTC().Truncate(time.Microsecond))
 	var people []testkit.Person
 	for i := range 5 {
 		p := w.User(fmt.Sprintf("Человек %d", i))
