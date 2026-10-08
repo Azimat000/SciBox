@@ -11,6 +11,7 @@ import { TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
 import { useMe } from '../auth/api'
 import { describeError, fieldErrorsOf } from '../auth/errors'
+import { useReauth } from '../auth/reauth-context'
 import { useForm } from '../auth/useForm'
 import { checkEmail, compact } from '../auth/validation'
 import { changeRole, invite, refreshOrganizations, removeMember, revokeInvitation, roles, useMembers, type Member, type PendingInvitation } from './api'
@@ -79,11 +80,13 @@ export function ManageMembersPage() {
 
 function InviteForm({ slug, vacantUnits }: { slug: string; vacantUnits: readonly Option[] }) {
   const client = useQueryClient()
+  const guard = useReauth()
   const toast = useToast()
   const formRef = useRef<HTMLFormElement>(null)
   const send = useMutation({
+    // Пригласить владельцем можно только со свежим паролем: guard спросит его и повторит запрос.
     mutationFn: (v: { email: string; role: string; unit: string }) =>
-      invite(slug, { email: v.email.trim(), role: v.role, unit_id: v.role === 'unit_head' && v.unit ? v.unit : null }),
+      guard(() => invite(slug, { email: v.email.trim(), role: v.role, unit_id: v.role === 'unit_head' && v.unit ? v.unit : null })),
     onSuccess: async (inv) => {
       await refreshOrganizations(client, slug)
       set('email', '')
@@ -161,9 +164,10 @@ function MemberRow({ slug, member }: { slug: string; member: Member }) {
   const { user } = useMe()
   const [removing, setRemoving] = useState(false)
   const isYou = user?.id === member.user_id
+  const guard = useReauth()
 
   const change = useMutation({
-    mutationFn: (role: string) => changeRole(slug, member.user_id, role),
+    mutationFn: (role: string) => guard(() => changeRole(slug, member.user_id, role)),
     onSuccess: async () => {
       await refreshOrganizations(client, slug)
       toast.show({ kind: 'success', title: t.orgs.members.roleChanged })
@@ -227,6 +231,7 @@ function MemberRow({ slug, member }: { slug: string; member: Member }) {
 function PendingRow({ slug, invitation }: { slug: string; invitation: PendingInvitation }) {
   const client = useQueryClient()
   const toast = useToast()
+  const guard = useReauth()
   const revoke = useMutation({
     mutationFn: () => revokeInvitation(slug, invitation.id),
     onSuccess: async () => {
@@ -236,7 +241,7 @@ function PendingRow({ slug, invitation }: { slug: string; invitation: PendingInv
     onError: (err) => toast.show({ kind: 'error', title: t.orgs.members.revokeFailed, text: describeError(err) }),
   })
   const again = useMutation({
-    mutationFn: () => invite(slug, { email: invitation.email, role: invitation.role, unit_id: invitation.unit_id }),
+    mutationFn: () => guard(() => invite(slug, { email: invitation.email, role: invitation.role, unit_id: invitation.unit_id })),
     onSuccess: async (inv) => {
       await refreshOrganizations(client, slug)
       toast.show({ kind: 'success', title: t.orgs.members.sent(inv.email) })

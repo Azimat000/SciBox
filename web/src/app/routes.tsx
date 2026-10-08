@@ -1,6 +1,8 @@
 import type { RouteObject } from 'react-router'
 import { AccountPage } from '../features/auth/AccountPage'
 import { ConfirmEmailPage } from '../features/auth/ConfirmEmailPage'
+import { ConfirmEmailChangePage, RevertEmailChangePage } from '../features/auth/EmailChangePages'
+import { SecurityPage } from '../features/auth/SecurityPage'
 import { ForgotPasswordPage } from '../features/auth/ForgotPasswordPage'
 import { LoginPage } from '../features/auth/LoginPage'
 import { PrivacyPage } from '../features/auth/PrivacyPage'
@@ -61,6 +63,9 @@ export const routes: RouteObject[] = [
       { path: 'reset-password', handle: { title: t.pageTitles.resetPassword }, element: <ResetPasswordPage /> },
       { path: 'confirm-email', handle: { title: t.pageTitles.confirmEmail }, element: <ConfirmEmailPage /> },
       { path: 'account', handle: { title: t.pageTitles.account }, element: <AccountPage /> },
+      { path: 'account/security', handle: { title: t.pageTitles.accountSecurity }, element: <SecurityPage /> },
+      { path: 'confirm-email-change', handle: { title: t.pageTitles.confirmEmailChange }, element: <ConfirmEmailChangePage /> },
+      { path: 'revert-email-change', handle: { title: t.pageTitles.revertEmailChange }, element: <RevertEmailChangePage /> },
       { path: 'privacy', handle: { title: t.pageTitles.privacy }, element: <PrivacyPage /> },
       { path: 'organizations', handle: { title: t.pageTitles.organizations }, element: <OrganizationsPage /> },
       { path: 'organizations/new', handle: { title: t.pageTitles.organizationsNew }, element: <CreateOrganizationPage /> },

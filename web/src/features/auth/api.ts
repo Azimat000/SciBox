@@ -8,6 +8,8 @@ export type User = {
   name: string
   email_confirmed: boolean
   created_at: string
+  /** Когда аккаунт будет удалён (ISO); null — удаление не назначено. */
+  deletion_due_at?: string | null
 }
 
 type UserResponse = { user: User | null }
@@ -84,4 +86,70 @@ export function changePassword(currentPassword: string, newPassword: string) {
 
 export function revokeOtherSessions() {
   return apiSend('POST', '/api/account/sessions/revoke-others')
+}
+
+/** Ввести пароль ещё раз: следующие 10 минут в этом сеансе разрешены опасные действия. */
+export function reauth(password: string) {
+  return apiSend('POST', '/api/account/reauth', { password })
+}
+
+/** Сеанс: устройство по строке браузера (коды), когда вошли и когда заходили. */
+export type SessionInfo = {
+  id: string
+  browser: string
+  os: string
+  mobile: boolean
+  created_at: string
+  last_seen_at: string
+  current: boolean
+}
+
+export const sessionsQueryKey = ['account', 'sessions'] as const
+
+export function useSessions() {
+  return useQuery({
+    queryKey: sessionsQueryKey,
+    retry: false,
+    queryFn: async ({ signal }) => (await apiGet<{ sessions: SessionInfo[] }>('/api/account/sessions', { signal })).sessions,
+  })
+}
+
+export function endSession(id: string) {
+  return apiSend('DELETE', `/api/account/sessions/${encodeURIComponent(id)}`)
+}
+
+export function requestEmailChange(email: string) {
+  return apiSend('POST', '/api/account/email', { email })
+}
+
+export async function confirmEmailChange(token: string): Promise<User> {
+  const res = await apiSend<UserResponse>('POST', '/api/auth/confirm-email-change', { token })
+  return res.user as User
+}
+
+export function revertEmailChange(token: string) {
+  return apiSend('POST', '/api/auth/revert-email-change', { token })
+}
+
+export type OrgRef = { slug: string; name: string }
+
+/** Что будет при удалении: организации, где нужно сначала назначить владельца, и те, что останутся без владельца. */
+export type DeletionPlan = { due_at: string | null; grace_days: number; blocking: OrgRef[]; orphaned: OrgRef[] }
+
+export const deletionPlanQueryKey = ['account', 'deletion'] as const
+
+export function useDeletionPlan() {
+  return useQuery({
+    queryKey: deletionPlanQueryKey,
+    retry: false,
+    queryFn: ({ signal }) => apiGet<DeletionPlan>('/api/account/deletion', { signal }),
+  })
+}
+
+export async function requestDeletion(): Promise<string> {
+  return (await apiSend<{ due_at: string }>('POST', '/api/account/deletion')).due_at
+}
+
+export function cancelDeletion() {
+  return apiSend('POST', '/api/account/deletion/cancel')
 }

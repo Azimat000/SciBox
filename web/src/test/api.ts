@@ -61,3 +61,16 @@ export const signedInAs = (user = ann): Record<string, Route> => ({
   'GET /api/auth/me': reply(200, { user }),
   'GET /api/notification-settings': reply(200, { email_new_vacancies: true, email_deadlines: true }),
 })
+
+/** Сеансы для вкладки «Безопасность»: этот браузер и телефон. */
+export const sessionsFixture = [
+  { id: 's-this', browser: 'chrome', os: 'macos', mobile: false, created_at: '2026-10-02T09:05:00Z', last_seen_at: '2026-10-08T11:00:00Z', current: true },
+  { id: 's-phone', browser: 'safari', os: 'ios', mobile: true, created_at: '2026-10-01T15:40:00Z', last_seen_at: '2026-10-07T18:20:00Z', current: false },
+]
+
+/** Вкладка «Безопасность» у вошедшей Анны: два сеанса, удалить аккаунт можно. */
+export const securityApi = (user = ann): Record<string, Route> => ({
+  ...signedInAs(user),
+  'GET /api/account/sessions': reply(200, { sessions: sessionsFixture }),
+  'GET /api/account/deletion': reply(200, { due_at: null, grace_days: 14, blocking: [], orphaned: [] }),
+})

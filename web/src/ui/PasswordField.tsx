@@ -1,4 +1,4 @@
-import { useState, type InputHTMLAttributes } from 'react'
+import { useState, type InputHTMLAttributes, type Ref } from 'react'
 import { t } from '../i18n'
 import { Field } from './Field'
 import './PasswordField.css'
@@ -7,6 +7,7 @@ type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'ty
   label: string
   hint?: string
   error?: string
+  ref?: Ref<HTMLInputElement>
 }
 
 /** Поле пароля с кнопкой «Показать»: на телефоне опечатку в пароле иначе не заметить. */

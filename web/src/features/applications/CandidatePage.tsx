@@ -75,79 +75,96 @@ function Loader({ id }: { id: string }) {
             </section>
           )}
 
-          <section className="application-section" aria-labelledby="cand-letter">
-            <h2 id="cand-letter">{c.letter}</h2>
-            <p className="application-text">{app.cover_letter}</p>
-            <p className="application-contact">
-              <span>{c.contact}: </span>
-              <a href={`mailto:${app.contact_email}`}>{app.contact_email}</a>
-            </p>
-          </section>
-
-          <section className="application-section" aria-labelledby="cand-files">
-            <h2 id="cand-files">{c.files}</h2>
-            <ul className="file-links">
-              {app.cv && (
-                <li>
-                  <FileLink appId={app.id} file={app.cv} label={`${c.cv}, ${c.letterFile(app.cv.name, sizeText(app.cv.size))}`} />
-                </li>
-              )}
-              {app.files.map((f) => (
-                <li key={f.id}>
-                  <FileLink appId={app.id} file={f} label={c.letterFile(f.name, sizeText(f.size))} />
-                </li>
-              ))}
-            </ul>
-            {app.files.length === 0 && <p className="application-muted">{c.noExtraFiles}</p>}
-          </section>
-
-          <section className="application-section" aria-labelledby="cand-refs">
-            <h2 id="cand-refs">{c.referencesTitle}</h2>
-            <p className="application-muted">{c.referencesText}</p>
-            {refs.length === 0 ? (
-              <p className="application-muted">{c.referencesEmpty}</p>
-            ) : (
-              <ul className="ref-list">
-                {refs.map((r) => (
-                  <li key={r.id} className="ref-row ref-row-letter">
-                    <div className="ref-who">
-                      <p className="ref-name">{r.name}</p>
-                      <p className="ref-sub">{[r.relation, r.email].filter(Boolean).join(' · ')}</p>
-                    </div>
-                    <div className="ref-state">
-                      <Tag tone={r.status === 'received' ? 'accent' : 'neutral'}>
-                        {r.status === 'pending' ? c.waiting : r.status === 'declined' ? c.declined : refStatusLabel(r.status)}
-                      </Tag>
-                      {r.answered_at && <span className="ref-when">{dateTimeText(r.answered_at)}</span>}
-                    </div>
-                    {r.letter && (
-                      <div className="ref-letter">
-                        {r.letter.text && <p className="application-text">{r.letter.text}</p>}
-                        {r.letter.file && (
-                          <FileLink appId={app.id} file={r.letter.file} label={c.letterFile(r.letter.file.name, sizeText(r.letter.file.size))} />
-                        )}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="application-section" aria-labelledby="cand-profile">
-            <h2 id="cand-profile">{c.profileTitle}</h2>
-            <p className="application-muted">{c.profileNote}</p>
-            <ProfileView
-              nested
-              page={{
-                profile: app.profile,
-                viewer: { is_owner: false, can_see_contacts: true },
-              }}
-            />
-          </section>
+          {app.anonymized ? (
+            <section className="application-section" aria-labelledby="cand-erased">
+              <h2 id="cand-erased">{c.anonymizedTitle}</h2>
+              <p className="application-muted">{c.anonymizedText}</p>
+            </section>
+          ) : (
+            <Submission app={app} refs={refs} />
+          )}
         </div>
       </div>
     </article>
+  )
+}
+
+/** Что прислал соискатель: письмо, файлы, рекомендации и снимок профиля. */
+function Submission({ app, refs }: { app: Detail; refs: StaffReference[] }) {
+  const c = t.applications.candidate
+  return (
+    <>
+      <section className="application-section" aria-labelledby="cand-letter">
+        <h2 id="cand-letter">{c.letter}</h2>
+        <p className="application-text">{app.cover_letter}</p>
+        <p className="application-contact">
+          <span>{c.contact}: </span>
+          <a href={`mailto:${app.contact_email}`}>{app.contact_email}</a>
+        </p>
+      </section>
+
+      <section className="application-section" aria-labelledby="cand-files">
+        <h2 id="cand-files">{c.files}</h2>
+        <ul className="file-links">
+          {app.cv && (
+            <li>
+              <FileLink appId={app.id} file={app.cv} label={`${c.cv}, ${c.letterFile(app.cv.name, sizeText(app.cv.size))}`} />
+            </li>
+          )}
+          {app.files.map((f) => (
+            <li key={f.id}>
+              <FileLink appId={app.id} file={f} label={c.letterFile(f.name, sizeText(f.size))} />
+            </li>
+          ))}
+        </ul>
+        {app.files.length === 0 && <p className="application-muted">{c.noExtraFiles}</p>}
+      </section>
+
+      <section className="application-section" aria-labelledby="cand-refs">
+        <h2 id="cand-refs">{c.referencesTitle}</h2>
+        <p className="application-muted">{c.referencesText}</p>
+        {refs.length === 0 ? (
+          <p className="application-muted">{c.referencesEmpty}</p>
+        ) : (
+          <ul className="ref-list">
+            {refs.map((r) => (
+              <li key={r.id} className="ref-row ref-row-letter">
+                <div className="ref-who">
+                  <p className="ref-name">{r.name}</p>
+                  <p className="ref-sub">{[r.relation, r.email].filter(Boolean).join(' · ')}</p>
+                </div>
+                <div className="ref-state">
+                  <Tag tone={r.status === 'received' ? 'accent' : 'neutral'}>
+                    {r.status === 'pending' ? c.waiting : r.status === 'declined' ? c.declined : refStatusLabel(r.status)}
+                  </Tag>
+                  {r.answered_at && <span className="ref-when">{dateTimeText(r.answered_at)}</span>}
+                </div>
+                {r.letter && (
+                  <div className="ref-letter">
+                    {r.letter.text && <p className="application-text">{r.letter.text}</p>}
+                    {r.letter.file && (
+                      <FileLink appId={app.id} file={r.letter.file} label={c.letterFile(r.letter.file.name, sizeText(r.letter.file.size))} />
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="application-section" aria-labelledby="cand-profile">
+        <h2 id="cand-profile">{c.profileTitle}</h2>
+        <p className="application-muted">{c.profileNote}</p>
+        <ProfileView
+          nested
+          page={{
+            profile: app.profile,
+            viewer: { is_owner: false, can_see_contacts: true },
+          }}
+        />
+      </section>
+    </>
   )
 }
 

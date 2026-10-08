@@ -30,6 +30,7 @@ export const application: Detail = {
   status_changed_at: '2026-10-03T09:00:00Z',
   vacancy: { id: VACANCY_ID, title: 'Старший научный сотрудник: сверхпроводящие плёнки', status: 'published', org_name: 'Сибирский институт', org_slug: 'sibirskiy-institut', deadline: '2099-12-31' },
   applicant_name: 'Анна Смирнова',
+  anonymized: false,
   contact_email: 'anna.apply@example.ru',
   cover_letter: 'Здравствуйте!\nЗанимаюсь эпитаксией плёнок и хотела бы работать в вашей лаборатории.',
   profile: { ...profile, name: 'Анна Смирнова', visibility: undefined, contact_email: 'anna.apply@example.ru' },
@@ -124,7 +125,7 @@ export const reviewedApplication: Detail = { ...staffApplication, status: 'viewe
 
 export const candidate: Candidate = {
   id: APP_ID, status: 'sent', created_at: '2026-10-03T09:00:00Z', status_changed_at: '2026-10-03T09:00:00Z', applicant_name: 'Анна Смирнова',
-  headline: 'Научный сотрудник, лаборатория катализа', vacancy: application.vacancy, unit_name: 'Лаборатория катализа', references: { total: 3, received: 1 },
+  headline: 'Научный сотрудник, лаборатория катализа', anonymized: false, vacancy: application.vacancy, unit_name: 'Лаборатория катализа', references: { total: 3, received: 1 },
   pending_invitations: 0, proposed_invitations: 0,
 }
 

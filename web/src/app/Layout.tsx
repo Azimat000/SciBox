@@ -1,4 +1,6 @@
 import { Outlet } from 'react-router'
+import { DeletionBanner } from '../features/auth/DeletionBanner'
+import { ReauthProvider } from '../features/auth/ReauthProvider'
 import { RoleProvider } from '../features/shell/RoleProvider'
 import { SiteFooter } from '../features/shell/SiteFooter'
 import { SiteHeader } from '../features/shell/SiteHeader'
@@ -11,14 +13,17 @@ export function Layout() {
   return (
     <RoleProvider>
       <ToastProvider>
-        <a className="skip-link" href="#main">
-          {t.shell.skipToContent}
-        </a>
-        <SiteHeader />
-        <main id="main" tabIndex={-1}>
-          <Outlet />
-        </main>
-        <SiteFooter />
+        <ReauthProvider>
+          <a className="skip-link" href="#main">
+            {t.shell.skipToContent}
+          </a>
+          <SiteHeader />
+          <DeletionBanner />
+          <main id="main" tabIndex={-1}>
+            <Outlet />
+          </main>
+          <SiteFooter />
+        </ReauthProvider>
       </ToastProvider>
     </RoleProvider>
   )

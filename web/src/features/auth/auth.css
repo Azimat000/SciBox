@@ -171,3 +171,109 @@
 .policy p {
   color: var(--ink-body);
 }
+
+/* Вкладки настроек: между заголовком и пояснением, как у разделов организации */
+.account-tabs {
+  margin-top: var(--s-4);
+}
+
+.auth-page .account-tabs + .lead {
+  margin-top: var(--s-4);
+}
+
+/* «Сейчас: почта» — подпись и значение одной строкой, длинный адрес переносится */
+.account-current {
+  overflow-wrap: anywhere;
+}
+
+.account-current-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-right: var(--s-2);
+}
+
+/* Где вы вошли: строки списка под линейками, без карточек */
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+  padding-block: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.session-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.session-device {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.session-meta {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-row .btn {
+  flex: none;
+}
+
+@media (max-width: 30rem) {
+  .session-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Удаление аккаунта: последний раздел, отделён жирной линейкой, как рубрика журнала */
+.account-section.account-danger {
+  border-top: 3px solid var(--ink);
+}
+
+.account-danger .auth-section-title .mark {
+  font-weight: 700;
+}
+
+.account-orgs {
+  margin: var(--s-2) 0 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+/* Полоса «Аккаунт будет удалён»: под шапкой, во всю ширину, дата под жёлтым маркером срока */
+.deletion-banner {
+  border-bottom: 1px solid var(--line);
+  background: var(--wash);
+}
+
+.deletion-banner-inner {
+  max-width: var(--content);
+  margin-inline: auto;
+  padding: var(--s-3) var(--gutter);
+  font-size: var(--text-sm);
+}
+
+.deletion-banner-inner a {
+  font-weight: 600;
+}

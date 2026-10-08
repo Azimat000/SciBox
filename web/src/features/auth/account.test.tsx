@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { ann, apiError, reply, signedInAs, stubApi } from '../../test/api'
+import { ann, apiError, reply, securityApi, signedInAs, stubApi } from '../../test/api'
 import { field, fill, press } from '../../test/forms'
 import { renderApp } from '../../test/render'
 
@@ -107,8 +107,8 @@ describe('AccountPage', () => {
 
   describe('password', () => {
     async function open() {
-      const api = stubApi({ ...signedInAs(), 'POST /api/account/password': reply(204) })
-      renderApp('/account')
+      const api = stubApi({ ...securityApi(), 'POST /api/account/password': reply(204) })
+      renderApp('/account/security')
       await screen.findByRole('heading', { level: 2, name: 'Пароль' })
       return api
     }
@@ -142,10 +142,10 @@ describe('AccountPage', () => {
 
     it('puts "wrong current password" under the current-password field', async () => {
       stubApi({
-        ...signedInAs(),
+        ...securityApi(),
         'POST /api/account/password': apiError(422, 'validation_failed', 'x', { fields: { current_password: 'Текущий пароль указан неверно' } }),
       })
-      renderApp('/account')
+      renderApp('/account/security')
       await screen.findByRole('heading', { level: 2, name: 'Пароль' })
       await fill(/^Текущий пароль/, 'не тот пароль')
       await fill(/^Новый пароль/, 'кофе на рассвете')
@@ -157,10 +157,10 @@ describe('AccountPage', () => {
 
     it('puts the verdict on the new password under the new-password field', async () => {
       stubApi({
-        ...signedInAs(),
+        ...securityApi(),
         'POST /api/account/password': apiError(422, 'validation_failed', 'x', { fields: { new_password: 'Новый пароль совпадает со старым' } }),
       })
-      renderApp('/account')
+      renderApp('/account/security')
       await screen.findByRole('heading', { level: 2, name: 'Пароль' })
       await fill(/^Текущий пароль/, 'кофе на рассвете')
       await fill(/^Новый пароль/, 'кофе на рассвете')
@@ -170,8 +170,8 @@ describe('AccountPage', () => {
     })
 
     it('tells how long to wait after too many wrong guesses', async () => {
-      stubApi({ ...signedInAs(), 'POST /api/account/password': apiError(429, 'rate_limited', 'x', { retry_after: 840 }) })
-      renderApp('/account')
+      stubApi({ ...securityApi(), 'POST /api/account/password': apiError(429, 'rate_limited', 'x', { retry_after: 840 }) })
+      renderApp('/account/security')
       await screen.findByRole('heading', { level: 2, name: 'Пароль' })
       await fill(/^Текущий пароль/, 'кофе на рассвете')
       await fill(/^Новый пароль/, 'другой пароль 1')
@@ -180,24 +180,7 @@ describe('AccountPage', () => {
     })
   })
 
-  describe('devices and sign-out', () => {
-    it('signs out everywhere else and says so', async () => {
-      const api = stubApi({ ...signedInAs(), 'POST /api/account/sessions/revoke-others': reply(204) })
-      renderApp('/account')
-      await screen.findByRole('heading', { level: 2, name: 'Устройства' })
-      await press('Выйти на других устройствах')
-      expect(await screen.findByText('Готово: на других устройствах вы вышли из аккаунта')).toBeInTheDocument()
-      expect(api.called('POST', '/api/account/sessions/revoke-others')).toHaveLength(1)
-    })
-
-    it('says so when that failed', async () => {
-      stubApi({ ...signedInAs(), 'POST /api/account/sessions/revoke-others': reply(500) })
-      renderApp('/account')
-      await screen.findByRole('heading', { level: 2, name: 'Устройства' })
-      await press('Выйти на других устройствах')
-      expect(await screen.findByText('Не удалось выйти на других устройствах')).toBeInTheDocument()
-    })
-
+  describe('sign-out', () => {
     it('signs out of this device and goes home, not to a sign-in page asking to sign in', async () => {
       const api = stubApi({ ...signedInAs(), 'POST /api/auth/logout': reply(204) })
       const { router } = renderApp('/account')

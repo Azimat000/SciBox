@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 19 (периметр HTTP: сроки, заголовки защиты, настоящий IP, лимиты тела и частоты, боевой режим). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 20 (аккаунты: список сеансов, свежий пароль, смена почты с откатом, удаление аккаунта, письмо о новом устройстве, список частых паролей). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -49,9 +49,10 @@ SciBox/
 │       ├── cv/           отрисовка PDF по описанию документа (fpdf, шрифты в `fonts/`, лицензия OFL)
 │       ├── refdata/      справочники (специальности ВАК, регионы, должности, источники): `GET /api/reference`
 │       ├── apierr/       единый формат ответов и ошибок API (D-032), коды, DecodeJSON; `WriteInternal` (500 или 499, если запрос оборвал сам человек, D-119)
-│       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin
+│       ├── auth/         аккаунты (критичная зона): пароли argon2id, регистрация, вход, сессии, сброс пароля, письма, HTTP-обработчики, проверка Origin; срез 20: `sessions.go` (список и завершение сеансов, свежий пароль `Reauth`), `devices.go` (User-Agent, знакомые браузеры), `email_change.go` (смена почты и откат), `deletion.go` (удаление со сроком отмены, фоновое стирание), `breached.go` + `data/` (список частых паролей NCSC, README с источником)
 │       ├── mail/         отправка писем по SMTP (Mailpit) и `Memory` для тестов
 │       ├── cli/          разбор команд, запуск HTTP-сервера, мягкая остановка; `newApp` собирает все сервисы и роутер (его же проверяет `TestPerimeter`)
+│       ├── erasure/      что стирается и обезличивается при удалении аккаунта, проверка «единственный владелец» (срез 20, критичная зона)
 │       ├── config/       переменные окружения + config/product.json; боевой режим `SCIBOX_ENV=production` (`checkProduction`, критичная зона)
 │       ├── covercheck/   чтение профиля покрытия и сверка с coverage.conf
 │       ├── dbgen/        код sqlc (сгенерирован, не править руками)
@@ -159,27 +160,37 @@ SciBox/
 - Миграция `00012_journals.sql`: `journals` (id = Sourceid SCImago, title, publisher, quartile 1–4 или NULL, sjr, data_year; индекс pg_trgm по названию), `journal_issns` (issn `1234-567X` → journal_id, position — порядок в файле); индекс по `profile_items.data->>'issn'` у публикаций. Строки кладёт `scibox journals load` (D-127), источник и выпуск — строка `journals` в `reference_sources`.
 - Миграция `00014_profile_skills.sql` (D-136): `profiles.research_skills`, `profiles.general_skills` (`text[]`, до 30 строк; длину и повторы проверяет сервис).
 - Миграция `00015_rate_counters.sql` (срез 19, D-141): `rate_counters` (kind, key, window_start, hits; ключ из трёх первых), таблица UNLOGGED. Счётчики ограничения частоты публичных и тяжёлых адресов по окнам; удаляются через 2 часа после начала окна (фоновая очистка раз в час).
+- Миграция `00016_account_security.sql` (срез 20, D-142…D-146): `sessions.reauth_at` (когда в сеансе последний раз вводили пароль); `auth_tokens.new_email` и назначения `change_email`, `revert_email`; `known_devices` (user_id, device_hash, first_seen_at, last_seen_at; ключ из двух первых) — знакомые браузеры, удаляются через 400 дней без входа; `users.deletion_due_at` (когда сотрутся данные), `users.deleted_at` (стёрт, строка-«надгробие»); `profiles.visibility_before_deletion`; `applications.anonymized_at` (письмо и почта могут быть пустыми только у обезличенного отклика).
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
-Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `unsupported_media_type` (415), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`.
+Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `reauth_required` (403, нужен свежий пароль: сайт показывает окно пароля и повторяет запрос, срез 20), `email_taken` (409), `deletion_blocked` (409), `unsupported_media_type` (415), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`.
 
-Периметр (срез 19, `httpguard`): у всех ответов заголовки защиты (CSP: у API `default-src 'none'`, у сайта только свои скрипты, стили, шрифты и картинки; `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP и CORP `same-origin`; HSTS только при https). Ограничение частоты (`rate_limited`, 429): поиск, каталоги, главная, страницы вакансий, людей, организаций и подразделений, справочник журналов, поиск по DOI — гость 300, вошедший 120 запросов в минуту (`public_read`); резюме PDF — 20 в минуту (`pdf_build`); ссылки из писем (рекомендатель, приглашение в организацию) — 30 в минуту (`link_page`). Таблица адресов: `httpapi.PerimeterRoutes`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
+Периметр (срез 19, `httpguard`): у всех ответов заголовки защиты (CSP: у API `default-src 'none'`, у сайта только свои скрипты, стили, шрифты и картинки; `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP и CORP `same-origin`; HSTS только при https). Ограничение частоты (`rate_limited`, 429): поиск, каталоги, главная, страницы вакансий, людей, организаций и подразделений, справочник журналов, поиск по DOI — гость 300, вошедший 120 запросов в минуту (`public_read`); резюме PDF — 20 в минуту (`pdf_build`); ссылки из писем (рекомендатель, приглашение в организацию, подтверждение и откат смены почты) — 30 в минуту (`link_page`). Таблица адресов: `httpapi.PerimeterRoutes`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
 
 | Метод и адрес | Ответ |
 |---|---|
-| `GET /api/auth/me` | 200 `{"user": null | {id, email, name, email_confirmed, created_at}}` |
+| `GET /api/auth/me` | 200 `{"user": null | {id, email, name, email_confirmed, created_at, deletion_due_at}}` (`deletion_due_at` — когда аккаунт будет удалён, иначе null) |
 | `POST /api/auth/register` | 202 `{email}`; 422 с полями; пишет письмо в фоне |
 | `POST /api/auth/confirm-email` `{token}` | 200 `{user}` + cookie (вход) |
 | `POST /api/auth/resend-confirmation` `{email}` | всегда 202 |
-| `POST /api/auth/login` `{email,password}` | 200 `{user}` + cookie; 401/403/429 |
+| `POST /api/auth/login` `{email,password}` | 200 `{user}` + cookie сеанса и cookie устройства `scibox_device`; прежний сеанс этого браузера завершается; из незнакомого браузера письмо «вход с нового устройства»; 401/403/429 |
 | `POST /api/auth/logout` | 204, cookie стирается |
 | `POST /api/auth/forgot-password` `{email}` | всегда 202 |
 | `POST /api/auth/reset-password` `{token,password}` | 204, все сессии завершаются |
 | `PATCH /api/account` `{name}` | 200 `{user}` (нужен вход) |
 | `POST /api/account/password` `{current_password,new_password}` | 204; другие сессии завершаются |
 | `POST /api/account/sessions/revoke-others` | 204 |
+| `POST /api/account/reauth` `{password}` | 204: 10 минут сеансу разрешены опасные действия; 422 `fields.password`; 429 |
+| `GET /api/account/sessions` | 200 `{sessions:[{id, browser, os, mobile, created_at, last_seen_at, current}]}` (коды браузера и системы, до 50, последние сверху) |
+| `DELETE /api/account/sessions/{id}` | 204 (свой сеанс; текущий — как выход, cookie стирается); 404 чужой или нет такого |
+| `POST /api/account/email` `{email}` | 202 (свежий пароль); ссылка на новый адрес или «почта уже есть»; 422 `fields.email` |
+| `POST /api/auth/confirm-email-change` `{token}` | 200 `{user}` (без входа); 400 `invalid_token`; 409 `email_taken` |
+| `POST /api/auth/revert-email-change` `{token}` | 204: прежняя почта, все сеансы завершены, удаление отменено, ссылка для пароля на почту; 400; 409 `email_taken` |
+| `GET /api/account/deletion` | 200 `{due_at, grace_days, blocking:[{slug,name}], orphaned:[{slug,name}]}` |
+| `POST /api/account/deletion` | 200 `{due_at}` (свежий пароль): профиль скрыт, все сеансы завершены, cookie стирается; 409 `deletion_blocked` |
+| `POST /api/account/deletion/cancel` | 204 (нет назначенного удаления — тоже 204) |
 | `GET /api/organizations?q=&kind=&limit=&offset=` | публичный каталог: `{items:[{id,slug,name,kind,city,summary,unit_count}], total}`; поиск по названию и городу без учёта регистра |
 | `GET /api/organizations/{slug}` | публично: `{organization, units:[…], viewer}`; `viewer` (роль и права) только у вошедшего; номера аккаунтов руководителей только сотрудникам |
 | `GET /api/organizations/{slug}/units/{id}` | публично: страница подразделения |
@@ -262,6 +273,7 @@ SciBox/
 | `/status` | Статус сервера и базы (проверяем / работает / база недоступна / сервер не отвечает), кнопка «Проверить ещё раз» (бывшая стартовая) |
 | `/styleguide` | Служебно: все компоненты со всеми состояниями (в меню нет) |
 | `/login` (`?next=` — куда вернуть после входа), `/register`, `/forgot-password`, `/reset-password?token=`, `/confirm-email?token=`, `/account`, `/privacy` | Настоящие страницы аккаунтов (срез 3); `/account` без входа ведёт на `/login` |
+| `/account/security`, `/confirm-email-change?token=`, `/revert-email-change?token=` | Срез 20: вкладка «Безопасность» (пароль, почта для входа, «Где вы вошли», удаление аккаунта); подтверждение новой почты (при открытии); откат почты (по кнопке). Окно «Подтвердите, что это вы» одно на сайт (`ReauthProvider` в `Layout`, хук `useReauth`), полоса `DeletionBanner` под шапкой, пока назначено удаление |
 | `/organizations` (поиск и тип в адресе, страницы по 20), `/organizations/new`, `/organizations/:slug`, `/organizations/:slug/units/:unitId` | Каталог, создание, публичные страницы организации и подразделения (срез 4) |
 | `/my-organization` | Мои организации и приглашения; без входа ведёт на `/login?next=` |
 | `/my-organization/:slug` (+ `/units`, `/units/new`, `/units/:unitId`, `/members`) | Управление: данные, подразделения, сотрудники и приглашения (вкладка «Сотрудники» только владельцу) |
@@ -300,4 +312,4 @@ SciBox/
 - Подробное описание визуальной системы: `DESIGN.md` (ведёт impeccable).
 
 ## Фоновая работа в процессе сервера
-`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), очистку аккаунтов и организаций (раз в час), очистку счётчиков частоты `rate_counters` (раз в час) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).
+`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), очистку аккаунтов и организаций (раз в час; уборка аккаунтов заодно стирает аккаунты с прошедшим сроком отмены, по одному в транзакции, `SKIP LOCKED`, срез 20), очистку счётчиков частоты `rate_counters` (раз в час) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).

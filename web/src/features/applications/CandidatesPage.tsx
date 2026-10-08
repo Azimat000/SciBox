@@ -153,7 +153,7 @@ function Row({ cand, showVacancy }: { cand: Candidate; showVacancy: boolean }) {
       <h2 className="cand-name" data-long={longName(cand.applicant_name)}>
         <Link to={`/candidates/${cand.id}`}>{cand.applicant_name}</Link>
       </h2>
-      <p className="cand-headline">{cand.headline || c.noHeadline}</p>
+      <p className="cand-headline">{cand.anonymized ? c.anonymizedHeadline : cand.headline || c.noHeadline}</p>
       {showVacancy && (
         <p className="cand-vacancy">
           {cand.vacancy.title}

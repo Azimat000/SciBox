@@ -92,6 +92,8 @@ export type Detail = {
   status_changed_at: string
   vacancy: VacancyRef
   applicant_name: string
+  /** Соискатель удалил аккаунт: письмо, контакты, профиль и файлы стёрты (D-142). */
+  anonymized: boolean
   contact_email: string
   cover_letter: string
   profile: Profile
@@ -111,6 +113,7 @@ export type Candidate = {
   status_changed_at: string
   applicant_name: string
   headline: string
+  anonymized: boolean
   vacancy: VacancyRef
   unit_name: string
   references: { total: number; received: number }

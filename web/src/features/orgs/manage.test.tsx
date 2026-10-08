@@ -530,6 +530,53 @@ describe('people and invitations', () => {
       expect(api.called('PATCH', `/api/organizations/${SLUG}/members/${members[1].user_id}`)[0].body).toEqual({ role: 'owner' })
     })
 
+    it('asks for the password before making someone an owner, then repeats the change', async () => {
+      let asked = false
+      const path = `/api/organizations/${SLUG}/members/${members[1].user_id}`
+      const api = stubApi(
+        asOwner({
+          [`PATCH ${path}`]: () => {
+            if (asked) return reply(204)
+            asked = true
+            return apiError(403, 'reauth_required', 'Для этого действия введите пароль ещё раз')
+          },
+          'POST /api/account/reauth': reply(204),
+        }),
+      )
+      renderApp(`${base}/members`)
+      await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Роль: Борис Кадров' }), 'owner')
+      const dialog = await screen.findByRole('dialog', { name: 'Подтвердите, что это вы' })
+      await userEvent.type(within(dialog).getByLabelText(/^Пароль/), 'кофе на рассвете')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Подтвердить' }))
+      expect(await screen.findByText('Роль изменена')).toBeInTheDocument()
+      expect(api.called('PATCH', path)).toHaveLength(2)
+      expect(api.called('POST', '/api/account/reauth')[0].body).toEqual({ password: 'кофе на рассвете' })
+    })
+
+    it('asks for the password before inviting an owner', async () => {
+      let asked = false
+      const api = stubApi(
+        asOwner({
+          [`POST /api/organizations/${SLUG}/invitations`]: () => {
+            if (asked) return reply(201, { invitation: { ...pending, email: 'boss@example.ru', role: 'owner' } })
+            asked = true
+            return apiError(403, 'reauth_required', 'Для этого действия введите пароль ещё раз')
+          },
+          'POST /api/account/reauth': reply(204),
+        }),
+      )
+      renderApp(`${base}/members`)
+      await screen.findByRole('heading', { level: 2, name: 'Пригласить сотрудника' })
+      await fill(/^Почта сотрудника/, 'boss@example.ru')
+      await userEvent.selectOptions(field(/^Роль ·/), 'owner')
+      await press('Отправить приглашение')
+      const dialog = await screen.findByRole('dialog', { name: 'Подтвердите, что это вы' })
+      await userEvent.type(within(dialog).getByLabelText(/^Пароль/), 'кофе на рассвете')
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Подтвердить' }))
+      expect(await screen.findByText('Приглашение отправлено на boss@example.ru')).toBeInTheDocument()
+      expect(api.called('POST', `/api/organizations/${SLUG}/invitations`)).toHaveLength(2)
+    })
+
     it('explains when a role cannot be changed', async () => {
       stubApi(
         asOwner({

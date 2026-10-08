@@ -1,25 +1,46 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRef, useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router'
+import { useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { Link, Navigate } from 'react-router'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
-import { PasswordField } from '../../ui/PasswordField'
 import { Skeleton } from '../../ui/Skeleton'
 import { Tag } from '../../ui/Tag'
 import { TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
 import { MailSettings } from '../matching/MailSettings'
-import { changePassword, revokeOtherSessions, setMe, updateName, useMe, type User } from './api'
+import { setMe, updateName, useMe, type User } from './api'
 import { AuthPage } from './AuthPage'
 import { describeError, fieldErrorsOf } from './errors'
 import { SocialSoon } from './SocialSoon'
 import { useForm } from './useForm'
 import { useSignOut } from './useSignOut'
-import { checkName, checkNewPassword, checkPasswordPresent, compact } from './validation'
+import { checkName, compact } from './validation'
 
-export function AccountPage() {
+export type AccountTab = 'account' | 'security'
+
+const tabPaths: Record<AccountTab, string> = { account: '/account', security: '/account/security' }
+
+/** Две вкладки настроек: «Аккаунт» (имя, письма) и «Безопасность» (пароль, почта, устройства, удаление). */
+export function AccountTabs({ current }: { current: AccountTab }) {
+  return (
+    <nav className="manage-tabs account-tabs" aria-label={t.auth.account.tabs.label}>
+      {(Object.keys(tabPaths) as AccountTab[]).map((tab) => (
+        <Link key={tab} className="manage-tab" to={tabPaths[tab]} aria-current={current === tab ? 'page' : undefined}>
+          {t.auth.account.tabs[tab]}
+        </Link>
+      ))}
+    </nav>
+  )
+}
+
+type FrameProps = { tab: AccountTab; lead: string; children: (user: User) => ReactNode }
+
+/**
+ * Рамка обеих вкладок: ждёт, кто вошёл, ведёт гостя на вход и обратно, показывает вкладки.
+ */
+export function AccountFrame({ tab, lead, children }: FrameProps) {
   const { user, isLoading, isError, refetch } = useMe()
   // Был ли здесь вошедший человек. Если был, а теперь его нет (вышел сам или сессия кончилась), ведём на главную:
   // просьба «войдите, чтобы открыть эту страницу» после намеренного выхода только сбивает с толку.
@@ -28,7 +49,7 @@ export function AccountPage() {
 
   if (isLoading) {
     return (
-      <AuthPage title={t.auth.account.title} wide>
+      <AuthPage title={t.auth.account.title} wide tabs={<AccountTabs current={tab} />}>
         <div role="status" aria-busy="true" aria-label={t.common.loading}>
           <Skeleton width="70%" height="1.25rem" />
         </div>
@@ -49,20 +70,30 @@ export function AccountPage() {
     )
   }
   if (!user) {
-    return wasSignedIn ? <Navigate to="/" replace /> : <Navigate to="/login?next=/account" state={{ notice: 'need-login' }} replace />
+    return wasSignedIn ? <Navigate to="/" replace /> : <Navigate to={`/login?next=${tabPaths[tab]}`} state={{ notice: 'need-login' }} replace />
   }
 
-  return <Account user={user} />
+  return (
+    <AuthPage title={t.auth.account.title} lead={lead} wide tabs={<AccountTabs current={tab} />}>
+      {children(user)}
+    </AuthPage>
+  )
+}
+
+export function AccountPage() {
+  return (
+    <AccountFrame tab="account" lead={t.auth.account.lead}>
+      {(user) => <Account user={user} />}
+    </AccountFrame>
+  )
 }
 
 function Account({ user }: { user: User }) {
   const signOut = useSignOut()
   return (
-    <AuthPage title={t.auth.account.title} lead={t.auth.account.lead} wide>
+    <>
       <ProfileSection user={user} />
       <MailSettings />
-      <PasswordSection />
-      <DevicesSection />
       <section className="account-section">
         <SocialSoon title={t.auth.account.linked} note={t.auth.account.linkedText} />
       </section>
@@ -71,7 +102,7 @@ function Account({ user }: { user: User }) {
           {t.auth.account.signOut}
         </Button>
       </section>
-    </AuthPage>
+    </>
   )
 }
 
@@ -124,83 +155,3 @@ function ProfileSection({ user }: { user: User }) {
   )
 }
 
-function PasswordSection() {
-  const toast = useToast()
-  const formRef = useRef<HTMLFormElement>(null)
-  const change = useMutation({
-    mutationFn: (v: { current: string; next: string }) => changePassword(v.current, v.next),
-    onSuccess: () => {
-      reset()
-      toast.show({ kind: 'success', title: t.auth.account.passwordChanged })
-    },
-  })
-  const { values, set, errors, validate } = useForm({ current: '', next: '' }, change.error, formRef)
-
-  // Сервер называет поля current_password и new_password; в форме они current и next.
-  const fieldErrors = { current: errors.current ?? errors.current_password, next: errors.next ?? errors.new_password }
-  const reset = () => {
-    set('current', '')
-    set('next', '')
-  }
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    const found = compact({ current: checkPasswordPresent(values.current), next: checkNewPassword(values.next) })
-    if (validate(found)) change.mutate({ current: values.current, next: values.next })
-  }
-  const formError = change.error && Object.keys(fieldErrorsOf(change.error)).length === 0 ? describeError(change.error) : undefined
-
-  return (
-    <section className="account-section" aria-labelledby="account-password">
-      <h2 id="account-password" className="auth-section-title">
-        {t.auth.account.password}
-      </h2>
-      <form className="auth-form" onSubmit={onSubmit} ref={formRef} noValidate>
-        {formError && <Alert kind="error">{formError}</Alert>}
-        <PasswordField
-          label={t.auth.fields.currentPassword}
-          name="current-password"
-          autoComplete="current-password"
-          value={values.current}
-          onChange={(e) => set('current', e.target.value)}
-          error={fieldErrors.current}
-          required
-        />
-        <PasswordField
-          label={t.auth.fields.newPassword}
-          hint={t.auth.passwordHint}
-          name="new-password"
-          autoComplete="new-password"
-          value={values.next}
-          onChange={(e) => set('next', e.target.value)}
-          error={fieldErrors.next}
-          required
-        />
-        <p className="auth-note">{t.auth.account.passwordNote}</p>
-        <Button type="submit" loading={change.isPending}>
-          {t.auth.account.changePassword}
-        </Button>
-      </form>
-    </section>
-  )
-}
-
-function DevicesSection() {
-  const toast = useToast()
-  const revoke = useMutation({
-    mutationFn: revokeOtherSessions,
-    onSuccess: () => toast.show({ kind: 'success', title: t.auth.account.revoked }),
-    onError: (err) => toast.show({ kind: 'error', title: t.auth.account.revokeFailed, text: describeError(err) }),
-  })
-  return (
-    <section className="account-section" aria-labelledby="account-devices">
-      <h2 id="account-devices" className="auth-section-title">
-        {t.auth.account.devices}
-      </h2>
-      <p className="auth-note">{t.auth.account.devicesText}</p>
-      <Button variant="secondary" loading={revoke.isPending} onClick={() => revoke.mutate()}>
-        {t.auth.account.revoke}
-      </Button>
-    </section>
-  )
-}

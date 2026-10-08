@@ -639,3 +639,42 @@ describe('other pages', () => {
     expect(within(row).queryByRole('link', { name: /отклик/ })).not.toBeInTheDocument()
   })
 })
+
+// ---------------------------------------------------------------- соискатель удалил аккаунт (срез 20, D-142)
+
+describe('anonymized application', () => {
+  const erased: Detail = {
+    ...staffApplication,
+    status: 'withdrawn',
+    applicant_name: 'Аккаунт удалён',
+    anonymized: true,
+    contact_email: '',
+    cover_letter: '',
+    cv: null,
+    files: [],
+    references: [],
+    viewer: { ...staffApplication.viewer, decisions: [], can_invite: false },
+  }
+
+  it('shows the card without the letter, files and profile, and says why', async () => {
+    stubApi(card(erased))
+    renderApp(`/candidates/${APP_ID}`)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Аккаунт удалён' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Соискатель удалил аккаунт' })).toBeInTheDocument()
+    expect(screen.getByText(/стёрты письмо, контакты, профиль, файлы и рекомендации/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2, name: 'Сопроводительное письмо' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /mailto/ })).not.toBeInTheDocument()
+  })
+
+  it('marks the row in the list', async () => {
+    stubApi(
+      signedIn({
+        'GET /api/my/candidates?*': reply(200, candidateList([{ ...candidate, applicant_name: 'Аккаунт удалён', headline: '', anonymized: true, status: 'withdrawn' }])),
+        'GET /api/my/candidate-vacancies': reply(200, { items: [] }),
+      }),
+    )
+    renderApp('/candidates')
+    expect(await screen.findByText('Соискатель удалил аккаунт')).toBeInTheDocument()
+    expect(screen.queryByText('Должность не указана')).not.toBeInTheDocument()
+  })
+})
