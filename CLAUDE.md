@@ -33,7 +33,7 @@ npx skills update -p
 
 # SciBox: сервер на Go и безопасность
 
-Скиллы для сервера тоже в `.claude/skills/` (выбор и проверка: D-137). Источники: `samber/cc-skills-golang` (19 скиллов `golang-*`), `trailofbits/skills` (`sharp-edges`, `differential-review`), `JetBrains/go-modern-guidelines` (`use-modern-go`).
+Скиллы для сервера тоже в `.claude/skills/` (выбор и проверка: D-137, D-138). Источники: `samber/cc-skills-golang` (21 скилл `golang-*`), `trailofbits/skills` (`sharp-edges`, `differential-review`, `audit-context-building`, `semgrep`, `sarif-parsing`, `property-based-testing`), `JetBrains/go-modern-guidelines` (`use-modern-go`). Какие скиллы нужны в каком срезе, записано в строке «Скиллы:» каждого среза в `docs/ROADMAP.md`.
 
 ## Какой скилл когда
 
@@ -53,6 +53,11 @@ npx skills update -p
 | Добавляем или обновляем библиотеку | `golang-dependency-management` |
 | Ошибка, паника, гонка, зависание | `golang-troubleshooting` |
 | Линтер, `//nolint` | `golang-lint` |
+| Замеры скорости, бенчмарки, профили | `golang-benchmark`, `golang-performance` |
+| GitHub Actions, Dependabot | `golang-continuous-integration` |
+| Разобраться в коде перед поиском уязвимостей | `audit-context-building` |
+| Статический анализ (нужен `semgrep`, `--metrics=off`), разбор отчётов SARIF | `semgrep`, `sarif-parsing` |
+| Тесты, которые сами перебирают входные данные (Go: библиотека `rapid`) | `property-based-testing` |
 
 Встроенная команда `/security-review` (от Anthropic) подходит для быстрой общей проверки ветки.
 
@@ -77,11 +82,14 @@ npx skills update -p
 | `docs/ARCHITECTURE.md` | Папки, таблицы, API, страницы |
 | `docs/DOMAIN.md` | Термины предметной области и их имена в коде |
 | `docs/TESTING.md` | Пороги покрытия тестами, критичные зоны, исключения |
+| `docs/SECURITY.md` | Модель угроз, инварианты защиты с тестами, реестр угроз T-NN по срезам |
+| `docs/SCALING.md` | Цели нагрузки и объёма в цифрах, правила масштабируемости, узкие места, замеры |
 | `docs/slices/NN-*.md` | План и отчёт каждого среза |
 
 Правила:
 - Решения пользователя из `DECISIONS.md` не пересматривать без его просьбы. Новое решение = новая запись `D-NNN`.
 - Если код и документы расходятся, прав код; документы чинятся в том же коммите.
 - Покрытие тестами ≥ 90%, в критичных зонах ≥ 97% (`docs/TESTING.md`). Тесты пишутся вместе с кодом; `make test` проверяет пороги и должен быть зелёным.
-- В конце каждой сессии, даже незавершённой: обновить память и сделать git-коммит `slice NN: ...`.
+- Порядок срезов: строка `ОЧЕРЕДЬ:` в ROADMAP (сейчас серверная очередь 18–29, потом 15–17).
+- Внутри среза промежуточные коммиты `slice NN: <шаг>` после каждого зелёного шага; в конце сессии, даже незавершённой: обновить память и сделать git-коммит `slice NN: ...`; готовый срез получает метку `slice-NN`. В GitHub отправлять только с разрешения пользователя.
 - Пользователь не программист: объяснять по-русски и простыми словами, команды давать отдельными блоками `bash`.

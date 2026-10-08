@@ -14,6 +14,14 @@ echo
 
 if [ -f "$roadmap" ]; then
   current=$(sed -n 's/^ТЕКУЩИЙ: *//p' "$roadmap" | head -1)
+  queue=$(sed -n 's/^ОЧЕРЕДЬ: *//p' "$roadmap" | head -1)
+  [ -n "$queue" ] && echo "Очередь срезов: $queue"
+  security="$root/docs/SECURITY.md"
+  if [ -f "$security" ]; then
+    open_threats=$(grep -c '^| T-[0-9]* |.*| открыта |$' "$security")
+    echo "Сервер: открытых угроз в docs/SECURITY.md: $open_threats. Срезы 18–29 читают docs/SECURITY.md и docs/SCALING.md."
+  fi
+  echo
   if [ -n "$current" ]; then
     echo "--- Текущий срез по ROADMAP: $current ---"
     awk -v n="$current" '
