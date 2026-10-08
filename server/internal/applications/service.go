@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
@@ -363,7 +364,7 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 	}
 	// Организация, открывшая карточку впервые, отмечает отклик просмотренным (и соискатель об этом узнаёт).
 	if reader == files.Staff && a.Status == StatusSent {
-		if err := s.markViewed(ctx, &a); err != nil {
+		if err := s.markViewed(ctx, user, &a); err != nil {
 			return Detail{}, err
 		}
 	}
@@ -430,6 +431,13 @@ func (s *Service) File(ctx context.Context, user auth.User, appID, fileID uuid.U
 	}
 	if kind, ok := files.Parse(f.Kind); !ok || !kind.VisibleTo(reader) {
 		return "", nil, ErrNotFound
+	}
+	// Выдача файла сотруднику организации записывается до выдачи: нет записи — нет файла. Свои файлы соискатель
+	// скачивает без записи.
+	if reader == files.Staff {
+		if err := record(ctx, s.q, audit.ApplicationFileDownloaded, a, user, map[string]string{"kind": f.Kind}); err != nil {
+			return "", nil, err
+		}
 	}
 	return f.Name, f.Data, nil
 }

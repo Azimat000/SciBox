@@ -46,6 +46,8 @@ const (
 	ManageVacancies
 	// ViewApplications — видеть отклики на вакансии. Привязано к подразделению.
 	ViewApplications
+	// ViewAudit — читать журнал действий организации (срез 21): в нём действия и имена всех сотрудников.
+	ViewAudit
 )
 
 // Actor — человек в организации: роль и подразделения, которыми он руководит.
@@ -64,7 +66,7 @@ var NoUnit = uuid.Nil
 // организацию ведут владелец и кадровик.
 func (a Actor) Can(p Permission, unit uuid.UUID) bool {
 	switch p {
-	case EditOrganization, ManageMembers, ManageUnits:
+	case EditOrganization, ManageMembers, ManageUnits, ViewAudit:
 		return a.Role == RoleOwner
 	case EditUnit:
 		return a.Role == RoleOwner || a.heads(unit)

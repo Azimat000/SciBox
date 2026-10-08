@@ -65,6 +65,16 @@ func TestCan(t *testing.T) {
 		{"unknown role", unknownRole, ManageMembers, NoUnit, false},
 		{"unknown role", unknownRole, ManageUnits, ownUnit, false},
 
+		// Журнал действий: только владелец (в нём действия и имена всех сотрудников).
+		{"owner", owner, ViewAudit, NoUnit, true},
+		{"owner", owner, ViewAudit, ownUnit, true},
+		{"hr", hr, ViewAudit, NoUnit, false},
+		{"hr with units", hrWithUnits, ViewAudit, ownUnit, false},
+		{"head", head, ViewAudit, ownUnit, false},
+		{"head of nothing", headOfNothing, ViewAudit, NoUnit, false},
+		{"stranger", stranger, ViewAudit, NoUnit, false},
+		{"unknown role", unknownRole, ViewAudit, ownUnit, false},
+
 		// Изменить подразделение: владелец везде, руководитель только своё, кадровик никак.
 		{"owner", owner, EditUnit, ownUnit, true},
 		{"owner", owner, EditUnit, otherUnit, true},

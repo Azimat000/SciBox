@@ -259,8 +259,14 @@ func TestAcceptByIDAndMyInvitations(t *testing.T) {
 		t.Errorf("someone else's invitation is listed: %+v", other)
 	}
 
-	if _, err := w.svc.AcceptInvitationByID(bg, stranger.User, inv.ID); !errors.Is(err, ErrWrongEmail) {
-		t.Errorf("a stranger accepting by id: %v", err)
+	// Чужому приглашение по номеру «не существует»: ответ тот же, что на выдуманный номер (T-16), и оно не сгорает.
+	_, strangerErr := w.svc.AcceptInvitationByID(bg, stranger.User, inv.ID)
+	_, unknownErr := w.svc.AcceptInvitationByID(bg, stranger.User, uuid.New())
+	if !errors.Is(strangerErr, ErrInvalidInvitation) || !errors.Is(unknownErr, ErrInvalidInvitation) || strangerErr.Error() != unknownErr.Error() {
+		t.Errorf("a stranger accepting by id: %v, a made-up id: %v", strangerErr, unknownErr)
+	}
+	if mine, _ := w.svc.MyInvitations(bg, guest.User); len(mine) != 1 {
+		t.Errorf("a stranger's attempt burned the invitation: %+v", mine)
 	}
 	if _, err := w.svc.AcceptInvitationByID(bg, guest.User, uuid.New()); !errors.Is(err, ErrInvalidInvitation) {
 		t.Errorf("unknown id: %v", err)

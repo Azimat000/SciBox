@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/notifications"
@@ -214,7 +215,10 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 			return fmt.Errorf("offers: load offer: %w", err)
 		}
 		out = offerFromRow(row, true)
-		return nil
+		return audit.Record(ctx, q, audit.Event{
+			Action: audit.OfferSent, OrgID: v.OrgID, Actor: user.ID, Subject: p.UserID,
+			TargetKind: "offer", TargetID: id, TargetLabel: v.Title,
+		})
 	})
 	return out, err
 }
@@ -251,6 +255,12 @@ func (s *Service) Cancel(ctx context.Context, user auth.User, id uuid.UUID) erro
 		}
 		if n == 0 {
 			return ErrBadState
+		}
+		if err := audit.Record(ctx, q, audit.Event{
+			Action: audit.OfferCanceled, OrgID: o.OrgID, Actor: user.ID, Subject: o.UserID,
+			TargetKind: "offer", TargetID: id, TargetLabel: o.VacancyTitle,
+		}); err != nil {
+			return err
 		}
 		title, body := cancelledNotice(o.VacancyTitle, o.OrgName)
 		return s.notes.Emit(ctx, q, notifications.Notice{UserID: o.UserID, Kind: "offer_cancelled", Title: title, Body: body, Link: "/offers/" + id.String()})

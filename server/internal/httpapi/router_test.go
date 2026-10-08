@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"scibox/server/internal/audit"
 	"scibox/server/internal/health"
 )
 
@@ -142,5 +143,17 @@ func TestWriteJSONEncodeFailureIsLogged(t *testing.T) {
 	WriteJSON(failingWriter{httptest.NewRecorder()}, http.StatusOK, map[string]string{"a": "b"})
 	if !strings.Contains(logs.String(), "broken pipe") {
 		t.Fatalf("encode error not logged: %q", logs.String())
+	}
+}
+
+// Журнал действий записывает адрес человека, а сервисы про HTTP не знают: адрес запроса лежит в контексте.
+func TestRecordSourcePutsTheClientAddressInTheContext(t *testing.T) {
+	var got string
+	h := recordSource(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { got = audit.SourceIP(r.Context()) }))
+	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	req.RemoteAddr = "198.51.100.8:4321"
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if got != "198.51.100.8" {
+		t.Fatalf("address in the context = %q", got)
 	}
 }

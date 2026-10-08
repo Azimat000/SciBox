@@ -391,21 +391,21 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 }
 
 func TestMaskEmail(t *testing.T) {
-	tests := map[string]string{
-		"anna.petrova@msu.ru":    "a***@msu.ru",
-		"  Anna@MSU.ru ":         "A***@msu.ru",
-		"Яна@почта.рф":           "Я***@почта.рф",
-		"a@b.c":                  "a***@b.c",
-		"no-at-sign":             "***",
-		"@msu.ru":                "***",
-		"anna@":                  "***",
-		"":                       "***",
-		"two@at@signs.ru":        "t***@at@signs.ru",
-		"long.address@Example.R": "l***@example.r",
+	tests := []struct{ in, want string }{
+		{"anna.petrova@msu.ru", "a***@msu.ru"},
+		{"  Anna@MSU.ru ", "A***@msu.ru"},
+		{"Яна@почта.рф", "Я***@почта.рф"},
+		{"a@b.c", "a***@b.c"},
+		{"no-at-sign", "***"},
+		{"@msu.ru", "***"},
+		{"anna@", "***"},
+		{"", "***"},
+		{"two@at@signs.ru", "t***@at@signs.ru"},
+		{"long.address@Example.R", "l***@example.r"},
 	}
-	for in, want := range tests {
-		if got := audit.MaskEmail(in); got != want {
-			t.Errorf("MaskEmail(%q) = %q, want %q", in, got, want)
+	for _, tc := range tests {
+		if got := audit.MaskEmail(tc.in); got != tc.want {
+			t.Errorf("MaskEmail(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

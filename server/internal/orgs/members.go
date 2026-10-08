@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 )
@@ -64,6 +65,16 @@ func (s *Service) Members(ctx context.Context, user auth.User, slug string) (Mem
 	return out, nil
 }
 
+// Audit показывает журнал действий организации (владелец): в нём действия и имена всех сотрудников.
+// before — номер записи, раньше которой читать (0 — с самых новых).
+func (s *Service) Audit(ctx context.Context, user auth.User, slug string, before int64, limit int) (audit.Page, error) {
+	org, _, err := s.require(ctx, s.q, slug, user, access.ViewAudit, access.NoUnit)
+	if err != nil {
+		return audit.Page{}, err
+	}
+	return audit.List(ctx, s.q, org.ID, before, limit)
+}
+
 // lockedOwners блокирует владельцев организации и возвращает их число: два одновременных запроса не смогут оба
 // убрать «последнего» владельца.
 func lockedOwners(ctx context.Context, q *dbgen.Queries, orgID uuid.UUID) (int, error) {
@@ -115,7 +126,13 @@ func (s *Service) ChangeRole(ctx context.Context, p auth.Principal, slug string,
 		if _, err := q.SetMemberRole(ctx, dbgen.SetMemberRoleParams{OrgID: org.ID, UserID: target, Role: string(role)}); err != nil {
 			return fmt.Errorf("orgs: set role: %w", err)
 		}
-		return nil
+		if m.Role == string(role) {
+			return nil // роль та же: менять было нечего, в журнале этого нет
+		}
+		return audit.Record(ctx, q, audit.Event{
+			Action: audit.MemberRoleChanged, OrgID: org.ID, Actor: user.ID, Subject: target,
+			Details: map[string]string{"from": m.Role, "to": string(role)},
+		})
 	})
 }
 
@@ -152,6 +169,12 @@ func (s *Service) RemoveMember(ctx context.Context, user auth.User, slug string,
 		if err := q.ClearHeadOfUser(ctx, dbgen.ClearHeadOfUserParams{OrgID: org.ID, HeadUserID: &target, UpdatedAt: s.now()}); err != nil {
 			return fmt.Errorf("orgs: clear unit head: %w", err)
 		}
-		return nil
+		action := audit.MemberRemoved
+		if leaving {
+			action = audit.MemberLeft
+		}
+		return audit.Record(ctx, q, audit.Event{
+			Action: action, OrgID: org.ID, Actor: user.ID, Subject: target, Details: map[string]string{"role": m.Role},
+		})
 	})
 }

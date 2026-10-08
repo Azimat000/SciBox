@@ -58,6 +58,7 @@ func (h *Handler) Mount(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(h.requireUser)
 				r.Get("/members", h.members)
+				r.Get("/audit", h.audit)
 				r.Patch("/members/{userID}", h.changeRole)
 				r.Delete("/members/{userID}", h.removeMember)
 				r.Post("/invitations", h.invite)
@@ -324,6 +325,17 @@ func (h *Handler) setHead(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) members(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.Members(r.Context(), actor(r), chi.URLParam(r, "slug"))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, res)
+}
+
+// audit отдаёт журнал действий организации владельцу: GET …/audit?before=&limit=.
+func (h *Handler) audit(w http.ResponseWriter, r *http.Request) {
+	before, _ := strconv.ParseInt(r.URL.Query().Get("before"), 10, 64)
+	res, err := h.svc.Audit(r.Context(), actor(r), chi.URLParam(r, "slug"), before, intParam(r, "limit"))
 	if err != nil {
 		h.fail(w, r, err)
 		return

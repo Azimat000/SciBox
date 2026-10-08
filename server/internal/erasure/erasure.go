@@ -71,6 +71,11 @@ func Check(ctx context.Context, q *dbgen.Queries, userID uuid.UUID) (Plan, error
 // «кто создал вакансию, пригласил, принял решение») и отклики без письма, контактов, профиля и файлов.
 // Если человек единственный владелец организации с другими сотрудниками, ничего не меняется: *BlockedError.
 func Erase(ctx context.Context, q *dbgen.Queries, user dbgen.User, now time.Time) error {
+	// Организации человека блокируются до проверки: приём приглашения идёт по той же строке, поэтому сотрудник не успеет
+	// войти между проверкой «других сотрудников нет» и стиранием членства (T-34).
+	if _, err := q.LockOrganizationsOwnedBy(ctx, user.ID); err != nil {
+		return fmt.Errorf("erasure: lock organizations: %w", err)
+	}
 	plan, err := Check(ctx, q, user.ID)
 	if err != nil {
 		return err
@@ -110,6 +115,8 @@ func Erase(ctx context.Context, q *dbgen.Queries, user dbgen.User, now time.Time
 		{"auth tokens", func() error { return q.EraseAuthTokens(ctx, id) }},
 		{"known devices", func() error { return q.EraseKnownDevices(ctx, id) }},
 		{"outbox", func() error { return q.EraseOutboxTo(ctx, user.Email) }},
+		// Записи журнала остаются (это история организации), адрес человека из них стирается.
+		{"audit addresses", func() error { _, err := q.ScrubAuditIP(ctx, &id); return err }},
 		{"rate events", func() error {
 			return q.EraseRateEvents(ctx, dbgen.EraseRateEventsParams{Email: user.Email, UserKey: id.String()})
 		}},

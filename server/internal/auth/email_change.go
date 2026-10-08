@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"scibox/server/internal/audit"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/mail"
 )
@@ -58,7 +59,8 @@ func (s *Service) RequestEmailChange(ctx context.Context, p Principal, rawEmail 
 			built = s.emailTakenMail(email)
 		}
 		m = &built
-		return nil
+		// Новый адрес в запись не попадает: занят он или нет, запись одинаковая.
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountEmailChangeAsked, Actor: user.ID})
 	})
 	if err != nil {
 		return err
@@ -99,8 +101,10 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, rawToken string) (User
 			return fmt.Errorf("auth: supersede reset tokens: %w", err)
 		}
 		// Ссылки «это не я» прежних смен не отменяются: каждая возвращает свой адрес.
-		revert, err = s.createToken(ctx, q, user.ID, purposeRevertEmail, s.cfg.RevertEmailTTL, oldUser.Email)
-		return err
+		if revert, err = s.createToken(ctx, q, user.ID, purposeRevertEmail, s.cfg.RevertEmailTTL, oldUser.Email); err != nil {
+			return err
+		}
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountEmailChanged, Actor: user.ID})
 	})
 	if err != nil {
 		return User{}, err
@@ -147,8 +151,10 @@ func (s *Service) RevertEmailChange(ctx context.Context, rawToken string) error 
 		if err := s.cancelDeletion(ctx, q, user.ID); err != nil {
 			return err
 		}
-		reset, err = s.createToken(ctx, q, user.ID, purposeReset, s.cfg.ResetTTL, "")
-		return err
+		if reset, err = s.createToken(ctx, q, user.ID, purposeReset, s.cfg.ResetTTL, ""); err != nil {
+			return err
+		}
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountEmailReverted, Actor: user.ID})
 	})
 	if err != nil {
 		return err

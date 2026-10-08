@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
@@ -64,9 +65,18 @@ func (s *Service) notifyStaff(ctx context.Context, q *dbgen.Queries, a dbgen.Get
 	return nil
 }
 
+// record пишет в журнал действие сотрудника над откликом. Подпись объекта — название вакансии, имя соискателя берётся
+// из его аккаунта при показе (у стёртого аккаунта в журнале «Аккаунт удалён»).
+func record(ctx context.Context, q *dbgen.Queries, action audit.Action, a dbgen.GetApplicationRow, user auth.User, details map[string]string) error {
+	return audit.Record(ctx, q, audit.Event{
+		Action: action, OrgID: a.OrgID, Actor: user.ID, Subject: a.UserID,
+		TargetKind: "application", TargetID: a.ID, TargetLabel: a.VacancyTitle, Details: details,
+	})
+}
+
 // markViewed ставит «просмотрен», когда организация впервые открыла карточку, и сообщает об этом соискателю.
 // Переход срабатывает один раз даже при одновременном открытии двумя сотрудниками.
-func (s *Service) markViewed(ctx context.Context, a *dbgen.GetApplicationRow) error {
+func (s *Service) markViewed(ctx context.Context, user auth.User, a *dbgen.GetApplicationRow) error {
 	return s.inTx(ctx, func(q *dbgen.Queries) error {
 		now := s.now()
 		n, err := q.SetApplicationStatusFrom(ctx, dbgen.SetApplicationStatusFromParams{ID: a.ID, ToStatus: StatusViewed, FromStatuses: []string{StatusSent}, Now: now})
@@ -77,6 +87,9 @@ func (s *Service) markViewed(ctx context.Context, a *dbgen.GetApplicationRow) er
 			return nil // уже просмотрен другим сотрудником
 		}
 		a.Status, a.StatusChangedAt = StatusViewed, now
+		if err := record(ctx, q, audit.ApplicationViewed, *a, user, nil); err != nil {
+			return err
+		}
 		return s.notifyApplicant(ctx, q, *a, "application_viewed", "Ваш отклик просмотрен",
 			lines(vacancyLine(a.VacancyTitle, a.OrgName), "Организация открыла ваш отклик."))
 	})
@@ -108,6 +121,13 @@ func (s *Service) Decide(ctx context.Context, user auth.User, id uuid.UUID, to, 
 		}
 		if n == 0 {
 			return ErrBadStatus
+		}
+		action := audit.ApplicationAccepted
+		if to == StatusRejected {
+			action = audit.ApplicationRejected
+		}
+		if err := record(ctx, q, action, a, user, nil); err != nil {
+			return err
 		}
 		title, body := decisionNotice(a, to, note)
 		if to == StatusRejected {
@@ -175,6 +195,9 @@ func (s *Service) Invite(ctx context.Context, user auth.User, id uuid.UUID, in I
 			return fmt.Errorf("applications: load invitation: %w", err)
 		}
 		out = invitationFrom(row, files.Staff)
+		if err := record(ctx, q, audit.ApplicationInvited, a, user, map[string]string{"kind": v.Kind}); err != nil {
+			return err
+		}
 		title, body := invitationNotice(a.VacancyTitle, a.OrgName, v)
 		return s.notifyApplicant(ctx, q, a, "invitation_"+v.Kind, title, body)
 	})
@@ -211,6 +234,9 @@ func (s *Service) CancelInvitation(ctx context.Context, user auth.User, appID, i
 		if n == 0 {
 			return ErrBadInvitation
 		}
+		if err := record(ctx, q, audit.ApplicationInvitationCanceled, a, user, map[string]string{"kind": inv.Kind}); err != nil {
+			return err
+		}
 		return s.notifyApplicant(ctx, q, a, "invitation_cancelled", "Приглашение отменено",
 			lines(vacancyLine(a.VacancyTitle, a.OrgName), "Организация отменила приглашение: "+kindWord(inv.Kind)+"."))
 	})
@@ -236,6 +262,9 @@ func (s *Service) AcceptProposal(ctx context.Context, user auth.User, appID, inv
 		}
 		if n == 0 {
 			return ErrBadInvitation // предложенное время уже прошло или приглашение изменили
+		}
+		if err := record(ctx, q, audit.ApplicationProposalAccepted, a, user, map[string]string{"kind": inv.Kind}); err != nil {
+			return err
 		}
 		return s.notifyApplicant(ctx, q, a, "invitation_confirmed", "Время собеседования согласовано",
 			lines(vacancyLine(a.VacancyTitle, a.OrgName), "Собеседование: "+momentText(*inv.AnswerAt), placeText(deref(inv.PlaceKind), inv.Place)))

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"scibox/server/internal/audit"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/erasure"
 	"scibox/server/internal/mail"
@@ -58,7 +59,7 @@ func (s *Service) RequestDeletion(ctx context.Context, p Principal) (time.Time, 
 		if err := q.DeleteUserSessions(ctx, user.ID); err != nil {
 			return fmt.Errorf("auth: revoke sessions: %w", err)
 		}
-		return nil
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountDeletionRequested, Actor: user.ID})
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -78,7 +79,10 @@ func (s *Service) CancelDeletion(ctx context.Context, p Principal) error {
 		if cancelled = n > 0; !cancelled {
 			return nil
 		}
-		return s.restoreProfile(ctx, q, p.User.ID)
+		if err := s.restoreProfile(ctx, q, p.User.ID); err != nil {
+			return err
+		}
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountDeletionCanceled, Actor: p.User.ID})
 	})
 	if err != nil {
 		return err
@@ -140,12 +144,15 @@ func (s *Service) ProcessDueDeletions(ctx context.Context) (int, error) {
 				}
 				built := s.deletionBlockedMail(user, blocked.Orgs)
 				m = &built
-				return nil
+				return audit.Record(ctx, q, audit.Event{Action: audit.AccountDeletionCanceled, Actor: user.ID, Details: map[string]string{"reason": "sole_owner"}})
 			}
 			if err != nil {
 				return err
 			}
 			wasHit = true
+			if err := audit.Record(ctx, q, audit.Event{Action: audit.AccountErased, Actor: user.ID}); err != nil {
+				return err
+			}
 			built := s.accountDeletedMail(user)
 			m = &built
 			return nil

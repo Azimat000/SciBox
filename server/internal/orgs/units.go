@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 )
@@ -125,6 +126,10 @@ func (s *Service) SetUnitHead(ctx context.Context, user auth.User, slug string, 
 				return fmt.Errorf("orgs: load future head: %w", err)
 			}
 		}
+		before, err := s.loadUnit(ctx, q, org.ID, unitID)
+		if err != nil {
+			return err
+		}
 		n, err := q.SetUnitHead(ctx, dbgen.SetUnitHeadParams{ID: unitID, OrgID: org.ID, HeadUserID: userID, UpdatedAt: s.now()})
 		if err != nil {
 			return fmt.Errorf("orgs: set unit head: %w", err)
@@ -137,9 +142,23 @@ func (s *Service) SetUnitHead(ctx context.Context, user auth.User, slug string, 
 			return err
 		}
 		out = unitFromRow(row, true)
-		return nil
+		if sameUser(before.HeadUserID, userID) {
+			return nil // руководитель тот же: в журнале этого нет
+		}
+		ev := audit.Event{Action: audit.UnitHeadChanged, OrgID: org.ID, Actor: user.ID, TargetKind: "unit", TargetID: unitID, TargetLabel: row.Name}
+		if userID != nil {
+			ev.Subject = *userID
+		}
+		return audit.Record(ctx, q, ev)
 	})
 	return out, err
+}
+
+func sameUser(a, b *uuid.UUID) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // DeleteUnit удаляет подразделение (владелец).

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"scibox/server/internal/audit"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/mail"
 )
@@ -489,8 +490,10 @@ func (s *Service) ConfirmEmail(ctx context.Context, rawToken string, meta Meta) 
 			return err
 		}
 		// Браузер, где подтвердили почту, сразу знакомый: письма «вход с нового устройства» о нём не будет.
-		sess.Device, _, err = s.rememberDevice(ctx, q, userID, meta.Device)
-		return err
+		if sess.Device, _, err = s.rememberDevice(ctx, q, userID, meta.Device); err != nil {
+			return err
+		}
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountLogin, Actor: userID, IP: meta.IP, Details: map[string]string{"via": "email_link"}})
 	})
 	if err != nil {
 		return User{}, Session{}, err
@@ -583,8 +586,10 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string, meta Met
 		if sess, err = s.createSession(ctx, q, user.ID, meta, true); err != nil {
 			return err
 		}
-		sess.Device, newDevice, err = s.rememberDevice(ctx, q, user.ID, meta.Device)
-		return err
+		if sess.Device, newDevice, err = s.rememberDevice(ctx, q, user.ID, meta.Device); err != nil {
+			return err
+		}
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountLogin, Actor: user.ID, IP: meta.IP})
 	})
 	if err != nil {
 		return User{}, Session{}, err
@@ -699,7 +704,7 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword strin
 		if user, err = q.GetUserByID(ctx, userID); err != nil {
 			return fmt.Errorf("auth: load user: %w", err)
 		}
-		return nil
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountPasswordReset, Actor: userID})
 	})
 	if err != nil {
 		return err
@@ -752,7 +757,7 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 		if err := q.DeleteOtherUserSessions(ctx, dbgen.DeleteOtherUserSessionsParams{UserID: user.ID, ID: p.SessionID}); err != nil {
 			return fmt.Errorf("auth: revoke sessions: %w", err)
 		}
-		return nil
+		return audit.Record(ctx, q, audit.Event{Action: audit.AccountPasswordChanged, Actor: user.ID})
 	})
 	if err != nil {
 		return err

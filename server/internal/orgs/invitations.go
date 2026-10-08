@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 )
@@ -103,7 +104,10 @@ func (s *Service) Invite(ctx context.Context, p auth.Principal, slug string, in 
 			return fmt.Errorf("orgs: create invitation: %w", err)
 		}
 		inv.ID = id
-		return nil
+		return audit.Record(ctx, q, audit.Event{
+			Action: audit.InvitationSent, OrgID: org.ID, Actor: user.ID, TargetKind: "invitation", TargetID: id,
+			Details: map[string]string{"role": string(role), "email": audit.MaskEmail(email)},
+		})
 	})
 	if err != nil {
 		return PendingInvitation{}, err
@@ -118,14 +122,16 @@ func (s *Service) RevokeInvitation(ctx context.Context, user auth.User, slug str
 	if err != nil {
 		return err
 	}
-	n, err := s.q.RevokeInvitation(ctx, dbgen.RevokeInvitationParams{At: s.now(), ID: id, OrgID: org.ID})
-	if err != nil {
-		return fmt.Errorf("orgs: revoke invitation: %w", err)
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return s.inTx(ctx, func(q *dbgen.Queries) error {
+		n, err := q.RevokeInvitation(ctx, dbgen.RevokeInvitationParams{At: s.now(), ID: id, OrgID: org.ID})
+		if err != nil {
+			return fmt.Errorf("orgs: revoke invitation: %w", err)
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
+		return audit.Record(ctx, q, audit.Event{Action: audit.InvitationRevoked, OrgID: org.ID, Actor: user.ID, TargetKind: "invitation", TargetID: id})
+	})
 }
 
 // InvitationPreview — что человек видит на странице приглашения до того, как принять.
@@ -170,6 +176,7 @@ type Joined struct {
 
 // consumed — приглашение, только что «погашенное»: единая форма для приёма по ссылке и по номеру.
 type consumed struct {
+	id     uuid.UUID
 	orgID  uuid.UUID
 	role   string
 	unitID *uuid.UUID
@@ -180,15 +187,16 @@ type consumed struct {
 func (s *Service) AcceptInvitation(ctx context.Context, user auth.User, rawToken string) (Joined, error) {
 	return s.accept(ctx, user, func(q *dbgen.Queries) (consumed, error) {
 		r, err := q.ConsumeInvitation(ctx, dbgen.ConsumeInvitationParams{Now: s.now(), TokenHash: hashToken(rawToken)})
-		return consumed{r.OrgID, r.Role, r.UnitID, r.Email}, err
+		return consumed{r.ID, r.OrgID, r.Role, r.UnitID, r.Email}, err
 	})
 }
 
 // AcceptInvitationByID принимает приглашение из списка «Мои приглашения» (там ссылки нет, но почта совпадает с аккаунтом).
 func (s *Service) AcceptInvitationByID(ctx context.Context, user auth.User, id uuid.UUID) (Joined, error) {
 	return s.accept(ctx, user, func(q *dbgen.Queries) (consumed, error) {
-		r, err := q.ConsumeInvitationByID(ctx, dbgen.ConsumeInvitationByIDParams{Now: s.now(), ID: id})
-		return consumed{r.OrgID, r.Role, r.UnitID, r.Email}, err
+		// Чужое приглашение не находится: по номеру нельзя узнать, что оно есть (T-16).
+		r, err := q.ConsumeInvitationByID(ctx, dbgen.ConsumeInvitationByIDParams{Now: s.now(), ID: id, Email: user.Email})
+		return consumed{r.ID, r.OrgID, r.Role, r.UnitID, r.Email}, err
 	})
 }
 
@@ -206,6 +214,18 @@ func (s *Service) accept(ctx context.Context, user auth.User, consume func(q *db
 		}
 		if !strings.EqualFold(c.email, user.Email) {
 			return ErrWrongEmail
+		}
+		// Организация под блокировкой: стирание аккаунта её последнего владельца идёт по той же строке и не разминётся
+		// с приёмом (T-34). У организации без владельца приглашение принять нельзя, кроме приглашения самого владельца.
+		if _, err := q.LockOrganization(ctx, c.orgID); err != nil {
+			return fmt.Errorf("orgs: lock organization: %w", err)
+		}
+		owners, err := q.LockOwners(ctx, c.orgID)
+		if err != nil {
+			return fmt.Errorf("orgs: lock owners: %w", err)
+		}
+		if len(owners) == 0 && access.Role(c.role) != access.RoleOwner {
+			return ErrInvalidInvitation
 		}
 		if _, err := q.GetMember(ctx, dbgen.GetMemberParams{OrgID: c.orgID, UserID: user.ID}); err == nil {
 			return ErrAlreadyMember
@@ -227,7 +247,10 @@ func (s *Service) accept(ctx context.Context, user auth.User, consume func(q *db
 			return fmt.Errorf("orgs: load organization: %w", err)
 		}
 		joined = Joined{Slug: org.Slug, Name: org.Name, Role: c.role}
-		return nil
+		return audit.Record(ctx, q, audit.Event{
+			Action: audit.MemberJoined, OrgID: c.orgID, Actor: user.ID, TargetKind: "invitation", TargetID: c.id,
+			Details: map[string]string{"role": c.role},
+		})
 	})
 	return joined, err
 }

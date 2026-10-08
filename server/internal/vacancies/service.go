@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/orgs"
@@ -346,7 +347,11 @@ func (s *Service) SetStatus(ctx context.Context, user auth.User, id uuid.UUID, t
 		if n == 0 {
 			return ErrChanged
 		}
-		return nil
+		return audit.Record(ctx, q, audit.Event{
+			Action: auditAction[[2]string{v.Status, to}], OrgID: v.OrgID, Actor: user.ID,
+			TargetKind: "vacancy", TargetID: id, TargetLabel: v.Title,
+			Details: map[string]string{"from": v.Status, "to": to},
+		})
 	})
 	if err != nil {
 		return Detail{}, err

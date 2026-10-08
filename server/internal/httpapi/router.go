@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"scibox/server/internal/applications"
+	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpguard"
@@ -102,7 +103,7 @@ func NewRouter(d Deps) http.Handler {
 	})
 
 	r.Route("/api", func(r chi.Router) {
-		r.Use(noStore)
+		r.Use(noStore, recordSource)
 		if d.Auth != nil {
 			r.Use(d.Auth.SameOrigin, d.Auth.Authenticate, guard.Throttle(whoIsSignedIn))
 			d.Auth.Mount(r)
@@ -179,6 +180,14 @@ func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// recordSource кладёт адрес человека в контекст запроса: журнал действий (internal/audit) записывает его, а сервисы про
+// HTTP не знают. Адрес уже очищен периметром: за доверенным прокси это настоящий адрес посетителя (T-06).
+func recordSource(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(audit.WithSource(r.Context(), httpguard.ClientIP(r))))
 	})
 }
 

@@ -259,6 +259,8 @@ func TestEveryReferenceToTheAccountIsHandled(t *testing.T) {
 		"vacancies.created_by":               true,
 		"org_invitations.invited_by":         true,
 		"vacancy_offers.invited_by":          true,
+		"audit_log.actor_id":                 true, // история организации; адрес из записей стирается (TestErasureKeepsTheJournalButDropsAddresses)
+		"audit_log.subject_id":               true,
 	}
 	rows, err := testkit.Pool.Query(bg, `
 		SELECT kcu.table_name::text, kcu.column_name::text
