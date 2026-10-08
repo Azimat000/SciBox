@@ -58,7 +58,7 @@ func (q *Queries) GetActiveApplicationForVacancy(ctx context.Context, arg GetAct
 
 const getApplication = `-- name: GetApplication :one
 SELECT a.id, a.vacancy_id, a.user_id, a.status, a.cover_letter, a.contact_email, a.profile, a.decision_note,
-       a.created_at, a.updated_at, a.status_changed_at,
+       a.created_at, a.updated_at, a.status_changed_at, (a.anonymized_at IS NOT NULL)::bool AS anonymized,
        u.display_name AS applicant_name,
        v.title AS vacancy_title, v.status AS vacancy_status, v.org_id, v.unit_id, v.org_name, v.org_slug, v.deadline
 FROM applications a
@@ -79,6 +79,7 @@ type GetApplicationRow struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	StatusChangedAt time.Time
+	Anonymized      bool
 	ApplicantName   string
 	VacancyTitle    string
 	VacancyStatus   string
@@ -105,6 +106,7 @@ func (q *Queries) GetApplication(ctx context.Context, id uuid.UUID) (GetApplicat
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.StatusChangedAt,
+		&i.Anonymized,
 		&i.ApplicantName,
 		&i.VacancyTitle,
 		&i.VacancyStatus,

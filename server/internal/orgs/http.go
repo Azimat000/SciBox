@@ -81,8 +81,13 @@ func viewer(r *http.Request) *auth.User {
 
 // actor — вошедший человек; за requireUser он всегда есть.
 func actor(r *http.Request) auth.User {
+	return principal(r).User
+}
+
+// principal — вошедший человек вместе с тем, вводил ли он недавно пароль (для назначения владельца).
+func principal(r *http.Request) auth.Principal {
 	p, _ := auth.FromContext(r.Context())
-	return p.User
+	return p
 }
 
 // pathUUID читает номер из адреса; ok == false, если это не номер (такой страницы нет).
@@ -106,6 +111,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteJSON(w, http.StatusTooManyRequests, apierr.ErrorBody{Error: apierr.ErrorDetail{
 			Code: apierr.CodeRateLimited, Message: "Слишком много попыток. Подождите немного и попробуйте снова", RetryAfter: secs,
 		}})
+	case errors.Is(err, auth.ErrReauthRequired):
+		auth.WriteReauthRequired(w)
 	case errors.Is(err, ErrNotFound):
 		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, "Такой страницы нет")
 	case errors.Is(err, ErrForbidden):
@@ -336,7 +343,7 @@ func (h *Handler) changeRole(w http.ResponseWriter, r *http.Request) {
 	if !apierr.DecodeJSON(w, r, &in, maxBody) {
 		return
 	}
-	if err := h.svc.ChangeRole(r.Context(), actor(r), chi.URLParam(r, "slug"), id, in.Role); err != nil {
+	if err := h.svc.ChangeRole(r.Context(), principal(r), chi.URLParam(r, "slug"), id, in.Role); err != nil {
 		h.fail(w, r, err)
 		return
 	}
@@ -374,7 +381,7 @@ func (h *Handler) invite(w http.ResponseWriter, r *http.Request) {
 		}
 		input.UnitID = &u
 	}
-	inv, err := h.svc.Invite(r.Context(), actor(r), chi.URLParam(r, "slug"), input)
+	inv, err := h.svc.Invite(r.Context(), principal(r), chi.URLParam(r, "slug"), input)
 	if err != nil {
 		h.fail(w, r, err)
 		return

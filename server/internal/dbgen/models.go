@@ -24,6 +24,7 @@ type Application struct {
 	StatusChangedAt time.Time
 	DecisionNote    string
 	DecidedBy       *uuid.UUID
+	AnonymizedAt    *time.Time
 }
 
 type ApplicationFile struct {
@@ -68,6 +69,7 @@ type AuthToken struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	UsedAt    *time.Time
+	NewEmail  pgtype.Text
 }
 
 type DeadlineReminder struct {
@@ -97,6 +99,13 @@ type JournalIssn struct {
 	Issn      string
 	JournalID int64
 	Position  int16
+}
+
+type KnownDevice struct {
+	UserID      uuid.UUID
+	DeviceHash  []byte
+	FirstSeenAt time.Time
+	LastSeenAt  time.Time
 }
 
 type Notification struct {
@@ -172,34 +181,35 @@ type Position struct {
 }
 
 type Profile struct {
-	ID                  uuid.UUID
-	UserID              uuid.UUID
-	Visibility          string
-	OpenToOffers        bool
-	Headline            string
-	City                string
-	RegionCode          *string
-	About               string
-	Degree              string
-	DegreeSpecialtyCode *string
-	DegreeYear          *int16
-	DegreeInstitution   string
-	DissertationTitle   string
-	AcademicTitle       string
-	AcademicTitleYear   *int16
-	Orcid               string
-	Spin                string
-	ScopusID            string
-	WosID               string
-	HRsci               *int16
-	HScopus             *int16
-	HWos                *int16
-	HScholar            *int16
-	ContactEmail        string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	ResearchSkills      []string
-	GeneralSkills       []string
+	ID                       uuid.UUID
+	UserID                   uuid.UUID
+	Visibility               string
+	OpenToOffers             bool
+	Headline                 string
+	City                     string
+	RegionCode               *string
+	About                    string
+	Degree                   string
+	DegreeSpecialtyCode      *string
+	DegreeYear               *int16
+	DegreeInstitution        string
+	DissertationTitle        string
+	AcademicTitle            string
+	AcademicTitleYear        *int16
+	Orcid                    string
+	Spin                     string
+	ScopusID                 string
+	WosID                    string
+	HRsci                    *int16
+	HScopus                  *int16
+	HWos                     *int16
+	HScholar                 *int16
+	ContactEmail             string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+	ResearchSkills           []string
+	GeneralSkills            []string
+	VisibilityBeforeDeletion *string
 }
 
 type ProfileItem struct {
@@ -293,6 +303,7 @@ type Session struct {
 	ExpiresAt  time.Time
 	UserAgent  string
 	Ip         string
+	ReauthAt   *time.Time
 }
 
 type Specialty struct {
@@ -323,6 +334,8 @@ type User struct {
 	PrivacyPolicyVersion string
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	DeletionDueAt        *time.Time
+	DeletedAt            *time.Time
 }
 
 type Vacancy struct {

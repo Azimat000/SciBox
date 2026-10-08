@@ -29,6 +29,8 @@ const (
 	msgPasswordLong     = "Пароль слишком длинный: не больше 128 знаков"
 	msgPasswordWeak     = "Этот пароль слишком простой, его легко угадать. Возьмите длинную фразу или набор слов"
 	msgPasswordEmail    = "Пароль не должен совпадать с почтой"
+	msgPasswordWrong    = "Пароль указан неверно"
+	msgEmailSame        = "Это и так почта вашего аккаунта"
 	msgConsentRequired  = "Без согласия на обработку персональных данных мы не можем создать аккаунт"
 )
 
@@ -87,18 +89,6 @@ func NormalizeName(raw string) (string, string) {
 	return name, ""
 }
 
-// commonPasswords — самые частые пароли (латиницей и кириллицей), которые подходят по длине.
-var commonPasswords = map[string]bool{
-	"1234567890": true, "0123456789": true, "12345678910": true, "1234567891": true,
-	"0987654321": true, "1111111111": true, "0000000000": true, "9876543210": true,
-	"password12": true, "password123": true, "password1234": true, "passw0rd123": true,
-	"qwertyuiop": true, "qwerty1234": true, "qwerty12345": true, "qwertyuiop1": true,
-	"asdfghjkl1": true, "1q2w3e4r5t": true, "1qaz2wsx3edc": true, "iloveyou12": true,
-	"йцукенгшщз": true, "йцукен1234": true, "пароль1234": true, "пароль12345": true,
-	"123456789a": true, "abcdefghij": true, "abc1234567": true, "administrator": true,
-	"letmein123": true, "welcome123": true, "scibox1234": true,
-}
-
 // ValidatePassword проверяет новый пароль. email нужен, чтобы пароль не совпадал с почтой.
 func ValidatePassword(password, email string) string {
 	n := passwordLen(password)
@@ -118,7 +108,7 @@ func ValidatePassword(password, email string) string {
 	for _, r := range lower {
 		distinct[r] = struct{}{}
 	}
-	if len(distinct) < 5 || commonPasswords[lower] {
+	if len(distinct) < 5 || isCommonPassword(lower) {
 		return msgPasswordWeak
 	}
 	return ""

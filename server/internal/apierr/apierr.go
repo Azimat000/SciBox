@@ -20,6 +20,8 @@ const (
 	CodeForbidden           = "forbidden"
 	CodeRateLimited         = "rate_limited"
 	CodePayloadTooLarge     = "payload_too_large"
+	// CodeReauthRequired — опасное действие: сайт просит ввести пароль ещё раз и повторяет запрос (срез 20).
+	CodeReauthRequired = "reauth_required"
 )
 
 // ErrorBody — единый формат ошибки: {"error": {"code": "...", "message": "..."}}.

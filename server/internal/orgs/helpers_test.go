@@ -175,7 +175,7 @@ func (w *world) unit(owner person, slug string) Unit {
 func (w *world) member(owner person, slug string, who person, role string, unitID *uuid.UUID) {
 	w.t.Helper()
 	w.clock.Advance(0)
-	if _, err := w.svc.Invite(bg, owner.User, slug, InviteInput{Email: who.Email, Role: role, UnitID: unitID}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), slug, InviteInput{Email: who.Email, Role: role, UnitID: unitID}); err != nil {
 		w.t.Fatalf("invite: %v", err)
 	}
 	m := w.lastMailTo(who.Email)
@@ -214,3 +214,6 @@ func countRows(t *testing.T, query string, args ...any) int {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// fresh — человек, который только что ввёл пароль (назначать владельца можно только так).
+func fresh(u auth.User) auth.Principal { return auth.Principal{User: u, Fresh: true} }

@@ -86,7 +86,9 @@ func targetMember(ctx context.Context, q *dbgen.Queries, orgID, userID uuid.UUID
 }
 
 // ChangeRole меняет роль сотрудника (владелец). Последнего владельца понизить нельзя.
-func (s *Service) ChangeRole(ctx context.Context, user auth.User, slug string, target uuid.UUID, rawRole string) error {
+// Сделать владельцем можно только вскоре после ввода пароля (p.Fresh, T-12): владелец получает всё.
+func (s *Service) ChangeRole(ctx context.Context, p auth.Principal, slug string, target uuid.UUID, rawRole string) error {
+	user := p.User
 	role, ok := access.ParseRole(rawRole)
 	return s.inTx(ctx, func(q *dbgen.Queries) error {
 		org, _, err := s.require(ctx, q, slug, user, access.ManageMembers, access.NoUnit)
@@ -95,6 +97,9 @@ func (s *Service) ChangeRole(ctx context.Context, user auth.User, slug string, t
 		}
 		if !ok {
 			return &auth.ValidationError{Fields: map[string]string{"role": msgRoleInvalid}}
+		}
+		if role == access.RoleOwner && !p.Fresh {
+			return auth.ErrReauthRequired
 		}
 		owners, err := lockedOwners(ctx, q, org.ID)
 		if err != nil {

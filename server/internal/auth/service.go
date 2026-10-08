@@ -19,8 +19,10 @@ import (
 
 // Назначения одноразовых ссылок и виды счётчиков частоты.
 const (
-	purposeConfirm = "confirm_email"
-	purposeReset   = "reset_password"
+	purposeConfirm     = "confirm_email"
+	purposeReset       = "reset_password"
+	purposeChangeEmail = "change_email"
+	purposeRevertEmail = "revert_email"
 
 	kindLoginEmail   = "login_email"
 	kindLoginIP      = "login_ip"
@@ -34,6 +36,10 @@ var (
 	ErrEmailNotConfirmed  = errors.New("auth: email is not confirmed")
 	ErrInvalidToken       = errors.New("auth: invalid or expired token")
 	ErrUnauthenticated    = errors.New("auth: not signed in")
+	// ErrReauthRequired — опасное действие, а пароль в этой сессии давно не вводили (T-12, D-144).
+	ErrReauthRequired = errors.New("auth: password confirmation required")
+	ErrNotFound       = errors.New("auth: not found")
+	ErrEmailTaken     = errors.New("auth: email already belongs to another account")
 )
 
 // RateLimitedError — слишком много попыток; RetryAfter — через сколько можно повторить.
@@ -66,6 +72,11 @@ type Config struct {
 	ConfirmTTL     time.Duration // срок ссылки подтверждения почты
 	ResetTTL       time.Duration // срок ссылки сброса пароля
 	MailCooldown   time.Duration // пауза между письмами со ссылкой одному человеку
+	ReauthTTL      time.Duration // сколько после ввода пароля разрешены опасные действия (D-144)
+	ChangeEmailTTL time.Duration // срок ссылки подтверждения новой почты
+	RevertEmailTTL time.Duration // срок ссылки «это не я» на старую почту
+	DeletionGrace  time.Duration // сколько дней на отмену удаления аккаунта (D-142)
+	DeviceTTL      time.Duration // сколько браузер помнится как знакомый (cookie устройства)
 
 	Limits       Limits
 	Hash         HashParams
@@ -74,6 +85,14 @@ type Config struct {
 
 // PolicyVersion — версия черновика политики конфиденциальности (страница /privacy).
 const PolicyVersion = "2026-10-draft"
+
+// Сроки по умолчанию. Нулевой или отрицательный срок в настройках заменяется ими (newService):
+// «0» не должен значить ни «опасные действия без пароля навсегда», ни «удалить сразу».
+const (
+	DefaultReauthTTL     = 10 * time.Minute
+	DefaultDeletionGrace = 14 * 24 * time.Hour
+	DefaultDeviceTTL     = 400 * 24 * time.Hour // столько браузеры хранят cookie самое большее
+)
 
 // DefaultConfig — боевые настройки.
 func DefaultConfig(productName, publicURL string) Config {
@@ -86,6 +105,11 @@ func DefaultConfig(productName, publicURL string) Config {
 		ConfirmTTL:     48 * time.Hour,
 		ResetTTL:       time.Hour,
 		MailCooldown:   time.Minute,
+		ReauthTTL:      DefaultReauthTTL,
+		ChangeEmailTTL: 24 * time.Hour,
+		RevertEmailTTL: 7 * 24 * time.Hour,
+		DeletionGrace:  DefaultDeletionGrace,
+		DeviceTTL:      DefaultDeviceTTL,
 		Limits: Limits{
 			LoginEmail:   Limit{Max: 5, Window: 15 * time.Minute},
 			LoginIP:      Limit{Max: 30, Window: 15 * time.Minute},
@@ -104,12 +128,16 @@ type User struct {
 	Name           string
 	EmailConfirmed bool
 	CreatedAt      time.Time
+	// DeletionDueAt — человек попросил удалить аккаунт; в этот момент данные сотрутся. nil — не просил.
+	DeletionDueAt *time.Time
 }
 
 // Session — только что созданная сессия; Token уходит в cookie и больше нигде не хранится.
 type Session struct {
 	Token     string
 	ExpiresAt time.Time
+	// Device — токен cookie устройства (знакомый браузер); пустой, если cookie менять не нужно.
+	Device string
 }
 
 // Principal — кто сейчас делает запрос.
@@ -119,12 +147,15 @@ type Principal struct {
 	// ExpiresAt — до какого момента действует сессия; Refreshed — сессию только что продлили (cookie надо обновить).
 	ExpiresAt time.Time
 	Refreshed bool
+	// Fresh — пароль в этой сессии вводили недавно (ReauthTTL): можно опасные действия.
+	Fresh bool
 }
 
 // Meta — откуда пришёл запрос.
 type Meta struct {
 	IP        string
 	UserAgent string
+	Device    string // токен из cookie устройства, если браузер его прислал
 }
 
 // DB — то, что сервису нужно от базы: запросы и транзакции. Этому интерфейсу отвечает *pgxpool.Pool;
@@ -151,7 +182,16 @@ func NewService(pool *pgxpool.Pool, mailer mail.Sender, cfg Config, logger *slog
 	return newService(pool, mailer, cfg, logger)
 }
 
+// NewServiceOn — то же, что NewService, поверх любой базы с запросами и транзакциями. Нужен тестам других
+// пакетов, которые подставляют «ломающуюся» базу и проверяют, что сбой не теряется.
+func NewServiceOn(db DB, mailer mail.Sender, cfg Config, logger *slog.Logger) *Service {
+	return newService(db, mailer, cfg, logger)
+}
+
 func newService(db DB, mailer mail.Sender, cfg Config, logger *slog.Logger) *Service {
+	cfg.ReauthTTL = positiveOr(cfg.ReauthTTL, DefaultReauthTTL)
+	cfg.DeletionGrace = positiveOr(cfg.DeletionGrace, DefaultDeletionGrace)
+	cfg.DeviceTTL = positiveOr(cfg.DeviceTTL, DefaultDeviceTTL)
 	return &Service{
 		db:     db,
 		q:      dbgen.New(db),
@@ -161,6 +201,13 @@ func newService(db DB, mailer mail.Sender, cfg Config, logger *slog.Logger) *Ser
 		logger: logger,
 		now:    func() time.Time { return time.Now().UTC() },
 	}
+}
+
+func positiveOr(d, fallback time.Duration) time.Duration {
+	if d <= 0 {
+		return fallback
+	}
+	return d
 }
 
 // Config возвращает настройки (нужны обработчикам: срок cookie, адрес сайта).
@@ -185,7 +232,10 @@ func (s *Service) inTx(ctx context.Context, fn func(q *dbgen.Queries) error) err
 }
 
 func userFrom(u dbgen.User) User {
-	return User{ID: u.ID, Email: u.Email, Name: u.DisplayName, EmailConfirmed: u.EmailConfirmedAt != nil, CreatedAt: u.CreatedAt}
+	return User{
+		ID: u.ID, Email: u.Email, Name: u.DisplayName, EmailConfirmed: u.EmailConfirmedAt != nil, CreatedAt: u.CreatedAt,
+		DeletionDueAt: u.DeletionDueAt,
+	}
 }
 
 // ---- ограничение частоты ----
@@ -224,6 +274,11 @@ func (s *Service) allowMail(ctx context.Context, ip string) error {
 // issueToken выдаёт новую одноразовую ссылку. Если человеку уже недавно отправляли такую же (пауза MailCooldown),
 // ссылка не выдаётся: ok == false.
 func (s *Service) issueToken(ctx context.Context, q *dbgen.Queries, userID uuid.UUID, purpose string, ttl time.Duration) (raw string, ok bool, err error) {
+	return s.issueEmailToken(ctx, q, userID, purpose, ttl, "")
+}
+
+// issueEmailToken — как issueToken; newEmail (для смены почты) запоминается вместе со ссылкой.
+func (s *Service) issueEmailToken(ctx context.Context, q *dbgen.Queries, userID uuid.UUID, purpose string, ttl time.Duration, newEmail string) (raw string, ok bool, err error) {
 	now := s.now()
 	last, err := q.LatestAuthTokenAt(ctx, dbgen.LatestAuthTokenAtParams{UserID: userID, Purpose: purpose})
 	if err != nil {
@@ -235,13 +290,29 @@ func (s *Service) issueToken(ctx context.Context, q *dbgen.Queries, userID uuid.
 	if err := q.SupersedeAuthTokens(ctx, dbgen.SupersedeAuthTokensParams{At: now, UserID: userID, Purpose: purpose}); err != nil {
 		return "", false, fmt.Errorf("auth: supersede tokens: %w", err)
 	}
+	raw, err = s.createToken(ctx, q, userID, purpose, ttl, newEmail)
+	return raw, err == nil, err
+}
+
+// createToken выдаёт ссылку без паузы и не отменяя прежние (ссылка «это не я» и сброс после отката почты
+// должны уйти всегда).
+func (s *Service) createToken(ctx context.Context, q *dbgen.Queries, userID uuid.UUID, purpose string, ttl time.Duration, newEmail string) (string, error) {
+	now := s.now()
 	raw, hash := newToken()
-	if err := q.CreateAuthToken(ctx, dbgen.CreateAuthTokenParams{
-		UserID: userID, Purpose: purpose, TokenHash: hash, CreatedAt: now, ExpiresAt: now.Add(ttl),
-	}); err != nil {
-		return "", false, fmt.Errorf("auth: create token: %w", err)
+	var err error
+	if newEmail == "" {
+		err = q.CreateAuthToken(ctx, dbgen.CreateAuthTokenParams{
+			UserID: userID, Purpose: purpose, TokenHash: hash, CreatedAt: now, ExpiresAt: now.Add(ttl),
+		})
+	} else {
+		err = q.CreateEmailToken(ctx, dbgen.CreateEmailTokenParams{
+			UserID: userID, Purpose: purpose, TokenHash: hash, CreatedAt: now, ExpiresAt: now.Add(ttl), NewEmail: newEmail,
+		})
 	}
-	return raw, true, nil
+	if err != nil {
+		return "", fmt.Errorf("auth: create token: %w", err)
+	}
+	return raw, nil
 }
 
 // sendAsync отправляет письмо в фоне: ответ человеку не ждёт почтовый сервер и не выдаёт, было ли письмо.
@@ -369,7 +440,7 @@ func (s *Service) sendLink(ctx context.Context, rawEmail string, meta Meta, purp
 	if err != nil {
 		return fmt.Errorf("auth: find user: %w", err)
 	}
-	if !eligible(user) {
+	if user.DeletedAt != nil || !eligible(user) {
 		return nil
 	}
 	var m *mail.Message
@@ -414,7 +485,11 @@ func (s *Service) ConfirmEmail(ctx context.Context, rawToken string, meta Meta) 
 		if user, err = q.GetUserByID(ctx, userID); err != nil {
 			return fmt.Errorf("auth: load user: %w", err)
 		}
-		sess, err = s.createSession(ctx, q, userID, meta)
+		if sess, err = s.createSession(ctx, q, userID, meta, false); err != nil {
+			return err
+		}
+		// Браузер, где подтвердили почту, сразу знакомый: письма «вход с нового устройства» о нём не будет.
+		sess.Device, _, err = s.rememberDevice(ctx, q, userID, meta.Device)
 		return err
 	})
 	if err != nil {
@@ -425,13 +500,18 @@ func (s *Service) ConfirmEmail(ctx context.Context, rawToken string, meta Meta) 
 
 // ---- вход и сессии ----
 
-func (s *Service) createSession(ctx context.Context, q *dbgen.Queries, userID uuid.UUID, meta Meta) (Session, error) {
+// createSession создаёт сессию. withPassword — человек только что ввёл пароль: сессия сразу «со свежим паролем».
+func (s *Service) createSession(ctx context.Context, q *dbgen.Queries, userID uuid.UUID, meta Meta, withPassword bool) (Session, error) {
 	now := s.now()
 	raw, hash := newToken()
 	expires := now.Add(s.cfg.SessionTTL)
+	var reauth *time.Time
+	if withPassword {
+		reauth = &now
+	}
 	if _, err := q.CreateSession(ctx, dbgen.CreateSessionParams{
 		UserID: userID, TokenHash: hash, CreatedAt: now, ExpiresAt: expires,
-		UserAgent: truncate(meta.UserAgent, 300), Ip: meta.IP,
+		UserAgent: truncate(meta.UserAgent, 300), Ip: meta.IP, ReauthAt: reauth,
 	}); err != nil {
 		return Session{}, fmt.Errorf("auth: create session: %w", err)
 	}
@@ -472,12 +552,13 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string, meta Met
 	}
 
 	user, err := s.q.GetUserByEmail(ctx, key)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return User{}, Session{}, fmt.Errorf("auth: find user: %w", err)
+	}
+	// Стёртого аккаунта для входа нет, как и несуществующего.
+	if errors.Is(err, pgx.ErrNoRows) || user.DeletedAt != nil {
 		s.hasher.spendTime(ctx)
 		return fail()
-	}
-	if err != nil {
-		return User{}, Session{}, fmt.Errorf("auth: find user: %w", err)
 	}
 	ok, err := s.hasher.Verify(ctx, password, user.PasswordHash)
 	if err != nil {
@@ -490,17 +571,26 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string, meta Met
 		return User{}, Session{}, ErrEmailNotConfirmed
 	}
 
-	var sess Session
+	var (
+		sess      Session
+		newDevice bool
+	)
 	err = s.inTx(ctx, func(q *dbgen.Queries) error {
 		if err := q.ClearRateEvents(ctx, dbgen.ClearRateEventsParams{Kind: kindLoginEmail, Key: key}); err != nil {
 			return fmt.Errorf("auth: clear attempts: %w", err)
 		}
 		var err error
-		sess, err = s.createSession(ctx, q, user.ID, meta)
+		if sess, err = s.createSession(ctx, q, user.ID, meta, true); err != nil {
+			return err
+		}
+		sess.Device, newDevice, err = s.rememberDevice(ctx, q, user.ID, meta.Device)
 		return err
 	})
 	if err != nil {
 		return User{}, Session{}, err
+	}
+	if newDevice {
+		s.sendAsync(s.newDeviceMail(user, meta, s.now()))
 	}
 	return userFrom(user), sess, nil
 }
@@ -531,7 +621,9 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (Principal,
 		User: User{
 			ID: row.UserID, Email: row.Email, Name: row.DisplayName,
 			EmailConfirmed: row.EmailConfirmedAt != nil, CreatedAt: row.UserCreatedAt,
+			DeletionDueAt: row.DeletionDueAt,
 		},
+		Fresh: row.ReauthAt != nil && !row.ReauthAt.After(now) && now.Sub(*row.ReauthAt) < s.cfg.ReauthTTL,
 	}
 	if now.Sub(row.LastSeenAt) >= s.cfg.SessionRefresh {
 		p.ExpiresAt = now.Add(s.cfg.SessionTTL)
@@ -695,6 +787,12 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	}
 	if err := s.q.DeleteOldRateEvents(ctx, now.Add(-24*time.Hour)); err != nil {
 		return fmt.Errorf("auth: cleanup rate events: %w", err)
+	}
+	if err := s.q.DeleteOldKnownDevices(ctx, now.Add(-s.cfg.DeviceTTL)); err != nil {
+		return fmt.Errorf("auth: cleanup known devices: %w", err)
+	}
+	if _, err := s.ProcessDueDeletions(ctx); err != nil {
+		return err
 	}
 	return nil
 }

@@ -13,8 +13,8 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO sessions (user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip)
-VALUES ($1, $2, $3, $3, $4, $5, $6)
+INSERT INTO sessions (user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip, reauth_at)
+VALUES ($1, $2, $3, $3, $4, $5, $6, $7)
 RETURNING id
 `
 
@@ -25,8 +25,11 @@ type CreateSessionParams struct {
 	ExpiresAt time.Time
 	UserAgent string
 	Ip        string
+	ReauthAt  *time.Time
 }
 
+// reauth_at: при входе по паролю сессия сразу считается «со свежим паролем» (тот же момент, что created_at);
+// при входе по ссылке из письма пароля не было, reauth_at пустой.
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createSession,
 		arg.UserID,
@@ -35,6 +38,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (u
 		arg.ExpiresAt,
 		arg.UserAgent,
 		arg.Ip,
+		arg.ReauthAt,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -73,6 +77,24 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash []byte
 	return err
 }
 
+const deleteUserSession = `-- name: DeleteUserSession :execrows
+DELETE FROM sessions WHERE user_id = $1 AND id = $2
+`
+
+type DeleteUserSessionParams struct {
+	UserID uuid.UUID
+	ID     uuid.UUID
+}
+
+// Завершить одну свою сессию: чужую не найдёт (0 строк).
+func (q *Queries) DeleteUserSession(ctx context.Context, arg DeleteUserSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserSession, arg.UserID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = $1
 `
@@ -83,24 +105,28 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT s.id AS session_id, s.last_seen_at, s.expires_at,
-       u.id AS user_id, u.email, u.display_name, u.email_confirmed_at, u.created_at AS user_created_at
+SELECT s.id AS session_id, s.last_seen_at, s.expires_at, s.reauth_at,
+       u.id AS user_id, u.email, u.display_name, u.email_confirmed_at, u.created_at AS user_created_at,
+       u.deletion_due_at
 FROM sessions s
 JOIN users u ON u.id = s.user_id
-WHERE s.token_hash = $1
+WHERE s.token_hash = $1 AND u.deleted_at IS NULL
 `
 
 type GetSessionByTokenHashRow struct {
 	SessionID        uuid.UUID
 	LastSeenAt       time.Time
 	ExpiresAt        time.Time
+	ReauthAt         *time.Time
 	UserID           uuid.UUID
 	Email            string
 	DisplayName      string
 	EmailConfirmedAt *time.Time
 	UserCreatedAt    time.Time
+	DeletionDueAt    *time.Time
 }
 
+// Стёртый аккаунт (deleted_at) не входит, даже если сессия почему-то осталась.
 func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (GetSessionByTokenHashRow, error) {
 	row := q.db.QueryRow(ctx, getSessionByTokenHash, tokenHash)
 	var i GetSessionByTokenHashRow
@@ -108,13 +134,75 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (
 		&i.SessionID,
 		&i.LastSeenAt,
 		&i.ExpiresAt,
+		&i.ReauthAt,
 		&i.UserID,
 		&i.Email,
 		&i.DisplayName,
 		&i.EmailConfirmedAt,
 		&i.UserCreatedAt,
+		&i.DeletionDueAt,
 	)
 	return i, err
+}
+
+const listUserSessions = `-- name: ListUserSessions :many
+SELECT id, created_at, last_seen_at, user_agent
+FROM sessions
+WHERE user_id = $1 AND expires_at > $2::timestamptz
+ORDER BY last_seen_at DESC, created_at DESC, id
+LIMIT 50
+`
+
+type ListUserSessionsParams struct {
+	UserID uuid.UUID
+	Now    time.Time
+}
+
+type ListUserSessionsRow struct {
+	ID         uuid.UUID
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	UserAgent  string
+}
+
+// Живые сессии человека, последние сверху (список «Где вы вошли»).
+func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsParams) ([]ListUserSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listUserSessions, arg.UserID, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserSessionsRow
+	for rows.Next() {
+		var i ListUserSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.UserAgent,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markSessionReauth = `-- name: MarkSessionReauth :exec
+UPDATE sessions SET reauth_at = $2 WHERE id = $1
+`
+
+type MarkSessionReauthParams struct {
+	ID       uuid.UUID
+	ReauthAt *time.Time
+}
+
+func (q *Queries) MarkSessionReauth(ctx context.Context, arg MarkSessionReauthParams) error {
+	_, err := q.db.Exec(ctx, markSessionReauth, arg.ID, arg.ReauthAt)
+	return err
 }
 
 const touchSession = `-- name: TouchSession :exec

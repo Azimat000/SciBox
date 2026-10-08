@@ -261,7 +261,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			b := mk(w)
 			other := w.user("Анна")
 			w.member(b.owner, b.org.Slug, other, "hr", nil)
-			return func(s *Service) error { return s.ChangeRole(bg, b.owner.User, b.org.Slug, other.ID, "owner") }
+			return func(s *Service) error { return s.ChangeRole(bg, fresh(b.owner.User), b.org.Slug, other.ID, "owner") }
 		},
 		"remove member": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
@@ -272,13 +272,13 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"invite": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
 			return func(s *Service) error {
-				_, err := s.Invite(bg, b.owner.User, b.org.Slug, InviteInput{Email: uniqueEmail(), Role: "unit_head", UnitID: &b.unit.ID})
+				_, err := s.Invite(bg, fresh(b.owner.User), b.org.Slug, InviteInput{Email: uniqueEmail(), Role: "unit_head", UnitID: &b.unit.ID})
 				return err
 			}
 		},
 		"revoke invitation": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
-			inv, err := w.svc.Invite(bg, b.owner.User, b.org.Slug, InviteInput{Email: uniqueEmail(), Role: "hr"})
+			inv, err := w.svc.Invite(bg, fresh(b.owner.User), b.org.Slug, InviteInput{Email: uniqueEmail(), Role: "hr"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -287,7 +287,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"lookup invitation": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
 			guest := w.user("Гость")
-			if _, err := w.svc.Invite(bg, b.owner.User, b.org.Slug, InviteInput{Email: guest.Email, Role: "hr"}); err != nil {
+			if _, err := w.svc.Invite(bg, fresh(b.owner.User), b.org.Slug, InviteInput{Email: guest.Email, Role: "hr"}); err != nil {
 				t.Fatal(err)
 			}
 			tok := tokenIn(t, w.lastMailTo(guest.Email).Body)
@@ -296,7 +296,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"accept invitation": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
 			guest := w.user("Гость")
-			if _, err := w.svc.Invite(bg, b.owner.User, b.org.Slug, InviteInput{Email: guest.Email, Role: "unit_head", UnitID: &b.unit.ID}); err != nil {
+			if _, err := w.svc.Invite(bg, fresh(b.owner.User), b.org.Slug, InviteInput{Email: guest.Email, Role: "unit_head", UnitID: &b.unit.ID}); err != nil {
 				t.Fatal(err)
 			}
 			tok := tokenIn(t, w.lastMailTo(guest.Email).Body)
@@ -305,7 +305,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"accept invitation by id": func(t *testing.T, w *world) func(*Service) error {
 			b := mk(w)
 			guest := w.user("Гость")
-			inv, err := w.svc.Invite(bg, b.owner.User, b.org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
+			inv, err := w.svc.Invite(bg, fresh(b.owner.User), b.org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -356,7 +356,7 @@ func TestInvitationLosesTheRaceForTheLink(t *testing.T) {
 	owner := w.user("Иван")
 	org := w.org(owner)
 	guest := w.user("Гость")
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "hr"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "hr"}); err != nil {
 		t.Fatal(err)
 	}
 	tok := tokenIn(t, w.lastMailTo(guest.Email).Body)
@@ -385,7 +385,7 @@ func TestCleanup(t *testing.T) {
 	w := newWorld(t)
 	owner := w.user("Иван")
 	org := w.org(owner)
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: uniqueEmail(), Role: "hr"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: uniqueEmail(), Role: "hr"}); err != nil {
 		t.Fatal(err)
 	}
 	count := func() int {

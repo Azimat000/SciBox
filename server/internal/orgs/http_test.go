@@ -508,3 +508,39 @@ func TestUnitHasVacanciesIsAConflict(t *testing.T) {
 		t.Errorf("%d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// Сделать владельцем и пригласить владельцем можно только со свежим паролем (T-12): сайт получает
+// reauth_required, человек вводит пароль, запрос повторяется.
+func TestHTTPOwnerNeedsFreshPassword(t *testing.T) {
+	a := newAPI(t)
+	owner := a.user("Иван Петров")
+	org := a.org(owner)
+	staff := a.user("Анна Смирнова")
+	a.member(owner, org.Slug, staff, "hr", nil)
+	base := "/api/organizations/" + org.Slug
+
+	if r := a.do(&owner, "PATCH", base+"/members/"+staff.ID.String(), map[string]string{"role": "owner"}); r.Code != 403 || r.errCode(t) != "reauth_required" {
+		t.Fatalf("make owner without a fresh password: %d %s", r.Code, r.Raw)
+	}
+	if r := a.do(&owner, "POST", base+"/invitations", map[string]any{"email": "boss@example.ru", "role": "owner"}); r.Code != 403 || r.errCode(t) != "reauth_required" {
+		t.Fatalf("invite an owner without a fresh password: %d %s", r.Code, r.Raw)
+	}
+	// Другие роли пароля не просят.
+	if r := a.do(&owner, "POST", base+"/invitations", map[string]any{"email": "hr@example.ru", "role": "hr"}); r.Code != 201 {
+		t.Fatalf("invite hr: %d %s", r.Code, r.Raw)
+	}
+
+	p, err := a.auth.Authenticate(bg, owner.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.auth.Reauth(bg, p, goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	if r := a.do(&owner, "PATCH", base+"/members/"+staff.ID.String(), map[string]string{"role": "owner"}); r.Code != 204 {
+		t.Fatalf("make owner after reauth: %d %s", r.Code, r.Raw)
+	}
+	if r := a.do(&owner, "POST", base+"/invitations", map[string]any{"email": "boss@example.ru", "role": "owner"}); r.Code != 201 {
+		t.Fatalf("invite an owner after reauth: %d %s", r.Code, r.Raw)
+	}
+}

@@ -118,6 +118,16 @@ func tokenIn(t *testing.T, m mail.Message) string {
 	return tok
 }
 
+// gotMail — человеку пришло письмо, в теме которого есть subject.
+func (e *env) gotMail(email, subject string) bool {
+	for _, m := range e.mailsTo(email) {
+		if strings.Contains(m.Subject, subject) {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *env) lastMailTo(email string) mail.Message {
 	e.t.Helper()
 	ms := e.mailsTo(email)

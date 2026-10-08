@@ -361,7 +361,7 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 			unit = *r.UnitName
 		}
 		out.Items = append(out.Items, Candidate{
-			ID: r.ID, Status: r.Status, CreatedAt: r.CreatedAt, StatusChangedAt: r.StatusChangedAt, ApplicantName: r.ApplicantName, Headline: r.Headline,
+			ID: r.ID, Status: r.Status, CreatedAt: r.CreatedAt, StatusChangedAt: r.StatusChangedAt, ApplicantName: r.ApplicantName, Headline: r.Headline, Anonymized: r.Anonymized,
 			Vacancy:            VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug},
 			UnitName:           unit,
 			References:         RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)},

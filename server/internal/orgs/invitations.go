@@ -39,7 +39,9 @@ type InviteInput struct {
 }
 
 // Invite приглашает человека по почте (владелец). Новое приглашение на ту же почту отменяет прежние.
-func (s *Service) Invite(ctx context.Context, user auth.User, slug string, in InviteInput) (PendingInvitation, error) {
+// Пригласить владельцем можно только со свежим паролем (p.Fresh).
+func (s *Service) Invite(ctx context.Context, p auth.Principal, slug string, in InviteInput) (PendingInvitation, error) {
+	user := p.User
 	org, _, err := s.require(ctx, s.q, slug, user, access.ManageMembers, access.NoUnit)
 	if err != nil {
 		return PendingInvitation{}, err
@@ -77,6 +79,10 @@ func (s *Service) Invite(ctx context.Context, user auth.User, slug string, in In
 	}
 	if len(fields) > 0 {
 		return PendingInvitation{}, &auth.ValidationError{Fields: fields}
+	}
+	// Приглашение владельцем передаёт права на всё: только вскоре после ввода пароля (T-12).
+	if role == access.RoleOwner && !p.Fresh {
+		return PendingInvitation{}, auth.ErrReauthRequired
 	}
 
 	raw, hash := newToken()

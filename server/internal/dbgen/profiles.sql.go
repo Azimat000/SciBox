@@ -81,7 +81,7 @@ func (q *Queries) EnsureProfile(ctx context.Context, arg EnsureProfileParams) er
 }
 
 const getProfileByID = `-- name: GetProfileByID :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -128,6 +128,7 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 		&i.Profile.UpdatedAt,
 		&i.Profile.ResearchSkills,
 		&i.Profile.GeneralSkills,
+		&i.Profile.VisibilityBeforeDeletion,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -136,7 +137,7 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 }
 
 const getProfileByUser = `-- name: GetProfileByUser :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -183,6 +184,7 @@ func (q *Queries) GetProfileByUser(ctx context.Context, userID uuid.UUID) (GetPr
 		&i.Profile.UpdatedAt,
 		&i.Profile.ResearchSkills,
 		&i.Profile.GeneralSkills,
+		&i.Profile.VisibilityBeforeDeletion,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,

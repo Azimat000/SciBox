@@ -90,7 +90,10 @@ func TestUpDownUp(t *testing.T) {
 	journalTables := append(slices.Clone(matchingTables), "journal_issns", "journals")
 	slices.Sort(journalTables)
 	// Счётчики ограничения частоты (00015).
-	allTables := append(slices.Clone(journalTables), "rate_counters")
+	counterTables := append(slices.Clone(journalTables), "rate_counters")
+	slices.Sort(counterTables)
+	// Знакомые браузеры (00016).
+	allTables := append(slices.Clone(counterTables), "known_devices")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -99,9 +102,10 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00015_rate_counters.sql", 2, allTables},
+		{"up", "00016_account_security.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		{"down", "00016_account_security.sql", 2, counterTables},
 		{"down", "00015_rate_counters.sql", 2, journalTables},
 		// Виды вакансий и навыки (00013, 00014) таблиц не добавляют.
 		{"down", "00014_profile_skills.sql", 2, journalTables},
@@ -118,7 +122,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00015_rate_counters.sql", 2, allTables},
+		{"up", "00016_account_security.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

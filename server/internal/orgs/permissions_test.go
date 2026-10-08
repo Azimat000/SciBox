@@ -35,7 +35,7 @@ func newPermWorld(t *testing.T) *permWorld {
 	w.member(p.owner, p.slug, p.headA, "unit_head", &p.unitA.ID)
 	w.member(p.owner, p.slug, p.headB, "unit_head", &p.unitB.ID)
 	w.member(p.owner, p.slug, p.colleague, "hr", nil)
-	inv, err := w.svc.Invite(bg, p.owner.User, p.slug, InviteInput{Email: "pending@example.ru", Role: "hr"})
+	inv, err := w.svc.Invite(bg, fresh(p.owner.User), p.slug, InviteInput{Email: "pending@example.ru", Role: "hr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestWhoCanDoWhat(t *testing.T) {
 			return err
 		}, ownerOnly},
 		{"change a role", func(p *permWorld, who person) error {
-			return p.w.svc.ChangeRole(bg, who.User, p.slug, p.colleague.ID, "unit_head")
+			return p.w.svc.ChangeRole(bg, fresh(who.User), p.slug, p.colleague.ID, "unit_head")
 		}, ownerOnly},
 		{"remove a colleague", func(p *permWorld, who person) error {
 			target := p.w.user("Жертва")
@@ -93,11 +93,11 @@ func TestWhoCanDoWhat(t *testing.T) {
 			return p.w.svc.RemoveMember(bg, who.User, p.slug, target.ID)
 		}, ownerOnly},
 		{"invite", func(p *permWorld, who person) error {
-			_, err := p.w.svc.Invite(bg, who.User, p.slug, InviteInput{Email: uniqueEmail(), Role: "hr"})
+			_, err := p.w.svc.Invite(bg, fresh(who.User), p.slug, InviteInput{Email: uniqueEmail(), Role: "hr"})
 			return err
 		}, ownerOnly},
 		{"revoke an invitation", func(p *permWorld, who person) error {
-			inv, err := p.w.svc.Invite(bg, p.owner.User, p.slug, InviteInput{Email: uniqueEmail(), Role: "hr"})
+			inv, err := p.w.svc.Invite(bg, fresh(p.owner.User), p.slug, InviteInput{Email: uniqueEmail(), Role: "hr"})
 			if err != nil {
 				return err
 			}
@@ -131,8 +131,8 @@ func TestForbiddenActionsChangeNothing(t *testing.T) {
 	for _, who := range []person{p.hr, p.headA, p.stranger} {
 		_, _ = w.svc.UpdateOrganization(bg, who.User, p.slug, OrgInput{Name: "Захвачено", Kind: KindOther, City: "Москва"})
 		_, _ = w.svc.CreateUnit(bg, who.User, p.slug, unitInput())
-		_, _ = w.svc.Invite(bg, who.User, p.slug, InviteInput{Email: "intruder@example.ru", Role: "owner"})
-		_ = w.svc.ChangeRole(bg, who.User, p.slug, p.owner.ID, "hr")
+		_, _ = w.svc.Invite(bg, fresh(who.User), p.slug, InviteInput{Email: "intruder@example.ru", Role: "owner"})
+		_ = w.svc.ChangeRole(bg, fresh(who.User), p.slug, p.owner.ID, "hr")
 		_ = w.svc.RemoveMember(bg, who.User, p.slug, p.owner.ID)
 		_ = w.svc.DeleteUnit(bg, who.User, p.slug, p.unitB.ID)
 	}

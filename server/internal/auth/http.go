@@ -11,13 +11,18 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"scibox/server/internal/apierr"
+	"scibox/server/internal/erasure"
 	"scibox/server/internal/httpguard"
 )
 
 // CookieName — имя cookie с сессией.
 const CookieName = "scibox_session"
+
+// DeviceCookieName — долгая cookie знакомого браузера (письмо о входе с нового устройства, T-13).
+const DeviceCookieName = "scibox_device"
 
 // maxBody — самый большой допустимый размер тела запроса аккаунтов.
 const maxBody = 16 << 10
@@ -28,6 +33,8 @@ const (
 	CodeEmailNotConfirmed  = "email_not_confirmed"
 	CodeInvalidToken       = "invalid_token"
 	CodeUnsupportedMedia   = apierr.CodeUnsupportedMedia
+	CodeEmailTaken         = "email_taken"
+	CodeDeletionBlocked    = "deletion_blocked"
 )
 
 // Handler — HTTP-часть аккаунтов: cookie, проверка источника запроса, обработчики.
@@ -69,12 +76,21 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Post("/logout", h.logout)
 		r.Post("/forgot-password", h.forgotPassword)
 		r.Post("/reset-password", h.resetPassword)
+		r.Post("/confirm-email-change", h.confirmEmailChange)
+		r.Post("/revert-email-change", h.revertEmailChange)
 	})
 	r.Route("/account", func(r chi.Router) {
 		r.Use(h.RequireUser)
 		r.Patch("/", h.updateAccount)
 		r.Post("/password", h.changePassword)
+		r.Post("/reauth", h.reauth)
+		r.Get("/sessions", h.listSessions)
+		r.Delete("/sessions/{id}", h.revokeSession)
 		r.Post("/sessions/revoke-others", h.revokeOthers)
+		r.Post("/email", h.requestEmailChange)
+		r.Get("/deletion", h.deletionPlan)
+		r.Post("/deletion", h.requestDeletion)
+		r.Post("/deletion/cancel", h.cancelDeletion)
 	})
 }
 
@@ -154,6 +170,18 @@ func (h *Handler) setCookie(w http.ResponseWriter, token string, expires time.Ti
 	})
 }
 
+// setDeviceCookie запоминает браузер как знакомый на DeviceTTL. Пустой токен — менять нечего.
+func (h *Handler) setDeviceCookie(w http.ResponseWriter, token string) {
+	if token == "" {
+		return
+	}
+	ttl := h.svc.cfg.DeviceTTL
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
+		Name: DeviceCookieName, Value: token, Path: "/", Expires: time.Now().Add(ttl), MaxAge: int(ttl.Seconds()),
+		HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func (h *Handler) clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
 		Name: CookieName, Value: "", Path: "/", MaxAge: -1,
@@ -164,7 +192,11 @@ func (h *Handler) clearCookie(w http.ResponseWriter) {
 // meta — адрес и браузер человека. Адрес с учётом доверенных прокси решает периметр (httpguard, T-06):
 // без доверенных прокси это адрес соединения, заголовки X-Forwarded-* не принимаются.
 func meta(r *http.Request) Meta {
-	return Meta{IP: httpguard.ClientIP(r), UserAgent: r.UserAgent()}
+	m := Meta{IP: httpguard.ClientIP(r), UserAgent: r.UserAgent()}
+	if c, err := r.Cookie(DeviceCookieName); err == nil {
+		m.Device = c.Value
+	}
+	return m
 }
 
 // decode читает JSON-тело запроса; при ошибке сам отвечает и возвращает false.
@@ -177,10 +209,20 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var (
 		verr *ValidationError
 		rerr *RateLimitedError
+		berr *erasure.BlockedError
 	)
 	switch {
 	case errors.As(err, &verr):
 		apierr.WriteFieldErrors(w, "Проверьте поля формы", verr.Fields)
+	case errors.Is(err, ErrReauthRequired):
+		WriteReauthRequired(w)
+	case errors.As(err, &berr):
+		apierr.WriteError(w, http.StatusConflict, CodeDeletionBlocked,
+			"Вы единственный владелец организации, где есть другие сотрудники. Сначала сделайте владельцем кого-то из них")
+	case errors.Is(err, ErrEmailTaken):
+		apierr.WriteError(w, http.StatusConflict, CodeEmailTaken, "Эта почта уже привязана к другому аккаунту")
+	case errors.Is(err, ErrNotFound):
+		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, "Такой сессии нет")
 	case errors.As(err, &rerr):
 		secs := int(math.Ceil(rerr.RetryAfter.Seconds()))
 		w.Header().Set("Retry-After", strconv.Itoa(secs))
@@ -200,16 +242,27 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	}
 }
 
+// WriteReauthRequired отвечает 403 reauth_required: сайт покажет окно пароля и повторит запрос.
+// Нужен и другим разделам (назначение владельца организации).
+func WriteReauthRequired(w http.ResponseWriter) {
+	apierr.WriteError(w, http.StatusForbidden, apierr.CodeReauthRequired, "Для этого действия введите пароль ещё раз")
+}
+
 type userJSON struct {
 	ID             string    `json:"id"`
 	Email          string    `json:"email"`
 	Name           string    `json:"name"`
 	EmailConfirmed bool      `json:"email_confirmed"`
 	CreatedAt      time.Time `json:"created_at"`
+	// DeletionDueAt — когда аккаунт будет удалён (null — удаление не назначено).
+	DeletionDueAt *time.Time `json:"deletion_due_at"`
 }
 
 func toJSON(u User) userJSON {
-	return userJSON{ID: u.ID.String(), Email: u.Email, Name: u.Name, EmailConfirmed: u.EmailConfirmed, CreatedAt: u.CreatedAt}
+	return userJSON{
+		ID: u.ID.String(), Email: u.Email, Name: u.Name, EmailConfirmed: u.EmailConfirmed, CreatedAt: u.CreatedAt,
+		DeletionDueAt: u.DeletionDueAt,
+	}
 }
 
 type userResponse struct {
@@ -263,6 +316,7 @@ func (h *Handler) confirmEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.setCookie(w, sess.Token, sess.ExpiresAt)
+	h.setDeviceCookie(w, sess.Device)
 	writeUser(w, http.StatusOK, user)
 }
 
@@ -304,7 +358,15 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
+	// Вход всегда даёт новую сессию; прежняя сессия этого браузера (любого человека) завершается (T-10).
+	if c, err := r.Cookie(CookieName); err == nil {
+		if err := h.svc.Logout(r.Context(), c.Value); err != nil {
+			h.fail(w, r, err)
+			return
+		}
+	}
 	h.setCookie(w, sess.Token, sess.ExpiresAt)
+	h.setDeviceCookie(w, sess.Device)
 	writeUser(w, http.StatusOK, user)
 }
 
@@ -370,6 +432,162 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) revokeOthers(w http.ResponseWriter, r *http.Request) {
 	p, _ := FromContext(r.Context())
 	if err := h.svc.RevokeOtherSessions(r.Context(), p); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- срез 20: свежий пароль, сессии, смена почты, удаление ----
+
+func (h *Handler) reauth(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Password string `json:"password"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	p, _ := FromContext(r.Context())
+	if err := h.svc.Reauth(r.Context(), p, in.Password); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type sessionJSON struct {
+	ID         string    `json:"id"`
+	Browser    string    `json:"browser"`
+	OS         string    `json:"os"`
+	Mobile     bool      `json:"mobile"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	Current    bool      `json:"current"`
+}
+
+func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
+	p, _ := FromContext(r.Context())
+	list, err := h.svc.ListSessions(r.Context(), p)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	out := make([]sessionJSON, len(list))
+	for i, s := range list {
+		out[i] = sessionJSON{
+			ID: s.ID.String(), Browser: s.Device.Browser, OS: s.Device.OS, Mobile: s.Device.Mobile,
+			CreatedAt: s.CreatedAt, LastSeenAt: s.LastSeenAt, Current: s.Current,
+		}
+	}
+	apierr.WriteJSON(w, http.StatusOK, map[string]any{"sessions": out})
+}
+
+func (h *Handler) revokeSession(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		h.fail(w, r, ErrNotFound)
+		return
+	}
+	p, _ := FromContext(r.Context())
+	if err := h.svc.RevokeSession(r.Context(), p, id); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	if id == p.SessionID {
+		h.clearCookie(w)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) requestEmailChange(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Email string `json:"email"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	p, _ := FromContext(r.Context())
+	if err := h.svc.RequestEmailChange(r.Context(), p, in.Email, meta(r)); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) confirmEmailChange(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Token string `json:"token"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	user, err := h.svc.ConfirmEmailChange(r.Context(), in.Token)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	writeUser(w, http.StatusOK, user)
+}
+
+func (h *Handler) revertEmailChange(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Token string `json:"token"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if err := h.svc.RevertEmailChange(r.Context(), in.Token); err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	// Все сессии завершены, в том числе, может быть, эта.
+	h.clearCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type orgRefJSON struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+func orgRefs(orgs []erasure.Org) []orgRefJSON {
+	out := make([]orgRefJSON, len(orgs))
+	for i, o := range orgs {
+		out[i] = orgRefJSON{Slug: o.Slug, Name: o.Name}
+	}
+	return out
+}
+
+func (h *Handler) deletionPlan(w http.ResponseWriter, r *http.Request) {
+	p, _ := FromContext(r.Context())
+	plan, err := h.svc.DeletionPlan(r.Context(), p)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, map[string]any{
+		"due_at":     p.User.DeletionDueAt,
+		"grace_days": int(h.svc.cfg.DeletionGrace / (24 * time.Hour)),
+		"blocking":   orgRefs(plan.Blocking),
+		"orphaned":   orgRefs(plan.Orphaned),
+	})
+}
+
+func (h *Handler) requestDeletion(w http.ResponseWriter, r *http.Request) {
+	p, _ := FromContext(r.Context())
+	due, err := h.svc.RequestDeletion(r.Context(), p)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	// Все сессии завершены, в том числе эта: человек вышел из аккаунта.
+	h.clearCookie(w)
+	apierr.WriteJSON(w, http.StatusOK, map[string]any{"due_at": due})
+}
+
+func (h *Handler) cancelDeletion(w http.ResponseWriter, r *http.Request) {
+	p, _ := FromContext(r.Context())
+	if err := h.svc.CancelDeletion(r.Context(), p); err != nil {
 		h.fail(w, r, err)
 		return
 	}

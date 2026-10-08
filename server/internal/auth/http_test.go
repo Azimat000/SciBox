@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -215,7 +217,7 @@ func TestHTTPFullCycle(t *testing.T) {
 	r.json(t, &raw)
 	for k := range raw["user"] {
 		switch k {
-		case "id", "email", "name", "email_confirmed", "created_at":
+		case "id", "email", "name", "email_confirmed", "created_at", "deletion_due_at":
 		default:
 			t.Fatalf("unexpected field %q in the user object (never leak hashes or internals)", k)
 		}
@@ -437,6 +439,10 @@ func TestHTTPEveryEndpointRejectsAnUnreadableBody(t *testing.T) {
 		{http.MethodPost, "/api/auth/login"},
 		{http.MethodPatch, "/api/account"},
 		{http.MethodPost, "/api/account/password"},
+		{http.MethodPost, "/api/account/reauth"},
+		{http.MethodPost, "/api/account/email"},
+		{http.MethodPost, "/api/auth/confirm-email-change"},
+		{http.MethodPost, "/api/auth/revert-email-change"},
 	} {
 		r := a.do(c.method, c.path, `{"broken":`)
 		if r.status != 400 || r.apiError(t).Error.Code != "bad_request" {
@@ -451,6 +457,13 @@ func TestHTTPAccountRequiresSignIn(t *testing.T) {
 		{http.MethodPatch, "/api/account"},
 		{http.MethodPost, "/api/account/password"},
 		{http.MethodPost, "/api/account/sessions/revoke-others"},
+		{http.MethodGet, "/api/account/sessions"},
+		{http.MethodDelete, "/api/account/sessions/" + uuid.NewString()},
+		{http.MethodPost, "/api/account/reauth"},
+		{http.MethodPost, "/api/account/email"},
+		{http.MethodGet, "/api/account/deletion"},
+		{http.MethodPost, "/api/account/deletion"},
+		{http.MethodPost, "/api/account/deletion/cancel"},
 	} {
 		r := a.do(c.method, c.path, map[string]string{"name": "x"})
 		if r.status != http.StatusUnauthorized || r.apiError(t).Error.Code != "unauthorized" {
@@ -576,6 +589,8 @@ func TestHTTPServerFailuresAreHiddenFromThePerson(t *testing.T) {
 		{"/api/auth/resend-confirmation", map[string]string{"email": "a@b.ru"}},
 		{"/api/auth/forgot-password", map[string]string{"email": "a@b.ru"}},
 		{"/api/auth/reset-password", map[string]string{"token": "x", "password": "a good new passphrase"}},
+		{"/api/auth/confirm-email-change", map[string]string{"token": "x"}},
+		{"/api/auth/revert-email-change", map[string]string{"token": "x"}},
 	} {
 		if r := a.post(c.path, c.body); r.status != 500 || r.apiError(t).Error.Code != "internal" {
 			t.Errorf("%s: %d %s", c.path, r.status, r.body)
@@ -591,7 +606,10 @@ func TestHTTPServerFailuresAreHiddenFromThePerson(t *testing.T) {
 	}
 	// Адреса настроек, когда человек уже распознан, а база отвалилась.
 	signedIn := func(req *http.Request) *http.Request {
-		return req.WithContext(context.WithValue(req.Context(), ctxKey{}, Principal{User: User{Name: "x"}}))
+		rc := chi.NewRouteContext()
+		rc.URLParams.Add("id", uuid.NewString())
+		ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rc)
+		return req.WithContext(context.WithValue(ctx, ctxKey{}, Principal{User: User{Name: "x"}, Fresh: true}))
 	}
 	for name, c := range map[string]struct {
 		call func(http.ResponseWriter, *http.Request)
@@ -600,6 +618,13 @@ func TestHTTPServerFailuresAreHiddenFromThePerson(t *testing.T) {
 		"rename":   {h.updateAccount, `{"name":"Анна"}`},
 		"password": {h.changePassword, `{"current_password":"x","new_password":"a good new passphrase"}`},
 		"revoke":   {h.revokeOthers, `{}`},
+		"reauth":   {h.reauth, `{"password":"x"}`},
+		"sessions": {h.listSessions, ``},
+		"end one":  {h.revokeSession, ``},
+		"email":    {h.requestEmailChange, `{"email":"new@example.ru"}`},
+		"plan":     {h.deletionPlan, ``},
+		"delete":   {h.requestDeletion, ``},
+		"undelete": {h.cancelDeletion, ``},
 	} {
 		call := c.call
 		req := signedIn(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(c.body)))
@@ -659,5 +684,281 @@ func TestServiceConfigAccessor(t *testing.T) {
 	}
 	if (&RateLimitedError{}).Error() == "" {
 		t.Fatal("RateLimitedError must have a message")
+	}
+}
+
+// browser — второй «браузер» того же теста: своя cookie, та же база и почта.
+func (a *api) browser() *api {
+	return &api{t: a.t, e: a.e, handler: a.handler, ip: a.e.meta().IP, origin: a.origin, cookies: map[string]*http.Cookie{}}
+}
+
+func (a *api) login(email string) {
+	a.t.Helper()
+	if r := a.post("/api/auth/login", map[string]string{"email": email, "password": goodPassword}); r.status != http.StatusOK {
+		a.t.Fatalf("login: %d %s", r.status, r.body)
+	}
+}
+
+func (a *api) signedInAs() string {
+	a.t.Helper()
+	r := a.get("/api/whoami")
+	if r.status != http.StatusOK {
+		return ""
+	}
+	return string(r.body)
+}
+
+// Регистрация отвечает одинаково на свободную и на занятую почту: по ответу не узнать, есть ли аккаунт.
+func TestHTTPRegisterAnswersTheSameForTakenAndFreeAddress(t *testing.T) {
+	a := newAPI(t)
+	taken := a.signedIn()
+	a.post("/api/auth/logout", nil)
+	free := uniqueEmail()
+	var answers []string
+	for _, email := range []string{taken, free} {
+		r := a.post("/api/auth/register", a.registerBody(strings.ToUpper(email)))
+		if r.status != http.StatusAccepted || r.header.Get("Set-Cookie") != "" {
+			t.Fatalf("register %s: %d %s", email, r.status, r.body)
+		}
+		answers = append(answers, strings.Replace(string(r.body), email, "EMAIL", 1))
+	}
+	if answers[0] != answers[1] {
+		t.Fatalf("answers differ: %q", answers)
+	}
+}
+
+// Свежий пароль, смена почты и откат через HTTP (T-11, T-12).
+func TestHTTPEmailChangeNeedsFreshPasswordAndCanBeReverted(t *testing.T) {
+	a := newAPI(t)
+	oldEmail := a.signedIn() // вход по ссылке из письма: пароль не вводили
+	newEmail := uniqueEmail()
+
+	r := a.post("/api/account/email", map[string]string{"email": newEmail})
+	if r.status != http.StatusForbidden || r.apiError(t).Error.Code != "reauth_required" {
+		t.Fatalf("change without a fresh password: %d %s", r.status, r.body)
+	}
+	if r = a.post("/api/account/reauth", map[string]string{"password": "wrong password here"}); r.status != 422 || r.apiError(t).Error.Fields["password"] == "" {
+		t.Fatalf("wrong password: %d %s", r.status, r.body)
+	}
+	if r = a.post("/api/account/reauth", map[string]string{"password": goodPassword}); r.status != http.StatusNoContent {
+		t.Fatalf("reauth: %d %s", r.status, r.body)
+	}
+	if r = a.post("/api/account/email", map[string]string{"email": "broken"}); r.status != 422 || r.apiError(t).Error.Fields["email"] == "" {
+		t.Fatalf("broken email: %d %s", r.status, r.body)
+	}
+	if r = a.post("/api/account/email", map[string]string{"email": newEmail}); r.status != http.StatusAccepted {
+		t.Fatalf("change: %d %s", r.status, r.body)
+	}
+
+	// Ссылку открывают в другом браузере, где никто не вошёл: почта меняется, входа нет.
+	other := a.browser()
+	tok := tokenIn(t, a.e.lastMailTo(newEmail))
+	r = other.post("/api/auth/confirm-email-change", map[string]string{"token": tok})
+	var u userResp
+	r.json(t, &u)
+	if r.status != http.StatusOK || u.User == nil || u.User.Email != newEmail || other.cookies[CookieName] != nil {
+		t.Fatalf("confirm change: %d %s", r.status, r.body)
+	}
+	if r = other.post("/api/auth/confirm-email-change", map[string]string{"token": tok}); r.status != 400 || r.apiError(t).Error.Code != CodeInvalidToken {
+		t.Fatalf("second use: %d %s", r.status, r.body)
+	}
+	if got := a.signedInAs(); got != newEmail {
+		t.Fatalf("this browser must see the new email, got %q", got)
+	}
+
+	// «Это не я» со старого адреса: все сессии завершены.
+	revert := tokenIn(t, a.e.lastMailTo(oldEmail))
+	if r = other.post("/api/auth/revert-email-change", map[string]string{"token": revert}); r.status != http.StatusNoContent {
+		t.Fatalf("revert: %d %s", r.status, r.body)
+	}
+	if got := a.signedInAs(); got != "" {
+		t.Fatalf("every session must end after a revert, still %q", got)
+	}
+	a.login(oldEmail)
+}
+
+func TestHTTPEmailChangeToTakenAddressAfterLinkSent(t *testing.T) {
+	a := newAPI(t)
+	email := a.signedIn()
+	a.post("/api/auth/logout", nil)
+	a.login(email)
+	newEmail := uniqueEmail()
+	if r := a.post("/api/account/email", map[string]string{"email": newEmail}); r.status != http.StatusAccepted {
+		t.Fatalf("change: %d %s", r.status, r.body)
+	}
+	tok := tokenIn(t, a.e.lastMailTo(newEmail))
+	a.browser().signedInWith(newEmail)
+	r := a.browser().post("/api/auth/confirm-email-change", map[string]string{"token": tok})
+	if r.status != http.StatusConflict || r.apiError(t).Error.Code != CodeEmailTaken {
+		t.Fatalf("taken address: %d %s", r.status, r.body)
+	}
+}
+
+// signedInWith регистрирует и подтверждает человека с этой почтой.
+func (a *api) signedInWith(email string) {
+	a.t.Helper()
+	if r := a.post("/api/auth/register", a.registerBody(email)); r.status != http.StatusAccepted {
+		a.t.Fatalf("register: %d %s", r.status, r.body)
+	}
+	if r := a.post("/api/auth/confirm-email", map[string]string{"token": tokenIn(a.t, a.e.lastMailTo(email))}); r.status != http.StatusOK {
+		a.t.Fatalf("confirm: %d %s", r.status, r.body)
+	}
+}
+
+// Сессии: список, завершение чужой (своей другой) и текущей; cookie устройства (T-10, T-13).
+func TestHTTPSessions(t *testing.T) {
+	a := newAPI(t)
+	email := a.signedIn()
+	dev := a.cookies[DeviceCookieName]
+	if dev == nil || !dev.HttpOnly || dev.SameSite != http.SameSiteLaxMode || dev.MaxAge < 399*24*3600 || dev.Value == "" {
+		t.Fatalf("device cookie after confirmation: %+v", dev)
+	}
+	phone := a.browser()
+	phone.login(email)
+
+	r := a.get("/api/account/sessions")
+	var list struct {
+		Sessions []map[string]any `json:"sessions"`
+	}
+	r.json(t, &list)
+	if r.status != http.StatusOK || len(list.Sessions) != 2 {
+		t.Fatalf("sessions: %d %s", r.status, r.body)
+	}
+	var otherID string
+	for _, s := range list.Sessions {
+		for _, k := range []string{"id", "browser", "os", "mobile", "created_at", "last_seen_at", "current"} {
+			if _, ok := s[k]; !ok {
+				t.Fatalf("session row lacks %q: %v", k, s)
+			}
+		}
+		if len(s) != 7 {
+			t.Fatalf("session row must not carry extra fields (IP, token): %v", s)
+		}
+		if s["current"] == false {
+			otherID = s["id"].(string)
+		}
+	}
+	if otherID == "" {
+		t.Fatal("no other session in the list")
+	}
+	if r = a.do(http.MethodDelete, "/api/account/sessions/not-a-number", nil); r.status != 404 {
+		t.Fatalf("bad id: %d %s", r.status, r.body)
+	}
+	if r = a.do(http.MethodDelete, "/api/account/sessions/"+otherID, nil); r.status != http.StatusNoContent || a.cookies[CookieName] == nil {
+		t.Fatalf("end the phone session: %d %s", r.status, r.body)
+	}
+	if phone.signedInAs() != "" || a.signedInAs() != email {
+		t.Fatal("only the phone session must end")
+	}
+	if r = a.do(http.MethodDelete, "/api/account/sessions/"+otherID, nil); r.status != 404 {
+		t.Fatalf("ending twice: %d %s", r.status, r.body)
+	}
+	// Завершить текущую — то же, что выйти.
+	a.get("/api/account/sessions").json(t, &list)
+	if r = a.do(http.MethodDelete, "/api/account/sessions/"+list.Sessions[0]["id"].(string), nil); r.status != http.StatusNoContent || a.cookies[CookieName] != nil {
+		t.Fatalf("end the current session: %d %s", r.status, r.body)
+	}
+}
+
+// Вход завершает прежнюю сессию этого браузера, даже если она чужая (T-10).
+func TestHTTPLoginReplacesTheBrowserSession(t *testing.T) {
+	a := newAPI(t)
+	first := a.signedIn()
+	oldCookie := a.cookies[CookieName].Value
+	second := uniqueEmail()
+	a.browser().signedInWith(second)
+	a.login(second)
+	if a.cookies[CookieName].Value == oldCookie {
+		t.Fatal("login must give a new session")
+	}
+	if _, err := a.e.svc.Authenticate(bg, oldCookie); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("the previous session of this browser (%s) must end", first)
+	}
+}
+
+// Удаление аккаунта через HTTP: план, просьба (выход), отмена после входа.
+func TestHTTPDeletion(t *testing.T) {
+	a := newAPI(t)
+	email := a.signedIn()
+	r := a.post("/api/account/deletion", nil)
+	if r.status != http.StatusForbidden || r.apiError(t).Error.Code != "reauth_required" {
+		t.Fatalf("deletion without a fresh password: %d %s", r.status, r.body)
+	}
+	a.login(email)
+	var plan map[string]any
+	r = a.get("/api/account/deletion")
+	r.json(t, &plan)
+	if r.status != http.StatusOK || plan["due_at"] != nil || plan["grace_days"] != float64(14) ||
+		len(plan["blocking"].([]any)) != 0 || len(plan["orphaned"].([]any)) != 0 {
+		t.Fatalf("plan: %d %s", r.status, r.body)
+	}
+	r = a.post("/api/account/deletion", nil)
+	var due struct {
+		DueAt time.Time `json:"due_at"`
+	}
+	r.json(t, &due)
+	if r.status != http.StatusOK || due.DueAt.IsZero() || a.cookies[CookieName] != nil {
+		t.Fatalf("request deletion: %d %s", r.status, r.body)
+	}
+	a.login(email)
+	var me struct {
+		User struct {
+			DeletionDueAt *time.Time `json:"deletion_due_at"`
+		} `json:"user"`
+	}
+	a.get("/api/auth/me").json(t, &me)
+	if me.User.DeletionDueAt == nil || !me.User.DeletionDueAt.Equal(due.DueAt) {
+		t.Fatalf("me during the grace period: %+v", me)
+	}
+	if r = a.post("/api/account/deletion/cancel", nil); r.status != http.StatusNoContent {
+		t.Fatalf("cancel: %d %s", r.status, r.body)
+	}
+	a.get("/api/auth/me").json(t, &me)
+	if me.User.DeletionDueAt != nil {
+		t.Fatal("deletion must be cancelled")
+	}
+}
+
+func TestWriteReauthRequired(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteReauthRequired(rec)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"reauth_required"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+// Единственный владелец организации с сотрудниками: план называет организацию, просьба — 409 deletion_blocked.
+func TestHTTPDeletionBlockedForSoleOwner(t *testing.T) {
+	a := newAPI(t)
+	email := a.signedIn()
+	a.login(email)
+	staff := a.browser()
+	staffEmail := uniqueEmail()
+	staff.signedInWith(staffEmail)
+	var ownerID, staffID, orgID string
+	if err := sharedPool.QueryRow(bg, `SELECT id FROM users WHERE email = $1`, email).Scan(&ownerID); err != nil {
+		t.Fatal(err)
+	}
+	if err := sharedPool.QueryRow(bg, `SELECT id FROM users WHERE email = $1`, staffEmail).Scan(&staffID); err != nil {
+		t.Fatal(err)
+	}
+	slug := "sole-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:8]
+	if err := sharedPool.QueryRow(bg, `INSERT INTO organizations (slug, name, kind, city, created_by, created_at, updated_at)
+		VALUES ($1, 'Институт единственного владельца', 'institute', 'Пермь', $2, now(), now()) RETURNING id`, slug, ownerID).Scan(&orgID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sharedPool.Exec(bg, `INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES ($1, $2, 'owner', now()), ($1, $3, 'hr', now())`, orgID, ownerID, staffID); err != nil {
+		t.Fatal(err)
+	}
+	var plan struct {
+		Blocking []map[string]string `json:"blocking"`
+	}
+	a.get("/api/account/deletion").json(t, &plan)
+	if len(plan.Blocking) != 1 || plan.Blocking[0]["slug"] != slug || plan.Blocking[0]["name"] != "Институт единственного владельца" {
+		t.Fatalf("plan: %+v", plan)
+	}
+	r := a.post("/api/account/deletion", nil)
+	if r.status != http.StatusConflict || r.apiError(t).Error.Code != CodeDeletionBlocked || a.cookies[CookieName] == nil {
+		t.Fatalf("blocked deletion: %d %s", r.status, r.body)
 	}
 }

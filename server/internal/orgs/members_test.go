@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"scibox/server/internal/auth"
 )
 
 func roleOf(t *testing.T, w *world, slug string, owner person, who person) string {
@@ -29,7 +31,7 @@ func TestMembersList(t *testing.T) {
 	head := w.user("Борис Лабов")
 	w.member(owner, org.Slug, head, "unit_head", nil)
 	w.member(owner, org.Slug, hr, "hr", nil)
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "future@example.ru", Role: "hr"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "future@example.ru", Role: "hr"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,42 +67,42 @@ func TestChangeRole(t *testing.T) {
 	other := w.user("Анна")
 	w.member(owner, org.Slug, other, "hr", nil)
 
-	if err := w.svc.ChangeRole(bg, owner.User, org.Slug, other.ID, "owner"); err != nil {
+	if err := w.svc.ChangeRole(bg, fresh(owner.User), org.Slug, other.ID, "owner"); err != nil {
 		t.Fatal(err)
 	}
 	if got := roleOf(t, w, org.Slug, owner, other); got != "owner" {
 		t.Fatalf("role = %q, want owner", got)
 	}
 	// Теперь владельцев двое: первого можно понизить.
-	if err := w.svc.ChangeRole(bg, other.User, org.Slug, owner.ID, "hr"); err != nil {
+	if err := w.svc.ChangeRole(bg, fresh(other.User), org.Slug, owner.ID, "hr"); err != nil {
 		t.Fatal(err)
 	}
 	if got := roleOf(t, w, org.Slug, other, owner); got != "hr" {
 		t.Fatalf("role = %q, want hr", got)
 	}
 	// Остался один владелец (Анна): понизить себя она не может.
-	if err := w.svc.ChangeRole(bg, other.User, org.Slug, other.ID, "unit_head"); !errors.Is(err, ErrLastOwner) {
+	if err := w.svc.ChangeRole(bg, fresh(other.User), org.Slug, other.ID, "unit_head"); !errors.Is(err, ErrLastOwner) {
 		t.Fatalf("err = %v, want ErrLastOwner", err)
 	}
 	if got := roleOf(t, w, org.Slug, other, other); got != "owner" {
 		t.Errorf("the last owner must stay an owner, got %q", got)
 	}
 	// Подтвердить владельца владельцем можно.
-	if err := w.svc.ChangeRole(bg, other.User, org.Slug, other.ID, "owner"); err != nil {
+	if err := w.svc.ChangeRole(bg, fresh(other.User), org.Slug, other.ID, "owner"); err != nil {
 		t.Errorf("owner -> owner: %v", err)
 	}
 
-	if err := w.svc.ChangeRole(bg, other.User, org.Slug, owner.ID, "boss"); fieldsOf(t, err)["role"] == "" {
+	if err := w.svc.ChangeRole(bg, fresh(other.User), org.Slug, owner.ID, "boss"); fieldsOf(t, err)["role"] == "" {
 		t.Errorf("unknown role: %v", err)
 	}
-	if err := w.svc.ChangeRole(bg, other.User, org.Slug, uuid.New(), "hr"); !errors.Is(err, ErrNotFound) {
+	if err := w.svc.ChangeRole(bg, fresh(other.User), org.Slug, uuid.New(), "hr"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown person: %v", err)
 	}
 	// Не владелец роли не меняет.
-	if err := w.svc.ChangeRole(bg, owner.User, org.Slug, other.ID, "hr"); !errors.Is(err, ErrForbidden) {
+	if err := w.svc.ChangeRole(bg, fresh(owner.User), org.Slug, other.ID, "hr"); !errors.Is(err, ErrForbidden) {
 		t.Errorf("hr changing roles: %v", err)
 	}
-	if err := w.svc.ChangeRole(bg, other.User, "no-such-org", owner.ID, "hr"); !errors.Is(err, ErrNotFound) {
+	if err := w.svc.ChangeRole(bg, fresh(other.User), "no-such-org", owner.ID, "hr"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("missing organization: %v", err)
 	}
 }
@@ -164,5 +166,36 @@ func TestRemoveMember(t *testing.T) {
 	}
 	if err := w.svc.RemoveMember(bg, second.User, "no-such-org", second.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("missing organization: %v", err)
+	}
+}
+
+// Без свежего пароля владельцем не сделать и не пригласить; другие роли пароля не просят (T-12).
+func TestOwnerRoleNeedsFreshPassword(t *testing.T) {
+	w := newWorld(t)
+	owner := w.user("Иван")
+	org := w.org(owner)
+	other := w.user("Анна")
+	w.member(owner, org.Slug, other, "hr", nil)
+	stale := auth.Principal{User: owner.User}
+
+	if err := w.svc.ChangeRole(bg, stale, org.Slug, other.ID, "owner"); !errors.Is(err, auth.ErrReauthRequired) {
+		t.Fatalf("ChangeRole = %v", err)
+	}
+	if got := roleOf(t, w, org.Slug, owner, other); got != "hr" {
+		t.Fatalf("role changed without a password: %q", got)
+	}
+	if err := w.svc.ChangeRole(bg, stale, org.Slug, other.ID, "unit_head"); err != nil {
+		t.Fatalf("other roles need no password: %v", err)
+	}
+	before := countRows(t, `SELECT count(*) FROM org_invitations`)
+	if _, err := w.svc.Invite(bg, stale, org.Slug, InviteInput{Email: uniqueEmail(), Role: "owner"}); !errors.Is(err, auth.ErrReauthRequired) {
+		t.Fatalf("Invite owner = %v", err)
+	}
+	if after := countRows(t, `SELECT count(*) FROM org_invitations`); after != before {
+		t.Fatal("nothing must be created without a password")
+	}
+	// Посторонний без прав получает «нет прав», а не просьбу ввести пароль: права проверяются раньше.
+	if err := w.svc.ChangeRole(bg, auth.Principal{User: w.user("Чужой").User}, org.Slug, other.ID, "owner"); errors.Is(err, auth.ErrReauthRequired) {
+		t.Fatal("an outsider must not be asked for a password")
 	}
 }

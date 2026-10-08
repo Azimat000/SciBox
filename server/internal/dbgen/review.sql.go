@@ -288,7 +288,7 @@ func (q *Queries) ListCandidateVacancies(ctx context.Context, arg ListCandidateV
 
 const listCandidates = `-- name: ListCandidates :many
 
-SELECT a.id, a.status, a.created_at, a.status_changed_at,
+SELECT a.id, a.status, a.created_at, a.status_changed_at, (a.anonymized_at IS NOT NULL)::bool AS anonymized,
        u.display_name AS applicant_name,
        COALESCE(a.profile->>'headline', '')::text AS headline,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.unit_name,
@@ -320,6 +320,7 @@ type ListCandidatesRow struct {
 	Status          string
 	CreatedAt       time.Time
 	StatusChangedAt time.Time
+	Anonymized      bool
 	ApplicantName   string
 	Headline        string
 	VacancyID       uuid.UUID
@@ -358,6 +359,7 @@ func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) 
 			&i.Status,
 			&i.CreatedAt,
 			&i.StatusChangedAt,
+			&i.Anonymized,
 			&i.ApplicantName,
 			&i.Headline,
 			&i.VacancyID,

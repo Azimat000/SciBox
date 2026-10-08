@@ -71,7 +71,7 @@ func TestValidatePassword(t *testing.T) {
 		{"fine long phrase", "correct horse battery", "ivan@example.ru", ""},
 		{"fine cyrillic", "длинный русский пароль", "ivan@example.ru", ""},
 		{"fine without email", "correct horse battery", "", ""},
-		{"exactly 10", "abcde12345", "ivan@example.ru", ""},
+		{"exactly 10", "kv7rt2mx9q", "ivan@example.ru", ""},
 		{"empty", "", "ivan@example.ru", msgPasswordRequired},
 		{"9 characters", "abcde1234", "ivan@example.ru", msgPasswordShort},
 		{"10 cyrillic letters count as 10 not 20", "привет123", "ivan@example.ru", msgPasswordShort},

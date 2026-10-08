@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"scibox/server/internal/mail"
 )
 
 var bg = context.Background()
@@ -119,11 +121,17 @@ func TestRegisterExistingConfirmedAccountChangesNothing(t *testing.T) {
 	if _, _, err := e.login(email, "another password 1"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("the new password must not work: %v", err)
 	}
-	ms := e.mailsTo(email)
-	if len(ms) != before+1 {
-		t.Fatalf("want one extra mail, got %d", len(ms)-before)
+	// Кроме письма «вход с нового устройства» (тест входил дважды) — ровно одно письмо «уже есть».
+	var extra []mail.Message
+	for _, m := range e.mailsTo(email)[before:] {
+		if !strings.Contains(m.Subject, "нового устройства") {
+			extra = append(extra, m)
+		}
 	}
-	last := ms[len(ms)-1]
+	if len(extra) != 1 {
+		t.Fatalf("want one extra mail, got %d", len(extra))
+	}
+	last := extra[0]
 	if !strings.Contains(last.Subject, "уже есть") || !strings.Contains(last.Body, "/login") || !strings.Contains(last.Body, "/forgot-password") || strings.Contains(last.Body, "token=") {
 		t.Fatalf("already-registered mail: %q / %q", last.Subject, last.Body)
 	}
@@ -645,8 +653,8 @@ func TestPasswordResetFullCycle(t *testing.T) {
 	if _, _, err := e.login(email, "brand new passphrase"); err != nil {
 		t.Fatalf("new password must work: %v", err)
 	}
-	if last := e.lastMailTo(email); !strings.Contains(last.Subject, "изменён") {
-		t.Fatalf("the owner must be told about the change: %q", last.Subject)
+	if !e.gotMail(email, "изменён") {
+		t.Fatal("the owner must be told about the change")
 	}
 	// Ссылка одноразовая.
 	if err := e.svc.ResetPassword(bg, tok, "yet another passphrase"); !errors.Is(err, ErrInvalidToken) {
@@ -775,8 +783,8 @@ func TestChangePassword(t *testing.T) {
 	if _, _, err := e.login(email, "a brand new passphrase"); err != nil {
 		t.Fatal(err)
 	}
-	if last := e.lastMailTo(email); !strings.Contains(last.Subject, "изменён") {
-		t.Fatalf("the owner must be notified: %q", last.Subject)
+	if !e.gotMail(email, "изменён") {
+		t.Fatal("the owner must be notified")
 	}
 }
 

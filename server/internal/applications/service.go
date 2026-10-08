@@ -378,7 +378,7 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 	d := Detail{Base: Base{
 		ID: a.ID, Status: a.Status, CreatedAt: a.CreatedAt, StatusChangedAt: a.StatusChangedAt,
 		Vacancy:       VacancyRef{ID: a.VacancyID, Title: a.VacancyTitle, Status: a.VacancyStatus, OrgName: a.OrgName, OrgSlug: a.OrgSlug, Deadline: dateStr(a.Deadline)},
-		ApplicantName: a.ApplicantName, ContactEmail: a.ContactEmail, CoverLetter: a.CoverLetter, Profile: view, Files: []FileRef{}, DecisionNote: a.DecisionNote,
+		ApplicantName: a.ApplicantName, Anonymized: a.Anonymized, ContactEmail: a.ContactEmail, CoverLetter: a.CoverLetter, Profile: view, Files: []FileRef{}, DecisionNote: a.DecisionNote,
 	}}
 	if d.Invitations, err = s.invitationsOf(ctx, s.q, a.ID, reader); err != nil {
 		return Detail{}, err

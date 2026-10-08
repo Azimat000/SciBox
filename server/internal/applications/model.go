@@ -117,17 +117,19 @@ type List struct {
 
 // Base — то, что видят и соискатель, и организация.
 type Base struct {
-	ID              uuid.UUID     `json:"id"`
-	Status          string        `json:"status"`
-	CreatedAt       time.Time     `json:"created_at"`
-	StatusChangedAt time.Time     `json:"status_changed_at"`
-	Vacancy         VacancyRef    `json:"vacancy"`
-	ApplicantName   string        `json:"applicant_name"`
-	ContactEmail    string        `json:"contact_email"`
-	CoverLetter     string        `json:"cover_letter"`
-	Profile         profiles.View `json:"profile"`
-	CV              *FileRef      `json:"cv"`
-	Files           []FileRef     `json:"files"`
+	ID              uuid.UUID  `json:"id"`
+	Status          string     `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
+	StatusChangedAt time.Time  `json:"status_changed_at"`
+	Vacancy         VacancyRef `json:"vacancy"`
+	ApplicantName   string     `json:"applicant_name"`
+	// Anonymized — соискатель удалил аккаунт: письмо, контакты, профиль и файлы стёрты (D-142).
+	Anonymized   bool          `json:"anonymized"`
+	ContactEmail string        `json:"contact_email"`
+	CoverLetter  string        `json:"cover_letter"`
+	Profile      profiles.View `json:"profile"`
+	CV           *FileRef      `json:"cv"`
+	Files        []FileRef     `json:"files"`
 	// DecisionNote — записка организации к решению (принят, отказ); её видят обе стороны.
 	DecisionNote string       `json:"decision_note"`
 	Invitations  []Invitation `json:"invitations"`
@@ -217,6 +219,7 @@ type Candidate struct {
 	StatusChangedAt time.Time  `json:"status_changed_at"`
 	ApplicantName   string     `json:"applicant_name"`
 	Headline        string     `json:"headline"`
+	Anonymized      bool       `json:"anonymized"`
 	Vacancy         VacancyRef `json:"vacancy"`
 	UnitName        string     `json:"unit_name"`
 	References      RefsCount  `json:"references"`

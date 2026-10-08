@@ -12,6 +12,90 @@ import (
 	"github.com/google/uuid"
 )
 
+const cancelUserDeletion = `-- name: CancelUserDeletion :execrows
+UPDATE users SET deletion_due_at = NULL, updated_at = $1::timestamptz
+WHERE id = $2 AND deletion_due_at IS NOT NULL AND deleted_at IS NULL
+`
+
+type CancelUserDeletionParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+func (q *Queries) CancelUserDeletion(ctx context.Context, arg CancelUserDeletionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelUserDeletion, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const changeUserEmail = `-- name: ChangeUserEmail :one
+UPDATE users SET email = $1::citext, updated_at = $2::timestamptz
+WHERE id = $3 AND deleted_at IS NULL
+RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
+`
+
+type ChangeUserEmailParams struct {
+	Email string
+	Now   time.Time
+	ID    uuid.UUID
+}
+
+// Сменить почту аккаунта. Занятый адрес даёт ошибку уникальности (её разбирает сервис).
+func (q *Queries) ChangeUserEmail(ctx context.Context, arg ChangeUserEmailParams) (User, error) {
+	row := q.db.QueryRow(ctx, changeUserEmail, arg.Email, arg.Now, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.EmailConfirmedAt,
+		&i.PrivacyConsentAt,
+		&i.PrivacyPolicyVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletionDueAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const claimDueDeletions = `-- name: ClaimDueDeletions :many
+SELECT id FROM users
+WHERE deletion_due_at IS NOT NULL AND deletion_due_at <= $1::timestamptz AND deleted_at IS NULL
+ORDER BY deletion_due_at
+LIMIT $2
+FOR UPDATE SKIP LOCKED
+`
+
+type ClaimDueDeletionsParams struct {
+	Now     time.Time
+	MaxRows int32
+}
+
+// Аккаунты, чей срок отмены прошёл. SKIP LOCKED: две копии сервера не возьмут один аккаунт.
+func (q *Queries) ClaimDueDeletions(ctx context.Context, arg ClaimDueDeletionsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, claimDueDeletions, arg.Now, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const confirmUserEmail = `-- name: ConfirmUserEmail :exec
 UPDATE users
 SET email_confirmed_at = COALESCE(email_confirmed_at, $1::timestamptz), updated_at = $1::timestamptz
@@ -32,7 +116,7 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, display_name, password_hash, privacy_consent_at, privacy_policy_version, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $4, $4)
 ON CONFLICT (email) DO NOTHING
-RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at
+RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
 `
 
 type CreateUserParams struct {
@@ -62,12 +146,31 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PrivacyPolicyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionDueAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
+const emailTakenByOther = `-- name: EmailTakenByOther :one
+SELECT EXISTS (SELECT 1 FROM users WHERE email = $1::citext AND id <> $2) AS taken
+`
+
+type EmailTakenByOtherParams struct {
+	Email string
+	ID    uuid.UUID
+}
+
+// Есть ли живой аккаунт с этой почтой (кроме самого человека).
+func (q *Queries) EmailTakenByOther(ctx context.Context, arg EmailTakenByOtherParams) (bool, error) {
+	row := q.db.QueryRow(ctx, emailTakenByOther, arg.Email, arg.ID)
+	var taken bool
+	err := row.Scan(&taken)
+	return taken, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at FROM users WHERE email = $1
+SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -83,12 +186,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.PrivacyPolicyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionDueAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at FROM users WHERE id = $1
+SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -104,6 +209,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PrivacyPolicyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionDueAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -111,8 +218,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 const reregisterUnconfirmedUser = `-- name: ReregisterUnconfirmedUser :one
 UPDATE users
 SET display_name = $2, password_hash = $3, privacy_consent_at = $4, privacy_policy_version = $5, updated_at = $4
-WHERE id = $1 AND email_confirmed_at IS NULL
-RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at
+WHERE id = $1 AND email_confirmed_at IS NULL AND deleted_at IS NULL
+RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
 `
 
 type ReregisterUnconfirmedUserParams struct {
@@ -144,12 +251,34 @@ func (q *Queries) ReregisterUnconfirmedUser(ctx context.Context, arg ReregisterU
 		&i.PrivacyPolicyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionDueAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
+const scheduleUserDeletion = `-- name: ScheduleUserDeletion :one
+UPDATE users SET deletion_due_at = COALESCE(deletion_due_at, $1::timestamptz), updated_at = $2::timestamptz
+WHERE id = $3 AND deleted_at IS NULL
+RETURNING deletion_due_at
+`
+
+type ScheduleUserDeletionParams struct {
+	Due time.Time
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// Просьба удалить аккаунт: срок, после которого данные сотрутся. Повторная просьба срок не сдвигает.
+func (q *Queries) ScheduleUserDeletion(ctx context.Context, arg ScheduleUserDeletionParams) (*time.Time, error) {
+	row := q.db.QueryRow(ctx, scheduleUserDeletion, arg.Due, arg.Now, arg.ID)
+	var deletion_due_at *time.Time
+	err := row.Scan(&deletion_due_at)
+	return deletion_due_at, err
+}
+
 const updateUserName = `-- name: UpdateUserName :one
-UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at
+UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
 `
 
 type UpdateUserNameParams struct {
@@ -171,6 +300,8 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 		&i.PrivacyPolicyVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionDueAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }

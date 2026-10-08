@@ -223,8 +223,10 @@ func TestPerimeter(t *testing.T) {
 				name   string
 				cookie *http.Cookie
 			}{{"guest", nil}, {"signed in", applicant}} {
-				if who.cookie != nil && key == "POST /api/auth/logout" {
-					continue // выход закрыл бы сессию для всех следующих адресов; тело он не читает, гость проверяет его так же
+				if who.cookie != nil && (key == "POST /api/auth/logout" || key == "POST /api/account/deletion") {
+					// Выход и просьба удалить аккаунт закрыли бы сессию для всех следующих адресов; тело они не читают,
+					// гость проверяет их так же.
+					continue
 				}
 				t.Run(key+" "+who.name, func(t *testing.T) {
 					// Длина в заголовке больше лимита — отказ до чтения.

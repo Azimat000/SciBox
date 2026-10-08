@@ -20,7 +20,7 @@ RETURNING id;
 -- Карточка отклика с вакансией и именем соискателя.
 -- name: GetApplication :one
 SELECT a.id, a.vacancy_id, a.user_id, a.status, a.cover_letter, a.contact_email, a.profile, a.decision_note,
-       a.created_at, a.updated_at, a.status_changed_at,
+       a.created_at, a.updated_at, a.status_changed_at, (a.anonymized_at IS NOT NULL)::bool AS anonymized,
        u.display_name AS applicant_name,
        v.title AS vacancy_title, v.status AS vacancy_status, v.org_id, v.unit_id, v.org_name, v.org_slug, v.deadline
 FROM applications a

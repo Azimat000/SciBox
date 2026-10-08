@@ -28,3 +28,15 @@ WHERE t.token_hash = sqlc.arg(token_hash) AND t.purpose = sqlc.arg(purpose)
 -- name: LatestAuthTokenAt :one
 SELECT COALESCE(max(created_at), 'epoch'::timestamptz)::timestamptz AS at
 FROM auth_tokens WHERE user_id = $1 AND purpose = $2;
+
+-- Ссылка смены почты (change_email) или отката (revert_email): new_email — какой станет почта аккаунта.
+-- name: CreateEmailToken :exec
+INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at, new_email)
+VALUES ($1, $2, $3, $4, $5, sqlc.arg(new_email)::citext);
+
+-- Погасить ссылку смены почты одним запросом (как ConsumeAuthToken) и узнать адрес.
+-- name: ConsumeEmailToken :one
+UPDATE auth_tokens SET used_at = sqlc.arg(now)::timestamptz
+WHERE token_hash = sqlc.arg(token_hash) AND purpose = sqlc.arg(purpose)
+  AND used_at IS NULL AND expires_at > sqlc.arg(now)::timestamptz
+RETURNING user_id, new_email::text AS new_email;

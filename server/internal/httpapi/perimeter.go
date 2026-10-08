@@ -33,8 +33,8 @@ var (
 		Guest: httpguard.Rate{Requests: 20, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 20, Per: time.Minute},
 	}
-	// linkPages — страницы по одноразовым ссылкам из писем (рекомендатель, приглашение в организацию):
-	// человеку хватит нескольких запросов, перебор ссылок должен упираться в предел.
+	// linkPages — страницы по одноразовым ссылкам из писем (рекомендатель, приглашение в организацию,
+	// смена почты): человеку хватит нескольких запросов, перебор ссылок должен упираться в предел.
 	linkPages = &httpguard.Policy{
 		Name:  "link_page",
 		Guest: httpguard.Rate{Requests: 30, Per: time.Minute},
@@ -71,6 +71,8 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: post, Pattern: "/api/recommendations/submit", Body: uploadBody, Slow: true, Limit: linkPages},
 		{Method: post, Pattern: "/api/recommendations/decline", Limit: linkPages},
 		{Method: post, Pattern: "/api/invitations/lookup", Limit: linkPages},
+		{Method: post, Pattern: "/api/auth/confirm-email-change", Limit: linkPages},
+		{Method: post, Pattern: "/api/auth/revert-email-change", Limit: linkPages},
 	}
 }
 

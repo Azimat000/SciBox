@@ -20,7 +20,7 @@ func TestInviteAndAccept(t *testing.T) {
 	unit := w.unit(owner, org.Slug)
 	newbie := w.user("Анна Смирнова")
 
-	inv, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "  " + strings.ToUpper(newbie.Email) + " ", Role: "unit_head", UnitID: &unit.ID})
+	inv, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "  " + strings.ToUpper(newbie.Email) + " ", Role: "unit_head", UnitID: &unit.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestInviteValidation(t *testing.T) {
 		{"already a member", InviteInput{Email: strings.ToUpper(member.Email), Role: "hr"}, "email", msgAlreadyMember},
 	}
 	for _, c := range cases {
-		_, err := w.svc.Invite(bg, owner.User, org.Slug, c.in)
+		_, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, c.in)
 		got := fieldsOf(t, err)[c.field]
 		if got == "" || (c.msg != "" && got != c.msg) {
 			t.Errorf("%s: field %q = %q, want %q", c.name, c.field, got, c.msg)
@@ -135,12 +135,12 @@ func TestInviteValidation(t *testing.T) {
 		t.Errorf("%d mails sent for invalid invitations", n)
 	}
 	// Роль неверная и подразделение указано: ошибка только про роль (про подразделение судить рано).
-	_, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "a@example.ru", Role: "boss", UnitID: &unit.ID})
+	_, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "a@example.ru", Role: "boss", UnitID: &unit.ID})
 	if f := fieldsOf(t, err); f["unit_id"] != "" || f["role"] == "" {
 		t.Errorf("fields = %v", f)
 	}
 	// Руководитель без подразделения — допустимо.
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "a@example.ru", Role: "unit_head"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "a@example.ru", Role: "unit_head"}); err != nil {
 		t.Errorf("a head without a unit: %v", err)
 	}
 }
@@ -151,11 +151,11 @@ func TestInviteAgainReplacesEarlier(t *testing.T) {
 	org := w.org(owner)
 	guest := w.user("Гость")
 
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "hr"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "hr"}); err != nil {
 		t.Fatal(err)
 	}
 	first := tokenIn(t, w.lastMailTo(guest.Email).Body)
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "owner"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "owner"}); err != nil {
 		t.Fatal(err)
 	}
 	second := tokenIn(t, w.lastMailTo(guest.Email).Body)
@@ -183,7 +183,7 @@ func TestInvitationExpiresAndCanBeRevoked(t *testing.T) {
 	org := w.org(owner)
 	guest := w.user("Гость")
 
-	inv, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
+	inv, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestInvitationExpiresAndCanBeRevoked(t *testing.T) {
 	}
 
 	// Отзыв.
-	inv2, _ := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
+	inv2, _ := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
 	token2 := tokenIn(t, w.lastMailTo(guest.Email).Body)
 	if err := w.svc.RevokeInvitation(bg, owner.User, org.Slug, inv2.ID); err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestInvitationExpiresAndCanBeRevoked(t *testing.T) {
 	}
 	// Приглашение другой организации по адресу этой не отозвать.
 	other := w.org(owner)
-	inv3, _ := w.svc.Invite(bg, owner.User, other.Slug, InviteInput{Email: guest.Email, Role: "hr"})
+	inv3, _ := w.svc.Invite(bg, fresh(owner.User), other.Slug, InviteInput{Email: guest.Email, Role: "hr"})
 	if err := w.svc.RevokeInvitation(bg, owner.User, org.Slug, inv3.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("revoking through the wrong organization: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestAcceptByIDAndMyInvitations(t *testing.T) {
 	if mine, _ := w.svc.MyInvitations(bg, guest.User); len(mine) != 0 {
 		t.Fatalf("no invitations yet: %+v", mine)
 	}
-	inv, _ := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "unit_head", UnitID: &unit.ID})
+	inv, _ := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "unit_head", UnitID: &unit.ID})
 	mine, err := w.svc.MyInvitations(bg, guest.User)
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("my invitations: %+v, %v", mine, err)
@@ -284,7 +284,7 @@ func TestAcceptRefusedForExistingMemberKeepsInvitationAlive(t *testing.T) {
 	org := w.org(owner)
 	guest := w.user("Гость")
 	// Два приглашения от разных «поколений»: второе ещё живо, пока первое принимают в обход замены.
-	inv, _ := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
+	inv, _ := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: guest.Email, Role: "hr"})
 	token := tokenIn(t, w.lastMailTo(guest.Email).Body)
 	if _, err := sharedPool.Exec(bg, "INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES ($1, $2, 'hr', now())", org.ID, guest.ID); err != nil {
 		t.Fatal(err)
@@ -306,11 +306,11 @@ func TestInviteIsRateLimited(t *testing.T) {
 	org := w.org(owner)
 	w.svc.cfg.Invite = Limit{Max: 3, Window: time.Hour}
 	for i := 0; i < 3; i++ {
-		if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: uniqueEmail(), Role: "hr"}); err != nil {
+		if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: uniqueEmail(), Role: "hr"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	_, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "late@example.ru", Role: "hr"})
+	_, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "late@example.ru", Role: "hr"})
 	var rl *auth.RateLimitedError
 	if !errors.As(err, &rl) || rl.RetryAfter <= 0 || rl.RetryAfter > time.Hour {
 		t.Fatalf("err = %v", err)
@@ -319,7 +319,7 @@ func TestInviteIsRateLimited(t *testing.T) {
 		t.Errorf("a limited invitation sent %d mails", n)
 	}
 	w.clock.Advance(61 * time.Minute)
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "late@example.ru", Role: "hr"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "late@example.ru", Role: "hr"}); err != nil {
 		t.Errorf("after the window: %v", err)
 	}
 }
@@ -332,7 +332,7 @@ func TestMailFailureIsLoggedWithoutAddress(t *testing.T) {
 	w.svc.mailer = failingMailer{}
 	owner := w.user("Иван")
 	org := w.org(owner)
-	if _, err := w.svc.Invite(bg, owner.User, org.Slug, InviteInput{Email: "secret.person@example.ru", Role: "hr"}); err != nil {
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "secret.person@example.ru", Role: "hr"}); err != nil {
 		t.Fatal(err)
 	}
 	w.svc.Flush()

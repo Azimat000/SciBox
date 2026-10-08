@@ -33,6 +33,32 @@ func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenPara
 	return user_id, err
 }
 
+const consumeEmailToken = `-- name: ConsumeEmailToken :one
+UPDATE auth_tokens SET used_at = $1::timestamptz
+WHERE token_hash = $2 AND purpose = $3
+  AND used_at IS NULL AND expires_at > $1::timestamptz
+RETURNING user_id, new_email::text AS new_email
+`
+
+type ConsumeEmailTokenParams struct {
+	Now       time.Time
+	TokenHash []byte
+	Purpose   string
+}
+
+type ConsumeEmailTokenRow struct {
+	UserID   uuid.UUID
+	NewEmail string
+}
+
+// Погасить ссылку смены почты одним запросом (как ConsumeAuthToken) и узнать адрес.
+func (q *Queries) ConsumeEmailToken(ctx context.Context, arg ConsumeEmailTokenParams) (ConsumeEmailTokenRow, error) {
+	row := q.db.QueryRow(ctx, consumeEmailToken, arg.Now, arg.TokenHash, arg.Purpose)
+	var i ConsumeEmailTokenRow
+	err := row.Scan(&i.UserID, &i.NewEmail)
+	return i, err
+}
+
 const createAuthToken = `-- name: CreateAuthToken :exec
 INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -53,6 +79,33 @@ func (q *Queries) CreateAuthToken(ctx context.Context, arg CreateAuthTokenParams
 		arg.TokenHash,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+	)
+	return err
+}
+
+const createEmailToken = `-- name: CreateEmailToken :exec
+INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at, new_email)
+VALUES ($1, $2, $3, $4, $5, $6::citext)
+`
+
+type CreateEmailTokenParams struct {
+	UserID    uuid.UUID
+	Purpose   string
+	TokenHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	NewEmail  string
+}
+
+// Ссылка смены почты (change_email) или отката (revert_email): new_email — какой станет почта аккаунта.
+func (q *Queries) CreateEmailToken(ctx context.Context, arg CreateEmailTokenParams) error {
+	_, err := q.db.Exec(ctx, createEmailToken,
+		arg.UserID,
+		arg.Purpose,
+		arg.TokenHash,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.NewEmail,
 	)
 	return err
 }

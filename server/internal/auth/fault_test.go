@@ -255,6 +255,107 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"cleanup": func(t *testing.T, e *env) func(*Service) error {
 			return func(s *Service) error { return s.Cleanup(bg) }
 		},
+		"login from a known device": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, email := e.confirmedUser()
+			m := e.meta()
+			m.Device = sess.Device
+			return func(s *Service) error { _, _, err := s.Login(bg, email, goodPassword, m); return err }
+		},
+		"reauth": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			p, _ := e.svc.Authenticate(bg, sess.Token)
+			return func(s *Service) error { return s.Reauth(bg, p, goodPassword) }
+		},
+		"reauth, wrong password": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			p, _ := e.svc.Authenticate(bg, sess.Token)
+			return func(s *Service) error {
+				err := s.Reauth(bg, p, "wrong password!!")
+				if _, ok := errors.AsType[*ValidationError](err); ok {
+					return nil
+				}
+				return err
+			}
+		},
+		"list sessions": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			p, _ := e.svc.Authenticate(bg, sess.Token)
+			return func(s *Service) error { _, err := s.ListSessions(bg, p); return err }
+		},
+		"revoke session": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, email := e.confirmedUser()
+			p, _ := e.svc.Authenticate(bg, sess.Token)
+			_, other, _ := e.login(email, goodPassword)
+			po, _ := e.svc.Authenticate(bg, other.Token)
+			return func(s *Service) error { return s.RevokeSession(bg, p, po.SessionID) }
+		},
+		"request email change": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			p := e.freshPrincipal(sess)
+			return func(s *Service) error { return s.RequestEmailChange(bg, p, uniqueEmail(), e.meta()) }
+		},
+		"request email change, taken address": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			_, _, taken := e.confirmedUser()
+			p := e.freshPrincipal(sess)
+			return func(s *Service) error { return s.RequestEmailChange(bg, p, taken, e.meta()) }
+		},
+		"confirm email change": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			newEmail := uniqueEmail()
+			if err := e.svc.RequestEmailChange(bg, e.freshPrincipal(sess), newEmail, e.meta()); err != nil {
+				t.Fatal(err)
+			}
+			tok := tokenIn(t, e.lastMailTo(newEmail))
+			return func(s *Service) error { _, err := s.ConfirmEmailChange(bg, tok); return err }
+		},
+		"revert email change": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, oldEmail := e.confirmedUser()
+			p := e.freshPrincipal(sess)
+			newEmail := uniqueEmail()
+			if err := e.svc.RequestEmailChange(bg, p, newEmail, e.meta()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := e.svc.ConfirmEmailChange(bg, tokenIn(t, e.lastMailTo(newEmail))); err != nil {
+				t.Fatal(err)
+			}
+			revert := tokenIn(t, e.lastMailTo(oldEmail))
+			if _, err := e.svc.RequestDeletion(bg, p); err != nil {
+				t.Fatal(err)
+			}
+			return func(s *Service) error { return s.RevertEmailChange(bg, revert) }
+		},
+		"deletion plan": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			p, _ := e.svc.Authenticate(bg, sess.Token)
+			return func(s *Service) error { _, err := s.DeletionPlan(bg, p); return err }
+		},
+		"request deletion": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, _ := e.confirmedUser()
+			p := e.freshPrincipal(sess)
+			return func(s *Service) error { _, err := s.RequestDeletion(bg, p); return err }
+		},
+		"cancel deletion": func(t *testing.T, e *env) func(*Service) error {
+			_, sess, email := e.confirmedUser()
+			if _, err := e.svc.RequestDeletion(bg, e.freshPrincipal(sess)); err != nil {
+				t.Fatal(err)
+			}
+			p := e.freshPrincipal(mustLogin(t, e, email))
+			return func(s *Service) error { return s.CancelDeletion(bg, p) }
+		},
+		"process due deletions": func(t *testing.T, e *env) func(*Service) error {
+			if _, err := sharedPool.Exec(bg, `UPDATE users SET deletion_due_at = NULL WHERE deleted_at IS NULL`); err != nil {
+				t.Fatal(err)
+			}
+			u, sess, _ := e.confirmedUser()
+			if _, err := e.svc.RequestDeletion(bg, e.freshPrincipal(sess)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := sharedPool.Exec(bg, `UPDATE users SET deletion_due_at = $2 WHERE id = $1`, u.ID, e.clock.Now().Add(-time.Minute)); err != nil {
+				t.Fatal(err)
+			}
+			return func(s *Service) error { _, err := s.ProcessDueDeletions(bg); return err }
+		},
 	}
 	for name, prepare := range cases {
 		t.Run(name, func(t *testing.T) { runFaults(t, prepare) })

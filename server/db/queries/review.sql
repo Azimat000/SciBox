@@ -56,7 +56,7 @@ WHERE id = @id AND status = ANY(@from_statuses::text[]);
 -- Отклики на вакансии, которые человек вправе разбирать: организации целиком и отдельные подразделения.
 -- Нулевой номер вакансии и пустой статус значат «любые».
 -- name: ListCandidates :many
-SELECT a.id, a.status, a.created_at, a.status_changed_at,
+SELECT a.id, a.status, a.created_at, a.status_changed_at, (a.anonymized_at IS NOT NULL)::bool AS anonymized,
        u.display_name AS applicant_name,
        COALESCE(a.profile->>'headline', '')::text AS headline,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.unit_name,
