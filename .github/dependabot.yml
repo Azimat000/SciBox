@@ -1,0 +1,35 @@
+# Предложения обновить библиотеки (срез 18, T-03). Dependabot открывает запросы на слияние;
+# их проверяет ci.yml, вливает человек. Мелкие обновления собираются в один запрос на неделю,
+# крупные (смена первой цифры версии) приходят по одному. Свежий выпуск ждёт несколько дней:
+# так меньше шанс взять сломанную или подменённую версию.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /server
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      go-minor:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directories: [/web, /e2e]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        update-types: [minor, patch]

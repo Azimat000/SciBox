@@ -6,10 +6,11 @@
 
 ```
 SciBox/
+├── .github/             автоматические проверки в GitHub (срез 18): `workflows/ci.yml` — тесты сервера с -race и порогами на PostgreSQL-сервисе, golangci-lint, govulncheck, тесты сайта; `dependabot.yml` — еженедельные обновления Go, npm (web, e2e) и Actions с выдержкой 7 дней
 ├── config/product.json   название продукта; читают и сервер, и сайт (D-029)
 ├── docker-compose.yml    PostgreSQL 16.15 (порт 5433, D-028), Mailpit v1.31.3 (8025 / 1025)
 ├── README.md             запуск, демо-аккаунты, дорожки «я учёный» и «я организация», проверки
-├── Makefile              dev, test, test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc
+├── Makefile              dev, test (= lint + vulncheck + test-server + test-web), test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc
 ├── scripts/
 │   ├── dev.sh            собирает сервер, запускает сервер и Vite вместе
 │   ├── coverage-check    go vet + go test -race с покрытием + проверка порогов
@@ -18,14 +19,14 @@ SciBox/
 │                         и Vite на 5174 с базой scibox_e2e; tests/helpers.ts (письма из Mailpit, вход, режим, слежка за 5xx);
 │                         сценарии scientist-and-organization и new-organization, каждый на компьютере и телефоне (Pixel 7)
 ├── PRODUCT.md            описание продукта для impeccable (ведёт impeccable)
-├── server/               Go 1.26, модуль scibox/server
+├── server/               Go 1.26 (строка `toolchain go1.26.6` в go.mod закрепляет версию), модуль scibox/server
 │   ├── cmd/api/          точка входа: команды serve | migrate up|down|reset|status | journals load [--force] [файл] | seed | version
 │   ├── cmd/covercheck/   проверка порогов покрытия (логика в internal/covercheck)
 │   ├── db/migrations/    goose, встроены в бинарник (db/embed.go)
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
-│   ├── .golangci.yml     линтер: корректность и безопасность (gosec и др.), `make lint` / `make lint-new` (D-137)
+│   ├── .golangci.yml     линтер: корректность и безопасность (gosec, gocritic diagnostic, revive об ошибках и экспорте, nolintlint), `make lint` / `make lint-new` (D-137, срез 18); 0 замечаний, входит в `make test`
 │   ├── seed/             демо-данные (у демо-публикаций настоящие ISSN журналов из SCImago, `journalISSN` в `scientists.go`) (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов; `matching.go` — избранное и сохранённые поиски через сервис подбора); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
@@ -39,6 +40,7 @@ SciBox/
 │       ├── offers/       приглашения учёных на вакансии (критичная зона): отправка (права `ManageVacancies`, приватность профиля, лимит), ответ «Интересно / Не сейчас», отзыв, списки обеих сторон, «куда можно пригласить», тексты уведомлений (`notices.go`), HTTP
 │       ├── matching/     избранное, сохранённые поиски, подбор, календарь сроков (критичная зона): правила подбора (`rules.go`, без базы), расписание (`schedule.go`), сервис (`service.go`), фоновая рассылка по поискам (`digest.go`) и напоминания о сроках (`reminders.go`), тексты писем (`notices.go`), HTTP
 │       ├── journals/     справочник журналов SCImago (срез 14): разбор выгрузки (`parse.go`), загрузка заменой целиком (`load.go`, файл `data/scimagojr.csv.gz` встроен в сервер), поиск по названию и ISSN (`search.go`), HTTP
+│       ├── num/          перевод int в int16/int32/uint32 с прижатием к границе типа вместо переворота (срез 18): все параметры sqlc с меньшим типом идут через него
 │       ├── issn/         проверка и запись ISSN (`1234-567X`, контрольная цифра); общий для журналов и профилей
 │       ├── landing/      числа для главной (`GET /api/landing`): открытые вакансии, организации, учёные для гостя, разбивка по областям и видам позиций; HTTP
 │       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, переключатели писем (`settings.go`), HTTP
