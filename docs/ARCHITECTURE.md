@@ -9,7 +9,7 @@ SciBox/
 ├── config/product.json   название продукта; читают и сервер, и сайт (D-029)
 ├── docker-compose.yml    PostgreSQL 16.15 (порт 5433, D-028), Mailpit v1.31.3 (8025 / 1025)
 ├── README.md             запуск, демо-аккаунты, дорожки «я учёный» и «я организация», проверки
-├── Makefile              dev, test, test-server, test-web, e2e, db-up, db-down, migrate, seed, db-reset, sqlc
+├── Makefile              dev, test, test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc
 ├── scripts/
 │   ├── dev.sh            собирает сервер, запускает сервер и Vite вместе
 │   ├── coverage-check    go vet + go test -race с покрытием + проверка порогов
@@ -25,6 +25,7 @@ SciBox/
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
+│   ├── .golangci.yml     линтер: корректность и безопасность (gosec и др.), `make lint` / `make lint-new` (D-137)
 │   ├── seed/             демо-данные (у демо-публикаций настоящие ISSN журналов из SCImago, `journalISSN` в `scientists.go`) (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов; `matching.go` — избранное и сохранённые поиски через сервис подбора); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP

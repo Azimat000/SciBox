@@ -1,0 +1,50 @@
+version: "2"
+# Проверки сервера: ошибки в логике и безопасность (D-137).
+# Основа: шаблон скилла golang-lint (samber/cc-skills-golang), оставлены только правила
+# про корректность, безопасность и утечки ресурсов. Правила оформления (wsl, godot, funlen и т.п.)
+# сознательно не включены: на готовом коде они дают тысячи замечаний без пользы.
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  default: none
+  enable:
+    # корректность
+    - govet
+    - staticcheck
+    - unused
+    - errcheck
+    - errorlint
+    - nilerr
+    - ineffassign
+    - durationcheck
+    - reassign
+    # безопасность и ресурсы
+    - gosec
+    - bidichk
+    - asciicheck
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    - fatcontext
+    - containedctx
+  settings:
+    gosec:
+      excludes:
+        # G104 повторяет errcheck.
+        - G104
+  exclusions:
+    generated: lax
+    paths:
+      - internal/dbgen
+    rules:
+      # В тестах допустимы фиксированные пароли и ключи для проверок.
+      - path: _test\.go
+        linters: [gosec]
+        text: "G101"

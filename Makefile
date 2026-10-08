@@ -1,5 +1,5 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev share test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc
+.PHONY: dev share test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck
 
 SCIBOX = cd server && go run ./cmd/api
 
@@ -19,6 +19,17 @@ test-server:
 
 test-web:
 	cd web && npm run typecheck && npm run lint && npm run test:coverage
+
+## lint: проверки сервера на ошибки и безопасность (server/.golangci.yml, D-137); lint-new — только незакоммиченные правки
+lint:
+	cd server && golangci-lint run ./...
+
+lint-new:
+	cd server && golangci-lint run --new ./...
+
+## vulncheck: известные уязвимости в Go и библиотеках, через которые реально проходит код сервера (D-137)
+vulncheck:
+	cd server && go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
 ## e2e: сквозные сценарии в настоящем браузере (Playwright) на отдельной базе scibox_e2e.
 ## Нужен свободный порт 8090 и 5174; `make dev` может работать параллельно.

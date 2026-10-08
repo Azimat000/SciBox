@@ -31,6 +31,38 @@ npx impeccable update
 npx skills update -p
 ```
 
+# SciBox: сервер на Go и безопасность
+
+Скиллы для сервера тоже в `.claude/skills/` (выбор и проверка: D-137). Источники: `samber/cc-skills-golang` (19 скиллов `golang-*`), `trailofbits/skills` (`sharp-edges`, `differential-review`), `JetBrains/go-modern-guidelines` (`use-modern-go`).
+
+## Какой скилл когда
+
+| Задача | Скилл |
+|---|---|
+| Любая работа с Go-кодом: сам подбирает нужные скиллы ниже | `golang-how-to` |
+| Пишем или правим Go-код: современные приёмы именно для версии из `go.mod` | `use-modern-go` (программа JetBrains: `list --file-path файл.go`, затем `explain ID`) |
+| Запросы к базе, pgx, sqlc, транзакции, миграции | `golang-database` |
+| Ошибки, `%w`, `errors.Is/As`, что отдавать наружу | `golang-error-handling` |
+| Тесты, табличные тесты, фаззинг, покрытие | `golang-testing` |
+| Горутины, фоновые рассылки, отмена по `context`, мягкая остановка | `golang-concurrency`, `golang-context`, `golang-design-patterns` |
+| Новые пакеты, перенос кода между пакетами | `golang-project-layout`, `golang-structs-interfaces`, `golang-refactoring` |
+| Логи, метрики, трассировка, `/api/health` | `golang-observability` |
+| Пароли, сессии, cookie, файлы, загрузки, внешние запросы, секреты | `golang-security` (+ `golang-safety` для паник и nil) |
+| Проектируем API или настройку, которую легко использовать неправильно | `sharp-edges` |
+| Перед коммитом изменений в критичных зонах (аккаунты, права, приватность, отклики, файлы, рассылки) | `differential-review` |
+| Добавляем или обновляем библиотеку | `golang-dependency-management` |
+| Ошибка, паника, гонка, зависание | `golang-troubleshooting` |
+| Линтер, `//nolint` | `golang-lint` |
+
+Встроенная команда `/security-review` (от Anthropic) подходит для быстрой общей проверки ветки.
+
+## Проверки сервера
+
+- `make lint`: все замечания линтера (`server/.golangci.yml`: корректность и безопасность, включая gosec). На 2026-10-08 в старом коде есть долг, см. HANDOFF.
+- `make lint-new`: только незакоммиченные правки. Перед коммитом среза должен давать `0 issues`.
+- `make vulncheck`: известные уязвимости Go и библиотек, через которые реально проходит код. Находку чинить обновлением версии, а не обходом.
+- `//nolint` только с конкретным правилом и причиной: `//nolint:gosec // G304: путь из конфигурации, не от пользователя`.
+
 # Работа срезами и память проекта
 
 Проект строится срезами: один срез = одна сессия. Следующий срез запускается командой `/next-slice` (скилл `.claude/skills/next-slice/`), конкретный: `/next-slice N`.
