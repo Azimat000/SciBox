@@ -2,7 +2,7 @@ module scibox/server
 
 go 1.26.5
 
-toolchain go1.26.6
+toolchain go1.26.9
 
 require (
 	codeberg.org/go-pdf/fpdf v0.12.0

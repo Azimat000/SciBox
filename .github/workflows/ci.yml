@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: server/go.mod # берёт версию из строки toolchain (go1.26.6)
+          go-version-file: server/go.mod # берёт версию из строки toolchain (go1.26.9)
           cache-dependency-path: server/go.sum
       - name: go mod tidy leaves go.mod and go.sum unchanged
         working-directory: server
