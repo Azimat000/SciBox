@@ -97,6 +97,7 @@ func accountCases() []kase {
 		{route: "GET /api/account/deletion", kind: self},
 		{route: "POST /api/account/deletion", kind: self},
 		{route: "POST /api/account/deletion/cancel", kind: self},
+		{route: "GET /api/account/export", kind: self},
 		// Сеанс видит и завершает только его хозяин.
 		{route: "DELETE /api/account/sessions/{id}", kind: object, allow: of(subject), deny: missing, twin: []string{"id"}, make: func(f *fx, _ actor) call {
 			return call{params: P{"id": f.session().String()}}

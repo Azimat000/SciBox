@@ -23,6 +23,7 @@ import (
 	"scibox/server/internal/auth"
 	"scibox/server/internal/config"
 	"scibox/server/internal/crossref"
+	"scibox/server/internal/dataexport"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
@@ -324,6 +325,7 @@ func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker 
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
 		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
+		Export:        dataexport.NewHandler(dataexport.NewService(pool, dataexport.DefaultConfig(cfg.Product.Name)), logger, authHandler.RequireUser),
 		Web:           web,
 		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: counters, Now: now},
 	})
@@ -335,7 +337,9 @@ func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker 
 			func(ctx context.Context) { worker.Run(ctx, outboxInterval) },
 			func(ctx context.Context) { matchingSvc.Run(ctx, matchingInterval) },
 			func(ctx context.Context) { counters.RunCleanup(ctx, time.Hour, logger) },
-			func(ctx context.Context) { retention.NewService(pool, retention.DefaultConfig(), logger).Run(ctx, time.Hour) },
+			func(ctx context.Context) {
+				retention.NewService(pool, retention.DefaultConfig(), logger).Run(ctx, time.Hour)
+			},
 		},
 		flush: []func(){accounts.Flush, organizations.Flush},
 	}

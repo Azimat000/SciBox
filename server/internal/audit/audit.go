@@ -68,7 +68,8 @@ const (
 	AccountEmailReverted     Action = "account.email_reverted"
 	AccountDeletionRequested Action = "account.deletion_requested"
 	AccountDeletionCanceled  Action = "account.deletion_canceled"
-	AccountErased            Action = "account.erased" // данные стёрты по сроку (actor пусто)
+	AccountErased            Action = "account.erased"        // данные стёрты по сроку (actor пусто)
+	AccountDataExported      Action = "account.data_exported" // человек скачал архив своих данных (T-20)
 )
 
 type scope uint8
@@ -90,6 +91,7 @@ var registry = map[Action]scope{
 	AccountLogin: scopeAccount, AccountPasswordChanged: scopeAccount, AccountPasswordReset: scopeAccount,
 	AccountEmailChangeAsked: scopeAccount, AccountEmailChanged: scopeAccount, AccountEmailReverted: scopeAccount,
 	AccountDeletionRequested: scopeAccount, AccountDeletionCanceled: scopeAccount, AccountErased: scopeAccount,
+	AccountDataExported: scopeAccount,
 }
 
 // Actions — все известные действия по алфавиту (для тестов и проверки подписей на сайте).

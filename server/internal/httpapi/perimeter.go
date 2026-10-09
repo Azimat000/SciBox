@@ -65,6 +65,7 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: get, Pattern: "/api/profile/cv", Slow: true, Limit: pdfBuilds},
 		{Method: get, Pattern: "/api/scientists/{id}/cv", Slow: true, Limit: pdfBuilds},
 		{Method: get, Pattern: "/api/applications/{id}/files/{fileId}", Slow: true},
+		{Method: get, Pattern: "/api/account/export", Slow: true},
 		{Method: post, Pattern: "/api/applications", Body: uploadBody, Slow: true},
 
 		{Method: post, Pattern: "/api/recommendations/lookup", Limit: linkPages},

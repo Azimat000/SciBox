@@ -14,6 +14,7 @@ import (
 	"scibox/server/internal/applications"
 	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/dataexport"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpguard"
 	"scibox/server/internal/journals"
@@ -64,6 +65,8 @@ type Deps struct {
 	Landing *landing.Handler
 	// Journals подключает поиск по справочнику журналов (/api/journals). Нужен вместе с Auth.
 	Journals *journals.Handler
+	// Export подключает выгрузку своих данных (/api/account/export). Нужен вместе с Auth.
+	Export *dataexport.Handler
 	// Web отдаёт страницы сайта по всем адресам вне /api (см. WebHandler); без него там 404.
 	Web http.Handler
 	// Perimeter — прокси, https, хранилище счётчиков частоты. Периметр работает всегда; нулевое значение —
@@ -142,6 +145,9 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Journals != nil {
 			d.Journals.Mount(r)
+		}
+		if d.Export != nil {
+			d.Export.Mount(r)
 		}
 		r.Get("/health", healthHandler(d))
 	})

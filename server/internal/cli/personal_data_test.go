@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
@@ -181,4 +184,58 @@ func eraseInTx(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) error {
 
 func errorsAsBlocked(err error) (*erasure.BlockedError, bool) {
 	return errors.AsType[*erasure.BlockedError](err)
+}
+
+// Выгрузка через всю сборку сервера: роутер кладёт адрес человека в журнал, периметр не режет долгую передачу,
+// заголовки защиты стоят, а пароль и лимит работают.
+func TestExportThroughTheWholeServer(t *testing.T) {
+	w := newPerimeterWorld(t)
+	h := w.handler(nil)
+	const email, remote = "dmitry.korolev@demo.example.ru", "198.51.100.200"
+	cookie := login(t, h, email, remote+":5000", nil)
+	rec := send(h, req{path: "/api/account/export", cookie: cookie, remote: remote + ":5000"})
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/zip" {
+		t.Fatalf("export: %d %q %.200s", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("the archive must not be cached or sniffed: %v", rec.Header())
+	}
+	zr, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, f := range zr.File {
+		names[f.Name] = true
+	}
+	if !names["data.json"] || !names["README.txt"] {
+		t.Errorf("archive entries: %v", names)
+	}
+	files := 0
+	for name := range names {
+		if strings.HasPrefix(name, "files/") {
+			files++
+		}
+	}
+	if files == 0 {
+		t.Error("the demo applicant has applications with files: they must be in the archive")
+	}
+	var ip *string
+	if err := w.pool.QueryRow(t.Context(), `SELECT a.ip FROM audit_log a JOIN users u ON u.id = a.actor_id WHERE u.email = $1 AND a.action = 'account.data_exported'`, email).Scan(&ip); err != nil || ip == nil || *ip != remote {
+		t.Errorf("the journal must record the address of the request: %v %v", ip, err)
+	}
+	// Сеанс из ссылки не свежий: окно пароля, а не архив.
+	if rec := send(h, req{path: "/api/account/export", cookie: staleSession(t, w, h, email), remote: remote + ":5000"}); rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "reauth_required") {
+		t.Errorf("stale session: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// staleSession — сеанс без недавнего ввода пароля: вход по паролю ставит отметку «свежий», поэтому она убирается вручную.
+func staleSession(t *testing.T, w *perimeterWorld, h http.Handler, email string) *http.Cookie {
+	t.Helper()
+	c := login(t, h, email, "198.51.100.201:5000", nil)
+	if _, err := w.pool.Exec(t.Context(), `UPDATE sessions SET reauth_at = NULL WHERE user_id = (SELECT id FROM users WHERE email = $1)`, email); err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
