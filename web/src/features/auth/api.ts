@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
-import { apiGet, apiSend } from '../../api/client'
+import { apiDownload, apiGet, apiSend } from '../../api/client'
 
 /** Человек, как его отдаёт сервер. */
 export type User = {
@@ -152,4 +152,9 @@ export async function requestDeletion(): Promise<string> {
 
 export function cancelDeletion() {
   return apiSend('POST', '/api/account/deletion/cancel')
+}
+
+/** Архив со всеми данными человека (ZIP): сервер просит свежий пароль и пускает не больше трёх раз в сутки. */
+export function downloadMyData() {
+  return apiDownload('/api/account/export')
 }

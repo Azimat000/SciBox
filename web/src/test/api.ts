@@ -1,11 +1,14 @@
 import { vi } from 'vitest'
 
 /** Что ответит подставной сервер: статус и тело JSON. */
-export type Reply = { status: number; body?: unknown }
+export type Reply = { status: number; body?: unknown; file?: { name: string; content: string } }
 export type Call = { method: string; path: string; body: unknown }
 export type Route = Reply | ((call: Call) => Reply | Promise<Reply>)
 
 export const reply = (status: number, body?: unknown): Reply => ({ status, body })
+
+/** Ответ-скачивание: файл с именем в Content-Disposition. */
+export const fileReply = (name: string, content: string): Reply => ({ status: 200, file: { name, content } })
 
 /** Ответ сервера в формате ошибок API. */
 export const apiError = (status: number, code: string, message: string, extra: Record<string, unknown> = {}): Reply =>
@@ -44,6 +47,9 @@ function bodyOf(body: BodyInit | null | undefined): unknown {
 }
 
 function respond(r: Reply): Response {
+  if (r.file) {
+    return new Response(r.file.content, { status: 200, headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${r.file.name}"` } })
+  }
   if (r.status === 204 || r.body === undefined) return new Response(null, { status: r.status })
   return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'Content-Type': 'application/json' } })
 }

@@ -26,3 +26,9 @@ export function deviceLabel(s: Pick<SessionInfo, 'browser' | 'os' | 'mobile'>): 
   if (s.mobile) label += ` · ${t.auth.sessions.phone}`
   return label
 }
+
+/** Сколько ждать до следующей попытки: «15 мин», «3 ч». Округляется вверх, чтобы не обещать раньше срока. */
+export function waitLabel(seconds: number): string {
+  const minutes = Math.max(1, Math.ceil(seconds / 60))
+  return minutes < 60 ? t.auth.dataExport.waitMinutes(minutes) : t.auth.dataExport.waitHours(Math.ceil(minutes / 60))
+}

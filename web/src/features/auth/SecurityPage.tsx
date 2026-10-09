@@ -28,6 +28,7 @@ import {
   type User,
 } from './api'
 import { AccountFrame } from './AccountPage'
+import { DataSection } from './DataSection'
 import { describeError, fieldErrorsOf } from './errors'
 import { deviceLabel, formatDay, formatMoment } from './labels'
 import { useReauth } from './reauth-context'
@@ -35,7 +36,7 @@ import { useForm } from './useForm'
 import '../../ui/Deadline.css'
 import { checkEmail, checkNewPassword, checkPasswordPresent, compact } from './validation'
 
-/** «Настройки → Безопасность»: пароль, почта для входа, устройства и удаление аккаунта (срез 20). */
+/** «Настройки → Безопасность»: пароль, почта для входа, устройства, выгрузка данных и удаление аккаунта (срезы 20, 22). */
 export function SecurityPage() {
   return (
     <AccountFrame tab="security" lead={t.auth.account.securityLead}>
@@ -44,6 +45,7 @@ export function SecurityPage() {
           <PasswordSection />
           <EmailSection user={user} />
           <SessionsSection />
+          <DataSection />
           <DeletionSection user={user} />
         </>
       )}

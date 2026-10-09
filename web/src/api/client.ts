@@ -71,19 +71,25 @@ async function request<T>(path: string, { method, signal, body, form }: Options,
     throw new ApiError(0, UNREACHABLE, t.api.unreachable)
   }
   if (res.ok && allowEmpty && res.status === 204) return undefined as T
-  const data = await readJSON(res)
   if (res.ok) {
+    const data = await readJSON(res)
     if (data === undefined) throw new ApiError(res.status, BAD_RESPONSE, t.api.unknown)
     return data as T
   }
+  throw await failureOf(res)
+}
+
+/** Ответ с ошибкой превращается в ApiError: в нашем формате с кодом и текстом сервера, иначе «сервер недоступен». */
+async function failureOf(res: Response): Promise<ApiError> {
+  const data = await readJSON(res)
   if (isErrorBody(data)) {
-    throw new ApiError(res.status, data.error.code, data.error.message, {
+    return new ApiError(res.status, data.error.code, data.error.message, {
       fields: fieldsOf(data.error),
       retryAfter: typeof data.error.retry_after === 'number' ? data.error.retry_after : undefined,
     })
   }
   // Не наш формат: так отвечает прокси разработки, когда сервер не запущен.
-  throw new ApiError(res.status, UNREACHABLE, t.api.unreachable)
+  return new ApiError(res.status, UNREACHABLE, t.api.unreachable)
 }
 
 /** GET-запрос к API. Любая неудача превращается в ApiError. */
@@ -94,6 +100,20 @@ export function apiGet<T>(path: string, init?: { signal?: AbortSignal }): Promis
 /** Запрос, меняющий данные (POST, PATCH), с телом JSON. Ответ 204 (без тела) даёт undefined. */
 export function apiSend<T = void>(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
   return request<T>(path, { method, body: body ?? {} }, true)
+}
+
+/** Скачивание файла (GET): тело целиком как Blob и имя из заголовка Content-Disposition. Любая неудача — ApiError. */
+export async function apiDownload(path: string, init?: { signal?: AbortSignal }): Promise<{ blob: Blob; filename: string | undefined }> {
+  let res: Response
+  try {
+    res = await fetch(path, { signal: init?.signal })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new ApiError(0, UNREACHABLE, t.api.unreachable)
+  }
+  if (!res.ok) throw await failureOf(res)
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1]
+  return { blob: await res.blob(), filename: name }
 }
 
 /** Запрос с файлами (multipart): поля одним JSON в части `data`, файлы частями `file`. Ответ 204 даёт undefined. */

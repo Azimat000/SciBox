@@ -251,7 +251,7 @@ func TestNoLoggerBypassesTheMask(t *testing.T) {
 		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || allowed[rel] {
 			return nil
 		}
-		src, err := os.ReadFile(path)
+		src, err := os.ReadFile(path) //nolint:gosec // G304: путь из обхода папки internal самого проекта
 		if err != nil {
 			return err
 		}
