@@ -298,7 +298,7 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 }
 
 const markOutboxFailed = `-- name: MarkOutboxFailed :exec
-UPDATE outbox SET failed_at = $1::timestamptz, last_error = $2 WHERE id = $3
+UPDATE outbox SET failed_at = $1::timestamptz, last_error = $2, subject = '', body = '' WHERE id = $3
 `
 
 type MarkOutboxFailedParams struct {
@@ -328,7 +328,7 @@ func (q *Queries) MarkOutboxRetry(ctx context.Context, arg MarkOutboxRetryParams
 }
 
 const markOutboxSent = `-- name: MarkOutboxSent :exec
-UPDATE outbox SET sent_at = $1::timestamptz, last_error = '' WHERE id = $2
+UPDATE outbox SET sent_at = $1::timestamptz, last_error = '', subject = '', body = '' WHERE id = $2
 `
 
 type MarkOutboxSentParams struct {
@@ -336,6 +336,7 @@ type MarkOutboxSentParams struct {
 	ID  int64
 }
 
+// Текст отправленного письма больше не нужен, а в нём ссылки с живыми токенами и имена: тема и тело стираются сразу (T-19).
 func (q *Queries) MarkOutboxSent(ctx context.Context, arg MarkOutboxSentParams) error {
 	_, err := q.db.Exec(ctx, markOutboxSent, arg.Now, arg.ID)
 	return err

@@ -99,6 +99,15 @@ func rowOf(t *testing.T, addr string) (attempts int, sent, failed bool, lastErr 
 	return attempts, s != nil, f != nil, lastErr, next
 }
 
+// textOf — тема и тело письма, как они лежат в очереди.
+func textOf(t *testing.T, addr string) (subject, body string) {
+	t.Helper()
+	if err := testkit.Pool.QueryRow(bg, `SELECT subject, body FROM outbox WHERE to_email = $1`, addr).Scan(&subject, &body); err != nil {
+		t.Fatal(err)
+	}
+	return subject, body
+}
+
 // drain гоняет отправитель, пока в очереди остаётся что-то готовое; письма других тестов тоже уходят, но только в f.
 func drain(t *testing.T, w *Worker) Stats {
 	t.Helper()
@@ -138,6 +147,12 @@ func TestWorkerSendsEachMailOnce(t *testing.T) {
 			t.Errorf("message = %+v", m)
 		}
 	}
+	// T-19: в отправленном письме могла быть ссылка с живым токеном и чужие имена; в очереди остаётся только запись о факте.
+	for _, a := range addrs {
+		if subject, body := textOf(t, a); subject != "" || body != "" {
+			t.Errorf("%s: the text of a sent mail stays in the queue: %q %q", a, subject, body)
+		}
+	}
 }
 
 func TestWorkerRetriesWithBackoffAndGivesUp(t *testing.T) {
@@ -161,6 +176,10 @@ func TestWorkerRetriesWithBackoffAndGivesUp(t *testing.T) {
 			if failed || st.Retry < 1 || !strings.Contains(lastErr, "connection refused") {
 				t.Fatalf("attempt %d: failed=%v stats=%+v lastErr=%q", attempt, failed, st, lastErr)
 			}
+			// Пока письмо ждёт повтора, его текст нужен.
+			if subject, body := textOf(t, addr); subject != "Тема" || body != "Текст" {
+				t.Fatalf("attempt %d: a mail waiting for a retry lost its text: %q %q", attempt, subject, body)
+			}
 			want := clock.Add(DefaultBackoff(attempt))
 			if next.Sub(want).Abs() > time.Second {
 				t.Fatalf("attempt %d: next attempt at %v, want about %v", attempt, next, want)
@@ -175,6 +194,9 @@ func TestWorkerRetriesWithBackoffAndGivesUp(t *testing.T) {
 		} else if !failed || st.Failed < 1 {
 			t.Fatalf("last attempt: failed=%v stats=%+v", failed, st)
 		}
+	}
+	if subject, body := textOf(t, addr); subject != "" || body != "" {
+		t.Errorf("an undeliverable mail keeps its text: %q %q", subject, body)
 	}
 	// Окончательно недоставленное письмо больше не берут.
 	clock = clock.Add(100 * 24 * time.Hour)

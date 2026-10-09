@@ -39,6 +39,7 @@ import (
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
 	"scibox/server/internal/references"
+	"scibox/server/internal/retention"
 	"scibox/server/internal/vacancies"
 	"scibox/server/seed"
 )
@@ -334,6 +335,7 @@ func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker 
 			func(ctx context.Context) { worker.Run(ctx, outboxInterval) },
 			func(ctx context.Context) { matchingSvc.Run(ctx, matchingInterval) },
 			func(ctx context.Context) { counters.RunCleanup(ctx, time.Hour, logger) },
+			func(ctx context.Context) { retention.NewService(pool, retention.DefaultConfig(), logger).Run(ctx, time.Hour) },
 		},
 		flush: []func(){accounts.Flush, organizations.Flush},
 	}

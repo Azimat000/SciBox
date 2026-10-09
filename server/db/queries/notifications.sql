@@ -55,14 +55,15 @@ WHERE id IN (
 )
 RETURNING id, to_email, subject, body, attempts;
 
+-- Текст отправленного письма больше не нужен, а в нём ссылки с живыми токенами и имена: тема и тело стираются сразу (T-19).
 -- name: MarkOutboxSent :exec
-UPDATE outbox SET sent_at = @now::timestamptz, last_error = '' WHERE id = @id;
+UPDATE outbox SET sent_at = @now::timestamptz, last_error = '', subject = '', body = '' WHERE id = @id;
 
 -- name: MarkOutboxRetry :exec
 UPDATE outbox SET next_attempt_at = @next_attempt_at, last_error = @last_error WHERE id = @id;
 
 -- name: MarkOutboxFailed :exec
-UPDATE outbox SET failed_at = @now::timestamptz, last_error = @last_error WHERE id = @id;
+UPDATE outbox SET failed_at = @now::timestamptz, last_error = @last_error, subject = '', body = '' WHERE id = @id;
 
 -- Старые отправленные и окончательно неудавшиеся письма больше не нужны.
 -- name: DeleteOldOutbox :exec

@@ -105,9 +105,11 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00017_audit_log.sql", 2, allTables},
+		{"up", "00018_retention.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		// Сроки хранения (00018) таблиц не добавляют: меняют защиту журнала и добавляют индексы.
+		{"down", "00018_retention.sql", 2, allTables},
 		{"down", "00017_audit_log.sql", 2, deviceTables},
 		{"down", "00016_account_security.sql", 2, counterTables},
 		{"down", "00015_rate_counters.sql", 2, journalTables},
@@ -126,7 +128,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00017_audit_log.sql", 2, allTables},
+		{"up", "00018_retention.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},
