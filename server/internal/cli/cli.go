@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"scibox/server/internal/httpguard"
 	"scibox/server/internal/journals"
 	"scibox/server/internal/landing"
+	"scibox/server/internal/logmask"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/matching"
 	"scibox/server/internal/migrate"
@@ -76,7 +78,8 @@ func Run(ctx context.Context, args []string, env Env) int {
 		cmd = args[0]
 		args = args[1:]
 	}
-	logger := slog.New(slog.NewTextHandler(env.Stderr, nil))
+	logger := newLogger(env.Stderr)
+	defer useAsDefault(logger)()
 
 	switch cmd {
 	case "version":
@@ -122,6 +125,25 @@ func Run(ctx context.Context, args []string, env Env) int {
 			return 1
 		}
 		return 0
+	}
+}
+
+// newLogger — единственное место, где создаётся журнал сервера: всё, что в него пишется, проходит через logmask (T-18),
+// поэтому почты, адреса людей и токены не попадают в записи, где бы их ни написали по ошибке.
+func newLogger(w io.Writer) *slog.Logger {
+	return slog.New(logmask.NewHandler(slog.NewTextHandler(w, nil)))
+}
+
+// useAsDefault делает logger журналом по умолчанию: его используют slog.Info и пр. без логгера и стандартный log
+// (в том числе сам net/http, когда пишет об оборванных соединениях и адресе клиента). Возвращает функцию, которая
+// всё возвращает назад: тесты вызывают Run много раз.
+func useAsDefault(logger *slog.Logger) func() {
+	prev, writer, flags := slog.Default(), log.Writer(), log.Flags()
+	slog.SetDefault(logger)
+	return func() {
+		slog.SetDefault(prev)
+		log.SetOutput(writer)
+		log.SetFlags(flags)
 	}
 }
 
