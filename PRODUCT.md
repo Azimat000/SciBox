@@ -49,7 +49,7 @@ Built for science, not adapted from a general job site. It understands degrees a
 
 ## Brand Commitments
 
-- Name: SciBox (working title, may change).
+- Name: ИОН (Инновации, образование, наука); внутреннее имя репозитория, базы и команд остаётся SciBox (D-155).
 - Voice (confirmed 2026-10-02): businesslike but alive. Formal "вы", short and to the point, no bureaucratese, no familiarity. Example: «Откликнуться», «Вакансия закрыта 3 дня назад».
 
 ## Evidence on Hand

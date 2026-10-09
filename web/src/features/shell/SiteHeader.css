@@ -25,7 +25,8 @@
   font-weight: 700;
   font-size: 1.75rem;
   font-variation-settings: 'opsz' 72;
-  letter-spacing: -0.03em;
+  /* Заглавные буквы чуть разрежены, в отличие от прежнего поджатого строчного названия */
+  letter-spacing: 0.04em;
   text-decoration: none;
   flex: none;
 }
@@ -70,6 +71,33 @@
   align-items: center;
   gap: var(--s-4);
   margin-left: auto;
+}
+
+.header-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.header-icon:hover {
+  background: var(--wash);
+  text-decoration: none;
+}
+
+/* Текущий раздел отмечен так же, как пункт меню: маркерная линия под значком */
+.header-icon[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.2rem;
+  height: 3px;
+  background: var(--mark);
 }
 
 .header-auth {

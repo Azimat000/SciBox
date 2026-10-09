@@ -24,7 +24,7 @@ describe('parseRole and navFor', () => {
   })
 
   it('gives each role its own menu', () => {
-    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Соискатели', 'Организации', 'Избранное', 'Мои отклики'])
+    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Соискатели', 'Организации', 'Мои отклики'])
     expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Соискатели', 'Организация'])
   })
 
@@ -103,7 +103,7 @@ describe('site shell', () => {
     })
     stubApi({ 'GET /api/health': reply(200, healthy), ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
     renderApp('/')
-    expect(await within(desktopNav()).findByRole('link', { name: 'Избранное' })).toBeInTheDocument()
+    expect(await within(desktopNav()).findByRole('link', { name: 'Мои отклики' })).toBeInTheDocument()
     await userEvent.click(screen.getAllByRole('button', { name: 'Нанимаю' })[0])
     expect(within(desktopNav()).getByRole('link', { name: 'Отклики' })).toBeInTheDocument()
   })

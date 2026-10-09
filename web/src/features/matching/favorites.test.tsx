@@ -156,7 +156,7 @@ describe('favorites page', () => {
     expect(within(rows[2]).getByRole('link', { name: 'Смотреть отклик' })).toHaveAttribute('href', '/applications/app-1')
   })
 
-  it('has the four tabs and marks the section in the menu', async () => {
+  it('has the four tabs and marks the section in the header', async () => {
     stubApi(signedIn({ 'GET /api/favorites?*': reply(200, favoriteList()) }))
     renderApp('/favorites')
     const tabs = await screen.findByRole('navigation', { name: 'Разделы избранного' })
@@ -164,11 +164,11 @@ describe('favorites page', () => {
     expect(within(tabs).getByRole('link', { name: 'Подходящие' })).toHaveAttribute('href', '/matches')
     expect(within(tabs).getByRole('link', { name: 'Поиски' })).toHaveAttribute('href', '/saved-searches')
     expect(within(tabs).getByRole('link', { name: 'Сроки' })).toHaveAttribute('href', '/deadlines')
-    const menu = screen.getAllByRole('navigation', { name: 'Основное меню' })[0]
-    expect(within(menu).getByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
+    // «Избранное» в шапке — значок рядом с уведомлениями, а не пункт меню
+    expect(within(screen.getByRole('banner')).getByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it.each(['/matches', '/saved-searches', '/deadlines'])('keeps «Избранное» current in the menu on %s', async (path) => {
+  it.each(['/matches', '/saved-searches', '/deadlines'])('keeps the «Избранное» icon current on %s', async (path) => {
     stubApi(
       signedIn({
         'GET /api/matches?*': reply(200, { items: [], total: 0, ready: false, basis: { specialties: 0, level: 1, has_region: false, has_degree: false } }),
@@ -177,8 +177,7 @@ describe('favorites page', () => {
       }),
     )
     renderApp(path)
-    const menu = (await screen.findAllByRole('navigation', { name: 'Основное меню' }))[0]
-    expect(await within(menu).findByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
+    expect(await within(await screen.findByRole('banner')).findByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('explains an empty list and leads to the search', async () => {

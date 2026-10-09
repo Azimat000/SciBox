@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect } from 'react'
 import { useLocation, useMatches } from 'react-router'
 import { productName } from '../config/product'
 
-/** «Вакансии — SciBox»; без названия страницы только имя продукта. */
+/** «Вакансии — ИОН»; без названия страницы только имя продукта. */
 export function fullTitle(title: string | undefined): string {
   return title ? `${title} — ${productName}` : productName
 }

@@ -3,12 +3,12 @@ import { Link, useLocation } from 'react-router'
 import { productName } from '../../config/product'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
-import { CloseIcon, MenuIcon } from '../../ui/icons'
+import { BookmarkIcon, CloseIcon, MenuIcon } from '../../ui/icons'
 import { useMe } from '../auth/api'
 import { AccountBlock, UserMenu } from '../auth/UserMenu'
 import { useSignOut } from '../auth/useSignOut'
 import { NotificationBell } from '../notifications/NotificationBell'
-import { isCurrent, navFor, publicNav } from './nav'
+import { favoritesNav, isCurrent, navFor, publicNav } from './nav'
 import { RoleSwitch } from './RoleSwitch'
 import { useRole } from './useRole'
 import './SiteHeader.css'
@@ -34,6 +34,9 @@ export function SiteHeader() {
     return () => document.removeEventListener('keydown', onKey)
   }, [menuOpen])
 
+  const favorites = favoritesNav()
+  const favoritesCurrent = isCurrent(favorites, pathname)
+
   const links = items.map((item) => (
     <Link key={item.to} to={item.to} className="nav-link" aria-current={isCurrent(item, pathname) ? 'page' : undefined}>
       {item.label}
@@ -43,7 +46,7 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="site-header-bar">
-        <Link to="/" className="wordmark">
+        <Link to="/" className="wordmark" title={t.shell.brandExpansion}>
           {productName}
         </Link>
 
@@ -62,6 +65,17 @@ export function SiteHeader() {
             <span className="header-auth-placeholder" aria-hidden="true" />
           ) : user ? (
             <>
+              {role === 'seeker' && (
+                <Link
+                  to={favorites.to}
+                  className="header-icon"
+                  aria-label={favorites.label}
+                  title={favorites.label}
+                  aria-current={favoritesCurrent ? 'page' : undefined}
+                >
+                  <BookmarkIcon size={22} filled={favoritesCurrent} />
+                </Link>
+              )}
               <NotificationBell />
               <div className="header-signin">
                 <UserMenu user={user} />

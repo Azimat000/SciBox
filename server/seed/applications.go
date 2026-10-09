@@ -90,8 +90,8 @@ func groupPrefix(code string) string {
 }
 
 func seedApplications(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid.UUID, now time.Time) (int, error) {
-	notes := notifications.NewService(pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
-	refSvc := references.NewService(pool, notes, references.DefaultConfig("SciBox", "http://localhost:5173"))
+	notes := notifications.NewService(pool, notifications.Config{ProductName: "ИОН", PublicURL: "http://localhost:5173"})
+	refSvc := references.NewService(pool, notes, references.DefaultConfig("ИОН", "http://localhost:5173"))
 	profSvc := newProfiles(pool)
 	appSvc := applications.NewService(pool, profSvc, refSvc, notes, applications.Config{Apply: applications.Limit{Max: 1000, Window: 24 * time.Hour}})
 

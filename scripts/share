@@ -105,7 +105,7 @@ announce() {
   echo
   echo "  $1:  $url"
   echo
-  osascript -e "display notification \"$url\" with title \"SciBox: $1\"" >/dev/null 2>&1 || true
+  osascript -e "display notification \"$url\" with title \"ИОН: $1\"" >/dev/null 2>&1 || true
 }
 
 echo "Открываю туннель ($tunnel)…"

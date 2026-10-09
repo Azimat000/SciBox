@@ -45,7 +45,7 @@ const (
 type SMTP struct {
 	// Addr — адрес сервера вместе с портом, например localhost:1025.
 	Addr string
-	// From — отправитель целиком, например «SciBox <no-reply@scibox.local>».
+	// From — отправитель целиком, например «ИОН <no-reply@scibox.local>».
 	From string
 	// TLS — режим шифрования: TLSOff (по умолчанию, если пусто), TLSStartTLS или TLSImplicit.
 	TLS string

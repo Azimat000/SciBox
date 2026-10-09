@@ -1,5 +1,5 @@
 ---
-name: SciBox
+name: ИОН
 description: A science job board set like a serious journal, with one yellow highlighter for the deadline.
 colors:
   paper: "#ffffff"
@@ -136,7 +136,7 @@ components:
     rounded: "{rounded.md}"
 ---
 
-# Design System: SciBox
+# Design System: ИОН
 
 ## Overview
 
@@ -239,7 +239,7 @@ Printed and quiet: 2px for tags, chips, option rows and skeletons; 4px for butto
 - Select is the native element with a drawn chevron; the combobox adds a floating white list (edge border, shadow) with blue-wash active row and a drawn check on the selected option.
 
 ### Navigation
-Sticky white header closed by a 3px double ink rule, like a journal masthead, 4.25rem tall. Serif ink-blue wordmark (1.75rem, 700, display optical size), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: two segments in a 1px ink frame with 4px corners and an ink divider; the active segment is filled ink with white semibold text. In the mobile menu the active link carries an inset 3px marker line over the hairline.
+Sticky white header closed by a 3px double ink rule, like a journal masthead, 4.25rem tall. Serif ink-blue wordmark «ИОН», text only, no mark (1.75rem, 700, display optical size, letter-spacing 0.04em because it is set in capitals), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. In the seeker role «Избранное» is not a menu item but a bookmark icon beside the bell (44px, filled with a 3px marker underline when the section is current; tooltip and accessible name «Избранное»); it stays in the bar on phones too. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: two segments in a 1px ink frame with 4px corners and an ink divider; the active segment is filled ink with white semibold text. In the mobile menu the active link carries an inset 3px marker line over the hairline.
 
 ### Vacancy Entry (signature)
 Serif title (ink, underlined in blue on hover), organization line in ink-soft medium, a 3-line serif abstract, a facts row in 0.875rem ink-body joined by edge-colored middle dots (the accent "Конкурс" tag leads the row, the level code is ink semibold), the specialties on their own ink-soft line, and the deadline column at the right. A vacancy without a deadline says "Без срока подачи / приём до закрытия" in ink-soft, so the column never collapses and the bookmark stays at the same height. Entries separate by a 1px line. On the vacancy page VAK specialties are a list with the code in its own 3.5rem column, never wrapped.

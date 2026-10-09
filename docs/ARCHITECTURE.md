@@ -109,7 +109,7 @@ SciBox/
 | `SCIBOX_SMTP_ADDR` | `localhost:1025` (Mailpit) |
 | `SCIBOX_SMTP_TLS` | `off`; для почтового сервиса `tls` (порт 465) или `starttls` (порт 587) |
 | `SCIBOX_SMTP_USER`, `SCIBOX_SMTP_PASSWORD` | пусто (без входа); вход разрешён только с шифрованием |
-| `SCIBOX_MAIL_FROM` | `SciBox <no-reply@scibox.local>` |
+| `SCIBOX_MAIL_FROM` | `ИОН <no-reply@scibox.local>` |
 | `SCIBOX_PUBLIC_URL` | `http://localhost:5173` (из него строятся ссылки в письмах; https включает Secure у cookie) |
 | `SCIBOX_HTTP_ADDR` | `127.0.0.1:8080` |
 | `DATABASE_URL` | `postgres://scibox:scibox@localhost:5433/scibox?sslmode=disable` |
@@ -272,7 +272,7 @@ SciBox/
 | `GET /api/notification-settings`, `PUT …` `{email_new_vacancies, email_deadlines}` | какие письма присылать (оба поля обязательны); нет строки — всё включено |
 | `GET /api/landing` | публично: `{open_vacancies, hiring_organizations, scientists, fields:[{code,vacancies}], types:[{type,vacancies}]}`; открытая = опубликована и срок не прошёл (по Москве); `scientists` = то, что гость видит в каталоге; вакансия считается в каждой своей области |
 | `GET /api/account/export` | ZIP (`application/zip`, скачивание `scibox-data-ГГГГ-ММ-ДД.zip`) со всеми данными человека: `README.txt`, `data.json`, `files/…` (D-153); свежий пароль (иначе 403 `reauth_required`), не больше 3 в сутки (429 `rate_limited` и `Retry-After`); запись `account.data_exported` в личный журнал |
-| `GET /api/health` | 200 `{"status":"ok","product":"SciBox","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
+| `GET /api/health` | 200 `{"status":"ok","product":"ИОН","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 
 ## Страницы фронтенда
 | Адрес | Что |

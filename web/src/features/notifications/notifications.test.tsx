@@ -137,7 +137,7 @@ describe('bell in the header', () => {
     expect(button).toHaveFocus()
     await userEvent.click(button)
     expect(panel()).toBeVisible()
-    await userEvent.click(screen.getByRole('link', { name: 'SciBox' }))
+    await userEvent.click(screen.getByRole('link', { name: 'ИОН' }))
     expect(panel()).not.toBeVisible()
     await userEvent.click(button)
     await userEvent.click(document.body)

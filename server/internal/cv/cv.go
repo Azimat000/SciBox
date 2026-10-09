@@ -35,7 +35,7 @@ type Document struct {
 	IDs      []Fact    // идентификаторы одной строкой: «ORCID 0000-…»
 	Notes    []string  // мелкие пояснения под идентификаторами
 	Sections []Section // разделы по порядку
-	Footer   string    // подпись внизу каждой страницы, например «SciBox · 3 октября 2026»
+	Footer   string    // подпись внизу каждой страницы, например «ИОН · 3 октября 2026»
 	Created  time.Time // дата в свойствах файла
 }
 
@@ -176,7 +176,7 @@ func Render(doc Document) ([]byte, error) {
 	p.AddUTF8FontFromBytes("Literata", "", literataRegular)
 	p.AddUTF8FontFromBytes("Literata", "B", literataSemiBold)
 	p.SetTitle(doc.Title, true)
-	p.SetCreator("SciBox", true)
+	p.SetCreator("ИОН", true)
 	if !doc.Created.IsZero() {
 		p.SetCreationDate(doc.Created)
 	}

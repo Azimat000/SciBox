@@ -26,9 +26,13 @@ export function navFor(role: Role): NavItem[] {
     { to: '/vacancies', label: t.nav.vacancies },
     { to: '/scientists', label: t.nav.scientists },
     { to: '/organizations', label: t.nav.organizations },
-    { to: '/favorites', label: t.nav.favorites, also: ['/matches', '/saved-searches', '/deadlines'] },
     { to: '/applications', label: t.nav.myApplications, also: ['/offers'] },
   ]
+}
+
+/** «Избранное» в шапке не пункт меню, а значок рядом с уведомлениями (только в режиме «Ищу работу»). */
+export function favoritesNav(): NavItem {
+  return { to: '/favorites', label: t.nav.favorites, also: ['/matches', '/saved-searches', '/deadlines'] }
 }
 
 /** Пункт меню текущий, если открыт его раздел: сам адрес, страницы внутри него и связанные разделы (`also`). */

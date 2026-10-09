@@ -34,7 +34,7 @@ var demoOffers = []demoOffer{
 }
 
 func seedOffers(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid.UUID, now time.Time) (int, error) {
-	notes := notifications.NewService(pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
+	notes := notifications.NewService(pool, notifications.Config{ProductName: "ИОН", PublicURL: "http://localhost:5173"})
 	svc := offers.NewService(pool, notes, offers.Config{Invite: offers.Limit{Max: 1000, Window: 24 * time.Hour}})
 
 	var lastOutbox int64

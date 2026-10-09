@@ -42,7 +42,7 @@ describe('App shell', () => {
 })
 
 describe('browser tab titles', () => {
-  it('names the page: «Вакансии — SciBox», only the product on the home page', async () => {
+  it('names the page: «Вакансии — ИОН», only the product on the home page', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
     const { router } = renderApp('/vacancies')
     await waitFor(() => expect(document.title).toBe(`Вакансии — ${productName}`))

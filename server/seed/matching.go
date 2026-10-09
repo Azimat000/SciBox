@@ -53,7 +53,7 @@ var demoSearches = []demoSearch{
 }
 
 func seedMatching(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid.UUID, now time.Time) (favorites, searches int, err error) {
-	notes := notifications.NewService(pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
+	notes := notifications.NewService(pool, notifications.Config{ProductName: "ИОН", PublicURL: "http://localhost:5173"})
 	svc := matching.NewService(pool, vacancies.NewService(pool, vacancies.DefaultConfig()), notes, matching.DefaultConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	for _, f := range demoFavoriteSets {
