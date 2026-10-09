@@ -7,11 +7,19 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"scibox/server/internal/apierr"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/httpcache"
+)
+
+// Справочники меняются только миграциями, поэтому сервер читает их из базы раз в CacheTTL, а браузер держит ответ час.
+const (
+	CacheTTL   = 10 * time.Minute
+	BrowserTTL = time.Hour
 )
 
 // Specialty — научная специальность (1.1.1).
@@ -132,21 +140,22 @@ func (s *Service) Catalog(ctx context.Context) (Catalog, error) {
 type Handler struct {
 	svc    *Service
 	logger *slog.Logger
+	cache  *httpcache.Cache
 }
 
 // NewHandler собирает обработчик.
 func NewHandler(svc *Service, logger *slog.Logger) *Handler {
-	return &Handler{svc: svc, logger: logger}
+	return &Handler{svc: svc, logger: logger, cache: httpcache.New(CacheTTL)}
 }
 
 // Mount подключает GET /reference к роутеру, который уже живёт под /api.
 func (h *Handler) Mount(r chi.Router) {
 	r.Get("/reference", func(w http.ResponseWriter, r *http.Request) {
-		cat, err := h.svc.Catalog(r.Context())
+		doc, err := h.cache.Get(func() (any, error) { return h.svc.Catalog(r.Context()) })
 		if err != nil {
 			apierr.WriteInternal(w, r, h.logger, "reference", err)
 			return
 		}
-		apierr.WriteJSON(w, http.StatusOK, cat)
+		httpcache.Serve(w, r, doc, BrowserTTL)
 	})
 }

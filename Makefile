@@ -1,5 +1,5 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev share test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck
+.PHONY: dev share test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check
 
 SCIBOX = cd server && go run ./cmd/api
 
@@ -30,6 +30,14 @@ lint-new:
 ## vulncheck: известные уязвимости в Go и библиотеках, через которые реально проходит код сервера (D-137)
 vulncheck:
 	cd server && go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+## load-data: объёмные данные для замеров в отдельной базе scibox_load (срез 24); масштаб 1 = «вся наука РФ» (~12 ГБ), по умолчанию 0.5
+load-data: db-up
+	./scripts/load-data $(or $(SCALE),0.5)
+
+## load-check: замер горячих запросов на объёмных данных (нужен `make load-data`); медленнее 50 мс — тест красный
+load-check: db-up
+	cd server && SCIBOX_LOAD_DATABASE_URL='postgres://scibox:scibox@localhost:5433/scibox_load?sslmode=disable' go test ./internal/cli -run TestHotQueriesOnLoadData -count=1 -v -timeout 20m
 
 ## e2e: сквозные сценарии в настоящем браузере (Playwright) на отдельной базе scibox_e2e.
 ## Нужен свободный порт 8090 и 5174; `make dev` может работать параллельно.

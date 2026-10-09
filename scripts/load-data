@@ -1,0 +1,28 @@
+#!/bin/sh
+# Объёмные данные для замеров (срез 24): пересоздаёт базу scibox_load и заполняет её по таблице docs/SCALING.md.
+# Использование: scripts/load-data [масштаб]; 1 = «вся наука РФ» (≈ 8 ГБ на диске, 10–30 минут), 0.1 = десятая часть.
+# Рабочая база (scibox) и база сквозных тестов не трогаются.
+set -eu
+scale=${1:-1}
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+# Пароль у всех вымышленных людей один и тот же, хеш берётся у демо-людей рабочей базы.
+pwhash=$(docker compose exec -T postgres psql -U scibox -d scibox -Atc "SELECT password_hash FROM users WHERE password_hash LIKE '\$argon2id\$%' LIMIT 1" 2>/dev/null || true)
+[ -n "$pwhash" ] || pwhash='$argon2id$v=19$m=65536,t=3,p=2$bG9hZGdlbnNhbHQ$bG9hZGdlbmhhc2hsb2FkZ2VuaGFzaGxvYWRnZW4'
+
+docker compose exec -T -e PGOPTIONS="-c client_min_messages=warning" postgres psql -q -v ON_ERROR_STOP=1 -U scibox -d scibox \
+  -c "DROP DATABASE IF EXISTS scibox_load WITH (FORCE)" \
+  -c "CREATE DATABASE scibox_load"
+
+(cd server && go build -o bin/scibox ./cmd/api)
+export DATABASE_URL="postgres://scibox:scibox@localhost:5433/scibox_load?sslmode=disable"
+(cd server && ./bin/scibox migrate up >/dev/null && ./bin/scibox journals load >/dev/null)
+
+started=$(date +%s)
+docker compose exec -T -e PGOPTIONS="-c client_min_messages=warning" postgres psql -q -v ON_ERROR_STOP=1 -v scale="$scale" -v pwhash="$pwhash" \
+  -U scibox -d scibox_load < server/loadgen/generate.sql
+echo "Данные загружены за $(( $(date +%s) - started )) с."
+docker compose exec -T postgres psql -U scibox -d scibox_load -c \
+  "SELECT relname AS таблица, to_char(n_live_tup, 'FM999G999G999') AS строк, pg_size_pretty(pg_total_relation_size(relid)) AS размер FROM pg_stat_user_tables WHERE n_live_tup > 1000 ORDER BY pg_total_relation_size(relid) DESC"
+docker compose exec -T postgres psql -U scibox -d scibox_load -Atc "SELECT 'База: ' || pg_size_pretty(pg_database_size('scibox_load'))"

@@ -10,10 +10,13 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"scibox/server/internal/dbpool"
 	"scibox/server/internal/httpguard"
 )
 
@@ -73,6 +76,8 @@ type Config struct {
 	S3 S3
 	// ClamAVAddr — адрес clamd «хост:порт» (SCIBOX_CLAMAV_ADDR) или ClamAVOff.
 	ClamAVAddr string
+	// DB — пул соединений с базой и сроки для неё (SCIBOX_DB_*, срез 24, T-22).
+	DB dbpool.Config
 }
 
 // S3 — настройки S3-совместимого хранилища.
@@ -131,6 +136,9 @@ func Load(getenv func(string) string) (Config, error) {
 	if cfg.S3, err = loadS3(getenv, dev); err != nil {
 		return Config{}, err
 	}
+	if cfg.DB, err = loadDB(getenv); err != nil {
+		return Config{}, err
+	}
 	switch cfg.SMTPTLS {
 	case "off", "starttls", "tls":
 	default:
@@ -151,6 +159,38 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// loadDB читает настройки пула. Нулевое или отрицательное значение — ошибка, а не «без срока»: администратор,
+// написавший 0, ждёт отключения срока, а получил бы обычный.
+func loadDB(getenv func(string) string) (dbpool.Config, error) {
+	var c dbpool.Config
+	if v := strings.TrimSpace(getenv("SCIBOX_DB_MAX_CONNS")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 1000 {
+			return c, fmt.Errorf("SCIBOX_DB_MAX_CONNS: want a number from 1 to 1000, got %q", v)
+		}
+		c.MaxConns = int32(n) //nolint:gosec // G115: число проверено выше (1…1000)
+	}
+	for _, d := range []struct {
+		key string
+		dst *time.Duration
+	}{
+		{"SCIBOX_DB_STATEMENT_TIMEOUT", &c.StatementTimeout},
+		{"SCIBOX_DB_IDLE_TX_TIMEOUT", &c.IdleInTxTimeout},
+		{"SCIBOX_DB_SLOW_QUERY", &c.SlowQuery},
+	} {
+		v := strings.TrimSpace(getenv(d.key))
+		if v == "" {
+			continue
+		}
+		dur, err := time.ParseDuration(v)
+		if err != nil || dur <= 0 {
+			return c, fmt.Errorf("%s: want a positive duration like 10s, got %q", d.key, v)
+		}
+		*d.dst = dur
+	}
+	return c.Normalized(), nil
 }
 
 func loadS3(getenv func(string) string, dev bool) (S3, error) {

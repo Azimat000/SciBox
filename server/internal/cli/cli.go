@@ -27,6 +27,7 @@ import (
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/dataexport"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/dbpool"
 	"scibox/server/internal/files"
 	"scibox/server/internal/filework"
 	"scibox/server/internal/health"
@@ -233,7 +234,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		web = httpapi.WebHandler(os.DirFS(cfg.WebDir))
 	}
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// Пул сервера со сроками для базы и журналом медленных запросов (T-22). Команды администратора (migrate, seed,
+	// journals) открывают обычные соединения без этих сроков: загрузка справочника или миграция может идти долго.
+	pool, err := dbpool.New(ctx, cfg.DatabaseURL, cfg.DB, logger)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}

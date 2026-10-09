@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"scibox/server/internal/dbpool"
 )
 
 func writeFile(t *testing.T, content string) string {
@@ -327,6 +330,42 @@ func TestLoadFileStorage(t *testing.T) {
 			_, err := Load(envMap(base(map[string]string{tc.key: tc.val})))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadDB(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	t.Run("по умолчанию", func(t *testing.T) {
+		cfg, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.DB != dbpool.Default() {
+			t.Fatalf("DB = %+v", cfg.DB)
+		}
+	})
+	t.Run("свои значения", func(t *testing.T) {
+		cfg, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p, "SCIBOX_DB_MAX_CONNS": " 35 ",
+			"SCIBOX_DB_STATEMENT_TIMEOUT": "4s", "SCIBOX_DB_IDLE_TX_TIMEOUT": "1m", "SCIBOX_DB_SLOW_QUERY": "250ms"}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.DB.MaxConns != 35 || cfg.DB.StatementTimeout != 4*time.Second || cfg.DB.IdleInTxTimeout != time.Minute || cfg.DB.SlowQuery != 250*time.Millisecond {
+			t.Fatalf("DB = %+v", cfg.DB)
+		}
+	})
+	bad := []struct{ key, value string }{
+		{"SCIBOX_DB_MAX_CONNS", "0"}, {"SCIBOX_DB_MAX_CONNS", "-3"}, {"SCIBOX_DB_MAX_CONNS", "много"}, {"SCIBOX_DB_MAX_CONNS", "1001"},
+		{"SCIBOX_DB_STATEMENT_TIMEOUT", "0"}, {"SCIBOX_DB_STATEMENT_TIMEOUT", "-5s"}, {"SCIBOX_DB_STATEMENT_TIMEOUT", "10"},
+		{"SCIBOX_DB_IDLE_TX_TIMEOUT", "0s"}, {"SCIBOX_DB_SLOW_QUERY", "быстро"},
+	}
+	for _, tc := range bad {
+		t.Run("ошибка "+tc.key+"="+tc.value, func(t *testing.T) {
+			_, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p, tc.key: tc.value}))
+			if err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("err = %v", err)
 			}
 		})
 	}

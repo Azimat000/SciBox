@@ -276,3 +276,37 @@ func TestHTTPHidesDatabaseFailure(t *testing.T) {
 		t.Errorf("body %s", rec.Body)
 	}
 }
+
+// Числа главной считаются раз в CacheTTL: второй запрос не идёт в базу, повторный запрос с ETag получает 304.
+func TestHTTPIsCachedAndRevalidated(t *testing.T) {
+	clean(t)
+	w := testkit.NewWorld(t)
+	w.Team().Published(nil)
+	db, calls := testkit.Faulty(testkit.Pool, 0) // сбоев не вносит, только считает обращения к базе
+	h := router(NewService(db))
+
+	get := func(etag string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/landing", nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	first := get("")
+	if first.Code != http.StatusOK || first.Header().Get("Cache-Control") != "public, max-age=30" || first.Header().Get("ETag") == "" {
+		t.Fatalf("first: %d %v", first.Code, first.Header())
+	}
+	asked := calls.Load()
+	if asked == 0 {
+		t.Fatal("the first request must read the database")
+	}
+	second := get("")
+	if second.Body.String() != first.Body.String() || calls.Load() != asked {
+		t.Fatalf("the second request must come from the cache: calls %d -> %d", asked, calls.Load())
+	}
+	if again := get(first.Header().Get("ETag")); again.Code != http.StatusNotModified || again.Body.Len() != 0 {
+		t.Fatalf("revalidation: %d %q", again.Code, again.Body)
+	}
+}

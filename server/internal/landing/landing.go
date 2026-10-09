@@ -14,8 +14,14 @@ import (
 
 	"scibox/server/internal/apierr"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/httpcache"
 	"scibox/server/internal/privacy"
 )
+
+// CacheTTL — как долго сервер и браузер держат числа главной. Они одинаковы для всех и считаются тяжёлыми подсчётами по
+// таблице вакансий и профилей, а главную открывают чаще всего. Поэтому сервер пересчитывает их раз в CacheTTL, а браузер и общий кеш перед сервером держат ответ столько же
+// (срез 24). Цифры «открытых вакансий» отстают от жизни не больше чем на эту полминуты.
+const CacheTTL = 30 * time.Second
 
 // moscow — сроки подачи считаются по московскому дню (D-057).
 var moscow = time.FixedZone("MSK", 3*60*60)
@@ -97,21 +103,22 @@ func (s *Service) Stats(ctx context.Context) (Stats, error) {
 type Handler struct {
 	svc    *Service
 	logger *slog.Logger
+	cache  *httpcache.Cache
 }
 
 // NewHandler собирает обработчик.
 func NewHandler(svc *Service, logger *slog.Logger) *Handler {
-	return &Handler{svc: svc, logger: logger}
+	return &Handler{svc: svc, logger: logger, cache: httpcache.New(CacheTTL)}
 }
 
 // Mount подключает GET /landing к роутеру, который уже живёт под /api.
 func (h *Handler) Mount(r chi.Router) {
 	r.Get("/landing", func(w http.ResponseWriter, r *http.Request) {
-		stats, err := h.svc.Stats(r.Context())
+		doc, err := h.cache.Get(func() (any, error) { return h.svc.Stats(r.Context()) })
 		if err != nil {
 			apierr.WriteInternal(w, r, h.logger, "landing", err)
 			return
 		}
-		apierr.WriteJSON(w, http.StatusOK, stats)
+		httpcache.Serve(w, r, doc, CacheTTL)
 	})
 }

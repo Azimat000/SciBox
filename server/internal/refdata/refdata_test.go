@@ -143,3 +143,34 @@ func TestDatabaseFailures(t *testing.T) {
 		t.Errorf("%d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// Справочники читаются из базы раз в CacheTTL; браузеру разрешено держать ответ час и сверять его по ETag.
+func TestHandlerIsCachedAndRevalidated(t *testing.T) {
+	calls := 0
+	h := NewHandler(NewService(&countingDB{DBTX: pool(t), failAt: -1, calls: &calls}), slog.New(slog.DiscardHandler))
+	r := chi.NewRouter()
+	h.Mount(r)
+	get := func(etag string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/reference", nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+	first := get("")
+	if first.Code != http.StatusOK || first.Header().Get("Cache-Control") != "public, max-age=3600" || first.Header().Get("ETag") == "" {
+		t.Fatalf("first: %d %v", first.Code, first.Header())
+	}
+	asked := calls
+	if asked == 0 {
+		t.Fatal("the first request must read the database")
+	}
+	if second := get(""); second.Body.String() != first.Body.String() || calls != asked {
+		t.Fatalf("the second request must come from the cache: calls %d -> %d", asked, calls)
+	}
+	if again := get(first.Header().Get("ETag")); again.Code != http.StatusNotModified || again.Body.Len() != 0 {
+		t.Fatalf("revalidation: %d %q", again.Code, again.Body)
+	}
+}

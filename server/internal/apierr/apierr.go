@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"scibox/server/internal/dbpool"
 )
 
 // Машинные коды ошибок API. Тексты для людей лежат рядом, по-русски.
@@ -14,12 +16,14 @@ const (
 	CodeMethodNotAllowed    = "method_not_allowed"
 	CodeInternal            = "internal"
 	CodeDatabaseUnavailable = "database_unavailable"
-	CodeBadRequest          = "bad_request"
-	CodeValidation          = "validation_failed"
-	CodeUnauthorized        = "unauthorized"
-	CodeForbidden           = "forbidden"
-	CodeRateLimited         = "rate_limited"
-	CodePayloadTooLarge     = "payload_too_large"
+	// CodeDatabaseBusy — база не уложилась в срок запроса (statement_timeout): ответ 503 с Retry-After (срез 24, T-22).
+	CodeDatabaseBusy    = "database_busy"
+	CodeBadRequest      = "bad_request"
+	CodeValidation      = "validation_failed"
+	CodeUnauthorized    = "unauthorized"
+	CodeForbidden       = "forbidden"
+	CodeRateLimited     = "rate_limited"
+	CodePayloadTooLarge = "payload_too_large"
 	// CodeReauthRequired — опасное действие: сайт просит ввести пароль ещё раз и повторяет запрос (срез 20).
 	CodeReauthRequired = "reauth_required"
 )
@@ -62,13 +66,20 @@ func WriteJSON(w http.ResponseWriter, status int, body any) {
 // Код взят из nginx (499); отвечать уже некому, он нужен только в журнале запросов.
 const StatusClientClosed = 499
 
-// WriteInternal отвечает 500 на непредвиденную ошибку и пишет её в журнал.
+// WriteInternal отвечает 500 на непредвиденную ошибку и пишет её в журнал; запрос, остановленный базой по сроку, получает 503.
 // Если запрос оборвал сам человек, это не поломка: в журнал идёт спокойная строка, а не ошибка,
 // чтобы настоящие сбои не терялись среди обрывов.
 func WriteInternal(w http.ResponseWriter, r *http.Request, logger *slog.Logger, what string, err error) {
 	if r.Context().Err() != nil {
 		logger.Info(what+" cancelled by client", "path", r.URL.Path)
 		w.WriteHeader(StatusClientClosed)
+		return
+	}
+	if dbpool.IsTimeout(err) {
+		// Запрос остановила база по сроку: это перегрузка, а не поломка; человеку предлагаем повторить.
+		logger.Warn(what+" request stopped by the database timeout", "path", r.URL.Path)
+		w.Header().Set("Retry-After", "5")
+		WriteError(w, http.StatusServiceUnavailable, CodeDatabaseBusy, "Сервер сейчас занят. Попробуйте ещё раз через несколько секунд")
 		return
 	}
 	logger.Error(what+" request failed", "path", r.URL.Path, "err", err)
