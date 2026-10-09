@@ -18,6 +18,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/files"
 	"scibox/server/internal/orgs"
 )
 
@@ -154,7 +155,7 @@ var organizations = []orgSeed{
 }
 
 // Run загружает демо-данные в одной транзакции. Уже загруженное (по почте и адресу организации) не трогает.
-func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error) {
+func Run(ctx context.Context, pool *pgxpool.Pool, vault *files.Vault, now time.Time) (Result, error) {
 	hasher := auth.NewHasher(auth.DefaultHashParams, 1)
 	hash, err := hasher.Hash(ctx, DemoPassword)
 	if err != nil {
@@ -215,7 +216,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool, now time.Time) (Result, error)
 		return Result{}, err
 	}
 	// Отклики идут после профилей: откликаться можно только с заполненным профилем.
-	if res.Applications, err = seedApplications(ctx, pool, ids, now); err != nil {
+	if res.Applications, err = seedApplications(ctx, pool, vault, ids, now); err != nil {
 		return Result{}, err
 	}
 	// История действий в журнале организаций строится по уже загруженным людям, вакансиям и откликам; она старше приглашений ниже,

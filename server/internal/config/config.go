@@ -25,7 +25,16 @@ const (
 	DefaultSMTPAddr      = "localhost:1025" // Mailpit из docker-compose.yml
 	DefaultPublicURL     = "http://localhost:5173"
 	DefaultCrossrefURL   = "https://api.crossref.org"
-	defaultMailAddress   = "no-reply@scibox.local"
+	// Хранилище файлов и антивирус из docker-compose.yml (срез 23, D-157).
+	DefaultS3Endpoint  = "localhost:8333"
+	DefaultS3Bucket    = "scibox-files"
+	DefaultS3Region    = "us-east-1"
+	DefaultS3AccessKey = "scibox"
+	DefaultS3SecretKey = "scibox-dev-secret" //nolint:gosec // G101: ключ локального хранилища из docker-compose.yml; в боевом режиме он запрещён (checkProduction)
+	DefaultClamAVAddr  = "localhost:3310"
+	// ClamAVOff отключает проверку на вирусы: только для разработки без контейнера, в боевом режиме запрещено.
+	ClamAVOff          = "off"
+	defaultMailAddress = "no-reply@scibox.local"
 	// defaultDatabasePassword — пароль из docker-compose.yml и DefaultDatabaseURL.
 	defaultDatabasePassword = "scibox"
 )
@@ -60,6 +69,25 @@ type Config struct {
 	Env string
 	// TrustedProxies — прокси, которым верим X-Forwarded-For (SCIBOX_TRUSTED_PROXIES, T-06); пусто — никому.
 	TrustedProxies httpguard.Proxies
+	// S3 — хранилище файлов откликов (SCIBOX_S3_*, срез 23).
+	S3 S3
+	// ClamAVAddr — адрес clamd «хост:порт» (SCIBOX_CLAMAV_ADDR) или ClamAVOff.
+	ClamAVAddr string
+}
+
+// S3 — настройки S3-совместимого хранилища.
+type S3 struct {
+	Endpoint  string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+	Region    string
+	// TLS — ходить по https (SCIBOX_S3_TLS=on). В боевом режиме обязательно.
+	TLS bool
+	// PathStyle — адреса вида endpoint/bucket/key (SCIBOX_S3_PATH_STYLE). Локальному хранилищу нужно; у облаков обычно нет.
+	PathStyle bool
+	// CreateBucket — создать бакет при старте, если его нет (SCIBOX_S3_CREATE_BUCKET). Только для разработки.
+	CreateBucket bool
 }
 
 // Режимы SCIBOX_ENV.
@@ -98,6 +126,11 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("SCIBOX_TRUSTED_PROXIES: %w", err)
 	}
 	cfg.TrustedProxies = proxies
+	dev := cfg.Env == EnvDevelopment
+	cfg.ClamAVAddr = envOr(getenv, "SCIBOX_CLAMAV_ADDR", DefaultClamAVAddr)
+	if cfg.S3, err = loadS3(getenv, dev); err != nil {
+		return Config{}, err
+	}
 	switch cfg.SMTPTLS {
 	case "off", "starttls", "tls":
 	default:
@@ -120,6 +153,45 @@ func Load(getenv func(string) string) (Config, error) {
 	return cfg, nil
 }
 
+func loadS3(getenv func(string) string, dev bool) (S3, error) {
+	s := S3{
+		Endpoint:  envOr(getenv, "SCIBOX_S3_ENDPOINT", DefaultS3Endpoint),
+		Bucket:    envOr(getenv, "SCIBOX_S3_BUCKET", DefaultS3Bucket),
+		AccessKey: envOr(getenv, "SCIBOX_S3_ACCESS_KEY", DefaultS3AccessKey),
+		SecretKey: envOr(getenv, "SCIBOX_S3_SECRET_KEY", DefaultS3SecretKey),
+		Region:    envOr(getenv, "SCIBOX_S3_REGION", DefaultS3Region),
+	}
+	var err error
+	// Для локальной работы по умолчанию путь вместо поддомена и создание бакета; в бою всё наоборот.
+	if s.TLS, err = envBool(getenv, "SCIBOX_S3_TLS", false); err != nil {
+		return S3{}, err
+	}
+	if s.PathStyle, err = envBool(getenv, "SCIBOX_S3_PATH_STYLE", dev); err != nil {
+		return S3{}, err
+	}
+	if s.CreateBucket, err = envBool(getenv, "SCIBOX_S3_CREATE_BUCKET", dev); err != nil {
+		return S3{}, err
+	}
+	if strings.Contains(s.Endpoint, "://") || strings.Contains(s.Endpoint, "/") {
+		return S3{}, fmt.Errorf("SCIBOX_S3_ENDPOINT: want host or host:port without scheme and path, got %q (https is switched by SCIBOX_S3_TLS=on)", s.Endpoint)
+	}
+	return s, nil
+}
+
+// envBool читает on/off, true/false, 1/0; пусто — значение по умолчанию. Опечатка не молчит: «fasle» — ошибка.
+func envBool(getenv func(string) string, key string, def bool) (bool, error) {
+	raw := strings.ToLower(strings.TrimSpace(getenv(key)))
+	switch raw {
+	case "":
+		return def, nil
+	case "1", "true", "on", "yes":
+		return true, nil
+	case "0", "false", "off", "no":
+		return false, nil
+	}
+	return false, fmt.Errorf("%s: want on or off, got %q", key, raw)
+}
+
 // checkProduction не даёт запустить боевой сервер с настройками для локальной работы (T-08).
 // Перечисляет все проблемы сразу и для каждой пишет, что исправить.
 func checkProduction(cfg Config) error {
@@ -133,6 +205,7 @@ func checkProduction(cfg Config) error {
 		problems = append(problems, errors.New("SCIBOX_SMTP_TLS is off: set starttls (port 587) or tls (port 465) "+
 			"so that mail with sign-in links is encrypted on the way to the mail service"))
 	}
+	problems = append(problems, checkFileStorage(cfg)...)
 	if from, err := mail.ParseAddress(cfg.MailFrom); err != nil || strings.HasSuffix(strings.ToLower(from.Address), ".local") {
 		problems = append(problems, fmt.Errorf("SCIBOX_MAIL_FROM must be a real address on the site's domain, got %q: "+
 			"mail services reject letters from .local addresses", cfg.MailFrom))
@@ -141,6 +214,25 @@ func checkProduction(cfg Config) error {
 		return nil
 	}
 	return fmt.Errorf("SCIBOX_ENV=production refuses unsafe settings:\n%w", errors.Join(problems...))
+}
+
+// checkFileStorage: в бою файлы идут в хранилище по шифрованному каналу с настоящими ключами, а антивирус включён.
+// Ключ в сообщения не попадает.
+func checkFileStorage(cfg Config) []error {
+	var problems []error
+	if !cfg.S3.TLS {
+		problems = append(problems, errors.New("SCIBOX_S3_TLS is off: set SCIBOX_S3_TLS=on, "+
+			"otherwise CVs and recommendation letters travel to the file storage unencrypted"))
+	}
+	if cfg.S3.AccessKey == DefaultS3AccessKey || cfg.S3.SecretKey == DefaultS3SecretKey {
+		problems = append(problems, errors.New("SCIBOX_S3_ACCESS_KEY or SCIBOX_S3_SECRET_KEY is the development key from docker-compose.yml: "+
+			"use the keys of a service account of your storage provider"))
+	}
+	if cfg.ClamAVAddr == "" || strings.EqualFold(cfg.ClamAVAddr, ClamAVOff) {
+		problems = append(problems, errors.New("SCIBOX_CLAMAV_ADDR is off: files must be checked for viruses, "+
+			"set the address of clamd (host:port)"))
+	}
+	return problems
 }
 
 // checkDatabase: пароль из docker-compose.yml и база в сети без шифрования в бою запрещены.

@@ -1,13 +1,14 @@
 // Package files — файлы откликов: что принимаем, как проверяем и кому отдаём. Это критичная зона (docs/TESTING.md):
 // ошибка здесь отдаёт рекомендательное письмо самому соискателю или принимает не PDF, а исполняемый файл.
 //
-// Принимаем только PDF (D-080). Сами файлы лежат в базе (таблица application_files); пакет не знает про базу:
-// он проверяет загрузки, читает multipart-запрос, решает «вид файла → кто видит» и отдаёт файл безопасно.
+// Принимаем только PDF (D-080). Сами файлы лежат в S3-совместимом хранилище, в базе только строка с ключом и
+// результатом проверки на вирусы (D-157). Пакет не знает про базу: он принимает загрузку потоком (Vault), читает
+// multipart-запрос, решает «вид файла → кто видит» и отдаёт файл безопасно.
 package files
 
 import (
-	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -77,12 +78,6 @@ func (k Kind) VisibleTo(r Reader) bool {
 	return false
 }
 
-// Upload — загруженный файл.
-type Upload struct {
-	Name string
-	Data []byte
-}
-
 // Ошибки проверки. В тексте — что сказать человеку; имя файла сообщает вызывающий.
 var (
 	ErrEmpty   = errors.New("files: empty file")
@@ -105,32 +100,14 @@ func (e *FileError) Unwrap() error { return e.Err }
 
 var pdfMagic = []byte("%PDF-")
 
-// Check проверяет один файл: не пустой, не больше предела и начинается с метки PDF. Расширению и типу из запроса не верим.
-func Check(u Upload) error {
-	switch {
-	case len(u.Data) == 0:
-		return ErrEmpty
-	case len(u.Data) > MaxFileSize:
-		return ErrTooBig
-	}
-	head := u.Data[:min(len(u.Data), headerWindow)]
-	if !bytes.Contains(head, pdfMagic) {
-		return ErrNotPDF
-	}
-	return nil
-}
-
-// CheckSet проверяет набор приложенных файлов: число, каждый файл и общий размер.
-func CheckSet(uploads []Upload) error {
-	if len(uploads) > MaxAttachments {
+// CheckSet проверяет набор принятых файлов: число и общий размер. Каждый файл уже проверен при записи (Vault.Put).
+func CheckSet(set []Stored) error {
+	if len(set) > MaxAttachments {
 		return ErrTooMany
 	}
-	total := 0
-	for _, u := range uploads {
-		if err := Check(u); err != nil {
-			return &FileError{Name: CleanName(u.Name), Err: err}
-		}
-		total += len(u.Data)
+	var total int64
+	for _, f := range set {
+		total += f.Size
 	}
 	if total > MaxTotalSize {
 		return ErrTooBig
@@ -167,13 +144,19 @@ func CleanName(raw string) string {
 	return base + ".pdf"
 }
 
-// Serve отдаёт PDF как скачиваемый файл. Браузеру запрещено угадывать тип и исполнять содержимое.
-func Serve(w http.ResponseWriter, name string, data []byte) {
+// Serve отдаёт PDF как скачиваемый файл потоком из хранилища. Браузеру запрещено угадывать тип и исполнять содержимое.
+// Длина известна заранее: если поток оборвётся посреди файла, соединение закроется и браузер увидит неполную загрузку,
+// а не «успешно скачанный» обрезанный файл. Ошибка копирования возвращается для журнала.
+func Serve(w http.ResponseWriter, name string, size int64, body io.Reader) error {
 	h := w.Header()
 	h.Set("Content-Type", "application/pdf")
 	h.Set("Content-Disposition", `attachment; filename="file.pdf"; filename*=UTF-8''`+url.PathEscape(name))
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Content-Security-Policy", "sandbox; default-src 'none'; frame-ancestors 'none'")
-	h.Set("Content-Length", strconv.Itoa(len(data)))
-	_, _ = w.Write(data)
+	h.Set("Content-Length", strconv.FormatInt(size, 10))
+	n, err := io.Copy(w, body)
+	if err == nil && n != size {
+		err = io.ErrUnexpectedEOF
+	}
+	return err
 }

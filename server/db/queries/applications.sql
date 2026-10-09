@@ -13,8 +13,8 @@ VALUES (@vacancy_id, @user_id, @cover_letter, @contact_email, @profile, @now, @n
 RETURNING id;
 
 -- name: InsertApplicationFile :one
-INSERT INTO application_files (application_id, reference_id, kind, name, size, position, data, created_at)
-VALUES (@application_id, @reference_id, @kind, @name, @size, @position, @data, @now)
+INSERT INTO application_files (application_id, reference_id, kind, name, size, position, storage_key, sha256, scan_status, scanned_at, created_at)
+VALUES (@application_id, @reference_id, @kind, @name, @size, @position, @storage_key, @sha256, @scan_status, @scanned_at, @now)
 RETURNING id;
 
 -- Карточка отклика с вакансией и именем соискателя.
@@ -44,12 +44,12 @@ LIMIT @lim OFFSET @off;
 -- name: CountMyApplications :one
 SELECT count(*)::bigint FROM applications WHERE user_id = $1;
 
--- Список файлов без содержимого.
+-- Список файлов без содержимого; scan_status показывает, проверен ли файл (срез 23).
 -- name: ListApplicationFiles :many
-SELECT id, reference_id, kind, name, size, position FROM application_files WHERE application_id = $1 ORDER BY kind, position, created_at;
+SELECT id, reference_id, kind, name, size, position, scan_status FROM application_files WHERE application_id = $1 ORDER BY kind, position, created_at;
 
 -- name: GetApplicationFile :one
-SELECT id, reference_id, kind, name, size, data FROM application_files WHERE id = @id AND application_id = @application_id;
+SELECT id, reference_id, kind, name, size, storage_key, scan_status FROM application_files WHERE id = @id AND application_id = @application_id;
 
 -- Статус меняется только из ожидаемых: две одновременные смены не пройдут обе.
 -- name: SetApplicationStatusFrom :execrows

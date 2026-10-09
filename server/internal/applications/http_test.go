@@ -192,8 +192,8 @@ func TestHTTPFileDownload(t *testing.T) {
 	ref := refereeIn()
 	in := a.input(me)
 	in.Referees = []references.RefereeInput{ref}
-	d := a.mustApply(me, func(i *Input) { *i = in }, pdf("Список публикаций.pdf"))
-	if err := a.refs.Submit(bg, a.tokenFor(ref.Email), references.LetterInput{}, &pdfUpload); err != nil {
+	d := a.mustApply(me, func(i *Input) { *i = in }, a.pdf("Список публикаций.pdf"))
+	if err := a.refs.Submit(bg, a.tokenFor(ref.Email), references.LetterInput{}, ptr(a.pdf("Письмо.pdf"))); err != nil {
 		t.Fatal(err)
 	}
 	staff, _ := a.svc.Get(bg, a.tm.Owner.User, d.ID)
@@ -221,8 +221,6 @@ func TestHTTPFileDownload(t *testing.T) {
 		t.Errorf("bad file id: %d", r.Code)
 	}
 }
-
-var pdfUpload = pdf("Письмо.pdf")
 
 func TestHTTPInternalErrorsAreHidden(t *testing.T) {
 	a := newAPI(t)
@@ -256,7 +254,7 @@ func TestHTTPInternalErrorsAreHidden(t *testing.T) {
 
 func TestNewServiceStartsRealClock(t *testing.T) {
 	w := newWorld(t)
-	s := NewService(testkit.Pool, w.Prof, w.refs, w.notes, DefaultConfig())
+	s := NewService(testkit.Pool, w.Prof, w.refs, w.notes, w.Vault, DefaultConfig())
 	if s.cfg.Apply.Max != 20 || s.now().IsZero() {
 		t.Errorf("cfg=%+v", s.cfg)
 	}

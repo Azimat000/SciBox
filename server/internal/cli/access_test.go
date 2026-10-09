@@ -185,7 +185,7 @@ func (w *accessWorld) app(extra map[string]string) http.Handler {
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	return newApp(cfg, w.pool, discardLogger(), okHealth{}, nil, time.Now).handler
+	return newApp(cfg, w.pool, w.k.Vault, discardLogger(), okHealth{}, nil, time.Now).handler
 }
 
 // fx — заготовки одного запроса: свои объекты и свой «субъект», чтобы запросы не мешали друг другу.

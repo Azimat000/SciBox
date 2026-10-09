@@ -64,25 +64,28 @@ type DB interface {
 
 // Service — выгрузка данных.
 type Service struct {
-	db  DB
-	q   *dbgen.Queries
-	cfg Config
-	now func() time.Time
+	db    DB
+	q     *dbgen.Queries
+	vault *files.Vault
+	cfg   Config
+	now   func() time.Time
 }
 
-// NewService собирает сервис.
-func NewService(db DB, cfg Config) *Service { return newService(db, cfg, time.Now) }
+// NewService собирает сервис. vault — склад, откуда берётся содержимое файлов.
+func NewService(db DB, vault *files.Vault, cfg Config) *Service {
+	return newService(db, vault, cfg, time.Now)
+}
 
 // NewServiceWithClock — то же с чужими часами (для тестов лимита).
-func NewServiceWithClock(db DB, cfg Config, now func() time.Time) *Service {
-	return newService(db, cfg, now)
+func NewServiceWithClock(db DB, vault *files.Vault, cfg Config, now func() time.Time) *Service {
+	return newService(db, vault, cfg, now)
 }
 
-func newService(db DB, cfg Config, now func() time.Time) *Service {
+func newService(db DB, vault *files.Vault, cfg Config, now func() time.Time) *Service {
 	if cfg.Export.Max <= 0 || cfg.Export.Window <= 0 {
 		cfg.Export = DefaultConfig(cfg.ProductName).Export
 	}
-	return &Service{db: db, q: dbgen.New(db), cfg: cfg, now: now}
+	return &Service{db: db, q: dbgen.New(db), vault: vault, cfg: cfg, now: now}
 }
 
 // FileEntry — файл, который попадёт в архив.
@@ -92,8 +95,10 @@ type FileEntry struct {
 	Kind          string    `json:"kind"`
 	Name          string    `json:"name"`
 	Size          int32     `json:"size"`
-	// Path — где файл лежит в архиве.
-	Path string `json:"path"`
+	// Scan — проверка на вирусы: в архив попадают только проверенные (clean); остальные только перечислены.
+	Scan string `json:"scan"`
+	// Path — где файл лежит в архиве; пусто у файла, которого в архиве нет.
+	Path string `json:"path,omitempty"`
 }
 
 // Archive — собранные данные, готовые к записи в ZIP.
@@ -274,11 +279,12 @@ func (s *Service) collect(ctx context.Context, user auth.User, at time.Time) ([]
 		if !exportable(r.Kind) {
 			continue
 		}
-		perApplication[r.ApplicationID]++
-		entries = append(entries, FileEntry{
-			ID: r.ID, ApplicationID: r.ApplicationID, Kind: r.Kind, Name: r.Name, Size: r.Size,
-			Path: fmt.Sprintf("files/%s/%02d-%s", r.ApplicationID, perApplication[r.ApplicationID], files.CleanName(r.Name)),
-		})
+		e := FileEntry{ID: r.ID, ApplicationID: r.ApplicationID, Kind: r.Kind, Name: r.Name, Size: r.Size, Scan: r.ScanStatus}
+		if files.ScanStatus(r.ScanStatus).Available() {
+			perApplication[r.ApplicationID]++
+			e.Path = fmt.Sprintf("files/%s/%02d-%s", r.ApplicationID, perApplication[r.ApplicationID], files.CleanName(r.Name))
+		}
+		entries = append(entries, e)
 	}
 	list, _ := json.Marshal(entries)
 	out.WriteString(`,"files":`)
@@ -302,7 +308,7 @@ func exportable(kind string) bool {
 	return ok && k.VisibleTo(files.Applicant)
 }
 
-// Write пишет ZIP в w: README.txt, data.json и файлы по одному (в памяти одновременно один файл). Ошибка посреди записи
+// Write пишет ZIP в w: README.txt, data.json и файлы потоком из хранилища, по одному. Ошибка посреди записи
 // означает, что архив оборван: вызывающий обязан оборвать ответ, а не закончить его как удавшийся.
 func (s *Service) Write(ctx context.Context, w io.Writer, a *Archive) error {
 	zw := zip.NewWriter(w)
@@ -313,15 +319,17 @@ func (s *Service) Write(ctx context.Context, w io.Writer, a *Archive) error {
 		return err
 	}
 	for _, f := range a.Files {
-		data, err := s.q.ExportFileData(ctx, dbgen.ExportFileDataParams{ID: f.ID, UserID: a.user})
+		if f.Path == "" {
+			continue // файл ещё на проверке или отвергнут: в архиве его нет, в data.json он перечислен
+		}
+		key, err := s.q.ExportFileKey(ctx, dbgen.ExportFileKeyParams{ID: f.ID, UserID: a.user})
 		if errors.Is(err, pgx.ErrNoRows) {
 			continue // файл убрали, пока собирался архив
 		}
 		if err != nil {
 			return fmt.Errorf("dataexport: file: %w", err)
 		}
-		// PDF уже сжаты: Store не тратит время зря.
-		if err := addFile(zw, f.Path, a.at, zip.Store, data); err != nil {
+		if err := s.addObject(ctx, zw, f.Path, a.at, *key); err != nil {
 			return err
 		}
 	}
@@ -342,6 +350,24 @@ func addFile(zw *zip.Writer, name string, at time.Time, method uint16, data []by
 	return nil
 }
 
+// addObject кладёт в архив объект из хранилища потоком. PDF уже сжаты: Store не тратит время зря. Пропавший объект
+// проверенного файла — не повод тихо выдать неполный архив, а ошибка (ответ обрывается).
+func (s *Service) addObject(ctx context.Context, zw *zip.Writer, name string, at time.Time, key string) error {
+	obj, err := s.vault.Open(ctx, key)
+	if err != nil {
+		return fmt.Errorf("dataexport: open %s: %w", name, err)
+	}
+	defer obj.Close() //nolint:errcheck // чтение закончено; закрытие ничего не пишет
+	fw, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store, Modified: at})
+	if err != nil {
+		return fmt.Errorf("dataexport: add %s: %w", name, err)
+	}
+	if _, err := io.Copy(fw, obj); err != nil {
+		return fmt.Errorf("dataexport: write %s: %w", name, err)
+	}
+	return nil
+}
+
 func readme(product string, at time.Time) []byte {
 	msk := time.FixedZone("MSK", 3*3600)
 	var b strings.Builder
@@ -350,7 +376,8 @@ func readme(product string, at time.Time) []byte {
 	b.WriteString("- data.json — всё, что сервис хранит про вас: аккаунт, профиль, отклики, приглашения, избранное, поиски,\n")
 	b.WriteString("  уведомления, организации, сеансы входа и записи журнала о ваших действиях. Файл текстовый, его открывает любой\n")
 	b.WriteString("  редактор; поля названы по-английски, даты в формате ГГГГ-ММ-ДД и времени по Гринвичу.\n")
-	b.WriteString("- files/ — ваши резюме и файлы, которые вы прикладывали к откликам. Путь каждого файла указан в data.json, в разделе files.\n\n")
+	b.WriteString("- files/ — ваши резюме и файлы, которые вы прикладывали к откликам. Путь каждого файла указан в data.json, в разделе files.\n")
+	b.WriteString("  Файл, который ещё проверяется на вирусы или не прошёл проверку, в архив не кладётся: он только перечислен в data.json.\n\n")
 	b.WriteString("Чего в архиве нет\n")
 	b.WriteString("- Рекомендательных писем о вас: их видит только организация, куда вы откликнулись.\n")
 	b.WriteString("- Данных других людей: имён сотрудников организаций, чужих профилей. Почты и имена рекомендателей есть там, где вы их сами указали.\n")

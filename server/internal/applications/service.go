@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -75,16 +76,17 @@ type Service struct {
 	prof  Profiles
 	refs  References
 	notes *notifications.Service
+	vault *files.Vault
 	now   func() time.Time
 }
 
-// NewService собирает сервис.
-func NewService(pool *pgxpool.Pool, prof *profiles.Service, refs *references.Service, notes *notifications.Service, cfg Config) *Service {
-	return newService(pool, prof, refs, notes, cfg)
+// NewService собирает сервис. vault — склад файлов: сюда файлы приходят уже записанными (files.Vault.Put), отсюда выдаются.
+func NewService(pool *pgxpool.Pool, prof *profiles.Service, refs *references.Service, notes *notifications.Service, vault *files.Vault, cfg Config) *Service {
+	return newService(pool, prof, refs, notes, vault, cfg)
 }
 
-func newService(db DB, prof Profiles, refs References, notes *notifications.Service, cfg Config) *Service {
-	return &Service{db: db, q: dbgen.New(db), cfg: cfg, prof: prof, refs: refs, notes: notes, now: func() time.Time { return time.Now().UTC() }}
+func newService(db DB, prof Profiles, refs References, notes *notifications.Service, vault *files.Vault, cfg Config) *Service {
+	return &Service{db: db, q: dbgen.New(db), cfg: cfg, prof: prof, refs: refs, notes: notes, vault: vault, now: func() time.Time { return time.Now().UTC() }}
 }
 
 func (s *Service) inTx(ctx context.Context, fn func(q *dbgen.Queries) error) error {
@@ -142,7 +144,7 @@ const (
 )
 
 // validate проверяет поля отклика. Возвращает проверенные значения и ошибки по полям.
-func validate(user auth.User, in Input, ups []files.Upload) (contact, cover string, refs []references.Referee, errs map[string]string) {
+func validate(user auth.User, in Input, ups []files.Stored) (contact, cover string, refs []references.Referee, errs map[string]string) {
 	errs = map[string]string{}
 	var msg string
 	if contact, msg = auth.NormalizeEmail(in.ContactEmail); msg != "" {
@@ -186,9 +188,40 @@ func (s *Service) checkVacancy(v dbgen.GetVacancyForApplyRow) error {
 	return nil
 }
 
+// knownRefusal — отказ, который наш код вернул до записи в базу: отклик не создан, записанные файлы больше не нужны.
+// Любую другую ошибку (сбой базы, особенно при фиксации) считать отказом нельзя: возможно, транзакция всё же прошла,
+// и удалённые файлы остались бы без содержимого. Такие файлы, если они действительно не нужны, уберёт чистка осиротевших.
+func knownRefusal(err error) bool {
+	var (
+		verr *auth.ValidationError
+		rerr *auth.RateLimitedError
+	)
+	return errors.As(err, &verr) || errors.As(err, &rerr) ||
+		errors.Is(err, ErrNotFound) || errors.Is(err, ErrVacancyClosed) || errors.Is(err, ErrDeadlinePassed) ||
+		errors.Is(err, ErrOwnVacancy) || errors.Is(err, ErrAlreadyApplied)
+}
+
+// CheckInput проверяет поля отклика (без файлов) до их приёма: тот же набор проверок, что и в Apply.
+func (s *Service) CheckInput(user auth.User, in Input) error {
+	if _, _, _, errs := validate(user, in, nil); len(errs) > 0 {
+		return &auth.ValidationError{Fields: errs}
+	}
+	return nil
+}
+
 // Apply отправляет отклик. Профиль уходит снимком (D-081): организация увидит то, что человек отправил, даже если он
 // потом изменит или скроет профиль. Режим приватности профиля при этом не спрашивается: человек откликнулся сам.
-func (s *Service) Apply(ctx context.Context, user auth.User, in Input, ups []files.Upload) (Detail, error) {
+// Файлы ups уже записаны в хранилище; Apply становится их владельцем: при отказе удаляет, при успехе привязывает к отклику.
+func (s *Service) Apply(ctx context.Context, user auth.User, in Input, ups []files.Stored) (Detail, error) {
+	staged := ups
+	d, err := s.apply(ctx, user, in, ups, &staged)
+	if err != nil && knownRefusal(err) {
+		s.vault.Discard(ctx, staged...)
+	}
+	return d, err
+}
+
+func (s *Service) apply(ctx context.Context, user auth.User, in Input, ups []files.Stored, staged *[]files.Stored) (Detail, error) {
 	contact, cover, refs, errs := validate(user, in, ups)
 	if len(errs) > 0 {
 		return Detail{}, &auth.ValidationError{Fields: errs}
@@ -201,6 +234,12 @@ func (s *Service) Apply(ctx context.Context, user auth.User, in Input, ups []fil
 		return Detail{}, err
 	}
 	snapshot, _ := json.Marshal(pkg.Profile) // у View только строки, числа и списки: ошибки кодирования нет
+	// Резюме собрал сам сервер: оно чисто по происхождению и идёт в хранилище без антивируса.
+	cv, err := s.vault.PutTrusted(ctx, pkg.CVName, pkg.CV)
+	if err != nil {
+		return Detail{}, fmt.Errorf("applications: store cv: %w", err)
+	}
+	*staged = append([]files.Stored{cv}, ups...)
 
 	var id uuid.UUID
 	err = s.inTx(ctx, func(q *dbgen.Queries) error {
@@ -240,7 +279,7 @@ func (s *Service) Apply(ctx context.Context, user auth.User, in Input, ups []fil
 		if err != nil {
 			return fmt.Errorf("applications: insert: %w", err)
 		}
-		if err := s.saveFile(ctx, q, id, files.KindCV, 0, files.Upload{Name: pkg.CVName, Data: pkg.CV}, now); err != nil {
+		if err := s.saveFile(ctx, q, id, files.KindCV, 0, cv, now); err != nil {
 			return err
 		}
 		for i, up := range ups {
@@ -259,13 +298,22 @@ func (s *Service) Apply(ctx context.Context, user auth.User, in Input, ups []fil
 	return s.Get(ctx, user, id)
 }
 
-func (s *Service) saveFile(ctx context.Context, q *dbgen.Queries, appID uuid.UUID, kind files.Kind, pos int, up files.Upload, now time.Time) error {
+func (s *Service) saveFile(ctx context.Context, q *dbgen.Queries, appID uuid.UUID, kind files.Kind, pos int, st files.Stored, now time.Time) error {
 	if _, err := q.InsertApplicationFile(ctx, dbgen.InsertApplicationFileParams{
-		ApplicationID: appID, Kind: string(kind), Name: files.CleanName(up.Name), Size: num.Int32(len(up.Data)), Position: num.Int16(pos), Data: up.Data, Now: now,
+		ApplicationID: appID, Kind: string(kind), Name: files.CleanName(st.Name), Size: num.Int32(int(st.Size)), Position: num.Int16(pos),
+		StorageKey: &st.Key, Sha256: st.Sum[:], ScanStatus: string(st.Scan), ScannedAt: scannedAt(st), Now: now,
 	}); err != nil {
 		return fmt.Errorf("applications: save file: %w", err)
 	}
 	return nil
+}
+
+// scannedAt — когда файл проверен; у файла «на проверке» даты нет.
+func scannedAt(st files.Stored) *time.Time {
+	if st.ScannedAt.IsZero() {
+		return nil
+	}
+	return &st.ScannedAt
 }
 
 // announce сообщает об отклике организации (тем, кто вправе видеть отклики на эту вакансию) и подтверждает его соискателю.
@@ -390,7 +438,11 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 		if !ok || kind == files.KindReferenceLetter || !kind.VisibleTo(reader) {
 			continue
 		}
-		ref := FileRef{ID: f.ID, Name: f.Name, Size: int(f.Size)}
+		// Организация не видит заражённый файл вовсе; соискатель видит, чтобы понять, что он не принят.
+		if reader == files.Staff && files.ScanStatus(f.ScanStatus) == files.ScanInfected {
+			continue
+		}
+		ref := FileRef{ID: f.ID, Name: f.Name, Size: int(f.Size), Scan: f.ScanStatus}
 		if kind == files.KindCV {
 			d.CV = &ref
 		} else {
@@ -412,34 +464,58 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 	return d, nil
 }
 
-// File отдаёт файл отклика. Что кому положено, решает files.Kind.VisibleTo; недоступный файл «не существует».
-func (s *Service) File(ctx context.Context, user auth.User, appID, fileID uuid.UUID) (string, []byte, error) {
+// OpenedFile — файл отклика, открытый для выдачи. Body нужно закрыть.
+type OpenedFile struct {
+	Name string
+	Size int64
+	Body io.ReadCloser
+}
+
+// File открывает файл отклика для выдачи. Что кому положено, решает files.Kind.VisibleTo; недоступный файл «не существует».
+// Файл, который ещё не проверен на вирусы, не выдаётся никому (ErrFilePending); заражённого нет.
+func (s *Service) File(ctx context.Context, user auth.User, appID, fileID uuid.UUID) (OpenedFile, error) {
 	a, err := s.load(ctx, s.q, appID)
 	if err != nil {
-		return "", nil, err
+		return OpenedFile{}, err
 	}
 	reader, err := s.readerOf(ctx, s.q, a, user)
 	if err != nil {
-		return "", nil, err
+		return OpenedFile{}, err
 	}
 	f, err := s.q.GetApplicationFile(ctx, dbgen.GetApplicationFileParams{ID: fileID, ApplicationID: appID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil, ErrNotFound
+		return OpenedFile{}, ErrNotFound
 	}
 	if err != nil {
-		return "", nil, fmt.Errorf("applications: load file: %w", err)
+		return OpenedFile{}, fmt.Errorf("applications: load file: %w", err)
 	}
 	if kind, ok := files.Parse(f.Kind); !ok || !kind.VisibleTo(reader) {
-		return "", nil, ErrNotFound
+		return OpenedFile{}, ErrNotFound
+	}
+	switch files.ScanStatus(f.ScanStatus) {
+	case files.ScanClean:
+	case files.ScanPending:
+		return OpenedFile{}, ErrFilePending
+	default:
+		return OpenedFile{}, ErrNotFound
+	}
+	if f.StorageKey == nil {
+		// Чистый файл без ключа — нарушение таблицы (ограничения базы этого не допускают), не пропускаем.
+		return OpenedFile{}, fmt.Errorf("applications: file %s is clean but has no storage key", f.ID)
+	}
+	body, err := s.vault.Open(ctx, *f.StorageKey)
+	if err != nil {
+		return OpenedFile{}, fmt.Errorf("applications: open file %s: %w", f.ID, err)
 	}
 	// Выдача файла сотруднику организации записывается до выдачи: нет записи — нет файла. Свои файлы соискатель
 	// скачивает без записи.
 	if reader == files.Staff {
 		if err := record(ctx, s.q, audit.ApplicationFileDownloaded, a, user, map[string]string{"kind": f.Kind}); err != nil {
-			return "", nil, err
+			_ = body.Close()
+			return OpenedFile{}, err
 		}
 	}
-	return f.Name, f.Data, nil
+	return OpenedFile{Name: f.Name, Size: body.Size(), Body: body}, nil
 }
 
 // Withdraw отзывает отклик. Только соискатель и только пока решения нет. Организации приходит уведомление.

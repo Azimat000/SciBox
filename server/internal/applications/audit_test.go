@@ -23,14 +23,14 @@ func TestAuditTrailOfReviewing(t *testing.T) {
 	w := newWorld(t)
 	ctx := audit.WithSource(bg, "203.0.113.20")
 	me := w.Applicant("Мария")
-	d := w.mustApply(me, nil, pdf("diploma.pdf"))
+	d := w.mustApply(me, nil, w.pdf("diploma.pdf"))
 
 	// Соискатель сам читает и скачивает свой отклик: в журнал организации это не попадает.
 	own, err := w.svc.Get(ctx, me.User, d.ID)
 	if err != nil || own.CV == nil {
 		t.Fatalf("own view: %+v, %v", own.CV, err)
 	}
-	if _, _, err := w.svc.File(ctx, me.User, d.ID, own.CV.ID); err != nil {
+	if _, _, err := readFile(ctx, w.svc, me.User, d.ID, own.CV.ID); err != nil {
 		t.Fatal(err)
 	}
 	if rows := w.applicationRows(); len(rows) != 0 {
@@ -59,13 +59,13 @@ func TestAuditTrailOfReviewing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Скачивание: сотрудник записывается (и резюме, и приложенный файл), чужой руководитель получает «нет» без записи.
-	if _, _, err := w.svc.File(ctx, w.tm.Owner.User, d.ID, staff.CV.ID); err != nil {
+	if _, _, err := readFile(ctx, w.svc, w.tm.Owner.User, d.ID, staff.CV.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := w.svc.File(ctx, w.tm.HR.User, d.ID, staff.Files[0].ID); err != nil {
+	if _, _, err := readFile(ctx, w.svc, w.tm.HR.User, d.ID, staff.Files[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := w.svc.File(ctx, w.tm.HeadB.User, d.ID, staff.CV.ID); !errors.Is(err, ErrNotFound) {
+	if _, _, err := readFile(ctx, w.svc, w.tm.HeadB.User, d.ID, staff.CV.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("head of another unit: %v", err)
 	}
 	if err := w.svc.Decide(ctx, w.tm.Owner.User, d.ID, StatusAccepted, "Рады видеть в команде"); err != nil {
@@ -136,7 +136,7 @@ func mapValues(m map[string]string) []string {
 func TestRefusedReviewingLeavesNoTrace(t *testing.T) {
 	w := newWorld(t)
 	me := w.Applicant("Мария")
-	d := w.mustApply(me, nil, pdf("diploma.pdf"))
+	d := w.mustApply(me, nil, w.pdf("diploma.pdf"))
 	staff, _ := w.svc.Get(bg, w.tm.Owner.User, d.ID) // «просмотрен» записано здесь
 	before := len(w.applicationRows())
 
@@ -152,8 +152,8 @@ func TestRefusedReviewingLeavesNoTrace(t *testing.T) {
 			_, err := w.svc.Invite(bg, w.tm.Owner.User, d.ID, InvitationInput{Kind: InvInterview})
 			return err
 		},
-		"outsider downloads":         func() error { _, _, err := w.svc.File(bg, w.tm.Out.User, d.ID, staff.CV.ID); return err },
-		"unknown file":               func() error { _, _, err := w.svc.File(bg, w.tm.Owner.User, d.ID, d.ID); return err },
+		"outsider downloads":         func() error { _, _, err := readFile(bg, w.svc, w.tm.Out.User, d.ID, staff.CV.ID); return err },
+		"unknown file":               func() error { _, _, err := readFile(bg, w.svc, w.tm.Owner.User, d.ID, d.ID); return err },
 		"cancel an unknown invite":   func() error { return w.svc.CancelInvitation(bg, w.tm.Owner.User, d.ID, d.ID) },
 		"accept an unknown proposal": func() error { return w.svc.AcceptProposal(bg, w.tm.Owner.User, d.ID, d.ID) },
 	} {
@@ -198,16 +198,16 @@ func TestReviewingFailsWhenTheJournalIsDown(t *testing.T) {
 	if n := testkit.Count(t, `SELECT count(*) FROM application_invitations WHERE application_id = $1`, seen.ID); n != 0 {
 		t.Errorf("%d invitations were created", n)
 	}
-	name, data, err := w.svc.File(bg, w.tm.Owner.User, withFile.ID, staff.CV.ID)
+	name, data, err := readFile(bg, w.svc, w.tm.Owner.User, withFile.ID, staff.CV.ID)
 	if err == nil || name != "" || data != nil {
 		t.Errorf("the file was handed out without a journal entry: %q %d bytes, %v", name, len(data), err)
 	}
-	if _, _, err := w.svc.File(bg, nina.User, withFile.ID, staff.CV.ID); err == nil {
+	if _, _, err := readFile(bg, w.svc, nina.User, withFile.ID, staff.CV.ID); err == nil {
 		t.Error("a stranger got the file")
 	}
 	// Свой файл соискатель получает и при неисправном журнале.
 	own, _ := w.svc.Get(bg, olga.User, withFile.ID)
-	if _, _, err := w.svc.File(bg, olga.User, withFile.ID, own.CV.ID); err != nil {
+	if _, _, err := readFile(bg, w.svc, olga.User, withFile.ID, own.CV.ID); err != nil {
 		t.Errorf("own file: %v", err)
 	}
 }

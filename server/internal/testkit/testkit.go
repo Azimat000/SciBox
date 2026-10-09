@@ -4,6 +4,7 @@
 package testkit
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -19,9 +20,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"scibox/server/internal/access"
+	"scibox/server/internal/antivirus"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/blobstore"
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/files"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
@@ -93,6 +97,29 @@ type World struct {
 	Prof *profiles.Service
 	Mail *mail.Memory
 	Log  *slog.Logger
+	// Store, AV и Vault — склад файлов на хранилище в памяти и подставном антивирусе (находит EICAR).
+	Store *blobstore.Memory
+	AV    *antivirus.Fake
+	Vault *files.Vault
+}
+
+// PDF — минимальный файл, который склад принимает за PDF.
+func PDF() []byte { return append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte("p"), 300)...) }
+
+// Stored кладёт файл на склад мира, как это делает загрузка, и требует успеха.
+func (w *World) Stored(name string, data []byte) files.Stored {
+	w.T.Helper()
+	st, err := w.Vault.Put(BG, name, bytes.NewReader(data))
+	if err != nil {
+		w.T.Fatalf("store %s: %v", name, err)
+	}
+	return st
+}
+
+// PDF кладёт на склад обычный PDF.
+func (w *World) PDF(name string) files.Stored {
+	w.T.Helper()
+	return w.Stored(name, PDF())
 }
 
 // noDOI — Crossref в тестах не нужен.
@@ -108,7 +135,8 @@ func NewWorld(t *testing.T) *World {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	acfg := auth.DefaultConfig("SciBox", "http://localhost:5173")
 	acfg.Hash = auth.TestHashParams
-	w := &World{T: t, Mail: &mail.Memory{}, Log: logger}
+	w := &World{T: t, Mail: &mail.Memory{}, Log: logger, Store: blobstore.NewMemory(), AV: &antivirus.Fake{}}
+	w.Vault = files.NewVault(w.Store, w.AV, func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) })
 	w.Auth = auth.NewService(Pool, w.Mail, acfg, logger)
 	w.Orgs = orgs.NewService(Pool, w.Mail, orgs.DefaultConfig("SciBox", "http://localhost:5173"), logger)
 	w.Vac = vacancies.NewService(Pool, vacancies.Config{Create: vacancies.Limit{Max: 100000, Window: time.Hour}})

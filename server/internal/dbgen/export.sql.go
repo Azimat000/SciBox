@@ -113,26 +113,27 @@ func (q *Queries) ExportFavorites(ctx context.Context, userID uuid.UUID) ([]byte
 	return doc, err
 }
 
-const exportFileData = `-- name: ExportFileData :one
-SELECT f.data FROM application_files f JOIN applications a ON a.id = f.application_id
+const exportFileKey = `-- name: ExportFileKey :one
+SELECT f.storage_key FROM application_files f JOIN applications a ON a.id = f.application_id
 WHERE f.id = $1 AND a.user_id = $2 AND f.kind IN ('cv', 'attachment')
+  AND f.scan_status = 'clean' AND f.storage_key IS NOT NULL
 `
 
-type ExportFileDataParams struct {
+type ExportFileKeyParams struct {
 	ID     uuid.UUID
 	UserID uuid.UUID
 }
 
-// Содержимое одного файла; владелец проверяется в самом запросе.
-func (q *Queries) ExportFileData(ctx context.Context, arg ExportFileDataParams) ([]byte, error) {
-	row := q.db.QueryRow(ctx, exportFileData, arg.ID, arg.UserID)
-	var data []byte
-	err := row.Scan(&data)
-	return data, err
+// Где лежит содержимое одного файла; владелец и проверенность проверяются в самом запросе.
+func (q *Queries) ExportFileKey(ctx context.Context, arg ExportFileKeyParams) (*string, error) {
+	row := q.db.QueryRow(ctx, exportFileKey, arg.ID, arg.UserID)
+	var storage_key *string
+	err := row.Scan(&storage_key)
+	return storage_key, err
 }
 
 const exportFiles = `-- name: ExportFiles :many
-SELECT f.id, f.application_id, f.kind, f.name, f.size
+SELECT f.id, f.application_id, f.kind, f.name, f.size, f.scan_status
 FROM application_files f JOIN applications a ON a.id = f.application_id
 WHERE a.user_id = $1
 ORDER BY a.created_at, a.id, f.position, f.id
@@ -144,6 +145,7 @@ type ExportFilesRow struct {
 	Kind          string
 	Name          string
 	Size          int32
+	ScanStatus    string
 }
 
 // Файлы его откликов всех видов; какие из них отдать, решает сервис (dataexport.exportable): письма рекомендателей о нём — нет.
@@ -162,6 +164,7 @@ func (q *Queries) ExportFiles(ctx context.Context, userID uuid.UUID) ([]ExportFi
 			&i.Kind,
 			&i.Name,
 			&i.Size,
+			&i.ScanStatus,
 		); err != nil {
 			return nil, err
 		}

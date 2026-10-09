@@ -67,6 +67,13 @@ DELETE FROM notifications
 WHERE link IN (SELECT '/sent-offers?offer=' || o.id::text FROM vacancy_offers o WHERE o.user_id = $1);
 
 -- Отклики: файлы, просьбы о рекомендациях (вместе с письмами рекомендателей) и приглашения стираются целиком.
+-- Объекты файлов человека ставятся в очередь на удаление из хранилища в той же транзакции, что и удаление строк.
+-- name: QueueApplicationFileBlobs :exec
+INSERT INTO blob_deletions (storage_key, queued_at)
+SELECT f.storage_key, @now FROM application_files f JOIN applications a ON a.id = f.application_id
+WHERE a.user_id = @user_id AND f.storage_key IS NOT NULL
+ON CONFLICT DO NOTHING;
+
 -- name: EraseApplicationFiles :exec
 DELETE FROM application_files WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1);
 

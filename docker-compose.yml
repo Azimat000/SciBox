@@ -1,4 +1,4 @@
-# Локальное окружение SciBox: база данных и почтовый ящик для тестовых писем.
+# Локальное окружение SciBox: база данных, почтовый ящик для тестовых писем, хранилище файлов и антивирус.
 # Порт базы 5433, потому что 5432 на машине разработчика занят (D-028).
 name: scibox
 
@@ -30,5 +30,43 @@ services:
       timeout: 3s
       retries: 30
 
+  # Хранилище файлов откликов (срез 23, D-157): S3-совместимое, как в бою. MinIO с Docker Hub убран, взят SeaweedFS
+  # (Apache-2.0). Ключи ниже только для этого компьютера; в бою ключи выдаёт провайдер (Yandex, Selectel, VK Cloud).
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    command: ["mini", "-dir=/data", "-s3.port=8333", "-admin.ui=false"]
+    environment:
+      AWS_ACCESS_KEY_ID: scibox
+      AWS_SECRET_ACCESS_KEY: scibox-dev-secret
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - s3data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8333"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Антивирус ClamAV. Здесь облегчённый: без обновления баз и только с сигнатурой тестового вируса EICAR
+  # (docker/clamav-dev/eicar.hdb), потому что полный ClamAV с базами (3 млн сигнатур) на машине разработчика не
+  # помещается в память Docker. Протокол и поведение те же. В бою нужен полный образ с freshclam и 2 ГБ памяти
+  # (срез 28, docs/DEPLOY.md).
+  clamav:
+    image: clamav/clamav-debian:1.5.4
+    entrypoint: ["sh", "-c", "cp /dev-db/eicar.hdb /var/lib/clamav/eicar.hdb && exec /init"]
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "true"
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - ./docker/clamav-dev:/dev-db:ro
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
 volumes:
   pgdata:
+  s3data:

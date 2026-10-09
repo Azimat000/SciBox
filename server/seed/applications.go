@@ -1,6 +1,7 @@
 package seed
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -89,11 +90,11 @@ func groupPrefix(code string) string {
 	return parts[0] + "." + parts[1] + ".%"
 }
 
-func seedApplications(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid.UUID, now time.Time) (int, error) {
+func seedApplications(ctx context.Context, pool *pgxpool.Pool, vault *files.Vault, ids map[string]uuid.UUID, now time.Time) (int, error) {
 	notes := notifications.NewService(pool, notifications.Config{ProductName: "ИОН", PublicURL: "http://localhost:5173"})
-	refSvc := references.NewService(pool, notes, references.DefaultConfig("ИОН", "http://localhost:5173"))
+	refSvc := references.NewService(pool, notes, vault, references.DefaultConfig("ИОН", "http://localhost:5173"))
 	profSvc := newProfiles(pool)
-	appSvc := applications.NewService(pool, profSvc, refSvc, notes, applications.Config{Apply: applications.Limit{Max: 1000, Window: 24 * time.Hour}})
+	appSvc := applications.NewService(pool, profSvc, refSvc, notes, vault, applications.Config{Apply: applications.Limit{Max: 1000, Window: 24 * time.Hour}})
 
 	var lastOutbox int64
 	if err := pool.QueryRow(ctx, `SELECT COALESCE(max(id), 0) FROM outbox`).Scan(&lastOutbox); err != nil {
@@ -136,16 +137,20 @@ func seedApplications(ctx context.Context, pool *pgxpool.Pool, ids map[string]uu
 				refs = append(refs, r)
 				in.Referees = append(in.Referees, references.RefereeInput{Name: r.name, Email: r.email, Relation: r.relation})
 			}
-			var ups []files.Upload
+			var ups []files.Stored
 			if i == 0 {
-				ups = append(ups, files.Upload{Name: "Список публикаций.pdf", Data: demoPDF("Список публикаций", "Избранные работы за последние пять лет; полный список в профиле.")})
+				up, err := vault.Put(ctx, "Список публикаций.pdf", bytes.NewReader(demoPDF("Список публикаций", "Избранные работы за последние пять лет; полный список в профиле.")))
+				if err != nil {
+					return 0, fmt.Errorf("seed applications: store demo file: %w", err)
+				}
+				ups = append(ups, up)
 			}
 			d, err := appSvc.Apply(ctx, user, in, ups)
 			if err != nil {
 				return 0, fmt.Errorf("seed applications: %s -> %q: %w", a.key, v.title, err)
 			}
 			created++
-			if err := answerReferees(ctx, pool, refSvc, d.ID, refs); err != nil {
+			if err := answerReferees(ctx, pool, vault, refSvc, d.ID, refs); err != nil {
 				return 0, err
 			}
 			if status != applications.StatusSent {
@@ -195,7 +200,7 @@ func pickVacancies(ctx context.Context, pool *pgxpool.Pool, prefix string, n int
 }
 
 // answerReferees отвечает за рекомендателей так, как задано в демо-данных. Ссылку берём из письма в очереди.
-func answerReferees(ctx context.Context, pool *pgxpool.Pool, refSvc *references.Service, appID uuid.UUID, refs []demoReferee) error {
+func answerReferees(ctx context.Context, pool *pgxpool.Pool, vault *files.Vault, refSvc *references.Service, appID uuid.UUID, refs []demoReferee) error {
 	for _, r := range refs {
 		if r.answer == "" {
 			continue
@@ -211,7 +216,10 @@ func answerReferees(ctx context.Context, pool *pgxpool.Pool, refSvc *references.
 		case "decline":
 			err = refSvc.Decline(ctx, token)
 		case "pdf":
-			err = refSvc.Submit(ctx, token, references.LetterInput{Text: demoLetters["pdf"]}, &files.Upload{Name: "Рекомендация.pdf", Data: demoPDF("Рекомендательное письмо", demoLetters["text"])})
+			var up files.Stored
+			if up, err = vault.Put(ctx, "Рекомендация.pdf", bytes.NewReader(demoPDF("Рекомендательное письмо", demoLetters["text"]))); err == nil {
+				err = refSvc.Submit(ctx, token, references.LetterInput{Text: demoLetters["pdf"]}, &up)
+			}
 		default:
 			err = refSvc.Submit(ctx, token, references.LetterInput{Text: demoLetters[r.answer]}, nil)
 		}

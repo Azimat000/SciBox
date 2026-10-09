@@ -96,6 +96,8 @@ type FileInfo struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 	Size int       `json:"size"`
+	// Scan — проверка на вирусы: clean (можно скачать) или pending (проверяется). Заражённого письма организации не видно.
+	Scan string `json:"scan"`
 }
 
 // Letter — письмо рекомендателя: текст и/или PDF.

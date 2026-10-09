@@ -39,18 +39,25 @@ func newWorld(t *testing.T) *world {
 	t.Helper()
 	k := testkit.NewWorld(t)
 	notes := notifications.NewService(testkit.Pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
-	refs := references.NewService(testkit.Pool, notes, references.DefaultConfig("SciBox", "http://localhost:5173"))
-	w := &world{World: k, apps: applications.NewService(testkit.Pool, k.Prof, refs, notes, applications.Config{Apply: applications.Limit{Max: 1000, Window: time.Hour}})}
+	refs := references.NewService(testkit.Pool, notes, k.Vault, references.DefaultConfig("SciBox", "http://localhost:5173"))
+	w := &world{World: k, apps: applications.NewService(testkit.Pool, k.Prof, refs, notes, k.Vault, applications.Config{Apply: applications.Limit{Max: 1000, Window: time.Hour}})}
 	w.tm = k.Team()
 	w.vac = w.tm.Published(&w.tm.UnitA.ID).ID
 	return w
 }
 
-func pdf(name, marker string) files.Upload {
-	return files.Upload{Name: name, Data: append([]byte("%PDF-1.7\n% "+marker+"\n"), make([]byte, 300)...)}
+// pdfData — PDF с меткой marker внутри.
+func pdfData(marker string) []byte {
+	return append([]byte("%PDF-1.7\n% "+marker+"\n"), make([]byte, 300)...)
 }
 
-func (w *world) apply(who testkit.Person, cover, refereeEmail string, ups ...files.Upload) applications.Detail {
+// pdf кладёт на склад PDF с меткой marker внутри.
+func (w *world) pdf(name, marker string) files.Stored {
+	w.T.Helper()
+	return w.Stored(name, pdfData(marker))
+}
+
+func (w *world) apply(who testkit.Person, cover, refereeEmail string, ups ...files.Stored) applications.Detail {
 	w.T.Helper()
 	d, err := w.apps.Apply(bg, who.User, applications.Input{
 		VacancyID: w.vac, ContactEmail: who.Email, CoverLetter: cover,
@@ -86,7 +93,8 @@ func fresh(t *testing.T, w *testkit.World, email string) auth.Principal {
 // built — человек с полными данными и посторонний с другими; всё, что должно и не должно попасть в архив.
 type built struct {
 	me, other      testkit.Person
-	attachment     files.Upload
+	attachment     files.Stored
+	attachmentData []byte
 	meApp, otherID uuid.UUID
 }
 
@@ -99,10 +107,11 @@ const (
 func build(t *testing.T, w *world) built {
 	t.Helper()
 	b := built{me: w.Applicant("Мария Экспортова"), other: w.Applicant("Пётр Посторонний")}
-	b.attachment = pdf("../../etc/Статья: о катализе?.pdf", "MY-ATTACHMENT")
+	b.attachmentData = pdfData("MY-ATTACHMENT")
+	b.attachment = w.Stored("../../etc/Статья: о катализе?.pdf", b.attachmentData)
 	mine := w.apply(b.me, myCover, "ref-mine@example.ru", b.attachment)
 	b.meApp = mine.ID
-	other := w.apply(b.other, otherCover, "ref-other@example.ru", pdf("Чужая.pdf", "OTHER-ATTACHMENT"))
+	other := w.apply(b.other, otherCover, "ref-other@example.ru", w.pdf("Чужая.pdf", "OTHER-ATTACHMENT"))
 	b.otherID = other.ID
 	if _, err := w.Prof.SetPrivacy(bg, b.me.User, "public", true); err != nil {
 		t.Fatal(err)
@@ -110,8 +119,9 @@ func build(t *testing.T, w *world) built {
 	// Решение организации, письмо рекомендателя (текст и файл) — соискатель увидит записку, но не письмо.
 	exec(t, `UPDATE applications SET status = 'rejected', decision_note = 'Благодарим за интерес', decided_by = $2 WHERE id = $1`, b.meApp, w.tm.HR.ID)
 	exec(t, `UPDATE reference_requests SET status = 'received', letter_text = $2, answered_at = now() WHERE application_id = $1`, b.meApp, refereeSecret)
-	exec(t, `INSERT INTO application_files (application_id, reference_id, kind, name, size, position, data, created_at)
-		SELECT $1, r.id, 'reference_letter', 'letter.pdf', 20, 9, $2, now() FROM reference_requests r WHERE r.application_id = $1`, b.meApp, []byte("%PDF-1.7\n"+refereeSecret))
+	letter := w.Stored("letter.pdf", []byte("%PDF-1.7\n"+refereeSecret))
+	exec(t, `INSERT INTO application_files (application_id, reference_id, kind, name, size, position, storage_key, sha256, scan_status, scanned_at, created_at)
+		SELECT $1, r.id, 'reference_letter', 'letter.pdf', 20, 9, $2, $3, 'clean', now(), now() FROM reference_requests r WHERE r.application_id = $1`, b.meApp, letter.Key, letter.Sum[:])
 	second := w.tm.Published(&w.tm.UnitB.ID)
 	exec(t, `INSERT INTO favorites (user_id, vacancy_id, created_at) VALUES ($1, $2, now())`, b.me.ID, second.ID)
 	exec(t, `INSERT INTO saved_searches (user_id, name, query, checked_at, next_run_at, created_at, updated_at) VALUES ($1, 'Катализ в Новосибирске', 'q=катализ', now(), now(), now(), now())`, b.me.ID)
@@ -202,14 +212,14 @@ func export(t *testing.T, svc *dataexport.Service, p auth.Principal) archive {
 	return open(t, buf.Bytes())
 }
 
-func service() *dataexport.Service {
-	return dataexport.NewService(testkit.Pool, dataexport.DefaultConfig("SciBox"))
+func (w *world) service() *dataexport.Service {
+	return dataexport.NewService(testkit.Pool, w.Vault, dataexport.DefaultConfig("SciBox"))
 }
 
 func TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers(t *testing.T) {
 	w := newWorld(t)
 	b := build(t, w)
-	a := export(t, service(), fresh(t, w.World, b.me.Email))
+	a := export(t, w.service(), fresh(t, w.World, b.me.Email))
 
 	// Состав: README, data.json и файлы только в files/.
 	for _, name := range a.names {
@@ -359,7 +369,7 @@ func TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers(t *testing.T)
 		if strings.Contains(f.Path, "..") || strings.ContainsAny(strings.TrimPrefix(f.Path, "files/"+f.ApplicationID.String()+"/"), `\:*?"<>|`) {
 			t.Errorf("unsafe path in the archive: %q", f.Path)
 		}
-		if f.Kind == "attachment" && !bytes.Equal(data, b.attachment.Data) {
+		if f.Kind == "attachment" && !bytes.Equal(data, b.attachmentData) {
 			t.Errorf("the attachment differs from the uploaded file")
 		}
 		if f.Kind == "cv" && !bytes.HasPrefix(data, []byte("%PDF-")) {
@@ -394,7 +404,7 @@ func TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers(t *testing.T)
 func TestArchiveOfAPersonWithNothingIsStillValid(t *testing.T) {
 	w := newWorld(t)
 	p := w.User("Пустой Человек")
-	a := export(t, service(), fresh(t, w.World, p.Email))
+	a := export(t, w.service(), fresh(t, w.World, p.Email))
 	var profile json.RawMessage
 	a.section(t, "profile", &profile)
 	if string(profile) != "null" {
@@ -420,7 +430,7 @@ func TestExportNeedsAFreshPassword(t *testing.T) {
 		t.Fatalf("the session made by following a link must not be fresh: %+v %v", stale, err)
 	}
 	before := testkit.Count(t, `SELECT count(*) FROM rate_events WHERE kind = 'data_export' AND key = $1`, p.ID.String())
-	if _, err := service().Prepare(bg, stale); !errors.Is(err, auth.ErrReauthRequired) {
+	if _, err := w.service().Prepare(bg, stale); !errors.Is(err, auth.ErrReauthRequired) {
 		t.Fatalf("err = %v, want ErrReauthRequired", err)
 	}
 	if n := testkit.Count(t, `SELECT count(*) FROM rate_events WHERE kind = 'data_export' AND key = $1`, p.ID.String()); n != before {
@@ -437,7 +447,7 @@ func TestExportIsLimitedPerDay(t *testing.T) {
 	principal := fresh(t, w.World, p.Email)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	clock := &now
-	svc := dataexport.NewServiceWithClock(testkit.Pool, dataexport.DefaultConfig("SciBox"), func() time.Time { return *clock })
+	svc := dataexport.NewServiceWithClock(testkit.Pool, w.Vault, dataexport.DefaultConfig("SciBox"), func() time.Time { return *clock })
 	for i := range 3 {
 		if _, err := svc.Prepare(bg, principal); err != nil {
 			t.Fatalf("export %d: %v", i+1, err)
@@ -471,7 +481,7 @@ func TestEveryExportIsInThePersonalJournalAndWithoutAJournalThereIsNoArchive(t *
 	w := newWorld(t)
 	p := w.User("Журналируемый")
 	principal := fresh(t, w.World, p.Email)
-	if _, err := service().Prepare(bg, principal); err != nil {
+	if _, err := w.service().Prepare(bg, principal); err != nil {
 		t.Fatal(err)
 	}
 	rows := testaudit.Rows(t, testkit.Pool, `action = 'account.data_exported' AND actor_id = $1`, p.ID)
@@ -482,7 +492,7 @@ func TestEveryExportIsInThePersonalJournalAndWithoutAJournalThereIsNoArchive(t *
 
 	testaudit.Break(t, testkit.Pool)
 	before := testkit.Count(t, `SELECT count(*) FROM rate_events WHERE kind = 'data_export' AND key = $1`, p.ID.String())
-	if arch, err := service().Prepare(bg, principal); err == nil || arch != nil {
+	if arch, err := w.service().Prepare(bg, principal); err == nil || arch != nil {
 		t.Fatalf("the journal is down, yet the archive was prepared: %v", err)
 	}
 	if n := testkit.Count(t, `SELECT count(*) FROM rate_events WHERE kind = 'data_export' AND key = $1`, p.ID.String()); n != before {
@@ -498,17 +508,17 @@ func TestExportOfAStrangersFileIsImpossible(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := dbgen.New(testkit.Pool)
-	if _, err := q.ExportFileData(bg, dbgen.ExportFileDataParams{ID: fileID, UserID: b.me.ID}); err == nil {
+	if _, err := q.ExportFileKey(bg, dbgen.ExportFileKeyParams{ID: fileID, UserID: b.me.ID}); err == nil {
 		t.Error("the query returned a file of another person")
 	}
-	if data, err := q.ExportFileData(bg, dbgen.ExportFileDataParams{ID: fileID, UserID: b.other.ID}); err != nil || !bytes.HasPrefix(data, []byte("%PDF-")) {
-		t.Errorf("the owner must get the file: %v", err)
+	if key, err := q.ExportFileKey(bg, dbgen.ExportFileKeyParams{ID: fileID, UserID: b.other.ID}); err != nil || key == nil || !strings.HasPrefix(*key, files.KeyPrefix) {
+		t.Errorf("the owner must get the key of the file: %v", err)
 	}
 	var letterID uuid.UUID
 	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM application_files WHERE application_id = $1 AND kind = 'reference_letter'`, b.meApp).Scan(&letterID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.ExportFileData(bg, dbgen.ExportFileDataParams{ID: letterID, UserID: b.me.ID}); err == nil {
+	if _, err := q.ExportFileKey(bg, dbgen.ExportFileKeyParams{ID: letterID, UserID: b.me.ID}); err == nil {
 		t.Error("a reference letter must not be exportable even by the person it is about")
 	}
 }
@@ -516,7 +526,7 @@ func TestExportOfAStrangersFileIsImpossible(t *testing.T) {
 func TestWriteSkipsAFileThatVanishedAndFailsOnABrokenWriter(t *testing.T) {
 	w := newWorld(t)
 	b := build(t, w)
-	svc := service()
+	svc := w.service()
 	arch, err := svc.Prepare(bg, fresh(t, w.World, b.me.Email))
 	if err != nil {
 		t.Fatal(err)
@@ -539,9 +549,10 @@ func TestWriteSkipsAFileThatVanishedAndFailsOnABrokenWriter(t *testing.T) {
 
 // Сбой в самом начале: README и data.json больше буфера zip (4 КБ) и несжимаемы, поэтому ошибка видна уже на них.
 func TestWriteFailsEarlyOnABrokenWriter(t *testing.T) {
+	w := newWorld(t)
 	random := make([]byte, 100_000)
 	_, _ = rand.Read(random) // несжимаемые байты: README и data.json не поместятся в буфер zip
-	svc := service()
+	svc := w.service()
 	for name, a := range map[string]*dataexport.Archive{
 		"big readme":    {Readme: random, JSON: []byte("{}")},
 		"big data.json": {Readme: []byte("r"), JSON: random},
@@ -570,7 +581,7 @@ func TestEmptyConfigMeansThreeExportsADayNotNoLimit(t *testing.T) {
 	w := newWorld(t)
 	p := w.User("Без Настроек")
 	principal := fresh(t, w.World, p.Email)
-	svc := dataexport.NewService(testkit.Pool, dataexport.Config{})
+	svc := dataexport.NewService(testkit.Pool, w.Vault, dataexport.Config{})
 	for i := range 3 {
 		if _, err := svc.Prepare(bg, principal); err != nil {
 			t.Fatalf("export %d: %v", i+1, err)
@@ -587,7 +598,7 @@ func TestPrepareAndWriteDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 	principal := fresh(t, w.World, b.me.Email)
 	testkit.RunFaults(t, func(t *testing.T) func(db testkit.DB) error {
 		return func(db testkit.DB) error {
-			svc := dataexport.NewService(db, dataexport.Config{ProductName: "SciBox", Export: dataexport.Limit{Max: 1000, Window: time.Hour}})
+			svc := dataexport.NewService(db, w.Vault, dataexport.Config{ProductName: "SciBox", Export: dataexport.Limit{Max: 1000, Window: time.Hour}})
 			arch, err := svc.Prepare(bg, principal)
 			if err != nil {
 				return err
@@ -600,7 +611,7 @@ func TestPrepareAndWriteDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 func TestFileNamesAreCleanedAndUniquePerApplication(t *testing.T) {
 	w := newWorld(t)
 	b := build(t, w)
-	a := export(t, service(), fresh(t, w.World, b.me.Email))
+	a := export(t, w.service(), fresh(t, w.World, b.me.Email))
 	var listed []dataexport.FileEntry
 	a.section(t, "files", &listed)
 	seen := map[string]bool{}

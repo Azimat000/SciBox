@@ -120,7 +120,7 @@ func (q *Queries) GetApplication(ctx context.Context, id uuid.UUID) (GetApplicat
 }
 
 const getApplicationFile = `-- name: GetApplicationFile :one
-SELECT id, reference_id, kind, name, size, data FROM application_files WHERE id = $1 AND application_id = $2
+SELECT id, reference_id, kind, name, size, storage_key, scan_status FROM application_files WHERE id = $1 AND application_id = $2
 `
 
 type GetApplicationFileParams struct {
@@ -134,7 +134,8 @@ type GetApplicationFileRow struct {
 	Kind        string
 	Name        string
 	Size        int32
-	Data        []byte
+	StorageKey  *string
+	ScanStatus  string
 }
 
 func (q *Queries) GetApplicationFile(ctx context.Context, arg GetApplicationFileParams) (GetApplicationFileRow, error) {
@@ -146,7 +147,8 @@ func (q *Queries) GetApplicationFile(ctx context.Context, arg GetApplicationFile
 		&i.Kind,
 		&i.Name,
 		&i.Size,
-		&i.Data,
+		&i.StorageKey,
+		&i.ScanStatus,
 	)
 	return i, err
 }
@@ -215,8 +217,8 @@ func (q *Queries) InsertApplication(ctx context.Context, arg InsertApplicationPa
 }
 
 const insertApplicationFile = `-- name: InsertApplicationFile :one
-INSERT INTO application_files (application_id, reference_id, kind, name, size, position, data, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO application_files (application_id, reference_id, kind, name, size, position, storage_key, sha256, scan_status, scanned_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id
 `
 
@@ -227,7 +229,10 @@ type InsertApplicationFileParams struct {
 	Name          string
 	Size          int32
 	Position      int16
-	Data          []byte
+	StorageKey    *string
+	Sha256        []byte
+	ScanStatus    string
+	ScannedAt     *time.Time
 	Now           time.Time
 }
 
@@ -239,7 +244,10 @@ func (q *Queries) InsertApplicationFile(ctx context.Context, arg InsertApplicati
 		arg.Name,
 		arg.Size,
 		arg.Position,
-		arg.Data,
+		arg.StorageKey,
+		arg.Sha256,
+		arg.ScanStatus,
+		arg.ScannedAt,
 		arg.Now,
 	)
 	var id uuid.UUID
@@ -248,7 +256,7 @@ func (q *Queries) InsertApplicationFile(ctx context.Context, arg InsertApplicati
 }
 
 const listApplicationFiles = `-- name: ListApplicationFiles :many
-SELECT id, reference_id, kind, name, size, position FROM application_files WHERE application_id = $1 ORDER BY kind, position, created_at
+SELECT id, reference_id, kind, name, size, position, scan_status FROM application_files WHERE application_id = $1 ORDER BY kind, position, created_at
 `
 
 type ListApplicationFilesRow struct {
@@ -258,9 +266,10 @@ type ListApplicationFilesRow struct {
 	Name        string
 	Size        int32
 	Position    int16
+	ScanStatus  string
 }
 
-// Список файлов без содержимого.
+// Список файлов без содержимого; scan_status показывает, проверен ли файл (срез 23).
 func (q *Queries) ListApplicationFiles(ctx context.Context, applicationID uuid.UUID) ([]ListApplicationFilesRow, error) {
 	rows, err := q.db.Query(ctx, listApplicationFiles, applicationID)
 	if err != nil {
@@ -277,6 +286,7 @@ func (q *Queries) ListApplicationFiles(ctx context.Context, applicationID uuid.U
 			&i.Name,
 			&i.Size,
 			&i.Position,
+			&i.ScanStatus,
 		); err != nil {
 			return nil, err
 		}

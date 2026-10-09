@@ -190,13 +190,13 @@ func TestSubmitTextPdfAndBoth(t *testing.T) {
 	cases := []struct {
 		name     string
 		text     string
-		file     *files.Upload
+		file     string
 		wantText string
 		wantFile bool
 	}{
-		{"text only", "  Рекомендую без оговорок.  ", nil, "Рекомендую без оговорок.", false},
-		{"pdf only", "", &files.Upload{Name: "C:\\Users\\Иванов\\Письмо.pdf", Data: pdfBytes()}, "", true},
-		{"both", "Коротко: рекомендую.", &files.Upload{Name: "Письмо.pdf", Data: pdfBytes()}, "Коротко: рекомендую.", true},
+		{"text only", "  Рекомендую без оговорок.  ", "", "Рекомендую без оговорок.", false},
+		{"pdf only", "", "C:\\Users\\Иванов\\Письмо.pdf", "", true},
+		{"both", "Коротко: рекомендую.", "Письмо.pdf", "Коротко: рекомендую.", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -205,7 +205,11 @@ func TestSubmitTextPdfAndBoth(t *testing.T) {
 			app := w.application(me)
 			req, token := w.add(me, app)
 
-			if err := w.svc.Submit(bg, token, LetterInput{Text: c.text}, c.file); err != nil {
+			var up *files.Stored
+			if c.file != "" {
+				up = ptr(w.pdf(c.file))
+			}
+			if err := w.svc.Submit(bg, token, LetterInput{Text: c.text}, up); err != nil {
 				t.Fatal(err)
 			}
 			// Организация видит письмо.
@@ -221,7 +225,7 @@ func TestSubmitTextPdfAndBoth(t *testing.T) {
 				t.Fatalf("file = %+v", sr.Letter.File)
 			}
 			if c.wantFile {
-				if sr.Letter.File.Name != "Письмо.pdf" || sr.Letter.File.Size != len(pdfBytes()) {
+				if sr.Letter.File.Name != "Письмо.pdf" || sr.Letter.File.Size != len(pdfBytes()) || sr.Letter.File.Scan != "clean" {
 					t.Errorf("file = %+v", sr.Letter.File)
 				}
 				var kind string
@@ -289,7 +293,7 @@ func TestSubmitConcurrentOnlyOneWins(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = w.svc.Submit(bg, token, LetterInput{Text: "Письмо"}, &files.Upload{Name: "a.pdf", Data: pdfBytes()})
+			results[i] = w.svc.Submit(bg, token, LetterInput{Text: "Письмо"}, ptr(w.pdf("a.pdf")))
 		}()
 	}
 	wg.Wait()
@@ -331,12 +335,6 @@ func TestSubmitValidation(t *testing.T) {
 	}
 	if f := fields(w.svc.Submit(bg, token, LetterInput{Text: strings.Repeat("я", MaxLetterRunes+1)}, nil)); f["text"] == "" {
 		t.Errorf("long letter: %v", f)
-	}
-	if f := fields(w.svc.Submit(bg, token, LetterInput{Text: "Письмо"}, &files.Upload{Name: "a.pdf", Data: []byte("MZ not a pdf")})); f["file"] == "" {
-		t.Errorf("not a pdf: %v", f)
-	}
-	if f := fields(w.svc.Submit(bg, token, LetterInput{}, &files.Upload{Name: "a.pdf"})); f["file"] == "" {
-		t.Errorf("empty file: %v", f)
 	}
 	// Ошибки формы ссылку не тратят.
 	if err := w.svc.Submit(bg, token, LetterInput{Text: "Теперь правильно"}, nil); err != nil {
@@ -606,7 +604,7 @@ func TestCreateInTxRollsBackWithTheCaller(t *testing.T) {
 }
 
 func TestNewServiceTrimsAddressAndStartsRealClock(t *testing.T) {
-	s := NewService(testkit.Pool, notifications.NewService(testkit.Pool, notifications.Config{}), DefaultConfig("SciBox", "http://localhost:5173///"))
+	s := NewService(testkit.Pool, notifications.NewService(testkit.Pool, notifications.Config{}), testkit.NewWorld(t).Vault, DefaultConfig("SciBox", "http://localhost:5173///"))
 	if s.cfg.PublicURL != "http://localhost:5173" || time.Since(s.now()) > time.Minute {
 		t.Errorf("url=%q now=%v", s.cfg.PublicURL, s.now())
 	}
@@ -629,7 +627,7 @@ func TestAnswerLosesTheRaceForTheLink(t *testing.T) {
 			})
 		}
 	}
-	err := svcOn(w, db).Submit(bg, token, LetterInput{Text: "поздно"}, &files.Upload{Name: "a.pdf", Data: pdfBytes()})
+	err := svcOn(w, db).Submit(bg, token, LetterInput{Text: "поздно"}, ptr(w.pdf("a.pdf")))
 	if !errors.Is(err, ErrAlreadyAnswered) {
 		t.Fatalf("err = %v", err)
 	}

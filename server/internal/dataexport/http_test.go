@@ -34,7 +34,7 @@ func session(t *testing.T, w *world, p testkit.Person) testkit.Person {
 func TestHTTPExport(t *testing.T) {
 	w := newWorld(t)
 	b := build(t, w)
-	api := newAPI(w, service())
+	api := newAPI(w, w.service())
 	const path = "/api/account/export"
 
 	if r := api.Do(nil, "GET", path, nil); r.Code != http.StatusUnauthorized {
@@ -84,7 +84,7 @@ func TestHTTPExportWithABrokenDatabaseNeverPassesForASuccess(t *testing.T) {
 	aborted := 0
 	testkit.RunFaults(t, func(t *testing.T) func(db testkit.DB) error {
 		return func(db testkit.DB) (err error) {
-			svc := dataexport.NewService(db, dataexport.Config{ProductName: "SciBox", Export: dataexport.Limit{Max: 1000, Window: time.Hour}})
+			svc := dataexport.NewService(db, w.Vault, dataexport.Config{ProductName: "SciBox", Export: dataexport.Limit{Max: 1000, Window: time.Hour}})
 			defer func() {
 				if rec := recover(); rec != nil {
 					if !errors.Is(rec.(error), http.ErrAbortHandler) {

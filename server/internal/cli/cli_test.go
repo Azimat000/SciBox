@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,10 +17,28 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"scibox/server/internal/blobstore"
+	"scibox/server/internal/config"
 	"scibox/server/internal/testdb"
 )
 
 const productConfig = "../../../config/product.json"
+
+// testBucket — бакет хранилища из docker-compose для команд, которые запускает Run: свой на весь прогон тестов
+// пакета, чтобы демо-файлы и загрузки тестов не оседали в рабочем бакете разработчика.
+var testBucket = "t-cli-" + strings.ToLower(rand.Text()[:10])
+
+func TestMain(m *testing.M) {
+	// Бакет создаёт первая же команда (в разработке CreateBucket включён по умолчанию); убираем его в конце.
+	code := m.Run()
+	if s, err := blobstore.NewS3(context.Background(), blobstore.S3Config{
+		Endpoint: config.DefaultS3Endpoint, Bucket: testBucket, AccessKey: config.DefaultS3AccessKey, SecretKey: config.DefaultS3SecretKey,
+		Region: config.DefaultS3Region, PathStyle: true, CreateBucket: true,
+	}); err == nil {
+		_ = s.Destroy(context.Background())
+	}
+	os.Exit(code)
+}
 
 type result struct {
 	code           int
@@ -30,6 +49,9 @@ func run(ctx context.Context, args []string, env map[string]string, onListen fun
 	var out, errb bytes.Buffer
 	if _, ok := env["SCIBOX_PRODUCT_CONFIG"]; !ok {
 		env["SCIBOX_PRODUCT_CONFIG"] = productConfig
+	}
+	if _, ok := env["SCIBOX_S3_BUCKET"]; !ok {
+		env["SCIBOX_S3_BUCKET"] = testBucket
 	}
 	code := Run(ctx, args, Env{
 		Getenv:   func(k string) string { return env[k] },
@@ -384,7 +406,7 @@ func TestServeHealthAndShutdown(t *testing.T) {
 	if r.code != 0 || !strings.Contains(r.stderr, "server stopped") {
 		t.Fatalf("got %+v", r)
 	}
-	if status != http.StatusOK || got.Status != "ok" || got.Product != "SciBox" || got.Database.SchemaVersion < 1 {
+	if status != http.StatusOK || got.Status != "ok" || got.Product != productName(t) || got.Database.SchemaVersion < 1 {
 		t.Fatalf("health = %d %+v", status, got)
 	}
 	if landingStatus != http.StatusOK {
@@ -428,4 +450,14 @@ func TestServeWebDir(t *testing.T) {
 	if r.code != 1 || !strings.Contains(r.stderr, "site not built") {
 		t.Fatalf("got %+v", r)
 	}
+}
+
+// productName — название продукта из общего файла config/product.json.
+func productName(t *testing.T) string {
+	t.Helper()
+	p, err := config.LoadProduct(productConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p.Name
 }

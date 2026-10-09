@@ -19,6 +19,7 @@ import (
 const (
 	CodeVacancyClosed   = "vacancy_closed"
 	CodeDeadlinePassed  = "deadline_passed"
+	CodeFilePending     = "file_pending"
 	CodeOwnVacancy      = "own_vacancy"
 	CodeAlreadyApplied  = "already_applied"
 	CodeInvalidStatusCh = "invalid_status_change"
@@ -87,6 +88,11 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusConflict, CodeVacancyClosed, "Вакансия закрыта: отклики не принимаются")
 	case errors.Is(err, ErrDeadlinePassed):
 		apierr.WriteError(w, http.StatusConflict, CodeDeadlinePassed, "Срок подачи заявок прошёл")
+	case errors.Is(err, files.ErrStorage):
+		h.logger.Error("applications storage failed", "path", r.URL.Path, "err", err)
+		files.WriteStorageUnavailable(w)
+	case errors.Is(err, ErrFilePending):
+		apierr.WriteError(w, http.StatusConflict, CodeFilePending, "Файл ещё проверяется на вирусы. Это занимает несколько минут: попробуйте позже")
 	case errors.Is(err, ErrOwnVacancy):
 		apierr.WriteError(w, http.StatusForbidden, CodeOwnVacancy, "Вы ведёте эту вакансию и видите отклики на неё, поэтому откликнуться нельзя")
 	case errors.Is(err, ErrAlreadyApplied):
@@ -112,16 +118,33 @@ func intParam(r *http.Request, name string, def int) int {
 
 func (h *Handler) apply(w http.ResponseWriter, r *http.Request) {
 	var in Input
-	ups, ok := files.Decode(w, r, &in, maxFormJSON, files.MaxAttachments+1, "files")
-	if !ok {
+	user := actor(r)
+	// Поля проверяются до приёма файлов: неверный отклик не должен заставлять хранилище и антивирус работать впустую.
+	ups, err := files.Decode(r.Context(), w, r, h.svc.vault, &in, maxFormJSON, files.MaxAttachments+1, func() error {
+		return h.svc.CheckInput(user, in)
+	})
+	if err != nil {
+		h.failUpload(w, r, err)
 		return
 	}
-	d, err := h.svc.Apply(r.Context(), actor(r), in, ups)
+	d, err := h.svc.Apply(r.Context(), user, in, ups)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
 	apierr.WriteJSON(w, http.StatusCreated, map[string]Detail{"application": d})
+}
+
+// failUpload отвечает на ошибку приёма отклика: ошибки загрузки показывает files.WriteError, остальные — fail.
+func (h *Handler) failUpload(w http.ResponseWriter, r *http.Request, err error) {
+	if !files.IsUploadError(err) {
+		h.fail(w, r, err)
+		return
+	}
+	if errors.Is(err, files.ErrStorage) {
+		h.logger.Error("applications storage failed", "path", r.URL.Path, "err", err)
+	}
+	files.WriteError(w, err, "files")
 }
 
 func (h *Handler) mine(w http.ResponseWriter, r *http.Request) {
@@ -168,12 +191,16 @@ func (h *Handler) file(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, ErrNotFound)
 		return
 	}
-	name, data, err := h.svc.File(r.Context(), actor(r), id, fid)
+	f, err := h.svc.File(r.Context(), actor(r), id, fid)
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	files.Serve(w, name, data)
+	defer f.Body.Close() //nolint:errcheck // чтение закончено; закрытие ничего не пишет
+	if err := files.Serve(w, f.Name, f.Size, f.Body); err != nil {
+		// Заголовки уже ушли: статус не изменить. Обрыв потока виден браузеру как неполная загрузка (Content-Length).
+		h.logger.Error("applications file stream failed", "path", r.URL.Path, "err", err)
+	}
 }
 
 func (h *Handler) withdraw(w http.ResponseWriter, r *http.Request) {

@@ -59,18 +59,22 @@ type Service struct {
 	q     *dbgen.Queries
 	cfg   Config
 	notes *notifications.Service
+	vault *files.Vault
 	now   func() time.Time
 }
 
-// NewService собирает сервис.
-func NewService(pool *pgxpool.Pool, notes *notifications.Service, cfg Config) *Service {
-	return newService(pool, notes, cfg)
+// NewService собирает сервис. vault — склад файлов: письмо в PDF приходит уже записанным (files.Vault.Put).
+func NewService(pool *pgxpool.Pool, notes *notifications.Service, vault *files.Vault, cfg Config) *Service {
+	return newService(pool, notes, vault, cfg)
 }
 
-func newService(db DB, notes *notifications.Service, cfg Config) *Service {
+func newService(db DB, notes *notifications.Service, vault *files.Vault, cfg Config) *Service {
 	cfg.PublicURL = strings.TrimRight(cfg.PublicURL, "/")
-	return &Service{db: db, q: dbgen.New(db), cfg: cfg, notes: notes, now: func() time.Time { return time.Now().UTC() }}
+	return &Service{db: db, q: dbgen.New(db), cfg: cfg, notes: notes, vault: vault, now: func() time.Time { return time.Now().UTC() }}
 }
+
+// Vault отдаёт склад файлов обработчику, которому нужно принять загрузку.
+func (s *Service) Vault() *files.Vault { return s.vault }
 
 func (s *Service) inTx(ctx context.Context, fn func(q *dbgen.Queries) error) error {
 	tx, err := s.db.Begin(ctx)
@@ -329,8 +333,8 @@ func (s *Service) ListForStaff(ctx context.Context, appID uuid.UUID) ([]StaffReq
 	}
 	letterFile := map[uuid.UUID]FileInfo{}
 	for _, f := range fs {
-		if f.ReferenceID != nil && files.Kind(f.Kind) == files.KindReferenceLetter {
-			letterFile[*f.ReferenceID] = FileInfo{ID: f.ID, Name: f.Name, Size: int(f.Size)}
+		if f.ReferenceID != nil && files.Kind(f.Kind) == files.KindReferenceLetter && files.ScanStatus(f.ScanStatus) != files.ScanInfected {
+			letterFile[*f.ReferenceID] = FileInfo{ID: f.ID, Name: f.Name, Size: int(f.Size), Scan: f.ScanStatus}
 		}
 	}
 	out := make([]StaffRequest, 0, len(rows))
@@ -393,7 +397,7 @@ func (s *Service) Lookup(ctx context.Context, token string) (Info, error) {
 }
 
 // answer отмечает ответ и сообщает, кому положено. status — received или declined.
-func (s *Service) answer(ctx context.Context, token, status, text string, up *files.Upload) error {
+func (s *Service) answer(ctx context.Context, token, status, text string, up *files.Stored) error {
 	return s.inTx(ctx, func(q *dbgen.Queries) error {
 		row, err := s.open(ctx, q, token)
 		if err != nil {
@@ -412,9 +416,14 @@ func (s *Service) answer(ctx context.Context, token, status, text string, up *fi
 			return ErrAlreadyAnswered
 		}
 		if up != nil {
+			var scanned *time.Time
+			if !up.ScannedAt.IsZero() {
+				scanned = &up.ScannedAt
+			}
 			if _, err := q.InsertApplicationFile(ctx, dbgen.InsertApplicationFileParams{
 				ApplicationID: row.ApplicationID, ReferenceID: &row.ID, Kind: string(files.KindReferenceLetter),
-				Name: files.CleanName(up.Name), Size: num.Int32(len(up.Data)), Position: 0, Data: up.Data, Now: now,
+				Name: files.CleanName(up.Name), Size: num.Int32(int(up.Size)), Position: 0,
+				StorageKey: &up.Key, Sha256: up.Sum[:], ScanStatus: string(up.Scan), ScannedAt: scanned, Now: now,
 			}); err != nil {
 				return fmt.Errorf("references: save letter: %w", err)
 			}
@@ -455,17 +464,46 @@ func (s *Service) announce(ctx context.Context, q *dbgen.Queries, row dbgen.GetR
 	})
 }
 
+// CheckSubmit проверяет письмо до приёма файла: ссылка жива и не использована, текст не длиннее предела.
+// Сюда не входит требование «текст или файл»: оно зависит от файла, который ещё не принят (Submit).
+func (s *Service) CheckSubmit(ctx context.Context, token string, in LetterInput) error {
+	row, err := s.open(ctx, s.q, token)
+	if err != nil {
+		return err
+	}
+	if err := s.answerable(row); err != nil {
+		return err
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(in.Text)) > MaxLetterRunes {
+		return &auth.ValidationError{Fields: map[string]string{"text": fmt.Sprintf("Письмо длиннее %d знаков. Приложите его PDF-файлом", MaxLetterRunes)}}
+	}
+	return nil
+}
+
+// knownRefusal — отказ, вернувшийся до записи в базу: принятый файл больше не нужен. Остальные ошибки (сбой базы,
+// особенно при фиксации) отказом считать нельзя: файл мог уже получить строку, его удалять нельзя; лишний файл уберёт
+// чистка осиротевших.
+func knownRefusal(err error) bool {
+	var verr *auth.ValidationError
+	return errors.As(err, &verr) || errors.Is(err, ErrInvalidLink) || errors.Is(err, ErrAlreadyAnswered) ||
+		errors.Is(err, ErrGone) || errors.Is(err, ErrExpired)
+}
+
 // Submit принимает письмо рекомендателя: текст, PDF или и то и другое. Ссылка срабатывает один раз.
-func (s *Service) Submit(ctx context.Context, token string, in LetterInput, up *files.Upload) error {
+// Файл up уже записан в хранилище; Submit становится его владельцем: при отказе удаляет, при успехе привязывает к просьбе.
+func (s *Service) Submit(ctx context.Context, token string, in LetterInput, up *files.Stored) error {
+	err := s.submit(ctx, token, in, up)
+	if err != nil && up != nil && knownRefusal(err) {
+		s.vault.Discard(ctx, *up)
+	}
+	return err
+}
+
+func (s *Service) submit(ctx context.Context, token string, in LetterInput, up *files.Stored) error {
 	text := strings.TrimSpace(in.Text)
 	errs := map[string]string{}
 	if utf8.RuneCountInString(text) > MaxLetterRunes {
 		errs["text"] = fmt.Sprintf("Письмо длиннее %d знаков. Приложите его PDF-файлом", MaxLetterRunes)
-	}
-	if up != nil {
-		if err := files.Check(*up); err != nil {
-			errs["file"], _ = files.FieldMessage(err)
-		}
 	}
 	if text == "" && up == nil {
 		errs["text"] = "Напишите письмо или приложите PDF"

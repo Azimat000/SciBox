@@ -36,18 +36,16 @@ func newWorld(t *testing.T) *world {
 	t.Helper()
 	k := testkit.NewWorld(t)
 	notes := notifications.NewService(testkit.Pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
-	refs := references.NewService(testkit.Pool, notes, references.DefaultConfig("SciBox", "http://localhost:5173"))
-	w := &world{World: k, apps: applications.NewService(testkit.Pool, k.Prof, refs, notes, applications.Config{Apply: applications.Limit{Max: 1000, Window: time.Hour}})}
+	refs := references.NewService(testkit.Pool, notes, k.Vault, references.DefaultConfig("SciBox", "http://localhost:5173"))
+	w := &world{World: k, apps: applications.NewService(testkit.Pool, k.Prof, refs, notes, k.Vault, applications.Config{Apply: applications.Limit{Max: 1000, Window: time.Hour}})}
 	w.tm = k.Team()
 	w.vac = w.tm.Published(&w.tm.UnitA.ID)
 	return w
 }
 
-func pdf(name string) files.Upload {
-	return files.Upload{Name: name, Data: append([]byte("%PDF-1.7\n"), make([]byte, 300)...)}
-}
+func (w *world) pdf(name string) files.Stored { w.T.Helper(); return w.PDF(name) }
 
-func (w *world) apply(who testkit.Person, vacancy uuid.UUID, ups ...files.Upload) applications.Detail {
+func (w *world) apply(who testkit.Person, vacancy uuid.UUID, ups ...files.Stored) applications.Detail {
 	w.T.Helper()
 	d, err := w.apps.Apply(bg, who.User, applications.Input{
 		VacancyID: vacancy, ContactEmail: who.Email,
@@ -107,7 +105,7 @@ func TestEraseRemovesPersonalData(t *testing.T) {
 	if _, err := w.Prof.SetPrivacy(bg, who.User, "public", true); err != nil {
 		t.Fatal(err)
 	}
-	open := w.apply(who, w.vac.ID, pdf("Статья.pdf"))
+	open := w.apply(who, w.vac.ID, w.pdf("Статья.pdf"))
 	second := w.tm.Published(&w.tm.UnitA.ID)
 	accepted := w.apply(who, second.ID)
 	exec(t, `UPDATE applications SET status = 'accepted', decision_note = 'Ждём вас, Удаляемый Соискатель', decided_by = $2 WHERE id = $1`, accepted.ID, w.tm.HR.ID)
@@ -141,8 +139,30 @@ func TestEraseRemovesPersonalData(t *testing.T) {
 		t.Fatalf("the check of someone else's data would prove nothing: %+v", before)
 	}
 
+	myKeys := keysOf(t, who.ID)
+	otherKeys := keysOf(t, other.ID)
+	if len(myKeys) < 2 || len(otherKeys) == 0 {
+		t.Fatalf("the check of the file objects would prove nothing: %d and %d keys", len(myKeys), len(otherKeys))
+	}
+
 	if err := erase(t, who.ID); err != nil {
 		t.Fatal(err)
+	}
+
+	// Объекты файлов поставлены в очередь на удаление из хранилища, чужие нет. Сами объекты ещё лежат: их удалит
+	// фоновая задача (filework), чтобы недоступное хранилище не откатывало стирание.
+	for _, k := range myKeys {
+		if n := testkit.Count(t, `SELECT count(*) FROM blob_deletions WHERE storage_key = $1`, k); n != 1 {
+			t.Errorf("object %s is not queued for deletion (%d)", k, n)
+		}
+		if !w.Store.Has(k) {
+			t.Errorf("object %s was deleted inside the database transaction", k)
+		}
+	}
+	for _, k := range otherKeys {
+		if n := testkit.Count(t, `SELECT count(*) FROM blob_deletions WHERE storage_key = $1`, k); n != 0 {
+			t.Errorf("another person's object %s is queued for deletion", k)
+		}
 	}
 
 	// Строка аккаунта без почты, имени и пароля.
@@ -382,4 +402,23 @@ func TestEraseDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		}
 		return func(db testkit.DB) error { return erasure.Erase(bg, dbgen.New(db), u, time.Now().UTC()) }
 	})
+}
+
+// keysOf — ключи объектов файлов откликов человека.
+func keysOf(t *testing.T, user uuid.UUID) []string {
+	t.Helper()
+	rows, err := testkit.Pool.Query(bg, `SELECT f.storage_key FROM application_files f JOIN applications a ON a.id = f.application_id WHERE a.user_id = $1 AND f.storage_key IS NOT NULL ORDER BY f.storage_key`, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, k)
+	}
+	return keys
 }

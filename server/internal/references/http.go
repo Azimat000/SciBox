@@ -181,11 +181,22 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		tokenBody
 		LetterInput
 	}
-	ups, ok := files.Decode(w, r, &in, maxJSON, 1, "file")
-	if !ok {
+	// Ссылка и текст проверяются до приёма файла: по мёртвой ссылке никто не заставит хранилище и антивирус работать.
+	ups, err := files.Decode(r.Context(), w, r, h.svc.vault, &in, maxJSON, 1, func() error {
+		return h.svc.CheckSubmit(r.Context(), in.Token, in.LetterInput)
+	})
+	if err != nil {
+		if files.IsUploadError(err) {
+			if errors.Is(err, files.ErrStorage) {
+				h.logger.Error("references storage failed", "path", r.URL.Path, "err", err)
+			}
+			files.WriteError(w, err, "file")
+			return
+		}
+		h.fail(w, r, err)
 		return
 	}
-	var up *files.Upload
+	var up *files.Stored
 	if len(ups) == 1 {
 		up = &ups[0]
 	}

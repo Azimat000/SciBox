@@ -35,8 +35,15 @@ type ApplicationFile struct {
 	Name          string
 	Size          int32
 	Position      int16
-	Data          []byte
+	LegacyData    []byte
 	CreatedAt     time.Time
+	StorageKey    *string
+	Sha256        []byte
+	ScanStatus    string
+	ScannedAt     *time.Time
+	ScanSignature *string
+	ScanAttempts  int32
+	ScanNextAt    *time.Time
 }
 
 type ApplicationInvitation struct {
@@ -84,6 +91,11 @@ type AuthToken struct {
 	ExpiresAt time.Time
 	UsedAt    *time.Time
 	NewEmail  pgtype.Text
+}
+
+type BlobDeletion struct {
+	StorageKey string
+	QueuedAt   time.Time
 }
 
 type DeadlineReminder struct {

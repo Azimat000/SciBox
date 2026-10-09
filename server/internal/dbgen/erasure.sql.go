@@ -53,7 +53,6 @@ const eraseApplicationFiles = `-- name: EraseApplicationFiles :exec
 DELETE FROM application_files WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1)
 `
 
-// Отклики: файлы, просьбы о рекомендациях (вместе с письмами рекомендателей) и приглашения стираются целиком.
 func (q *Queries) EraseApplicationFiles(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, eraseApplicationFiles, userID)
 	return err
@@ -342,6 +341,25 @@ func (q *Queries) LockUserRow(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const queueApplicationFileBlobs = `-- name: QueueApplicationFileBlobs :exec
+INSERT INTO blob_deletions (storage_key, queued_at)
+SELECT f.storage_key, $1 FROM application_files f JOIN applications a ON a.id = f.application_id
+WHERE a.user_id = $2 AND f.storage_key IS NOT NULL
+ON CONFLICT DO NOTHING
+`
+
+type QueueApplicationFileBlobsParams struct {
+	Now    time.Time
+	UserID uuid.UUID
+}
+
+// Отклики: файлы, просьбы о рекомендациях (вместе с письмами рекомендателей) и приглашения стираются целиком.
+// Объекты файлов человека ставятся в очередь на удаление из хранилища в той же транзакции, что и удаление строк.
+func (q *Queries) QueueApplicationFileBlobs(ctx context.Context, arg QueueApplicationFileBlobsParams) error {
+	_, err := q.db.Exec(ctx, queueApplicationFileBlobs, arg.Now, arg.UserID)
+	return err
 }
 
 const restoreProfileAfterDeletion = `-- name: RestoreProfileAfterDeletion :exec

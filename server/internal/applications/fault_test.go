@@ -10,7 +10,7 @@ import (
 )
 
 func svcOn(w *world, db testkit.DB) *Service {
-	s := newService(db, w.Prof, w.refs, w.notes, testConfig())
+	s := newService(db, w.Prof, w.refs, w.notes, w.Vault, testConfig())
 	s.now = w.clock.Now
 	return s
 }
@@ -23,7 +23,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			in := w.input(me)
 			in.Referees = []references.RefereeInput{refereeIn()}
 			return func(s *Service) error {
-				_, err := s.Apply(bg, me.User, in, []files.Upload{pdf("a.pdf")})
+				_, err := s.Apply(bg, me.User, in, []files.Stored{w.pdf("a.pdf")})
 				return err
 			}
 		},
@@ -39,7 +39,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		},
 		"get as applicant": func(t *testing.T, w *world) func(*Service) error {
 			me := w.Applicant("Мария")
-			d := w.mustApply(me, nil, pdf("a.pdf"))
+			d := w.mustApply(me, nil, w.pdf("a.pdf"))
 			return func(s *Service) error { _, err := s.Get(bg, me.User, d.ID); return err }
 		},
 		"get as staff": func(t *testing.T, w *world) func(*Service) error {
@@ -50,12 +50,12 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"file as applicant": func(t *testing.T, w *world) func(*Service) error {
 			me := w.Applicant("Мария")
 			d := w.mustApply(me, nil)
-			return func(s *Service) error { _, _, err := s.File(bg, me.User, d.ID, d.CV.ID); return err }
+			return func(s *Service) error { _, _, err := readFile(bg, s, me.User, d.ID, d.CV.ID); return err }
 		},
 		"file as staff": func(t *testing.T, w *world) func(*Service) error {
 			me := w.Applicant("Мария")
 			d := w.mustApply(me, nil)
-			return func(s *Service) error { _, _, err := s.File(bg, w.tm.HeadA.User, d.ID, d.CV.ID); return err }
+			return func(s *Service) error { _, _, err := readFile(bg, s, w.tm.HeadA.User, d.ID, d.CV.ID); return err }
 		},
 		"withdraw": func(t *testing.T, w *world) func(*Service) error {
 			me := w.Applicant("Мария")

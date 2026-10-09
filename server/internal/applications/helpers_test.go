@@ -1,7 +1,8 @@
 package applications
 
 import (
-	"bytes"
+	"context"
+	"io"
 	"fmt"
 	"sync"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"scibox/server/internal/auth"
 	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/references"
@@ -59,15 +61,15 @@ func newWorld(t *testing.T) *world {
 	k := testkit.NewWorld(t)
 	w := &world{World: k, clock: &clock{t: time.Now().UTC().Truncate(time.Microsecond)}}
 	w.notes = notifications.NewService(testkit.Pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
-	w.refs = references.NewService(testkit.Pool, w.notes, references.DefaultConfig("SciBox", "http://localhost:5173"))
-	w.svc = NewService(testkit.Pool, k.Prof, w.refs, w.notes, testConfig())
+	w.refs = references.NewService(testkit.Pool, w.notes, k.Vault, references.DefaultConfig("SciBox", "http://localhost:5173"))
+	w.svc = NewService(testkit.Pool, k.Prof, w.refs, w.notes, k.Vault, testConfig())
 	w.svc.now = w.clock.Now
 	w.tm = k.Team()
 	w.vacancy = w.tm.Published(&w.tm.UnitA.ID)
 	return w
 }
 
-func pdfBytes() []byte { return append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte("p"), 300)...) }
+func pdfBytes() []byte { return testkit.PDF() }
 
 func emailSeq() string { return fmt.Sprintf("rec%d@example.ru", testkit.Seq()) }
 
@@ -77,7 +79,7 @@ func (w *world) input(who testkit.Person) Input {
 }
 
 // apply отправляет отклик; mod правит поля.
-func (w *world) apply(who testkit.Person, mod func(*Input), ups ...files.Upload) (Detail, error) {
+func (w *world) apply(who testkit.Person, mod func(*Input), ups ...files.Stored) (Detail, error) {
 	w.T.Helper()
 	in := w.input(who)
 	if mod != nil {
@@ -87,7 +89,7 @@ func (w *world) apply(who testkit.Person, mod func(*Input), ups ...files.Upload)
 }
 
 // mustApply отправляет отклик и требует успеха.
-func (w *world) mustApply(who testkit.Person, mod func(*Input), ups ...files.Upload) Detail {
+func (w *world) mustApply(who testkit.Person, mod func(*Input), ups ...files.Stored) Detail {
 	w.T.Helper()
 	d, err := w.apply(who, mod, ups...)
 	if err != nil {
@@ -117,4 +119,27 @@ func refereeIn() references.RefereeInput {
 	return references.RefereeInput{Name: "Профессор Иванов", Email: emailSeq(), Relation: "научный руководитель"}
 }
 
-func pdf(name string) files.Upload { return files.Upload{Name: name, Data: pdfBytes()} }
+// readFile открывает файл отклика, читает его целиком и закрывает: старый вид «имя, содержимое, ошибка» для тестов.
+func readFile(ctx context.Context, s *Service, who auth.User, app, file uuid.UUID) (string, []byte, error) {
+	f, err := s.File(ctx, who, app, file)
+	if err != nil {
+		return "", nil, err
+	}
+	defer func() { _ = f.Body.Close() }()
+	data, err := io.ReadAll(f.Body)
+	if err != nil {
+		return "", nil, err
+	}
+	if int64(len(data)) != f.Size {
+		return "", nil, fmt.Errorf("size %d, read %d", f.Size, len(data))
+	}
+	return f.Name, data, nil
+}
+
+// pdf кладёт на склад обычный PDF, как это делает загрузка.
+func (w *world) pdf(name string) files.Stored { w.T.Helper(); return w.PDF(name) }
+
+func ptr[T any](v T) *T { return &v }
+
+// bigPDF — PDF заданного размера.
+func bigPDF(n int) []byte { return append([]byte("%PDF-1.7\n"), make([]byte, n)...) }

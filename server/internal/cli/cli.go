@@ -19,12 +19,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
+	"scibox/server/internal/antivirus"
 	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/blobstore"
 	"scibox/server/internal/config"
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/dataexport"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/files"
+	"scibox/server/internal/filework"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
 	"scibox/server/internal/httpguard"
@@ -50,6 +54,13 @@ const outboxInterval = 2 * time.Second
 
 // matchingInterval — как часто фоновый цикл смотрит, не пора ли слать письма о новых вакансиях и напоминания о сроках.
 const matchingInterval = 5 * time.Minute
+
+// fileWorkInterval — как часто фоновая задача файлов смотрит, не пора ли проверить файл, перенести старый или удалить
+// объект из очереди; fileSweepInterval — как часто чистит осиротевшие объекты.
+const (
+	fileWorkInterval  = 30 * time.Second
+	fileSweepInterval = 6 * time.Hour
+)
 
 // Version задаётся при сборке через -ldflags; при локальном запуске "dev".
 var Version = "dev"
@@ -116,7 +127,12 @@ func Run(ctx context.Context, args []string, env Env) int {
 	case "journals":
 		return runJournals(ctx, cfg.DatabaseURL, args, env, logger)
 	case "seed":
-		if err := runSeed(ctx, cfg.DatabaseURL, env.Stdout); err != nil {
+		vault, err := openVault(ctx, cfg, logger)
+		if err != nil {
+			logger.Error("seed", "err", err)
+			return 1
+		}
+		if err := runSeed(ctx, cfg.DatabaseURL, vault, env.Stdout); err != nil {
 			logger.Error("seed", "err", err)
 			return 1
 		}
@@ -192,13 +208,13 @@ func runJournals(ctx context.Context, databaseURL string, args []string, env Env
 	return 0
 }
 
-func runSeed(ctx context.Context, databaseURL string, out io.Writer) error {
+func runSeed(ctx context.Context, databaseURL string, vault *files.Vault, out io.Writer) error {
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
 	defer pool.Close()
-	res, err := seed.Run(ctx, pool, time.Now().UTC())
+	res, err := seed.Run(ctx, pool, vault, time.Now().UTC())
 	if err != nil {
 		return err
 	}
@@ -234,7 +250,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	}
 
-	a := newApp(cfg, pool, logger, health.Checker{Queries: dbgen.New(pool), Migrations: migrations}, web, time.Now)
+	vault, err := openVault(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	a := newApp(cfg, pool, vault, logger, health.Checker{Queries: dbgen.New(pool), Migrations: migrations}, web, time.Now)
 	// Фоновые задачи останавливаются отменой cleanupCtx; сервер дожидается их до закрытия базы и выхода.
 	var background sync.WaitGroup
 	defer background.Wait()
@@ -290,7 +310,7 @@ type app struct {
 
 // newApp собирает сервисы и роутер так же, как в работе. Отдельно от serve, чтобы тесты проверяли
 // настоящую сборку (например, что каждый адрес ограничивает тело запроса). now — часы ограничения частоты.
-func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker httpapi.HealthChecker, web http.Handler, now func() time.Time) app {
+func newApp(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logger *slog.Logger, checker httpapi.HealthChecker, web http.Handler, now func() time.Time) app {
 	// Письма сначала попадают в очередь в базе и уходят оттуда в фоне: они переживают падение сервера и повторяются при сбоях.
 	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom, TLS: cfg.SMTPTLS, Username: cfg.SMTPUser, Password: cfg.SMTPPassword}
 	queue := notifications.NewQueue(pool)
@@ -301,12 +321,13 @@ func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker 
 
 	notes := notifications.NewService(pool, notifications.Config{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL})
 	profileSvc := profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name))
-	refSvc := references.NewService(pool, notes, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
-	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, applications.DefaultConfig())
+	refSvc := references.NewService(pool, notes, vault, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
+	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, vault, applications.DefaultConfig())
 	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
 	matchingSvc := matching.NewService(pool, vacancySvc, notes, matching.DefaultConfig(), logger)
 	// Счётчики частоты в базе: лимит общий для всех копий сервера (D-141).
 	counters := httpguard.NewPostgresStore(pool)
+	fileWork := filework.NewService(pool, vault, notes, filework.DefaultConfig(), logger)
 
 	handler := httpapi.NewRouter(httpapi.Deps{
 		ProductName:   cfg.Product.Name,
@@ -325,7 +346,7 @@ func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker 
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
 		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
-		Export:        dataexport.NewHandler(dataexport.NewService(pool, dataexport.DefaultConfig(cfg.Product.Name)), logger, authHandler.RequireUser),
+		Export:        dataexport.NewHandler(dataexport.NewService(pool, vault, dataexport.DefaultConfig(cfg.Product.Name)), logger, authHandler.RequireUser),
 		Web:           web,
 		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: counters, Now: now},
 	})
@@ -340,7 +361,36 @@ func newApp(cfg config.Config, pool *pgxpool.Pool, logger *slog.Logger, checker 
 			func(ctx context.Context) {
 				retention.NewService(pool, retention.DefaultConfig(), logger).Run(ctx, time.Hour)
 			},
+			func(ctx context.Context) { fileWork.Run(ctx, fileWorkInterval, fileSweepInterval) },
 		},
 		flush: []func(){accounts.Flush, organizations.Flush},
 	}
+}
+
+// openVault подключает хранилище файлов и антивирус. Хранилище, которое не отвечает при запуске, — ошибка запуска:
+// без него нельзя ни принять, ни выдать файл. Антивирус может подняться позже: до тех пор файлы ждут проверки.
+func openVault(ctx context.Context, cfg config.Config, logger *slog.Logger) (*files.Vault, error) {
+	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	store, err := blobstore.NewS3(connectCtx, blobstore.S3Config{
+		Endpoint: cfg.S3.Endpoint, Bucket: cfg.S3.Bucket, AccessKey: cfg.S3.AccessKey, SecretKey: cfg.S3.SecretKey,
+		Region: cfg.S3.Region, TLS: cfg.S3.TLS, PathStyle: cfg.S3.PathStyle, CreateBucket: cfg.S3.CreateBucket,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("file storage %s: %w", cfg.S3.Endpoint, err)
+	}
+	var scanner antivirus.Scanner
+	if strings.EqualFold(cfg.ClamAVAddr, config.ClamAVOff) {
+		logger.Warn("antivirus is OFF (SCIBOX_CLAMAV_ADDR=off): uploaded files are not checked; development only")
+		scanner = antivirus.Skip{}
+	} else {
+		clamd := antivirus.NewClamd(cfg.ClamAVAddr)
+		pingCtx, stop := context.WithTimeout(ctx, 5*time.Second)
+		defer stop()
+		if err := clamd.Ping(pingCtx); err != nil {
+			logger.Warn("antivirus does not answer yet: new files wait for the check", "addr", cfg.ClamAVAddr, "err", err)
+		}
+		scanner = clamd
+	}
+	return files.NewVault(store, scanner, func() time.Time { return time.Now().UTC() }), nil
 }

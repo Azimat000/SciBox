@@ -127,12 +127,13 @@ SELECT COALESCE(jsonb_agg(e.doc ORDER BY e.id DESC), '[]'::jsonb)::jsonb AS doc 
 
 -- Файлы его откликов всех видов; какие из них отдать, решает сервис (dataexport.exportable): письма рекомендателей о нём — нет.
 -- name: ExportFiles :many
-SELECT f.id, f.application_id, f.kind, f.name, f.size
+SELECT f.id, f.application_id, f.kind, f.name, f.size, f.scan_status
 FROM application_files f JOIN applications a ON a.id = f.application_id
 WHERE a.user_id = sqlc.arg(user_id)
 ORDER BY a.created_at, a.id, f.position, f.id;
 
--- Содержимое одного файла; владелец проверяется в самом запросе.
--- name: ExportFileData :one
-SELECT f.data FROM application_files f JOIN applications a ON a.id = f.application_id
-WHERE f.id = sqlc.arg(id) AND a.user_id = sqlc.arg(user_id) AND f.kind IN ('cv', 'attachment');
+-- Где лежит содержимое одного файла; владелец и проверенность проверяются в самом запросе.
+-- name: ExportFileKey :one
+SELECT f.storage_key FROM application_files f JOIN applications a ON a.id = f.application_id
+WHERE f.id = sqlc.arg(id) AND a.user_id = sqlc.arg(user_id) AND f.kind IN ('cv', 'attachment')
+  AND f.scan_status = 'clean' AND f.storage_key IS NOT NULL;

@@ -28,7 +28,7 @@ func TestApplyHappyPath(t *testing.T) {
 		in.CoverLetter = "  Здравствуйте! Мой опыт работы с катализаторами подходит для вашей лаборатории.  "
 		in.ContactEmail = "  Maria.Apply@Example.ru "
 		in.Referees = []references.RefereeInput{ref1, ref2}
-	}, pdf(`C:\Мои документы\Список публикаций.pdf`), pdf("diploma"))
+	}, w.pdf(`C:\Мои документы\Список публикаций.pdf`), w.pdf("diploma"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestApplyValidation(t *testing.T) {
 	cases := []struct {
 		name  string
 		mod   func(*Input)
-		ups   []files.Upload
+		ups   []files.Stored
 		field string
 	}{
 		{"no contact", func(in *Input) { in.ContactEmail = "" }, nil, "contact_email"},
@@ -168,15 +168,17 @@ func TestApplyValidation(t *testing.T) {
 			in.Referees = []references.RefereeInput{{Name: "Тот Же Человек", Email: "contact@example.ru"}}
 		}, nil, "referees"},
 		{"referee bad", func(in *Input) { in.Referees = []references.RefereeInput{{Name: "", Email: "x"}} }, nil, "referees"},
-		{"file not a pdf", nil, []files.Upload{{Name: "virus.pdf", Data: []byte("MZ\x90\x00")}}, "files"},
-		{"file empty", nil, []files.Upload{{Name: "empty.pdf"}}, "files"},
-		{"six files", nil, []files.Upload{pdf("1"), pdf("2"), pdf("3"), pdf("4"), pdf("5"), pdf("6")}, "files"},
-		{"file too big", nil, []files.Upload{{Name: "big.pdf", Data: append([]byte("%PDF-"), make([]byte, files.MaxFileSize)...)}}, "files"},
+		// Не PDF, пустой, слишком большой и заражённый файл отсекает склад при загрузке (files.TestVault…), до сервиса они не доходят.
+		{"six files", nil, []files.Stored{w.pdf("1"), w.pdf("2"), w.pdf("3"), w.pdf("4"), w.pdf("5"), w.pdf("6")}, "files"},
+		{"files together are too big", nil, []files.Stored{
+			w.Stored("1.pdf", bigPDF(9<<20)), w.Stored("2.pdf", bigPDF(9<<20)), w.Stored("3.pdf", bigPDF(9<<20)),
+		}, "files"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			before := testkit.Count(t, `SELECT count(*) FROM applications WHERE user_id = $1`, me.ID)
 			rates := testkit.Count(t, `SELECT count(*) FROM rate_events WHERE kind = 'apply' AND key = $1`, me.ID.String())
+			objects := w.Store.Count()
 			_, err := w.apply(me, c.mod, c.ups...)
 			var v *auth.ValidationError
 			if !errors.As(err, &v) || v.Fields[c.field] == "" {
@@ -187,6 +189,10 @@ func TestApplyValidation(t *testing.T) {
 			}
 			if testkit.Count(t, `SELECT count(*) FROM rate_events WHERE kind = 'apply' AND key = $1`, me.ID.String()) != rates {
 				t.Error("an invalid application spent the daily limit")
+			}
+			// Отказ забирает за собой принятые файлы: в хранилище не остаётся ни приложений, ни резюме.
+			if got, want := w.Store.Count(), objects-len(c.ups); got != want {
+				t.Errorf("objects left in the storage: %d, want %d", got, want)
 			}
 		})
 	}
@@ -199,7 +205,7 @@ func TestApplyValidation(t *testing.T) {
 	}
 	// Five files pass.
 	other := w.Applicant("Пять файлов")
-	if _, err := w.apply(other, nil, pdf("1"), pdf("2"), pdf("3"), pdf("4"), pdf("5")); err != nil {
+	if _, err := w.apply(other, nil, w.pdf("1"), w.pdf("2"), w.pdf("3"), w.pdf("4"), w.pdf("5")); err != nil {
 		t.Errorf("five files: %v", err)
 	}
 }
@@ -207,7 +213,11 @@ func TestApplyValidation(t *testing.T) {
 func TestApplyAllFieldErrorsAtOnce(t *testing.T) {
 	w := newWorld(t)
 	me := w.Applicant("Мария")
-	_, err := w.apply(me, func(in *Input) { in.ContactEmail = "x"; in.CoverLetter = "коротко" }, files.Upload{Name: "a.pdf", Data: []byte("nope")})
+	_, err := w.apply(me, func(in *Input) {
+		in.ContactEmail = "x"
+		in.CoverLetter = "коротко"
+		in.Referees = []references.RefereeInput{{Name: "", Email: "x"}}
+	})
 	var v *auth.ValidationError
 	if !errors.As(err, &v) || len(v.Fields) != 3 {
 		t.Errorf("fields = %v", v)
@@ -429,7 +439,7 @@ func TestWhoSeesTheApplication(t *testing.T) {
 	w := newWorld(t)
 	tm := w.tm
 	me := w.Applicant("Мария Смирнова")
-	d := w.mustApply(me, nil, pdf("Список.pdf"))
+	d := w.mustApply(me, nil, w.pdf("Список.pdf"))
 	// Приходит письмо рекомендателя.
 	req, err := w.refs.Add(bg, me.User, d.ID, refereeIn())
 	if err != nil {
@@ -476,7 +486,7 @@ func TestLettersAreVisibleToOrganizationOnly(t *testing.T) {
 	in := refereeIn()
 	d := w.mustApply(me, func(i *Input) { i.Referees = []references.RefereeInput{in} })
 	token := w.tokenFor(in.Email)
-	if err := w.refs.Submit(bg, token, references.LetterInput{Text: "ТЕКСТ РЕКОМЕНДАЦИИ"}, &files.Upload{Name: "Письмо.pdf", Data: pdfBytes()}); err != nil {
+	if err := w.refs.Submit(bg, token, references.LetterInput{Text: "ТЕКСТ РЕКОМЕНДАЦИИ"}, ptr(w.pdf("Письмо.pdf"))); err != nil {
 		t.Fatal(err)
 	}
 
@@ -534,7 +544,7 @@ func TestApplicantWhoBecomesStaffStillSeesTheApplicantView(t *testing.T) {
 	me := w.Applicant("Мария")
 	in := refereeIn()
 	d := w.mustApply(me, func(i *Input) { i.Referees = []references.RefereeInput{in} })
-	if err := w.refs.Submit(bg, w.tokenFor(in.Email), references.LetterInput{Text: "Письмо о ней"}, &files.Upload{Name: "l.pdf", Data: pdfBytes()}); err != nil {
+	if err := w.refs.Submit(bg, w.tokenFor(in.Email), references.LetterInput{Text: "Письмо о ней"}, ptr(w.pdf("l.pdf"))); err != nil {
 		t.Fatal(err)
 	}
 	if err := dbgen.New(testkit.Pool).AddMember(bg, dbgen.AddMemberParams{OrgID: w.tm.OrgID, UserID: me.ID, Role: "hr", JoinedAt: time.Now().UTC()}); err != nil {
@@ -550,7 +560,7 @@ func TestApplicantWhoBecomesStaffStillSeesTheApplicantView(t *testing.T) {
 	// И файл письма он тоже получить не может.
 	staff, _ := w.svc.Get(bg, w.tm.Owner.User, d.ID)
 	letter := staff.References.([]references.StaffRequest)[0].Letter.File
-	if _, _, err := w.svc.File(bg, me.User, d.ID, letter.ID); !errors.Is(err, ErrNotFound) {
+	if _, _, err := readFile(bg, w.svc, me.User, d.ID, letter.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("letter file: %v", err)
 	}
 }
@@ -560,8 +570,8 @@ func TestFileAccess(t *testing.T) {
 	tm := w.tm
 	me := w.Applicant("Мария")
 	in := refereeIn()
-	d := w.mustApply(me, func(i *Input) { i.Referees = []references.RefereeInput{in} }, pdf("Приложение.pdf"))
-	if err := w.refs.Submit(bg, w.tokenFor(in.Email), references.LetterInput{}, &files.Upload{Name: "Письмо.pdf", Data: pdfBytes()}); err != nil {
+	d := w.mustApply(me, func(i *Input) { i.Referees = []references.RefereeInput{in} }, w.pdf("Приложение.pdf"))
+	if err := w.refs.Submit(bg, w.tokenFor(in.Email), references.LetterInput{}, ptr(w.pdf("Письмо.pdf"))); err != nil {
 		t.Fatal(err)
 	}
 	staff, _ := w.svc.Get(bg, tm.Owner.User, d.ID)
@@ -583,7 +593,7 @@ func TestFileAccess(t *testing.T) {
 	}
 	for _, c := range cases {
 		for kind, id := range files {
-			name, data, err := w.svc.File(bg, c.who.User, d.ID, id)
+			name, data, err := readFile(bg, w.svc, c.who.User, d.ID, id)
 			if c.want[kind] {
 				if err != nil || len(data) == 0 || !strings.HasSuffix(name, ".pdf") {
 					t.Errorf("%s/%s: %v", c.name, kind, err)
@@ -595,14 +605,14 @@ func TestFileAccess(t *testing.T) {
 	}
 	// Файл чужого отклика по адресу своего отклика получить нельзя.
 	other := w.Applicant("Другая")
-	d2 := w.mustApply(other, nil, pdf("Другое.pdf"))
-	if _, _, err := w.svc.File(bg, other.User, d2.ID, d.Files[0].ID); !errors.Is(err, ErrNotFound) {
+	d2 := w.mustApply(other, nil, w.pdf("Другое.pdf"))
+	if _, _, err := readFile(bg, w.svc, other.User, d2.ID, d.Files[0].ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("file of another application: %v", err)
 	}
-	if _, _, err := w.svc.File(bg, me.User, d.ID, uuid.New()); !errors.Is(err, ErrNotFound) {
+	if _, _, err := readFile(bg, w.svc, me.User, d.ID, uuid.New()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown file: %v", err)
 	}
-	if _, _, err := w.svc.File(bg, me.User, uuid.New(), d.CV.ID); !errors.Is(err, ErrNotFound) {
+	if _, _, err := readFile(bg, w.svc, me.User, uuid.New(), d.CV.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown application: %v", err)
 	}
 }
@@ -612,7 +622,7 @@ func TestUnknownFileKindIsNeverServed(t *testing.T) {
 	me := w.Applicant("Мария")
 	d := w.mustApply(me, nil)
 	// Строку с неизвестным видом база не пропустит (CHECK), поэтому проверяем, что она и правда не пропускает.
-	_, err := testkit.Pool.Exec(bg, `INSERT INTO application_files (application_id, kind, name, size, data, created_at) VALUES ($1, 'exe', 'x.pdf', 1, 'x', now())`, d.ID)
+	_, err := testkit.Pool.Exec(bg, `INSERT INTO application_files (application_id, kind, name, size, storage_key, scan_status, scanned_at, created_at) VALUES ($1, 'exe', 'x.pdf', 1, 'files/x', 'clean', now(), now())`, d.ID)
 	if err == nil {
 		t.Fatal("the database accepted an unknown file kind")
 	}
@@ -900,7 +910,7 @@ func TestFailuresOfDependenciesAreReported(t *testing.T) {
 	me := w.Applicant("Мария")
 	d := w.mustApply(me, nil)
 
-	s := newService(testkit.Pool, brokenProfiles{w.Prof}, w.refs, w.notes, testConfig())
+	s := newService(testkit.Pool, brokenProfiles{w.Prof}, w.refs, w.notes, w.Vault, testConfig())
 	other := w.Applicant("Другая")
 	if _, err := s.Apply(bg, other.User, w.input(other), nil); !errors.Is(err, errBroken) {
 		t.Errorf("profile failure: %v", err)
@@ -908,11 +918,11 @@ func TestFailuresOfDependenciesAreReported(t *testing.T) {
 	if n := testkit.Count(t, `SELECT count(*) FROM applications WHERE user_id = $1`, other.ID); n != 0 {
 		t.Error("an application was stored although the profile could not be read")
 	}
-	s = newService(testkit.Pool, w.Prof, brokenRefs{References: w.refs, applicant: true}, w.notes, testConfig())
+	s = newService(testkit.Pool, w.Prof, brokenRefs{References: w.refs, applicant: true}, w.notes, w.Vault, testConfig())
 	if _, err := s.Get(bg, me.User, d.ID); !errors.Is(err, errBroken) {
 		t.Errorf("references failure (applicant): %v", err)
 	}
-	s = newService(testkit.Pool, w.Prof, brokenRefs{References: w.refs, staff: true}, w.notes, testConfig())
+	s = newService(testkit.Pool, w.Prof, brokenRefs{References: w.refs, staff: true}, w.notes, w.Vault, testConfig())
 	if _, err := s.Get(bg, w.tm.Owner.User, d.ID); !errors.Is(err, errBroken) {
 		t.Errorf("references failure (staff): %v", err)
 	}

@@ -11,6 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"scibox/server/internal/antivirus"
+	"scibox/server/internal/blobstore"
+	"scibox/server/internal/files"
 	"slices"
 	"strings"
 	"testing"
@@ -36,16 +39,18 @@ func (okHealth) CheckDatabase(context.Context) (health.Database, error) {
 
 // perimeterWorld — сервер, собранный как в работе (newApp), на базе с демо-данными.
 type perimeterWorld struct {
-	t    *testing.T
-	pool *pgxpool.Pool
-	env  map[string]string
-	web  http.Handler
+	vault *files.Vault
+	t     *testing.T
+	pool  *pgxpool.Pool
+	env   map[string]string
+	web   http.Handler
 }
 
 func newPerimeterWorld(t *testing.T) *perimeterWorld {
 	t.Helper()
 	dbURL := testdb.Create(t, true)
-	if err := runSeed(t.Context(), dbURL, io.Discard); err != nil {
+	vault := newTestVault()
+	if err := runSeed(t.Context(), dbURL, vault, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	pool, err := pgxpool.New(t.Context(), dbURL)
@@ -58,7 +63,8 @@ func newPerimeterWorld(t *testing.T) *perimeterWorld {
 		t.Fatal(err)
 	}
 	return &perimeterWorld{
-		t: t, pool: pool,
+		vault: vault,
+		t:     t, pool: pool,
 		env: map[string]string{"DATABASE_URL": dbURL, "SCIBOX_PRODUCT_CONFIG": productConfig},
 		web: httpapi.WebHandler(os.DirFS(dir)),
 	}
@@ -80,7 +86,7 @@ func (w *perimeterWorld) handler(extra map[string]string) http.Handler {
 	}
 	// Часы стоят: проверка частоты не должна зависеть от того, попала ли она на границу минуты.
 	frozen := func() time.Time { return time.Date(2026, 10, 8, 12, 0, 30, 0, time.UTC) }
-	return newApp(cfg, w.pool, slog.New(slog.NewTextHandler(io.Discard, nil)), okHealth{}, w.web, frozen).handler
+	return newApp(cfg, w.pool, w.vault, slog.New(slog.NewTextHandler(io.Discard, nil)), okHealth{}, w.web, frozen).handler
 }
 
 type req struct {
@@ -356,4 +362,9 @@ func TestPerimeter(t *testing.T) {
 			})
 		}
 	})
+}
+
+// newTestVault — склад на хранилище в памяти и подставном антивирусе.
+func newTestVault() *files.Vault {
+	return files.NewVault(blobstore.NewMemory(), &antivirus.Fake{}, time.Now)
 }

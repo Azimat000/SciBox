@@ -1,7 +1,6 @@
 package references
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/testkit"
 )
@@ -56,7 +56,7 @@ func newWorld(t *testing.T) *world {
 	k := testkit.NewWorld(t)
 	w := &world{World: k, clock: &clock{t: time.Now().UTC().Truncate(time.Microsecond)}}
 	w.notes = notifications.NewService(testkit.Pool, notifications.Config{ProductName: "SciBox", PublicURL: "http://localhost:5173"})
-	w.svc = NewService(testkit.Pool, w.notes, testConfig())
+	w.svc = NewService(testkit.Pool, w.notes, k.Vault, testConfig())
 	w.svc.now = w.clock.Now
 	w.tm = k.Team()
 	w.vacancyID = w.tm.Published(&w.tm.UnitA.ID).ID
@@ -97,8 +97,13 @@ func referee() RefereeInput {
 	return RefereeInput{Name: "Профессор Иванов", Email: emailSeq(), Relation: "Научный руководитель"}
 }
 
+func ptr[T any](v T) *T { return &v }
+
+// pdf кладёт на склад обычный PDF, как это делает загрузка.
+func (w *world) pdf(name string) files.Stored { w.T.Helper(); return w.PDF(name) }
+
 // pdfBytes — минимальный PDF для тестов.
-func pdfBytes() []byte { return append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte("p"), 200)...) }
+func pdfBytes() []byte { return testkit.PDF() }
 
 type outboxMail struct{ To, Subject, Body string }
 

@@ -4,12 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"scibox/server/internal/files"
 	"scibox/server/internal/testkit"
 )
 
 func svcOn(w *world, db testkit.DB) *Service {
-	s := newService(db, w.notes, w.svc.cfg)
+	s := newService(db, w.notes, w.Vault, w.svc.cfg)
 	s.now = w.clock.Now
 	return s
 }
@@ -46,7 +45,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			me := w.Applicant("Мария")
 			app := w.application(me)
 			_, token := w.add(me, app)
-			if err := w.svc.Submit(bg, token, LetterInput{Text: "письмо"}, &files.Upload{Name: "a.pdf", Data: pdfBytes()}); err != nil {
+			if err := w.svc.Submit(bg, token, LetterInput{Text: "письмо"}, ptr(w.pdf("a.pdf"))); err != nil {
 				t.Fatal(err)
 			}
 			return func(s *Service) error { _, err := s.ListForStaff(bg, app); return err }
@@ -65,7 +64,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			me := w.Applicant("Мария")
 			_, token := w.add(me, w.application(me))
 			return func(s *Service) error {
-				return s.Submit(bg, token, LetterInput{}, &files.Upload{Name: "a.pdf", Data: pdfBytes()})
+				return s.Submit(bg, token, LetterInput{}, ptr(w.pdf("a.pdf")))
 			}
 		},
 		"decline": func(t *testing.T, w *world) func(*Service) error {

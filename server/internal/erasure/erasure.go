@@ -96,6 +96,11 @@ func Erase(ctx context.Context, q *dbgen.Queries, user dbgen.User, now time.Time
 		// Уведомления организаций об откликах ищутся по ссылке на отклик: до обезличивания.
 		{"candidate notifications", func() error { return q.EraseCandidateNotifications(ctx, id) }},
 		{"offer answer notifications", func() error { return q.EraseOfferAnswerNotifications(ctx, id) }},
+		// Объекты файлов уходят в очередь на удаление из хранилища в этой же транзакции (T-21): сами строки стираются
+		// следом, а фоновая задача filework удалит объекты, как только хранилище ответит.
+		{"application file blobs", func() error {
+			return q.QueueApplicationFileBlobs(ctx, dbgen.QueueApplicationFileBlobsParams{UserID: id, Now: now})
+		}},
 		{"application files", func() error { return q.EraseApplicationFiles(ctx, id) }},
 		{"referee mail history", func() error { return q.EraseRefereeMailHistory(ctx, id) }},
 		{"reference requests", func() error { return q.EraseReferenceRequests(ctx, id) }},

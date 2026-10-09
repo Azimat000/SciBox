@@ -45,7 +45,7 @@ install: web/node_modules/.package-lock.json
 web/node_modules/.package-lock.json: web/package-lock.json
 	cd web && npm ci
 
-## db-up / db-down: база PostgreSQL (порт 5433) и Mailpit (8025)
+## db-up / db-down: база PostgreSQL (порт 5433), Mailpit (8025), хранилище файлов (8333) и антивирус (3310)
 db-up:
 	docker compose up -d --wait
 

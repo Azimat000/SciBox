@@ -66,6 +66,8 @@ var (
 	ErrOwnVacancy = errors.New("applications: own vacancy")
 	// ErrAlreadyApplied — на эту вакансию человек уже откликнулся.
 	ErrAlreadyApplied = errors.New("applications: already applied")
+	// ErrFilePending — файл ещё не проверен на вирусы и не выдаётся.
+	ErrFilePending = errors.New("applications: file is not scanned yet")
 	// ErrBadStatus — отклик в таком статусе нельзя отозвать, решить по нему или пригласить.
 	ErrBadStatus = errors.New("applications: invalid status change")
 	// ErrBadInvitation — приглашение уже в другом состоянии (отвечено, отменено): действие не подходит.
@@ -89,6 +91,8 @@ type FileRef struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 	Size int       `json:"size"`
+	// Scan — проверка на вирусы: clean (можно скачать), pending (проверяется), infected (не принят; видит только автор).
+	Scan string `json:"scan"`
 }
 
 // RefsCount — сколько рекомендателей просили и сколько письм получено.

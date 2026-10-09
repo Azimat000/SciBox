@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,6 +159,11 @@ func TestProductionRefusesUnsafeSettings(t *testing.T) {
 			"DATABASE_URL":          "postgres://app:Long-Random-Secret@db.internal:5432/scibox?sslmode=verify-full",
 			"SCIBOX_SMTP_TLS":       "starttls",
 			"SCIBOX_MAIL_FROM":      "SciBox <no-reply@scibox.example>",
+			"SCIBOX_S3_ENDPOINT":    "storage.yandexcloud.net",
+			"SCIBOX_S3_TLS":         "on",
+			"SCIBOX_S3_ACCESS_KEY":  "YCAJE-real-access-key",
+			"SCIBOX_S3_SECRET_KEY":  "Real-Secret-Key-Of-The-Service-Account",
+			"SCIBOX_CLAMAV_ADDR":    "clamav:3310",
 		}
 	}
 	cfg, err := Load(envMap(safe()))
@@ -204,6 +210,13 @@ func TestProductionRefusesUnsafeSettings(t *testing.T) {
 		{"mail without encryption", "SCIBOX_SMTP_TLS", "off", "SCIBOX_SMTP_TLS is off"},
 		{"default sender", "SCIBOX_MAIL_FROM", "", "SCIBOX_MAIL_FROM must be a real address"},
 		{"broken sender", "SCIBOX_MAIL_FROM", "not an address", "SCIBOX_MAIL_FROM must be a real address"},
+		{"storage without tls", "SCIBOX_S3_TLS", "off", "SCIBOX_S3_TLS is off"},
+		{"storage tls not set", "SCIBOX_S3_TLS", "", "SCIBOX_S3_TLS is off"},
+		{"development access key", "SCIBOX_S3_ACCESS_KEY", "scibox", "development key"},
+		{"development secret key", "SCIBOX_S3_SECRET_KEY", "scibox-dev-secret", "development key"},
+		{"keys not set", "SCIBOX_S3_SECRET_KEY", "", "development key"},
+		{"antivirus switched off", "SCIBOX_CLAMAV_ADDR", "off", "SCIBOX_CLAMAV_ADDR is off"},
+		{"antivirus switched off in capitals", "SCIBOX_CLAMAV_ADDR", "OFF", "SCIBOX_CLAMAV_ADDR is off"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -213,15 +226,17 @@ func TestProductionRefusesUnsafeSettings(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "SCIBOX_ENV=production") {
 				t.Fatalf("err = %v, want containing %q", err, tc.want)
 			}
-			if strings.Contains(err.Error(), "Long-Random-Secret") {
-				t.Fatalf("database password leaked into the error: %v", err)
+			for _, secret := range []string{"Long-Random-Secret", "Real-Secret-Key-Of-The-Service-Account", "scibox-dev-secret"} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("secret %q leaked into the error: %v", secret, err)
+				}
 			}
 		})
 	}
 
 	// Все проблемы видны сразу, а не по одной за запуск.
 	_, err = Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p, "SCIBOX_ENV": "production"}))
-	for _, want := range []string{"SCIBOX_PUBLIC_URL", "development password", "SCIBOX_SMTP_TLS", "SCIBOX_MAIL_FROM"} {
+	for _, want := range []string{"SCIBOX_PUBLIC_URL", "development password", "SCIBOX_SMTP_TLS", "SCIBOX_MAIL_FROM", "SCIBOX_S3_TLS", "development key"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("all-defaults production: err = %v, want containing %q", err, want)
 		}
@@ -255,6 +270,62 @@ func TestLoadEnvAndProxies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.env["SCIBOX_PRODUCT_CONFIG"] = p
 			if _, err := Load(envMap(tc.env)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadFileStorage(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	base := func(extra map[string]string) map[string]string {
+		env := map[string]string{"SCIBOX_PRODUCT_CONFIG": p}
+		maps.Copy(env, extra)
+		return env
+	}
+	t.Run("development defaults match docker-compose", func(t *testing.T) {
+		cfg, err := Load(envMap(base(nil)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := S3{Endpoint: "localhost:8333", Bucket: "scibox-files", AccessKey: "scibox", SecretKey: "scibox-dev-secret", Region: "us-east-1", PathStyle: true, CreateBucket: true}
+		if cfg.S3 != want || cfg.ClamAVAddr != "localhost:3310" {
+			t.Fatalf("got %+v, clamav %q", cfg.S3, cfg.ClamAVAddr)
+		}
+	})
+	t.Run("overrides", func(t *testing.T) {
+		cfg, err := Load(envMap(base(map[string]string{
+			"SCIBOX_S3_ENDPOINT": "s3.selcdn.ru", "SCIBOX_S3_BUCKET": "cvs", "SCIBOX_S3_REGION": "ru-1", "SCIBOX_S3_TLS": "true",
+			"SCIBOX_S3_PATH_STYLE": "off", "SCIBOX_S3_CREATE_BUCKET": "0", "SCIBOX_CLAMAV_ADDR": "off",
+		})))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.S3.Endpoint != "s3.selcdn.ru" || cfg.S3.Bucket != "cvs" || cfg.S3.Region != "ru-1" || !cfg.S3.TLS || cfg.S3.PathStyle || cfg.S3.CreateBucket || cfg.ClamAVAddr != "off" {
+			t.Fatalf("got %+v, clamav %q", cfg.S3, cfg.ClamAVAddr)
+		}
+	})
+	t.Run("production does not create buckets or use path style by default", func(t *testing.T) {
+		env := base(map[string]string{"SCIBOX_ENV": "production"})
+		_, err := Load(envMap(env)) // другие проблемы боя здесь не важны: смотрим на разбор
+		if err == nil {
+			t.Fatal("production defaults must be refused")
+		}
+		cfg, err := loadS3(envMap(env), false)
+		if err != nil || cfg.PathStyle || cfg.CreateBucket {
+			t.Fatalf("got %+v, %v", cfg, err)
+		}
+	})
+	for _, tc := range []struct{ name, key, val, want string }{
+		{"endpoint with scheme", "SCIBOX_S3_ENDPOINT", "https://storage.yandexcloud.net", "without scheme and path"},
+		{"endpoint with path", "SCIBOX_S3_ENDPOINT", "storage.example/bucket", "without scheme and path"},
+		{"typo in switch", "SCIBOX_S3_TLS", "fasle", "want on or off"},
+		{"typo in path style", "SCIBOX_S3_PATH_STYLE", "maybe", "want on or off"},
+		{"typo in create bucket", "SCIBOX_S3_CREATE_BUCKET", "2", "want on or off"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(envMap(base(map[string]string{tc.key: tc.val})))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want containing %q", err, tc.want)
 			}
 		})
