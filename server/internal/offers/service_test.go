@@ -452,7 +452,7 @@ func TestAnswer(t *testing.T) {
 			if err := testkit.Pool.QueryRow(bg, `SELECT title, body, link FROM notifications WHERE user_id = $1 AND kind = $2`, w.tm.HR.ID, "offer_"+tc.action).Scan(&title, &body, &link); err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(title, tc.noteLabel) || link != "/sent-offers" || !strings.Contains(body, "Анна Ильина") || !strings.Contains(body, "Спасибо, подумаю") || !strings.Contains(body, w.vacancy.Title) {
+			if !strings.Contains(title, tc.noteLabel) || link != "/sent-offers?offer="+o.ID.String() || !strings.Contains(body, "Анна Ильина") || !strings.Contains(body, "Спасибо, подумаю") || !strings.Contains(body, w.vacancy.Title) {
 				t.Errorf("текст: %q %q %q", title, body, link)
 			}
 			if mailCount(t, w.tm.HR.Email) < 1 {

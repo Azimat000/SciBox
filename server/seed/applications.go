@@ -158,8 +158,9 @@ func seedApplications(ctx context.Context, pool *pgxpool.Pool, ids map[string]uu
 			}
 		}
 	}
-	// Демо-данные не рассылают почту: письма, поставленные в очередь этим запуском, считаются отправленными.
-	if _, err := pool.Exec(ctx, `UPDATE outbox SET sent_at = $2 WHERE id > $1 AND sent_at IS NULL`, lastOutbox, now); err != nil {
+	// Демо-данные не рассылают почту: письма, поставленные в очередь этим запуском, считаются отправленными, а их текст
+	// стёрт, как стирает его отправитель (T-19).
+	if _, err := pool.Exec(ctx, `UPDATE outbox SET sent_at = $2, subject = '', body = '' WHERE id > $1 AND sent_at IS NULL`, lastOutbox, now); err != nil {
 		return 0, fmt.Errorf("seed applications: %w", err)
 	}
 	return created, nil

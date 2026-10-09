@@ -142,6 +142,17 @@ func (q *Queries) EraseNotifications(ctx context.Context, userID uuid.UUID) erro
 	return err
 }
 
+const eraseOfferAnswerNotifications = `-- name: EraseOfferAnswerNotifications :exec
+DELETE FROM notifications
+WHERE link IN (SELECT '/sent-offers?offer=' || o.id::text FROM vacancy_offers o WHERE o.user_id = $1)
+`
+
+// Уведомления сотрудников об ответах человека на приглашения на вакансии: в тексте его имя, ссылка несёт номер приглашения.
+func (q *Queries) EraseOfferAnswerNotifications(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseOfferAnswerNotifications, userID)
+	return err
+}
+
 const eraseOffersTo = `-- name: EraseOffersTo :exec
 DELETE FROM vacancy_offers WHERE user_id = $1
 `
@@ -193,6 +204,21 @@ type EraseRateEventsParams struct {
 // Счётчики попыток по почте и номеру аккаунта.
 func (q *Queries) EraseRateEvents(ctx context.Context, arg EraseRateEventsParams) error {
 	_, err := q.db.Exec(ctx, eraseRateEvents, arg.Email, arg.UserKey)
+	return err
+}
+
+const eraseRefereeMailHistory = `-- name: EraseRefereeMailHistory :exec
+DELETE FROM outbox
+WHERE (sent_at IS NOT NULL OR failed_at IS NOT NULL)
+  AND lower(to_email) IN (
+      SELECT lower(r.email::text) FROM reference_requests r JOIN applications a ON a.id = r.application_id WHERE a.user_id = $1
+  )
+`
+
+// История писем рекомендателям человека (почта третьего лица). Ожидающие письма не трогаем: они могут быть и по просьбе
+// другого соискателя к тому же рекомендателю. Вызывать до EraseReferenceRequests.
+func (q *Queries) EraseRefereeMailHistory(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseRefereeMailHistory, userID)
 	return err
 }
 

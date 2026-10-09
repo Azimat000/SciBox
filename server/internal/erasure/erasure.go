@@ -95,7 +95,9 @@ func Erase(ctx context.Context, q *dbgen.Queries, user dbgen.User, now time.Time
 	}{
 		// Уведомления организаций об откликах ищутся по ссылке на отклик: до обезличивания.
 		{"candidate notifications", func() error { return q.EraseCandidateNotifications(ctx, id) }},
+		{"offer answer notifications", func() error { return q.EraseOfferAnswerNotifications(ctx, id) }},
 		{"application files", func() error { return q.EraseApplicationFiles(ctx, id) }},
+		{"referee mail history", func() error { return q.EraseRefereeMailHistory(ctx, id) }},
 		{"reference requests", func() error { return q.EraseReferenceRequests(ctx, id) }},
 		{"application invitations", func() error { return q.EraseApplicationInvitations(ctx, id) }},
 		{"anonymize applications", func() error {

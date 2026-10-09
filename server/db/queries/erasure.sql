@@ -61,9 +61,23 @@ DELETE FROM org_invitations WHERE email = sqlc.arg(email)::citext;
 DELETE FROM notifications
 WHERE link IN (SELECT '/candidates/' || a.id::text FROM applications a WHERE a.user_id = $1);
 
+-- Уведомления сотрудников об ответах человека на приглашения на вакансии: в тексте его имя, ссылка несёт номер приглашения.
+-- name: EraseOfferAnswerNotifications :exec
+DELETE FROM notifications
+WHERE link IN (SELECT '/sent-offers?offer=' || o.id::text FROM vacancy_offers o WHERE o.user_id = $1);
+
 -- Отклики: файлы, просьбы о рекомендациях (вместе с письмами рекомендателей) и приглашения стираются целиком.
 -- name: EraseApplicationFiles :exec
 DELETE FROM application_files WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1);
+
+-- История писем рекомендателям человека (почта третьего лица). Ожидающие письма не трогаем: они могут быть и по просьбе
+-- другого соискателя к тому же рекомендателю. Вызывать до EraseReferenceRequests.
+-- name: EraseRefereeMailHistory :exec
+DELETE FROM outbox
+WHERE (sent_at IS NOT NULL OR failed_at IS NOT NULL)
+  AND lower(to_email) IN (
+      SELECT lower(r.email::text) FROM reference_requests r JOIN applications a ON a.id = r.application_id WHERE a.user_id = $1
+  );
 
 -- name: EraseReferenceRequests :exec
 DELETE FROM reference_requests WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1);

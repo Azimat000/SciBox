@@ -301,7 +301,7 @@ func (s *Service) Answer(ctx context.Context, user auth.User, id uuid.UUID, in A
 			if uid == user.ID {
 				continue
 			}
-			if err := s.notes.Emit(ctx, q, notifications.Notice{UserID: uid, Kind: "offer_" + in.Action, Title: title, Body: body, Link: "/sent-offers"}); err != nil {
+			if err := s.notes.Emit(ctx, q, notifications.Notice{UserID: uid, Kind: "offer_" + in.Action, Title: title, Body: body, Link: "/sent-offers?offer=" + id.String()}); err != nil {
 				return err
 			}
 		}
