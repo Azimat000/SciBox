@@ -330,7 +330,7 @@ func TestCVShowsQuartiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := cvDocument(page, "SciBox", testNow)
-	meta := strings.Join(doc.Meta, "\n")
+	meta := strings.Join(doc.Notes, "\n")
 	if !strings.Contains(meta, "Статей в журналах Q1–Q2: 1, из них в 2022–2026: 1 (квартили SCImago Journal Rank 2025)") {
 		t.Fatalf("meta = %s", meta)
 	}

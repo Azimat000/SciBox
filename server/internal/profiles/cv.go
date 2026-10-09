@@ -119,21 +119,15 @@ func cvDocument(page Page, product string, now time.Time) cv.Document {
 		Created:  now,
 	}
 	if loc := location(v.City, v.Region); loc != "" {
-		doc.Meta = append(doc.Meta, loc)
+		doc.Where = append(doc.Where, loc)
 	}
 	if page.Viewer.CanSeeContacts && v.ContactEmail != "" {
-		doc.Meta = append(doc.Meta, "Почта: "+v.ContactEmail)
+		doc.Where = append(doc.Where, v.ContactEmail)
 	}
-	ids := v.Identifiers
-	if line := join("  ·  ", prefixed("ORCID ", ids.ORCID), prefixed("SPIN ", spinText(ids.SPIN)), prefixed("Scopus ID ", ids.ScopusID), prefixed("WoS ResearcherID ", ids.WosID)); line != "" {
-		doc.Meta = append(doc.Meta, line)
-	}
-	h := v.HIndex
-	if line := join("  ·  ", hLine("РИНЦ", h.RSCI), hLine("Scopus", h.Scopus), hLine("Web of Science", h.WoS), hLine("Google Scholar", h.Scholar)); line != "" {
-		doc.Meta = append(doc.Meta, "h-index: "+line)
-	}
+	doc.IDs = idFacts(v.Identifiers)
+	doc.Stats = hFacts(v.HIndex)
 	if line := quartileLine(v.Quartiles); line != "" {
-		doc.Meta = append(doc.Meta, line)
+		doc.Notes = append(doc.Notes, line)
 	}
 
 	add := func(s cv.Section) {
@@ -199,11 +193,32 @@ func spinText(spin string) string {
 	return spin[:4] + "-" + spin[4:]
 }
 
-func hLine(base string, v *int) string {
-	if v == nil {
-		return ""
+// hFacts: h-index по базам, только заполненные; в плашке они идут крупными числами в этом порядке.
+func hFacts(h HIndex) []cv.Fact {
+	var out []cv.Fact
+	for _, it := range []struct {
+		base string
+		v    *int
+	}{{"РИНЦ", h.RSCI}, {"Scopus", h.Scopus}, {"Web of Science", h.WoS}, {"Google Scholar", h.Scholar}} {
+		if it.v != nil {
+			out = append(out, cv.Fact{Label: "h-index\n" + it.base, Value: fmt.Sprint(*it.v)})
+		}
 	}
-	return fmt.Sprintf("%s %d", base, *v)
+	return out
+}
+
+// idFacts: ORCID, SPIN, Scopus ID, WoS ResearcherID, только заполненные.
+func idFacts(ids Identifiers) []cv.Fact {
+	var out []cv.Fact
+	for _, it := range []cv.Fact{
+		{Label: "ORCID", Value: ids.ORCID}, {Label: "SPIN", Value: spinText(ids.SPIN)},
+		{Label: "Scopus ID", Value: ids.ScopusID}, {Label: "WoS ResearcherID", Value: ids.WosID},
+	} {
+		if it.Value != "" {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 func degreeEntries(v View) []cv.Entry {

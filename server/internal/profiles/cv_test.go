@@ -34,14 +34,22 @@ func TestCVDocumentFull(t *testing.T) {
 	if doc.Title != "Елена Орлова" || doc.Subtitle != "Старший научный сотрудник" || doc.Footer != "SciBox · 3 октября 2026" {
 		t.Errorf("шапка: %+v", doc)
 	}
-	meta := strings.Join(doc.Meta, "\n")
-	for _, want := range []string{
-		"Новосибирск, Новосибирская область", "Почта: orlova@example.ru", "ORCID 0000-0002-1825-0097", "SPIN 1234-5678",
-		"Scopus ID 57190123456", "WoS ResearcherID A-1234-2008", "h-index: РИНЦ 12  ·  Scopus 9  ·  Web of Science 7  ·  Google Scholar 15",
-	} {
-		if !strings.Contains(meta, want) {
-			t.Errorf("в шапке нет %q:\n%s", want, meta)
-		}
+	if got := strings.Join(doc.Where, "|"); got != "Новосибирск, Новосибирская область|orlova@example.ru" {
+		t.Errorf("плашка: %q", got)
+	}
+	ids := map[string]string{}
+	for _, f := range doc.IDs {
+		ids[f.Label] = f.Value
+	}
+	if len(doc.IDs) != 4 || ids["ORCID"] != "0000-0002-1825-0097" || ids["SPIN"] != "1234-5678" || ids["Scopus ID"] != "57190123456" || ids["WoS ResearcherID"] != "A-1234-2008" {
+		t.Errorf("идентификаторы: %+v", doc.IDs)
+	}
+	var stats []string
+	for _, f := range doc.Stats {
+		stats = append(stats, f.Value+" "+strings.ReplaceAll(f.Label, "\n", " "))
+	}
+	if got := strings.Join(stats, "|"); got != "12 h-index РИНЦ|9 h-index Scopus|7 h-index Web of Science|15 h-index Google Scholar" {
+		t.Errorf("числа: %q", got)
 	}
 	var heads []string
 	for _, s := range doc.Sections {
@@ -101,19 +109,19 @@ func TestCVDocumentHidesContactsFromThoseWhoMayNotSeeThem(t *testing.T) {
 	page := fullPage()
 	page.Viewer = ViewerInfo{CanSeeContacts: false}
 	page.Profile.ContactEmail = "" // сервис уже убрал почту; проверяем и флаг, и значение
-	if meta := strings.Join(cvDocument(page, "SciBox", testNow).Meta, "\n"); strings.Contains(meta, "Почта") {
-		t.Errorf("почта в чужом резюме: %s", meta)
+	if where := strings.Join(cvDocument(page, "SciBox", testNow).Where, "\n"); strings.Contains(where, "@") {
+		t.Errorf("почта в чужом резюме: %s", where)
 	}
 	// Даже если почта по ошибке осталась в данных, без права на контакты она в файл не попадёт.
 	page.Profile.ContactEmail = "orlova@example.ru"
-	if meta := strings.Join(cvDocument(page, "SciBox", testNow).Meta, "\n"); strings.Contains(meta, "orlova@example.ru") {
-		t.Errorf("почта просочилась: %s", meta)
+	if where := strings.Join(cvDocument(page, "SciBox", testNow).Where, "\n"); strings.Contains(where, "orlova@example.ru") {
+		t.Errorf("почта просочилась: %s", where)
 	}
 }
 
 func TestCVDocumentEmptyProfile(t *testing.T) {
 	doc := cvDocument(Page{Profile: View{Name: "Пустой"}}, "SciBox", testNow)
-	if doc.Title != "Пустой" || len(doc.Meta) != 0 || len(doc.Sections) != 0 {
+	if doc.Title != "Пустой" || len(doc.Where)+len(doc.Stats)+len(doc.IDs)+len(doc.Notes) != 0 || len(doc.Sections) != 0 {
 		t.Errorf("%+v", doc)
 	}
 	pdf, err := renderCV(Page{Profile: View{Name: "Пустой"}}, "SciBox", testNow)
@@ -151,7 +159,7 @@ func TestCVHelpers(t *testing.T) {
 	if got := location("Томск", nil); got != "Томск" {
 		t.Errorf("без региона: %q", got)
 	}
-	if yearOf(nil) != "" || yearOf(ptr(2020)) != "2020" || hLine("X", nil) != "" || hLine("X", ptr(3)) != "X 3" {
+	if yearOf(nil) != "" || yearOf(ptr(2020)) != "2020" || len(hFacts(HIndex{})) != 0 || len(idFacts(Identifiers{})) != 0 {
 		t.Error("пустые значения")
 	}
 	if spinText("12345678") != "1234-5678" || spinText("1234") != "1234" || spinText("1234567a") != "1234567a" {

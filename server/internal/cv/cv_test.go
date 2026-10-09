@@ -19,7 +19,10 @@ func isPDF(t *testing.T, b []byte) {
 func fullDoc() Document {
 	return Document{
 		Title: "Елена Орлова", Subtitle: "Старший научный сотрудник, Сибирский институт квантовых материалов",
-		Meta:    []string{"Новосибирск, Новосибирская область", "orlova@example.ru", "ORCID 0000-0002-1825-0097 · SPIN 1234-5678"},
+		Where:   []string{"Новосибирск, Новосибирская область", "orlova@example.ru"},
+		Stats:   []Fact{{"h-index\nРИНЦ", "12"}, {"h-index\nScopus", "9"}, {"h-index\nWeb of Science", "7"}, {"h-index\nGoogle Scholar", "15"}},
+		IDs:     []Fact{{"ORCID", "0000-0002-1825-0097"}, {"SPIN", "1234-5678"}},
+		Notes:   []string{"Статей в журналах Q1–Q2: 7"},
 		Footer:  "SciBox · 3 октября 2026",
 		Created: time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC),
 		Sections: []Section{
@@ -103,7 +106,10 @@ func TestRenderOddText(t *testing.T) {
 	doc := Document{
 		Title:    strings.Repeat("Длиннофамильный", 20), // одно слово во много строк
 		Subtitle: "Эмодзи 🙂 и иероглифы 漢字, которых нет в шрифте",
-		Meta:     []string{strings.Repeat("a", 400), "https://example.ru/" + strings.Repeat("x", 300)},
+		Where:    []string{strings.Repeat("a", 400), "https://example.ru/" + strings.Repeat("x", 300)},
+		Stats:    []Fact{{"только\nодна\nтри строки", strings.Repeat("9", 40)}, {}, {}, {}, {"пятая", "5"}},
+		IDs:      []Fact{{strings.Repeat("Метка", 40), strings.Repeat("0", 400)}},
+		Notes:    []string{strings.Repeat("Пояснение ", 80), "🙂"},
 		Sections: []Section{{Heading: strings.Repeat("Заголовок ", 30), Entries: []Entry{
 			{Label: strings.Repeat("МетокМного", 8), Lead: strings.Repeat("Я", 600), Text: "<b>&amp;</b> \\ ( ) %"},
 		}}},
