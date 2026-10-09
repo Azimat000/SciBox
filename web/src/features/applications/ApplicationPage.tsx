@@ -60,6 +60,18 @@ function Loader({ id }: { id: string }) {
 }
 
 export function FileLink({ appId, file, label }: { appId: string; file: FileRef; label: string }) {
+  // Файл, который ещё не проверен на вирусы или не принят, не скачивается: вместо ссылки подпись, что с ним.
+  if (file.scan === 'pending' || file.scan === 'infected') {
+    return (
+      <span className={`file-link file-link--${file.scan}`}>
+        <FileIcon size={18} />
+        <span className="file-link-body">
+          <span>{label}</span>
+          <span className="file-link-state">{t.applications.scan[file.scan]}</span>
+        </span>
+      </span>
+    )
+  }
   return (
     <a className="file-link" href={fileUrl(appId, file.id)} download>
       <FileIcon size={18} />

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,6 +24,10 @@ const KeyPrefix = "files/"
 // scanTimeout — сколько ждём проверку одного файла сразу при загрузке. Не уложились — файл остаётся «на проверке»,
 // и его проверит фоновая задача; человек не ждёт антивирус дольше этого.
 const scanTimeout = 20 * time.Second
+
+// scanPause — сколько после сбоя антивируса новые загрузки не ждут его, а сразу становятся «на проверке»: иначе каждый
+// файл запроса ждал бы свои scanTimeout секунд. Дальше проверит фоновая задача (filework).
+const scanPause = 30 * time.Second
 
 // ScanStatus — где файл в проверке на вирусы. Строки лежат в базе, не менять.
 type ScanStatus string
@@ -45,7 +50,8 @@ var ErrInfected = errors.New("files: virus found")
 // InfectedError — какой именно вирус; название сигнатуры предназначено журналу, не человеку.
 type InfectedError struct{ Signature string }
 
-func (e *InfectedError) Error() string        { return "files: virus found: " + e.Signature }
+func (e *InfectedError) Error() string { return "files: virus found: " + e.Signature }
+
 // Is делает InfectedError видимым для errors.Is(err, ErrInfected).
 func (e *InfectedError) Is(target error) bool { return target == ErrInfected }
 
@@ -70,6 +76,8 @@ type Vault struct {
 	store blobstore.Store
 	scan  antivirus.Scanner
 	now   func() time.Time
+	// scanDownUntil — до какого момента (UnixNano) антивирус считается лежащим после недавнего сбоя.
+	scanDownUntil atomic.Int64
 }
 
 // NewVault собирает склад. now — часы (в тестах подставные).
@@ -151,13 +159,15 @@ func (v *Vault) Put(ctx context.Context, name string, r io.Reader) (Stored, erro
 			return fail(ErrTooBig)
 		case src.srcErr != nil:
 			return Stored{}, src.srcErr
+		case ctx.Err() != nil:
+			return Stored{}, ctx.Err() // человек ушёл посреди загрузки: это не поломка хранилища
 		}
 		return Stored{}, fmt.Errorf("%w: %w", ErrStorage, err)
 	}
 	st := Stored{Name: name, Key: key, Size: src.n, Scan: ScanPending}
 	copy(st.Sum[:], src.sum.Sum(nil))
 
-	verdict, err := v.Check(ctx, key)
+	verdict, err := v.checkNow(ctx, key)
 	switch {
 	case err == nil && verdict.Infected:
 		// Заражённый объект удаляется сразу; если не вышло, его уберёт чистка осиротевших (его нет ни в одной строке базы).
@@ -167,6 +177,20 @@ func (v *Vault) Put(ctx context.Context, name string, r io.Reader) (Stored, erro
 		st.Scan, st.ScannedAt = ScanClean, v.now()
 	}
 	return st, nil
+}
+
+// checkNow проверяет только что записанный файл, но не стучится в антивирус, который только что не ответил.
+func (v *Vault) checkNow(ctx context.Context, key string) (antivirus.Verdict, error) {
+	if v.now().UnixNano() < v.scanDownUntil.Load() {
+		return antivirus.Verdict{}, antivirus.ErrUnavailable
+	}
+	verdict, err := v.Check(ctx, key)
+	// Пауза включается только настоящим сбоем антивируса: человек, оборвавший загрузку посреди проверки, не должен
+	// отключать проверку при загрузке для всех остальных.
+	if errors.Is(err, antivirus.ErrUnavailable) && ctx.Err() == nil {
+		v.scanDownUntil.Store(v.now().Add(scanPause).UnixNano())
+	}
+	return verdict, err
 }
 
 // PutTrusted записывает файл, который собрал сам сервер (резюме из профиля): он чист по происхождению, антивирус не нужен.

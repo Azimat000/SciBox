@@ -269,38 +269,36 @@ func retryAfter(attempts int32) time.Duration {
 }
 
 func (s *Service) scanPending(ctx context.Context, rep *Report) error {
+	var errs []error
 	for range s.cfg.MaxBatches {
 		now := s.now()
 		batch, err := s.q.ClaimFilesToScan(ctx, dbgen.ClaimFilesToScanParams{Now: now, Lim: s.cfg.ScanBatch, LeaseUntil: now.Add(s.cfg.Lease)})
 		if err != nil {
-			return err
+			return errors.Join(append(errs, err)...)
 		}
 		for _, f := range batch {
 			if err := ctx.Err(); err != nil {
-				return err
+				return errors.Join(errs...)
 			}
-			if f.StorageKey == nil {
-				continue // запрос берёт только файлы с ключом; страховка от пустого указателя
+			if err := s.scanOne(ctx, f.ID, f.StorageKey, f.ScanAttempts, rep); err != nil {
+				errs = append(errs, fmt.Errorf("file %s: %w", f.ID, err))
 			}
-			s.scanOne(ctx, f.ID, *f.StorageKey, f.ScanAttempts, rep)
 		}
 		if len(batch) < int(s.cfg.ScanBatch) {
-			return nil
+			return errors.Join(errs...)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
-// scanOne проверяет один файл. Ничего не возвращает: итог записан в базе, сбои — в журнале и в паузе до повтора.
-func (s *Service) scanOne(ctx context.Context, id uuid.UUID, key string, attempts int32, rep *Report) {
+// scanOne проверяет один файл. Итог записан в базе; сбои самой проверки идут в журнал и в паузу до повтора, а ошибка
+// возвращается только тогда, когда не удалось записать итог в базу: такой сбой не должен молча пропасть.
+func (s *Service) scanOne(ctx context.Context, id uuid.UUID, key string, attempts int32, rep *Report) error {
 	verdict, err := s.vault.Check(ctx, key)
 	switch {
 	case err != nil:
 		rep.Deferred++
 		next := s.now().Add(retryAfter(attempts))
-		if derr := s.q.DeferFileScan(ctx, dbgen.DeferFileScanParams{ID: id, NextAt: next}); derr != nil {
-			s.logger.Error("file scan defer failed", "file", id, "err", derr)
-		}
 		switch {
 		case errors.Is(err, blobstore.ErrNotFound):
 			// Строка есть, объекта нет: данные потеряны. Файл остаётся недоступным; человек должен знать.
@@ -310,24 +308,26 @@ func (s *Service) scanOne(ctx context.Context, id uuid.UUID, key string, attempt
 		default:
 			s.logger.Error("file scan failed", "file", id, "err", err)
 		}
+		return s.q.DeferFileScan(ctx, dbgen.DeferFileScanParams{ID: id, NextAt: next})
 	case verdict.Infected:
-		if s.reject(ctx, id, key, verdict.Signature) {
+		rejected, err := s.reject(ctx, id, key, verdict.Signature)
+		if rejected {
 			rep.Infected++
 		}
-	default:
-		n, merr := s.q.MarkFileClean(ctx, dbgen.MarkFileCleanParams{ID: id, StorageKey: &key, Now: s.now()})
-		if merr != nil {
-			s.logger.Error("file mark clean failed", "file", id, "err", merr)
-			return
-		}
-		if n > 0 {
-			rep.Clean++
-		}
+		return err
 	}
+	n, err := s.q.MarkFileClean(ctx, dbgen.MarkFileCleanParams{ID: id, StorageKey: &key, Now: s.now()})
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		rep.Clean++
+	}
+	return nil
 }
 
-// reject помечает файл заражённым, сообщает автору и удаляет объект. Возвращает true, если файл признан заражённым.
-func (s *Service) reject(ctx context.Context, id uuid.UUID, key, signature string) bool {
+// reject помечает файл заражённым, сообщает автору и удаляет объект. Первое значение — признан ли файл заражённым.
+func (s *Service) reject(ctx context.Context, id uuid.UUID, key, signature string) (bool, error) {
 	err := s.inTx(ctx, func(q *dbgen.Queries) error {
 		n, err := q.MarkFileInfected(ctx, dbgen.MarkFileInfectedParams{ID: id, StorageKey: &key, Signature: signature, Now: s.now()})
 		if err != nil {
@@ -346,17 +346,16 @@ func (s *Service) reject(ctx context.Context, id uuid.UUID, key, signature strin
 		})
 	})
 	if errors.Is(err, errRowGone) {
-		return false // строку успели стереть или изменить: объект уберёт очередь удаления или чистка
+		return false, nil // строку успели стереть или изменить: объект уберёт очередь удаления или чистка
 	}
 	if err != nil {
-		s.logger.Error("file reject failed", "file", id, "err", err)
-		return false
+		return false, err
 	}
 	s.logger.Warn("virus found in a stored file, file removed", "file", id, "signature", signature)
 	if err := s.vault.Store().Delete(context.WithoutCancel(ctx), key); err != nil {
 		s.logger.Error("infected object not deleted, the orphan sweep will remove it", "file", id, "err", err)
 	}
-	return true
+	return true, nil
 }
 
 func rejectedText(name, kind, vacancy string) string {
@@ -402,9 +401,7 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 		}
 		have := make(map[string]struct{}, len(known))
 		for _, k := range known {
-			if k != nil {
-				have[*k] = struct{}{}
-			}
+			have[k] = struct{}{}
 		}
 		for _, k := range batch {
 			if _, ok := have[k]; !ok {

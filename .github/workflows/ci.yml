@@ -53,6 +53,8 @@ jobs:
       - name: go mod verify
         working-directory: server
         run: go mod verify
+      - name: file storage (SeaweedFS) and antivirus (ClamAV) from docker-compose.yml
+        run: docker compose up -d --wait s3 clamav
       - name: vet, tests with -race, coverage thresholds
         run: ./scripts/coverage-check
 

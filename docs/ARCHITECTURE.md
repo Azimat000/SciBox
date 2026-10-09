@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 22 (персональные данные: маска журнала, сроки хранения, выгрузка своих данных; до этого срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 23 (файлы в S3-совместимом хранилище с проверкой на вирусы; до этого срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -8,7 +8,8 @@
 SciBox/
 ├── .github/             автоматические проверки в GitHub (срез 18): `workflows/ci.yml` — тесты сервера с -race и порогами на PostgreSQL-сервисе, golangci-lint, govulncheck, тесты сайта; `dependabot.yml` — еженедельные обновления Go, npm (web, e2e) и Actions с выдержкой 7 дней
 ├── config/product.json   название продукта; читают и сервер, и сайт (D-029)
-├── docker-compose.yml    PostgreSQL 16.15 (порт 5433, D-028), Mailpit v1.31.3 (8025 / 1025)
+├── docker-compose.yml    PostgreSQL 16.15 (порт 5433, D-028), Mailpit v1.31.3 (8025 / 1025), хранилище файлов SeaweedFS 4.48 (S3, порт 8333, D-157), ClamAV 1.5.4 облегчённый (порт 3310, D-158)
+├── docker/clamav-dev/    сигнатура тестового вируса EICAR для облегчённого ClamAV (`eicar.ndb`)
 ├── README.md             запуск, демо-аккаунты, дорожки «я учёный» и «я организация», проверки
 ├── Makefile              dev, test (= lint + vulncheck + test-server + test-web), test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc
 ├── scripts/
@@ -36,7 +37,10 @@ SciBox/
 │       ├── profiles/     профиль (критичная зона): основные поля и навыки, записи разделов, приватность, поиск по DOI, сборка резюме, раздел «Соискатели» (`catalog.go`), HTTP
 │       ├── applications/ отклики (критичная зона): отправка (снимок профиля, резюме, PDF-файлы, рекомендатели), «Мои отклики», карточка глазами соискателя и организации, выдача файлов, отзыв, «можно ли откликнуться»; разбор организацией (`review.go`: «просмотрен» при открытии, решение, приглашения и ответы на них, список откликов), таблицы переходов (`transitions.go`), проверка приглашений (`invitation_input.go`), тексты уведомлений (`notices.go`), HTTP
 │       ├── references/   рекомендательные письма (критичная зона): просьбы, одноразовые ссылки, письмо текстом/PDF, отказ, повтор и отмена, HTTP (в том числе страница рекомендателя без входа)
-│       ├── files/        файлы откликов (критичная зона): проверка PDF, имена, multipart-запрос, таблица «вид файла → кто видит», безопасная выдача
+│       ├── files/        файлы откликов (критичная зона): склад `Vault` (`vault.go`: приём потоком, проверка PDF по первым байтам до записи, SHA-256, проверка на вирусы, пауза после сбоя антивируса), multipart-запрос с проверкой полей до файлов (`form.go`), имена, таблица «вид файла → кто видит», безопасная выдача потоком
+│       ├── blobstore/    хранилище объектов (срез 23, критичная зона): интерфейс `Store`, `S3` на minio-go (любой S3: Yandex, Selectel, VK Cloud, SeaweedFS), `Memory` для тестов
+│       ├── antivirus/    проверка на вирусы (срез 23, критичная зона): клиент clamd по TCP (INSTREAM), «не знаем» это `ErrUnavailable`; `Fake` (находит EICAR) и `Skip` (без проверки, только разработка)
+│       ├── filework/     фоновая работа с файлами (срез 23, критичная зона): проверка тех, кого не успели проверить при загрузке, перенос старых файлов из базы, удаление объектов по очереди `blob_deletions`, чистка осиротевших
 │       ├── offers/       приглашения учёных на вакансии (критичная зона): отправка (права `ManageVacancies`, приватность профиля, лимит), ответ «Интересно / Не сейчас», отзыв, списки обеих сторон, «куда можно пригласить», тексты уведомлений (`notices.go`), HTTP
 │       ├── matching/     избранное, сохранённые поиски, подбор, календарь сроков (критичная зона): правила подбора (`rules.go`, без базы), расписание (`schedule.go`), сервис (`service.go`), фоновая рассылка по поискам (`digest.go`) и напоминания о сроках (`reminders.go`), тексты писем (`notices.go`), HTTP
 │       ├── journals/     справочник журналов SCImago (срез 14): разбор выгрузки (`parse.go`), загрузка заменой целиком (`load.go`, файл `data/scimagojr.csv.gz` встроен в сервер), поиск по названию и ISSN (`search.go`), HTTP
@@ -96,11 +100,11 @@ SciBox/
 
 Страницы организации и подразделения показывают список опубликованных вакансий (`VacancyList`).
 
-Файлы откликов лежат в базе (D-080), папки `storage/uploads/` нет. Журнал сервера пишется в stderr текстом и проходит через `logmask` (D-152).
+Файлы откликов и писем рекомендателей лежат в S3-совместимом хранилище, в базе только строка с ключом `files/<uuid>`, контрольной суммой и итогом проверки на вирусы (D-157, D-158); папки `storage/uploads/` нет. Журнал сервера пишется в stderr текстом и проходит через `logmask` (D-152).
 
 ## Порты
-- web (Vite): 5173 · api: 127.0.0.1:8080 · Postgres в Docker: **5433** · Mailpit UI: 8025, SMTP: 1025
-- сквозные тесты (`make e2e`): web 5174 · api 127.0.0.1:8090 · база `scibox_e2e` в том же контейнере
+- web (Vite): 5173 · api: 127.0.0.1:8080 · Postgres в Docker: **5433** · Mailpit UI: 8025, SMTP: 1025 · хранилище файлов (S3): 8333 · ClamAV: 3310
+- сквозные тесты (`make e2e`): web 5174 · api 127.0.0.1:8090 · база `scibox_e2e` в том же контейнере · бакет `scibox-e2e`
 - показ по ссылке (`make share`, `scripts/share`): сервер вместе с сайтом на 127.0.0.1:8088, туннель tuna или localhost.run (D-131)
 
 ## Переменные окружения сервера
@@ -119,6 +123,14 @@ SciBox/
 | `SCIBOX_WEB_DIR` | пусто; папка собранного сайта (`web/dist`): тогда сервер сам отдаёт страницы по всем адресам вне `/api` (`httpapi.WebHandler`) |
 | `SCIBOX_ENV` | `development`; `production` — сервер не стартует с http-адресом сайта, паролем базы из docker-compose, базой в сети без `sslmode=require/verify-*`, SMTP без шифрования, отправителем `.local` (срез 19, T-08) |
 | `SCIBOX_TRUSTED_PROXIES` | пусто (никому); сети и адреса через запятую (`127.0.0.1, 10.0.0.0/8`), от которых сервер принимает `X-Forwarded-For`; `/0` запрещено (срез 19, T-06). `make share` ставит `127.0.0.1,::1` |
+| `SCIBOX_S3_ENDPOINT` | `localhost:8333` (SeaweedFS из docker-compose); хост без схемы, например `storage.yandexcloud.net` (срез 23) |
+| `SCIBOX_S3_BUCKET` | `scibox-files` |
+| `SCIBOX_S3_ACCESS_KEY`, `SCIBOX_S3_SECRET_KEY` | ключи из docker-compose (только разработка; в бою запрещены) |
+| `SCIBOX_S3_REGION` | `us-east-1` (у Yandex `ru-central1`, у Selectel `ru-1`) |
+| `SCIBOX_S3_TLS` | `off`; в бою `on` обязательно |
+| `SCIBOX_S3_PATH_STYLE` | `on` в разработке, `off` в бою (адрес вида endpoint/bucket/key вместо bucket.endpoint/key) |
+| `SCIBOX_S3_CREATE_BUCKET` | `on` в разработке, `off` в бою (бакет создаёт администратор) |
+| `SCIBOX_CLAMAV_ADDR` | `localhost:3310`; `off` отключает проверку (только разработка, в бою запрещено) |
 | `TEST_DATABASE_URL` (тесты) | `postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable` |
 
 ## Таблицы БД
@@ -168,11 +180,12 @@ SciBox/
 - Миграция `00016_account_security.sql` (срез 20, D-142…D-146): `sessions.reauth_at` (когда в сеансе последний раз вводили пароль); `auth_tokens.new_email` и назначения `change_email`, `revert_email`; `known_devices` (user_id, device_hash, first_seen_at, last_seen_at; ключ из двух первых) — знакомые браузеры, удаляются через 400 дней без входа; `users.deletion_due_at` (когда сотрутся данные), `users.deleted_at` (стёрт, строка-«надгробие»); `profiles.visibility_before_deletion`; `applications.anonymized_at` (письмо и почта могут быть пустыми только у обезличенного отклика).
 - Миграция `00017_audit_log.sql` (срез 21, D-147, D-148): `audit_log` (id bigint, at, org_id → `organizations` (пусто у личных действий аккаунта), actor_id и subject_id → `users`, action `вид.действие`, target_kind, target_id, target_label ≤300, details jsonb ≤2000 байт, ip ≤45); индексы `(org_id, id DESC)`, `(actor_id, id DESC)`, `(at)`; триггеры запрещают `UPDATE`, `DELETE` и `TRUNCATE`, кроме обнуления `ip` при прочих равных полях.
 - Миграция `00018_retention.sql` (срез 22, D-151, D-152): триггер `audit_log_guard` разрешает `DELETE` внутри транзакции с отметкой `scibox.audit_purge` для записей старше 90 дней (остальное по-прежнему запрещено); индексы под чистку: `audit_log_purge_ip_idx`, `notifications_purge_read_idx`, `notifications_purge_unread_idx`, `users_purge_unconfirmed_idx`. Таблиц не добавляет.
+- Миграция `00019_file_storage.sql` (срез 23, D-157): `application_files.data` переименован в `legacy_data` (необязателен, обнуляется после переноса, новые строки содержимого не несут: ограничение `application_files_no_content`), новые столбцы `storage_key` (ключ объекта, уникален), `sha256`, `scan_status` (`pending|clean|infected`, по умолчанию `pending`), `scanned_at`, `scan_signature`, `scan_attempts`, `scan_next_at` (пауза до следующей проверки и «аренда» файла на время проверки); ограничения: чистый файл имеет дату проверки, заражённый не хранит ключ, содержимое есть либо в хранилище, либо в старом столбце; индексы под фоновую проверку и перенос; таблица `blob_deletions` (ключи объектов на удаление из хранилища, их кладёт стирание аккаунта). Столбец `legacy_data` удаляется в срезе 28.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
-Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `reauth_required` (403, нужен свежий пароль: сайт показывает окно пароля и повторяет запрос, срез 20), `email_taken` (409), `deletion_blocked` (409), `unsupported_media_type` (415), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`.
+Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `reauth_required` (403, нужен свежий пароль: сайт показывает окно пароля и повторяет запрос, срез 20), `email_taken` (409), `deletion_blocked` (409), `unsupported_media_type` (415), `file_pending` (409, файл ещё проверяется на вирусы), `storage_unavailable` (503, хранилище файлов не отвечает), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`.
 
 Периметр (срез 19, `httpguard`): у всех ответов заголовки защиты (CSP: у API `default-src 'none'`, у сайта только свои скрипты, стили, шрифты и картинки; `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP и CORP `same-origin`; HSTS только при https). Ограничение частоты (`rate_limited`, 429): поиск, каталоги, главная, страницы вакансий, людей, организаций и подразделений, справочник журналов, поиск по DOI — гость 300, вошедший 120 запросов в минуту (`public_read`); резюме PDF — 20 в минуту (`pdf_build`); ссылки из писем (рекомендатель, приглашение в организацию, подтверждение и откат смены почты) — 30 в минуту (`link_page`). Таблица адресов: `httpapi.PerimeterRoutes`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
 
@@ -231,16 +244,16 @@ SciBox/
 | `GET /api/profile/cv` | PDF собственного резюме (`Content-Disposition: attachment`) |
 | `GET /api/scientists/{id}` | публично, с учётом приватности: `{profile, viewer}`; скрытый или неизвестный 404; контакты только владельцу и сотрудникам организаций, `visibility` только владельцу |
 | `GET /api/scientists/{id}/cv` | PDF резюме по тем же правилам (нужен вход) |
-| `POST /api/applications` (multipart: часть `data` — JSON `{vacancy_id, contact_email, cover_letter, referees:[{name,email,relation}]}`, части `file` — PDF) | 201 `{application}`; 422 с полями (`contact_email`, `cover_letter`, `referees`, `files`, `profile`); 409 `vacancy_closed`, `deadline_passed`, `already_applied`; 403 `own_vacancy`; 404; 429 |
+| `POST /api/applications` (multipart, часть `data` идёт первой и проверяется до приёма файлов; файлы принимаются потоком, каждый проверяется на вирусы: найден вирус 422 в поле `files`; антивирус недоступен — файл принят со статусом `pending`; хранилище недоступно 503 `storage_unavailable`; часть `data` — JSON `{vacancy_id, contact_email, cover_letter, referees:[{name,email,relation}]}`, части `file` — PDF) | 201 `{application}`; 422 с полями (`contact_email`, `cover_letter`, `referees`, `files`, `profile`); 409 `vacancy_closed`, `deadline_passed`, `already_applied`; 403 `own_vacancy`; 404; 429 |
 | `GET /api/applications?limit=&offset=` | «Мои отклики»: `{items:[{id,status,created_at,status_changed_at,vacancy,references:{total,received}}], total}` |
 | `GET /api/applications/for-vacancy/{vacancyId}` | `{can_apply, reason?: own_vacancy|closed|deadline_passed|applied, application}` для вошедшего |
 | `GET /api/applications/{id}` | карточка: `{application}` с `viewer` `{role, can_withdraw, decisions, can_invite}`, `decision_note`, `invitations`; `applicant` (рекомендации — только статусы) или `staff` (с письмами; первое открытие ставит «просмотрен» и уведомляет соискателя); чужой и несуществующий — одинаковый 404 |
-| `GET /api/applications/{id}/files/{fileId}` | PDF как скачивание; письмо рекомендателя соискателю — 404 |
+| `GET /api/applications/{id}/files/{fileId}` | PDF как скачивание потоком из хранилища; письмо рекомендателя соискателю — 404; файл «на проверке» 409 `file_pending`; заражённого нет (404); хранилище не отвечает 503 `storage_unavailable`; у организации выдача записывается в журнал до выдачи |
 | `POST /api/applications/{id}/withdraw` | 204; 409 `invalid_status_change` |
 | `POST /api/applications/{id}/references` `{name,email,relation}` | 201 `{reference}`; 409 `too_many_references`, `application_closed` |
 | `POST …/references/{refId}/resend`, `DELETE …/references/{refId}` | повтор (429 `resend_too_soon` пока не прошли сутки) и отмена (409 `reference_not_pending`) |
 | `POST /api/recommendations/lookup {token}` | без входа: `{request:{referee_name,relation,applicant_name,vacancy_title,org_name,status,expires_at}}`; 404 `invalid_link`, 410 `link_expired`, 410 `application_withdrawn` |
-| `POST /api/recommendations/submit` (multipart: `data` `{token,text}`, не более одной части `file`) | 200; 422 (`text`, `file`); 409 `already_answered` |
+| `POST /api/recommendations/submit` (multipart: `data` `{token,text}` первой, не более одной части `file`; ссылка и длина текста проверяются до приёма файла) | 200; 422 (`text`, `file`, вирус в поле `file`); 409 `already_answered`; 503 `storage_unavailable` |
 | `POST /api/recommendations/decline {token}` | 200; те же ошибки |
 | `GET /api/my/candidates?vacancy=&status=&limit=&offset=` | отклики на вакансии, которые вошедший вправе разбирать (`ViewApplications`: организации целиком и подразделения, которыми руководит): `{items:[{id,status,created_at,applicant_name,headline,vacancy,unit_name,references,pending_invitations,proposed_invitations}], total, counts}`; `counts` по всем статусам (при выбранной вакансии только по ней); 422 на неизвестный статус и неверный номер вакансии; чужая вакансия даёт пустой список |
 | `GET /api/my/candidate-vacancies` | `{items:[{id,title,status,org_name,org_slug,total,new}]}`: вакансии с откликами (отозванные не считаются, `new` = «отправлен») |
@@ -321,4 +334,4 @@ SciBox/
 - Подробное описание визуальной системы: `DESIGN.md` (ведёт impeccable).
 
 ## Фоновая работа в процессе сервера
-`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), очистку аккаунтов и организаций (раз в час; уборка аккаунтов заодно стирает аккаунты с прошедшим сроком отмены, по одному в транзакции, `SKIP LOCKED`, срез 20), очистку счётчиков частоты `rate_counters` (раз в час), сроки хранения `retention.Service.Run` (раз в час и сразу при старте: уведомления, журнал действий, адреса в журнале, регистрации без подтверждённой почты) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).
+`cli.serve` запускает рядом с HTTP: отправитель писем из `outbox` (раз в 2 с), фоновая работа с файлами `filework.Service.Run` (раз в 30 секунд: удаление объектов по очереди, перенос старых файлов, проверка файлов «на проверке»; раз в 6 часов чистка осиротевших; копии сервера не мешают друг другу: строки берутся `SKIP LOCKED`, проверка арендуется), очистку аккаунтов и организаций (раз в час; уборка аккаунтов заодно стирает аккаунты с прошедшим сроком отмены, по одному в транзакции, `SKIP LOCKED`, срез 20), очистку счётчиков частоты `rate_counters` (раз в час), сроки хранения `retention.Service.Run` (раз в час и сразу при старте: уведомления, журнал действий, адреса в журнале, регистрации без подтверждённой почты) и `matching.Service.Run` (раз в 5 минут): рассылка по сохранённым поискам (`SendDigests`) и напоминания о сроках (`SendReminders`, не раньше 9:00 МСК). Каждый проход самостоятелен, ошибки пишутся в журнал, следующий проход повторяет недоделанное; двойной отправки нет (блокировка строки поиска `SKIP LOCKED`, запись о напоминании и уведомление в одной транзакции).

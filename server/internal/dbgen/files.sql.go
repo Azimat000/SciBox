@@ -48,7 +48,7 @@ WITH due AS (
 )
 UPDATE application_files f SET scan_next_at = $1::timestamptz, scan_attempts = f.scan_attempts + 1
 FROM due WHERE f.id = due.id
-RETURNING f.id, f.storage_key, f.scan_attempts
+RETURNING f.id, f.storage_key::text AS storage_key, f.scan_attempts
 `
 
 type ClaimFilesToScanParams struct {
@@ -59,7 +59,7 @@ type ClaimFilesToScanParams struct {
 
 type ClaimFilesToScanRow struct {
 	ID           uuid.UUID
-	StorageKey   *string
+	StorageKey   string
 	ScanAttempts int32
 }
 
@@ -146,19 +146,19 @@ func (q *Queries) DoneBlobDeletions(ctx context.Context, keys []string) error {
 }
 
 const existingFileKeys = `-- name: ExistingFileKeys :many
-SELECT storage_key FROM application_files WHERE storage_key = ANY($1::text[])
+SELECT storage_key::text AS storage_key FROM application_files WHERE storage_key = ANY($1::text[])
 `
 
 // Из этих ключей оставляет те, на которые есть строка в базе (остальные объекты осиротели).
-func (q *Queries) ExistingFileKeys(ctx context.Context, keys []string) ([]*string, error) {
+func (q *Queries) ExistingFileKeys(ctx context.Context, keys []string) ([]string, error) {
 	rows, err := q.db.Query(ctx, existingFileKeys, keys)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*string
+	var items []string
 	for rows.Next() {
-		var storage_key *string
+		var storage_key string
 		if err := rows.Scan(&storage_key); err != nil {
 			return nil, err
 		}

@@ -26,6 +26,7 @@
 2. Прокси → сервер: `X-Forwarded-For` принимается только от адресов из `SCIBOX_TRUSTED_PROXIES` и читается справа налево до первого недоверенного; без списка IP берётся из соединения (`TestMetaTakesTheIPFromTheConnectionNotFromHeaders`, `TestClientAddr`).
 3. Сервер → PostgreSQL: только параметризованные запросы sqlc.
 4. Сервер → Crossref, SMTP: ответы внешних сервисов недоверенные.
+4а. Сервер → хранилище файлов (S3) и ClamAV (срез 23): файл недоверен, пока ClamAV не ответил «чисто»; «не знаем» не значит «чисто» (`antivirus.ErrUnavailable`); хранилище отвечает только по ключам, которые мы сами выдали; его сбой не выдаётся за «нет файла».
 5. Письма → человек: ссылки с одноразовыми токенами, в базе только хеш.
 
 ## Инварианты (что всегда верно и каким тестом доказано)
@@ -77,6 +78,14 @@
 | I-41 | Текст отправленного (и окончательно не доставленного) письма стирается сразу; ждущее повтора письмо хранит текст | `notifications.TestWorkerSendsEachMailOnce`, `TestWorkerRetriesWithBackoffAndGivesUp` |
 | I-42 | После стирания аккаунта ни в одной таблице нет почты, имени, идентификаторов, адреса входа и почт рекомендателей человека; каждая таблица базы описана в карте ПДн | `cli.TestErasedPersonLeavesNothingToRecogniseThemBy`, `erasure.TestPersonalDataMapCoversEveryTable` |
 | I-43 | Архив своих данных выдаётся только со свежим паролем, не чаще трёх раз в сутки, только после записи в личный журнал; в нём нет данных других людей, писем рекомендателей о человеке, хешей и секретов | `dataexport.TestExportNeedsAFreshPassword`, `TestExportIsLimitedPerDay`, `TestEveryExportIsInThePersonalJournalAndWithoutAJournalThereIsNoArchive`, `TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers`, `TestExportOfAStrangersFileIsImpossible`, `TestHTTPExportWithABrokenDatabaseNeverPassesForASuccess` |
+| I-44 | Файл не выдаётся никому, пока ClamAV не ответил «чисто»; заражённого нет ни в хранилище, ни у организации; сбой антивируса не делает файл чистым и не теряет его | `antivirus.TestClamdFailsClosed`, `files.TestVaultPutVirus`, `filework.TestPendingFileBecomesCleanOnlyByTheAnswerClean`, `TestScanFailuresNeverMakeAFileClean`, `applications.TestAFileWaitingForTheCheckIsNotServedToAnyone`, `TestAnInfectedFileIsHiddenFromTheOrganizationAndNeverServed`, `cli.TestFilesThroughTheWholeServerOnTheRealStorageAndAntivirus` (настоящий ClamAV, EICAR внутри PDF) |
+| I-45 | Вид файла (PDF по первым байтам) и размер проверяются до записи в хранилище; бесконечный поток обрывается около предела; отказ забирает уже принятые файлы | `files.TestVaultPutRejectsBeforeWriting`, `TestVaultPutSizeLimit`, `TestReadFormErrors`, `TestReadFormTotalSizeLimit`, `applications.TestRefusalsTakeTheFilesBack` |
+| I-46 | Содержимое файлов в базу не пишется; старый файл переезжает только после совпадения размера и SHA-256 при чтении обратно | `filework.TestNoFileContentCanBeWrittenToTheDatabaseAgain`, `TestLegacyFilesMoveToTheStorageWithAChecksum`, `TestLegacyMoveRefusesACorruptCopy`, `TestLegacyMoveFailures` |
+| I-47 | Запрос с неверными полями или мёртвой ссылкой не доходит до хранилища и антивируса (усиления нагрузки по анонимной ссылке нет) | `files.TestReadFormStopsBeforeTheFilesWhenTheFieldsAreWrong`, `applications.TestHTTPApplyWithWrongFieldsNeverTouchesTheStorage`, `references.TestHTTPLetterIsCheckedBeforeTheFileIsTaken` |
+| I-48 | Объекты стёртого аккаунта ставятся в очередь удаления в той же транзакции, что и стирание строк; ключ вычёркивается только после удаления объекта | `erasure.TestEraseRemovesPersonalData`, `filework.TestQueuedObjectsAreDeletedInBatches`, `TestQueuedKeysWaitWhileTheStorageIsDown`, `cli.TestFilesThroughTheWholeServerOnTheRealStorageAndAntivirus` |
+| I-49 | Чистка осиротевших удаляет только старые объекты без строки в базе и отказывается работать при подозрительной массе «сирот» (база из старой копии) | `filework.TestSweepRemovesOnlyOldObjectsWithoutARow`, `TestSweepRefusesWhenThereAreSuspiciouslyManyOrphans`, `TestConfigFallsBackToSafeValues` |
+| I-50 | Сбой хранилища не выдаётся за «нет файла»; выдача не записывается в журнал, пока файл не открыт; пропавший объект проверенного файла — ошибка, не тихий 404 и не неполный архив | `applications.TestStorageFailuresAreNotNotFoundAndLeaveNoTrace`, `blobstore.TestS3ErrorMapping`, `TestS3BucketGone`, `dataexport.TestArchiveSkipsUncheckedFilesAndFailsOnAMissingObject` |
+| I-51 | Боевой режим не стартует без шифрованного канала к хранилищу, с ключами из docker-compose и с выключенным антивирусом; ключи в сообщения не попадают | `config.TestProductionRefusesUnsafeSettings`, `TestLoadFileStorage` |
 
 ## Реестр угроз
 
@@ -104,7 +113,7 @@
 | T-18 | Почты, IP и токены могут попадать в логи; нет правила маскирования | 22 | закрыта (срез 22, D-152: `internal/logmask`, I-37, I-38) |
 | T-19 | Нет сроков хранения: старые сессии, попытки, токены, тела писем в очереди, уведомления лежат вечно | 22 | закрыта (срез 22, D-151, D-152: `internal/retention`, I-39…I-41; сессии, ссылки, счётчики, знакомые браузеры были закрыты раньше) |
 | T-20 | Человек не может выгрузить свои данные (право на доступ, 152-ФЗ) | 22 | закрыта (срез 22, D-153: `internal/dataexport`, I-43) |
-| T-21 | Файлы откликов лежат в базе без проверки на вирусы (D-080); большие файлы читаются в память целиком | 23 | открыта |
+| T-21 | Файлы откликов лежат в базе без проверки на вирусы (D-080); большие файлы читаются в память целиком | 23 | закрыта (срез 23, D-157…D-160: хранилище S3, ClamAV, загрузка потоком; I-44…I-51) |
 | T-22 | Тяжёлый запрос к базе может работать бесконечно: нет `statement_timeout`, `idle_in_transaction_session_timeout` | 24 | открыта |
 | T-23 | При двух копиях сервера фоновые задачи подбора и напоминаний могут выполниться дважды (проверить блокировки) | 25 | открыта |
 | T-24 | Зависший Crossref или SMTP держит запросы и горутины | 25 | открыта |
@@ -123,6 +132,10 @@
 | T-38 | Неактивные аккаунты (подтверждённая почта, много лет без входа) не удаляются | 29 | открыта (нужно решение пользователя и юриста о сроке; при аудите) |
 | T-39 | Ожидающие письма третьим лицам (организации, рекомендателю), в тексте которых имя удалённого человека, дойдут после удаления: очередь не знает, о ком письмо | 22 | принята (окно не больше суток пока идут повторы; отправленные письма уже без текста) |
 | T-40 | Резервные копии (срез 28) будут хранить данные, которые человек уже удалил | 28 | открыта (записать срок хранения копий и порядок: после восстановления повторить удаления) |
+| T-41 | Локальный ClamAV облегчённый (одна сигнатура EICAR, без обновлений): боевую настройку (полные базы, `freshclam`, 2 ГБ памяти, размер `StreamMaxLength` не меньше 25 МБ) на этом компьютере не проверить | 28 | открыта (проверить при выкладке: EICAR, настоящая заражённая тестовая сигнатура из базы, обновление баз; docs/DEPLOY.md) |
+| T-42 | PDF может содержать активное содержимое (скрипты), которое ClamAV находит не всегда | 23 | принята (D-158: файлы выдаются только как скачивание с `Content-Disposition: attachment`, `nosniff` и `CSP: sandbox`, показ внутри сайта не делаем; пересмотреть при аудите, срез 29) |
+| T-43 | Содержимое файлов в хранилище не шифруется нами: шифрование на стороне провайдера и закрытость бакета (без публичного доступа, ключ только у сервера) задаёт администратор | 28 | открыта (записать в docs/DEPLOY.md: бакет приватный, шифрование на стороне провайдера включено, ключ сервисного аккаунта только на запись, чтение и удаление в одном бакете) |
+| T-44 | Очередь файлов «на проверке» может расти молча (антивирус лежит днями): пока видно только по журналу | 26 | открыта (метрики: число ожидающих проверки, возраст самого старого, очередь удаления; тревога) |
 | T-29 | `golang.org/x/crypto/openpgp` (GO-2026-5932) в модуле x/crypto: пакет не поддерживается, исправления нет; наш код его не вызывает (govulncheck: «модули», не «код») | 29 | принята (код не импортирует openpgp, исправления нет; проверить при аудите, D-140) |
 
 ## Карта персональных данных

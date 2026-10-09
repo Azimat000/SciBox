@@ -307,6 +307,13 @@ func TestRealClamAV(t *testing.T) {
 			t.Fatalf("got %+v %v", v, err)
 		}
 	})
+	t.Run("EICAR inside a larger file is rejected too", func(t *testing.T) {
+		data := append(append([]byte("%PDF-1.7\n% text before\n"), antivirus.EICAR()...), []byte("\n% text after\n")...)
+		v, err := c.Scan(t.Context(), bytes.NewReader(data))
+		if err != nil || !v.Infected {
+			t.Fatalf("got %+v %v", v, err)
+		}
+	})
 	t.Run("an honest pdf passes", func(t *testing.T) {
 		v, err := c.Scan(t.Context(), strings.NewReader("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"))
 		if err != nil || v.Infected {

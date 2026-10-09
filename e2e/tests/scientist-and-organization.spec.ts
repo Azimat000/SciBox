@@ -46,6 +46,16 @@ test('учёный регистрируется, откликается и по�
 
     await page.getByRole('link', { name: 'Откликнуться' }).or(page.getByRole('button', { name: 'Откликнуться' })).first().click()
     await page.getByLabel('Сопроводительное письмо').fill('Пять полевых сезонов в Якутии, работаю с буровым оборудованием и пробами льда. Готова к экспедиции.')
+    // Тестовый вирус EICAR (безвредная строка, которую любой антивирус обязан считать вирусом) отклоняется понятным
+    // сообщением. Строка собрана из частей, чтобы антивирус на компьютере не трогал исходник.
+    const eicar = ['X5O!P%@AP[4\\PZX54(P^)7CC)7}$', 'EICAR', '-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'].join('')
+    await page.locator('input[type=file]').setInputFiles({ name: 'счёт.pdf', mimeType: 'application/pdf', buffer: Buffer.from(`%PDF-1.7\n${eicar}\n`) })
+    await page.getByRole('button', { name: 'Отправить отклик' }).click()
+    await expect(page.getByRole('alert').filter({ hasText: 'вирус' })).toBeVisible()
+    await expect(page.getByText('Отклик отправлен')).toHaveCount(0)
+    // Человек убирает файл и прикладывает настоящий PDF.
+    await page.getByRole('button', { name: 'Убрать файл «счёт.pdf»' }).click()
+    await page.locator('input[type=file]').setInputFiles({ name: 'Список публикаций.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7\n% список публикаций\n') })
     await page.getByRole('button', { name: 'Отправить отклик' }).click()
     await expect(page.getByText('Отклик отправлен')).toBeVisible()
   })
@@ -60,6 +70,12 @@ test('учёный регистрируется, откликается и по�
     await staff.goto('/candidates')
     await staff.getByRole('link', { name: name }).first().click()
     await expect(staff.getByRole('heading', { level: 1 })).toContainText(name)
+    // Приложенный PDF прошёл проверку на вирусы и скачивается организацией.
+    const attached = staff.getByRole('link', { name: /Список публикаций\.pdf/ })
+    await expect(attached).toBeVisible()
+    const download = await staff.request.get((await attached.getAttribute('href')) ?? '')
+    expect(download.status()).toBe(200)
+    expect((await download.body()).toString()).toContain('%PDF-1.7')
 
     await staff.getByRole('button', { name: 'Пригласить' }).click()
     const dialog = staff.getByRole('dialog')

@@ -12,7 +12,7 @@ WITH due AS (
 )
 UPDATE application_files f SET scan_next_at = sqlc.arg(lease_until)::timestamptz, scan_attempts = f.scan_attempts + 1
 FROM due WHERE f.id = due.id
-RETURNING f.id, f.storage_key, f.scan_attempts;
+RETURNING f.id, f.storage_key::text AS storage_key, f.scan_attempts;
 
 -- name: MarkFileClean :execrows
 UPDATE application_files SET scan_status = 'clean', scanned_at = sqlc.arg(now)::timestamptz, scan_next_at = NULL
@@ -45,7 +45,7 @@ SELECT count(*)::bigint FROM application_files WHERE legacy_data IS NOT NULL;
 
 -- Из этих ключей оставляет те, на которые есть строка в базе (остальные объекты осиротели).
 -- name: ExistingFileKeys :many
-SELECT storage_key FROM application_files WHERE storage_key = ANY(@keys::text[]);
+SELECT storage_key::text AS storage_key FROM application_files WHERE storage_key = ANY(@keys::text[]);
 
 -- Сколько файлов ждёт проверки (для журнала фоновой задачи).
 -- name: CountPendingFiles :one

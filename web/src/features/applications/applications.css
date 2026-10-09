@@ -329,6 +329,35 @@
   color: var(--ink-soft);
 }
 
+/* Файл, который нельзя скачать (проверка на вирусы): не ссылка, под названием подпись, что с ним. */
+.file-link--pending,
+.file-link--infected {
+  align-items: flex-start;
+  padding-block: var(--s-2);
+  color: var(--ink-soft);
+}
+
+.file-link--pending svg,
+.file-link--infected svg {
+  margin-top: 0.15rem;
+}
+
+.file-link-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.file-link-state {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.file-link--infected .file-link-state {
+  color: var(--fail);
+}
+
 /* ---- рекомендатели ---- */
 
 .ref-list {

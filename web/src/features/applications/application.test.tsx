@@ -129,6 +129,20 @@ describe('application page (applicant)', () => {
     expect(screen.getByText('Вы пока никого не просили о рекомендации.')).toBeInTheDocument()
   })
 
+  it('shows files that are still being checked or were rejected as text, not as links', async () => {
+    const checking = { ...attachment, id: 'f0000000-0000-4000-8000-0000000000a1', name: 'Диплом.pdf', scan: 'pending' as const }
+    const rejected = { ...attachment, id: 'f0000000-0000-4000-8000-0000000000a2', name: 'Счёт.pdf', scan: 'infected' as const }
+    const clean = { ...attachment, scan: 'clean' as const }
+    stubApi(one({ ...application, files: [clean, checking, rejected], references: [] }))
+    renderApp(`/applications/${APP_ID}`)
+    expect(await screen.findByRole('link', { name: /Список публикаций\.pdf/ })).toBeInTheDocument()
+    expect(screen.getByText('проверяется на вирусы')).toBeInTheDocument()
+    expect(screen.getByText('не принят: найден вирус')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Диплом\.pdf/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Счёт\.pdf/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/Диплом\.pdf/)).toBeInTheDocument()
+  })
+
   it('works without a resume file in the list', async () => {
     stubApi(one({ ...application, cv: null }))
     renderApp(`/applications/${APP_ID}`)
@@ -344,6 +358,16 @@ describe('candidate card (organization)', () => {
     const profile = within(screen.getByRole('heading', { level: 2, name: 'Профиль кандидата' }).closest('section')!)
     expect(profile.getByRole('heading', { level: 2, name: 'Анна Смирнова' })).toBeInTheDocument()
     expect(profile.getByRole('heading', { level: 3, name: 'О себе' })).toBeInTheDocument()
+  })
+
+  it('shows the organization a letter file that is still being checked as text', async () => {
+    const waiting = { ...staffFileOnly, letter: { text: '', file: { ...letterFile, scan: 'pending' as const } } }
+    stubApi(staff({ ...staffApplication, files: [{ ...attachment, scan: 'pending' as const }], references: [waiting] }))
+    renderApp(path)
+    await screen.findByRole('heading', { level: 1, name: 'Анна Смирнова' })
+    expect(screen.getAllByText('проверяется на вирусы')).toHaveLength(2)
+    expect(screen.queryByRole('link', { name: /Письмо Иванова\.pdf/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Список публикаций\.pdf/ })).not.toBeInTheDocument()
   })
 
   it('shows letters that are only text or only a file, and an empty list', async () => {

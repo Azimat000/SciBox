@@ -48,8 +48,13 @@ type perimeterWorld struct {
 
 func newPerimeterWorld(t *testing.T) *perimeterWorld {
 	t.Helper()
+	return newPerimeterWorldOn(t, newTestVault())
+}
+
+// newPerimeterWorldOn — то же на заданном складе файлов (настоящее хранилище и антивирус в полном сквозном тесте).
+func newPerimeterWorldOn(t *testing.T, vault *files.Vault) *perimeterWorld {
+	t.Helper()
 	dbURL := testdb.Create(t, true)
-	vault := newTestVault()
 	if err := runSeed(t.Context(), dbURL, vault, io.Discard); err != nil {
 		t.Fatal(err)
 	}

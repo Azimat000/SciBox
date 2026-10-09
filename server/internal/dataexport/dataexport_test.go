@@ -633,3 +633,79 @@ func TestFileNamesAreCleanedAndUniquePerApplication(t *testing.T) {
 		t.Errorf("FileName() = %q", got)
 	}
 }
+
+// Файл, который ещё проверяется или отвергнут, в архив не попадает, но в data.json он перечислен; пропавший объект
+// проверенного файла — ошибка, а не тихо неполный архив.
+func TestArchiveSkipsUncheckedFilesAndFailsOnAMissingObject(t *testing.T) {
+	w := newWorld(t)
+	b := build(t, w)
+	svc := w.service()
+	var pendingID, infectedID uuid.UUID
+	rows, err := testkit.Pool.Query(bg, `SELECT id FROM application_files WHERE application_id = $1 AND kind = 'attachment' ORDER BY position`, b.meApp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if len(ids) != 1 {
+		t.Fatalf("attachments: %d", len(ids))
+	}
+	pendingID = ids[0]
+	// Ещё одно приложение, найденное заражённым.
+	extra := w.Stored("second.pdf", pdfData("second"))
+	if err := testkit.Pool.QueryRow(bg, `INSERT INTO application_files (application_id, kind, name, size, position, storage_key, sha256, scan_status, scanned_at, created_at)
+		VALUES ($1, 'attachment', 'second.pdf', $2, 5, $3, $4, 'clean', now(), now()) RETURNING id`, b.meApp, extra.Size, extra.Key, extra.Sum[:]).Scan(&infectedID); err != nil {
+		t.Fatal(err)
+	}
+	exec(t, `UPDATE application_files SET scan_status = 'pending', scanned_at = NULL WHERE id = $1`, pendingID)
+	exec(t, `UPDATE application_files SET scan_status = 'infected', storage_key = NULL WHERE id = $1`, infectedID)
+
+	a := export(t, svc, fresh(t, w.World, b.me.Email))
+	var listed []struct {
+		ID   uuid.UUID `json:"id"`
+		Scan string    `json:"scan"`
+		Path string    `json:"path"`
+	}
+	if err := json.Unmarshal(a.doc["files"], &listed); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[uuid.UUID]string{}
+	for _, f := range listed {
+		seen[f.ID] = f.Scan
+		if f.Scan != "clean" && f.Path != "" {
+			t.Errorf("file %s (%s) has a path in the archive: %q", f.ID, f.Scan, f.Path)
+		}
+		if f.Scan != "clean" {
+			if _, ok := a.entries[f.Path]; ok {
+				t.Errorf("an unchecked file is in the archive")
+			}
+		}
+	}
+	if seen[pendingID] != "pending" || seen[infectedID] != "infected" {
+		t.Errorf("states in data.json: pending=%q infected=%q", seen[pendingID], seen[infectedID])
+	}
+	for name := range a.entries {
+		if strings.Contains(name, "second") {
+			t.Errorf("the rejected file is in the archive: %s", name)
+		}
+	}
+
+	// Проверенный файл без объекта: архив не собирается молча.
+	for _, k := range w.Store.Keys() {
+		_ = w.Store.Delete(bg, k)
+	}
+	arch, err := svc.Prepare(bg, fresh(t, w.World, b.me.Email))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Write(bg, io.Discard, arch); err == nil {
+		t.Error("an archive with a missing object was written without an error")
+	}
+}

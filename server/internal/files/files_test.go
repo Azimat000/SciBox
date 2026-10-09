@@ -295,6 +295,78 @@ func TestVaultPutVirus(t *testing.T) {
 	})
 }
 
+func TestVaultStopsWaitingForAnAntivirusThatJustFailed(t *testing.T) {
+	var now = time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	r := newRig()
+	r.vault = NewVault(r.store, r.av, func() time.Time { return now })
+	r.av.Fault = func() error { return antivirus.ErrUnavailable }
+	put := func() Stored {
+		t.Helper()
+		st, err := r.vault.Put(bg, "a.pdf", bytes.NewReader(pdf(100)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+	if st := put(); st.Scan != ScanPending || r.av.Scans() != 1 {
+		t.Fatalf("first file: %+v, scans %d", st, r.av.Scans())
+	}
+	// Следующие файлы того же запроса не ждут антивирус заново.
+	for range 5 {
+		if st := put(); st.Scan != ScanPending {
+			t.Fatalf("file during the pause: %+v", st)
+		}
+	}
+	if r.av.Scans() != 1 {
+		t.Errorf("the antivirus was asked %d times during the pause", r.av.Scans())
+	}
+	// Пауза прошла, антивирус ожил: проверка идёт, файл чист.
+	now = now.Add(scanPause + time.Second)
+	r.av.Fault = nil
+	if st := put(); st.Scan != ScanClean || r.av.Scans() != 2 {
+		t.Errorf("after the pause: %+v, scans %d", st, r.av.Scans())
+	}
+	// Заражённый файл паузу не включает: это ответ антивируса, а не его сбой.
+	if _, err := r.vault.Put(bg, "v.pdf", bytes.NewReader(append(pdf(50), antivirus.EICAR()...))); !errors.Is(err, ErrInfected) {
+		t.Fatal(err)
+	}
+	if st := put(); st.Scan != ScanClean {
+		t.Errorf("a virus must not switch the checks off: %+v", st)
+	}
+}
+
+// Один человек, оборвавший загрузку посреди проверки, не отключает проверку при загрузке для всех остальных.
+func TestAClientThatLeavesDoesNotSwitchTheChecksOff(t *testing.T) {
+	r := newRig()
+	ctx, cancel := context.WithCancel(bg)
+	r.av.Fault = func() error { cancel(); return antivirus.ErrUnavailable }
+	if st, err := r.vault.Put(ctx, "a.pdf", bytes.NewReader(pdf(100))); err != nil || st.Scan != ScanPending {
+		t.Fatalf("%+v %v", st, err)
+	}
+	r.av.Fault = nil
+	scans := r.av.Scans()
+	if st, err := r.vault.Put(bg, "b.pdf", bytes.NewReader(pdf(100))); err != nil || st.Scan != ScanClean || r.av.Scans() != scans+1 {
+		t.Fatalf("the next upload was not checked: %+v %v", st, err)
+	}
+}
+
+// Человек ушёл посреди записи: ошибка отмены, а не «хранилище сломалось» (иначе ложная тревога в журнале и 503).
+func TestAClientThatLeavesDuringTheUploadIsNotAStorageFailure(t *testing.T) {
+	r := newRig()
+	ctx, cancel := context.WithCancel(bg)
+	r.store.Fault = func(op, _ string) error {
+		if op == "put" {
+			cancel()
+			return errors.New("context canceled inside the storage client")
+		}
+		return nil
+	}
+	_, err := r.vault.Put(ctx, "a.pdf", bytes.NewReader(pdf(100)))
+	if !errors.Is(err, context.Canceled) || errors.Is(err, ErrStorage) || IsUploadError(err) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestVaultPutTrustedOpenDiscard(t *testing.T) {
 	r := newRig()
 	data := pdf(500)

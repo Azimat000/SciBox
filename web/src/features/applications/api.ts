@@ -23,7 +23,8 @@ export type VacancyRef = {
   deadline: string | null
 }
 
-export type FileRef = { id: string; name: string; size: number }
+// scan — проверка на вирусы: clean (можно скачать), pending (проверяется), infected (не принят). Нет поля — как clean.
+export type FileRef = { id: string; name: string; size: number; scan?: 'clean' | 'pending' | 'infected' }
 
 export type Summary = {
   id: string

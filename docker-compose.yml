@@ -49,12 +49,12 @@ services:
       retries: 30
 
   # Антивирус ClamAV. Здесь облегчённый: без обновления баз и только с сигнатурой тестового вируса EICAR
-  # (docker/clamav-dev/eicar.hdb), потому что полный ClamAV с базами (3 млн сигнатур) на машине разработчика не
+  # (docker/clamav-dev/eicar.ndb), потому что полный ClamAV с базами (3 млн сигнатур) на машине разработчика не
   # помещается в память Docker. Протокол и поведение те же. В бою нужен полный образ с freshclam и 2 ГБ памяти
   # (срез 28, docs/DEPLOY.md).
   clamav:
     image: clamav/clamav-debian:1.5.4
-    entrypoint: ["sh", "-c", "cp /dev-db/eicar.hdb /var/lib/clamav/eicar.hdb && exec /init"]
+    entrypoint: ["sh", "-c", "cp /dev-db/eicar.ndb /var/lib/clamav/eicar.ndb && exec /init"]
     environment:
       CLAMAV_NO_FRESHCLAMD: "true"
     ports:

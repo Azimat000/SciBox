@@ -37,6 +37,7 @@ export default defineConfig({
       timeout: 60_000,
       env: {
         DATABASE_URL: 'postgres://scibox:scibox@localhost:5433/scibox_e2e?sslmode=disable',
+        SCIBOX_S3_BUCKET: 'scibox-e2e',
         SCIBOX_HTTP_ADDR: `127.0.0.1:${apiPort}`,
         SCIBOX_PUBLIC_URL: `http://localhost:${webPort}`,
       },
