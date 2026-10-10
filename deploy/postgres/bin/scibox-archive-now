@@ -1,0 +1,24 @@
+#!/bin/bash
+# Снимок для проверки восстановления (срез 28): записывает в /state/snapshot.json, сколько строк в ключевых
+# таблицах сейчас, затем заставляет базу отправить в архив все записанные изменения и убеждается, что полная копия
+# есть (если нет, делает). Всё, что записано до снимка, обязано оказаться в восстановленной базе
+# (`scibox-restore-check` это проверяет).
+set -euo pipefail
+. scibox-backup-lib
+STATE_DIR=${BACKUP_STATE_DIR:-/state}
+STANZA=${PGBACKREST_STANZA:-main}
+
+until pg_isready -q -h "${PGSOCKET:-/var/run/postgresql}" -U postgres; do sleep 1; done
+snapshot_counts > "$STATE_DIR/snapshot.json.tmp"
+mv "$STATE_DIR/snapshot.json.tmp" "$STATE_DIR/snapshot.json"
+log info "snapshot of the live database taken"
+
+# Если копий ещё нет (первый запуск), без полной копии восстанавливать нечего.
+if [ "$(pgbackrest --stanza="$STANZA" info --output=json | jq -r '[.[0].backup[]?] | length')" = 0 ]; then
+    log info "no backups yet: taking the first full backup"
+    pgbackrest --stanza="$STANZA" --type=full backup
+fi
+# pg_switch_wal закрывает текущий сегмент журнала, `check` ждёт, пока архив его примет.
+"${PSQL[@]}" -c "SELECT pg_switch_wal()" >/dev/null
+pgbackrest --stanza="$STANZA" check
+log info "the archive holds everything written before the snapshot"

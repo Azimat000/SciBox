@@ -64,9 +64,11 @@ const usage = `Использование: scibox <команда>
   serve                      запустить HTTP-сервер (по умолчанию); с SCIBOX_BACKGROUND=off без фоновых задач
   worker                     запустить только фоновые задачи (письма, подбор, напоминания, чистка, файлы)
   error-test                 отправить пробный отчёт в GlitchTip (проверка SCIBOX_ERROR_DSN)
-  migrate up|down|reset|status   миграции базы данных
-  seed                       загрузить демо-данные
+  migrate up|down|reset|status   миграции базы данных (down и reset в боевом режиме только с SCIBOX_ALLOW_DESTRUCTIVE=on)
+  release                    шаг выкладки: накатить миграции и загрузить справочник журналов (оба шага повторяемы)
+  seed                       загрузить демо-данные (в боевом режиме только с SCIBOX_ALLOW_DESTRUCTIVE=on)
   journals load [--force] [файл]  загрузить справочник журналов SCImago (без файла — встроенный в сервер)
+  healthcheck [serve|worker] спросить внутренний порт процесса, готов ли он (для проверки контейнера)
   version                    показать версию
 `
 
@@ -101,7 +103,9 @@ func Run(ctx context.Context, args []string, env Env) int {
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
-	case "serve", "worker", "migrate", "seed", "journals", "error-test":
+	case "healthcheck":
+		return runHealthcheck(ctx, args, env)
+	case "serve", "worker", "migrate", "release", "seed", "journals", "error-test":
 	default:
 		fmt.Fprintf(env.Stderr, "неизвестная команда %q\n\n%s", cmd, usage)
 		return 2
@@ -127,14 +131,32 @@ func Run(ctx context.Context, args []string, env Env) int {
 			fmt.Fprint(env.Stderr, usage)
 			return 2
 		}
+		if (args[0] == "down" || args[0] == "reset") && refuseDestructive(cfg, logger, "migrate "+args[0]) {
+			return 1
+		}
 		if err := migrate.Command(ctx, cfg.DatabaseURL, args[0], env.Stdout); err != nil {
 			logger.Error("migrate", "err", err)
 			return 1
 		}
 		return 0
+	case "release":
+		// Миграции и справочник журналов одним шагом: так их запускает выкладка (deploy/deploy.sh). Образ без
+		// оболочки не может выполнить две команды подряд.
+		if len(args) != 0 {
+			fmt.Fprint(env.Stderr, usage)
+			return 2
+		}
+		if err := migrate.Command(ctx, cfg.DatabaseURL, "up", env.Stdout); err != nil {
+			logger.Error("release: migrate", "err", err)
+			return 1
+		}
+		return runJournals(ctx, cfg.DatabaseURL, []string{"load"}, env, logger)
 	case "journals":
 		return runJournals(ctx, cfg.DatabaseURL, args, env, logger)
 	case "seed":
+		if refuseDestructive(cfg, logger, "seed") {
+			return 1
+		}
 		vault, err := openVault(ctx, cfg, logger)
 		if err != nil {
 			logger.Error("seed", "err", err)
@@ -160,6 +182,17 @@ func Run(ctx context.Context, args []string, env Env) int {
 		}
 		return 0
 	}
+}
+
+// refuseDestructive не даёт боевому серверу выполнить команду, которая стирает или подменяет данные (срез 28):
+// без явного SCIBOX_ALLOW_DESTRUCTIVE=on она отказывает. Возвращает true, если команду выполнять нельзя.
+func refuseDestructive(cfg config.Config, logger *slog.Logger, command string) bool {
+	if cfg.Env != config.EnvProduction || cfg.AllowDestructive {
+		return false
+	}
+	logger.Error("refused in production: "+command+" erases or replaces data; set SCIBOX_ALLOW_DESTRUCTIVE=on for this one command if you really mean it",
+		"command", command)
+	return true
 }
 
 // logOptions — как собрать журнал. Нулевое значение: читаемый текст, уровень Info, без метрик и сбора ошибок.

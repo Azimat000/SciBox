@@ -1,0 +1,129 @@
+# Репетиция боевого стенда на этом компьютере (срез 28). Накладывается на docker-compose.prod.yml:
+#
+#   docker compose -f deploy/docker-compose.prod.yml -f deploy/docker-compose.local.yml --env-file deploy/local/local.env up -d
+#
+# (то же делает `make prod-up`). Боевая конфигурация остаётся как есть: SCIBOX_ENV=production, шифрованные
+# каналы, секреты файлами, read-only, две копии за Caddy. Заменено только то, что в бою внешнее или платное:
+#   - сертификат сайта самоподписанный (Caddy `local_certs`) вместо Let's Encrypt;
+#   - хранилище файлов и копий: SeaweedFS за Caddy с собственным сертификатом (pgBackRest ходит в S3 только по https);
+#   - почта: Mailpit с STARTTLS;
+#   - антивирус облегчённый (одна сигнатура EICAR): полный ClamAV не помещается в память Docker на этом компьютере.
+# Секреты рядом (deploy/secrets) тестовые: `deploy/local/prepare.sh` создаёт их и не трогает уже настоящие.
+
+services:
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    command: ["mini", "-dir=/data", "-s3.port=8333", "-admin.ui=false"]
+    restart: unless-stopped
+    environment:
+      AWS_ACCESS_KEY_ID: rehearsal-access-key
+      AWS_SECRET_ACCESS_KEY: rehearsal-secret-key-1234567890
+    volumes:
+      - s3data:/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8333"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    restart: unless-stopped
+    environment:
+      MP_SMTP_TLS_CERT: /pki/leaf/mail.crt
+      MP_SMTP_TLS_KEY: /pki/leaf/mail.key
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    volumes:
+      - ./local/pki:/pki:ro
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8026}:8025"
+    networks:
+      backend:
+        aliases: [mail.scibox.test]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Антивирус облегчённый: только сигнатура EICAR, без обновления баз (как в docker-compose.yml для разработки).
+  clamav:
+    entrypoint: ["sh", "-c", "cp /dev-db/eicar.ndb /var/lib/clamav/eicar.ndb && exec /init"]
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "true"
+    volumes:
+      - ../docker/clamav-dev:/dev-db:ro
+    mem_limit: 1536m
+    healthcheck:
+      start_period: 90s
+
+  caddy:
+    volumes:
+      - ./local/pki:/pki:ro
+    networks:
+      backend:
+        aliases: [s3.scibox.test]
+
+  # Службы, которым в репетиции нужны хранилище и доверие к собственному центру сертификации.
+  release:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+    depends_on:
+      s3:
+        condition: service_healthy
+  app1:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+    depends_on:
+      s3:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+  app2:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+    depends_on:
+      s3:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+  worker:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+    depends_on:
+      s3:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+  postgres:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+  backup:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+  restore-check:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+
+  # Демо-данные для сквозных тестов. В боевом режиме `seed` отказывает без SCIBOX_ALLOW_DESTRUCTIVE: здесь разрешено
+  # явно и только для этой команды.
+  seed:
+    extends:
+      file: docker-compose.prod.yml
+      service: release
+    command: ["seed"]
+    environment:
+      SCIBOX_ALLOW_DESTRUCTIVE: "on"
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+    depends_on:
+      s3:
+        condition: service_healthy
+      release:
+        condition: service_completed_successfully
+    profiles: ["tools"]
+
+volumes:
+  s3data:

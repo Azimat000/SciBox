@@ -1,0 +1,144 @@
+#!/bin/bash
+# Планировщик копий (срез 28, T-26, D-184, D-185). Работает от postgres в контейнере `backup` рядом с базой и
+# делает три вещи по расписанию:
+#   1. полная копия базы раз в BACKUP_FULL_EVERY_DAYS дней, разностная раз в BACKUP_DIFF_EVERY_HOURS часов;
+#      между ними журнал изменений (WAL) уходит в архив самой базой каждые минуту (archive_timeout), поэтому
+#      потерять при аварии можно минуты, а не сутки;
+#   2. копия файлов откликов (rclone sync в шифрованное хранилище) раз в BACKUP_FILES_EVERY_HOURS часов; удалённые из
+#      хранилища файлы переезжают в `files-deleted/<дата>` и стираются через BACKUP_RETENTION_DAYS дней;
+#   3. метрики для Prometheus (файл для textfile-сборщика node-exporter).
+# Срок хранения полных копий pgBackRest считает сам по PGBACKREST_REPO1_RETENTION_FULL (задаёт scibox-entrypoint).
+set -u
+. scibox-backup-lib
+
+STANZA=${PGBACKREST_STANZA:-main}
+FULL_EVERY=$(( ${BACKUP_FULL_EVERY_DAYS:-7} * 86400 ))
+DIFF_EVERY=$(( ${BACKUP_DIFF_EVERY_HOURS:-24} * 3600 ))
+FILES_EVERY=$(( ${BACKUP_FILES_EVERY_HOURS:-24} * 3600 ))
+RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+TICK=${BACKUP_TICK_SECONDS:-60}
+RETRY_AFTER=${BACKUP_RETRY_SECONDS:-900}
+TEXTFILE_DIR=${BACKUP_TEXTFILE_DIR:-/textfile}
+STATE_DIR=${BACKUP_STATE_DIR:-/state}
+mkdir -p "$TEXTFILE_DIR" "$STATE_DIR"
+
+stop=0
+trap 'stop=1' TERM INT
+
+read_state() { [ -s "$STATE_DIR/$1" ] && cat "$STATE_DIR/$1" || echo 0; }
+write_state() { printf '%s' "$2" > "$STATE_DIR/$1.tmp" && mv "$STATE_DIR/$1.tmp" "$STATE_DIR/$1"; }
+
+write_metrics() {
+    local info archive last_arch failed repo_size
+    info=$(pgbackrest --stanza="$STANZA" info --output=json 2>/dev/null) || info="[]"
+    repo_size=$(jq -r '[.[0].backup[]? | .info.repository.delta] | add // 0' <<<"$info")
+    local last_full last_any
+    last_full=$(jq -r '[.[0].backup[]? | select(.type=="full") | .timestamp.stop] | max // 0' <<<"$info")
+    last_any=$(jq -r '[.[0].backup[]? | .timestamp.stop] | max // 0' <<<"$info")
+    archive=$("${PSQL[@]}" -F ' ' -c "SELECT COALESCE(floor(extract(epoch FROM last_archived_time))::bigint,0), failed_count FROM pg_stat_archiver" 2>/dev/null || echo "0 0")
+    last_arch=${archive% *}; failed=${archive#* }
+    {
+        echo '# TYPE scibox_backup_last_success_timestamp_seconds gauge'
+        echo "scibox_backup_last_success_timestamp_seconds{kind=\"database_full\"} $last_full"
+        echo "scibox_backup_last_success_timestamp_seconds{kind=\"database\"} $last_any"
+        echo "scibox_backup_last_success_timestamp_seconds{kind=\"files\"} $(read_state files_last_ok)"
+        echo '# TYPE scibox_backup_last_attempt_failed gauge'
+        echo "scibox_backup_last_attempt_failed{kind=\"database\"} $(read_state database_failed)"
+        echo "scibox_backup_last_attempt_failed{kind=\"files\"} $(read_state files_failed)"
+        echo '# TYPE scibox_backup_wal_archive_last_timestamp_seconds gauge'
+        echo "scibox_backup_wal_archive_last_timestamp_seconds $last_arch"
+        echo '# TYPE scibox_backup_wal_archive_failures_total counter'
+        echo "scibox_backup_wal_archive_failures_total $failed"
+        echo '# TYPE scibox_backup_repository_bytes gauge'
+        echo "scibox_backup_repository_bytes $repo_size"
+        echo '# TYPE scibox_backup_scheduler_timestamp_seconds gauge'
+        echo "scibox_backup_scheduler_timestamp_seconds $(date +%s)"
+    } > "$TEXTFILE_DIR/scibox_backup.prom.tmp" && mv "$TEXTFILE_DIR/scibox_backup.prom.tmp" "$TEXTFILE_DIR/scibox_backup.prom"
+    BACKUP_LAST_FULL=$last_full
+    BACKUP_LAST_ANY=$last_any
+}
+
+# Ждём, пока база примет соединения (она может перезапускаться вместе с выкладкой).
+wait_for_database() {
+    until pg_isready -q -h "${PGSOCKET:-/var/run/postgresql}" -U postgres; do
+        [ "$stop" = 1 ] && exit 0
+        sleep 2
+    done
+}
+
+run_database_backup() { # full | diff
+    log info "database backup ($1) started"
+    if pgbackrest --stanza="$STANZA" --type="$1" backup 2>&1 | while read -r l; do log info "pgbackrest: $l"; done && [ "${PIPESTATUS[0]}" = 0 ]; then
+        write_state database_failed 0
+        log info "database backup ($1) finished"
+    else
+        write_state database_failed 1
+        write_state database_last_attempt "$(date +%s)"
+        log error "database backup ($1) failed; the next attempt is in $((RETRY_AFTER / 60)) minutes"
+    fi
+}
+
+run_files_backup() {
+    log info "files backup started"
+    files_rclone_env
+    local today
+    today=$(date -u +%F)
+    if rclone sync SRC:"$FILES_S3_BUCKET" DST: --backup-dir "DELETED:$today" --size-only \
+        --transfers 4 --checkers 8 --stats 0 --log-level NOTICE --s3-no-check-bucket 2>&1 | while read -r l; do log info "rclone: $l"; done \
+        && [ "${PIPESTATUS[0]}" = 0 ]; then
+        write_state files_last_ok "$(date +%s)"
+        write_state files_failed 0
+        prune_deleted_files
+        log info "files backup finished"
+    else
+        write_state files_failed 1
+        write_state files_last_attempt "$(date +%s)"
+        log error "files backup failed; the next attempt is in $((RETRY_AFTER / 60)) minutes"
+    fi
+}
+
+# Удалённые из хранилища файлы лежат в files-deleted/<дата> и стираются через срок хранения копий (D-185): человек,
+# удаливший аккаунт, не остаётся в копиях дольше срока.
+prune_deleted_files() {
+    local cutoff dir
+    cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%F)
+    rclone lsf DELETED: --dirs-only 2>/dev/null | while read -r dir; do
+        dir=${dir%/}
+        if [[ "$dir" < "$cutoff" ]]; then
+            rclone purge "DELETED:$dir" >/dev/null 2>&1 && log info "removed the deleted files of $dir from the copy"
+        fi
+    done
+}
+
+log info "backup scheduler started (full every $((FULL_EVERY / 86400)) d, diff every $((DIFF_EVERY / 3600)) h, files every $((FILES_EVERY / 3600)) h, retention $RETENTION_DAYS d)"
+wait_for_database
+until pgbackrest --stanza="$STANZA" stanza-create 2>&1 | while read -r l; do log info "pgbackrest: $l"; done && [ "${PIPESTATUS[0]}" = 0 ]; do
+    [ "$stop" = 1 ] && exit 0
+    log warn "stanza-create failed (is the backup storage reachable?); retrying in 30 s"
+    sleep 30
+done
+
+while [ "$stop" = 0 ]; do
+    now=$(date +%s)
+    write_metrics
+    if pg_isready -q -h "${PGSOCKET:-/var/run/postgresql}" -U postgres; then
+        last_try=$(read_state database_last_attempt)
+        if [ $((now - last_try)) -ge "$RETRY_AFTER" ] || [ "$(read_state database_failed)" = 0 ]; then
+            if [ "$BACKUP_LAST_FULL" -eq 0 ] || [ $((now - BACKUP_LAST_FULL)) -ge "$FULL_EVERY" ]; then
+                run_database_backup full
+            elif [ $((now - BACKUP_LAST_ANY)) -ge "$DIFF_EVERY" ]; then
+                run_database_backup diff
+            fi
+        fi
+    fi
+    last_files=$(read_state files_last_ok)
+    last_files_try=$(read_state files_last_attempt)
+    if [ -n "${FILES_S3_BUCKET:-}" ] && [ $((now - last_files)) -ge "$FILES_EVERY" ] \
+        && { [ "$(read_state files_failed)" = 0 ] || [ $((now - last_files_try)) -ge "$RETRY_AFTER" ]; }; then
+        run_files_backup
+    fi
+    write_metrics
+    # sleep в фоне и wait: сигнал остановки прерывает ожидание, а не ждёт конца минуты.
+    sleep "$TICK" & wait $!
+done
+log info "backup scheduler stopped"

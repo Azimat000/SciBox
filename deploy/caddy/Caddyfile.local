@@ -1,0 +1,22 @@
+# Репетиция боевого стенда на этом компьютере (срез 28, deploy/docker-compose.local.yml): тот же сайт, но
+# самоподписанный сертификат собственного центра Caddy вместо Let's Encrypt. Порты выбраны свободные (по умолчанию
+# 8443 и 8080), чтобы не конфликтовать с другими проектами.
+{
+	local_certs
+	skip_install_trust
+	https_port {$HTTPS_PORT}
+	http_port {$HTTP_PORT}
+}
+
+import /etc/caddy/site.caddy
+
+localhost {
+	import scibox_site
+}
+
+# Хранилища репетиции за TLS: pgBackRest разговаривает с S3 только по https, а боевая проверка требует шифрованный
+# канал к файлам. Названия видны только внутри сети compose.
+s3.scibox.test {
+	tls /pki/leaf/s3.crt /pki/leaf/s3.key
+	reverse_proxy s3:8333
+}

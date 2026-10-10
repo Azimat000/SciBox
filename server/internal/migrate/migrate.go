@@ -39,9 +39,9 @@ func Command(ctx context.Context, databaseURL, command string, out io.Writer) (e
 	default:
 		return fmt.Errorf("unknown migrate command %q (want up, down, reset or status)", command)
 	}
-	connCfg, err := pgx.ParseConfig(databaseURL)
+	connCfg, err := connConfig(databaseURL)
 	if err != nil {
-		return fmt.Errorf("parse database url: %w", err)
+		return err
 	}
 	db := stdlib.OpenDB(*connCfg)
 	defer func() { err = errors.Join(err, db.Close()) }()
@@ -50,6 +50,25 @@ func Command(ctx context.Context, databaseURL, command string, out io.Writer) (e
 		return err
 	}
 	return run(ctx, p, command, out)
+}
+
+// LockTimeout — сколько миграция ждёт блокировки таблицы. Выкладка идёт, пока сайт работает: изменение таблицы встаёт
+// в очередь за долгим запросом, а все следующие запросы к этой таблице встают за ним, и сайт «замирает». Лучше,
+// чтобы миграция сдалась через 10 секунд и выкладку повторили, чем остановила сайт (срез 28). Срок ожидания блокировки,
+// а не срок самой миграции: долгая сборка индекса или заполнение не прерываются.
+const LockTimeout = "10s"
+
+// connConfig разбирает адрес базы и добавляет к соединению срок ожидания блокировок. Значение, которое администратор
+// сам указал в адресе (`?lock_timeout=…`), остаётся его.
+func connConfig(databaseURL string) (*pgx.ConnConfig, error) {
+	cfg, err := pgx.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse database url: %w", err)
+	}
+	if _, set := cfg.RuntimeParams["lock_timeout"]; !set {
+		cfg.RuntimeParams["lock_timeout"] = LockTimeout
+	}
+	return cfg, nil
 }
 
 func run(ctx context.Context, p *goose.Provider, command string, out io.Writer) error {

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Обёртка над `docker compose` для боевого стенда (срез 28): подставляет файлы и окружение, чтобы все скрипты и
+# команды из docs/DEPLOY.md вызывали compose одинаково.
+#
+#   ./compose ps                       боевой стенд (deploy/.env)
+#   SCIBOX_DEPLOY_LOCAL=1 ./compose ps репетиция на этом компьютере (deploy/local/local.env, самоподписанный сертификат)
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+if [ "${SCIBOX_DEPLOY_LOCAL:-}" = 1 ]; then
+    exec docker compose -f "$here/docker-compose.prod.yml" -f "$here/docker-compose.local.yml" \
+        --env-file "$here/local/local.env" "$@"
+fi
+if [ ! -f "$here/.env" ]; then
+    echo "нет файла deploy/.env: cp deploy/env.example deploy/.env и заполните (docs/DEPLOY.md)" >&2
+    exit 1
+fi
+exec docker compose -f "$here/docker-compose.prod.yml" --env-file "$here/.env" "$@"

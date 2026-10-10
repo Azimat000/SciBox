@@ -1,0 +1,24 @@
+# Контекст сборки образа: только то, что нужно сайту и серверу (срез 28).
+.git
+.github
+.claude
+.impeccable
+skill-test
+docs
+deploy
+monitoring
+docker
+scripts
+e2e
+loadtest
+**/node_modules
+web/dist
+web/coverage
+server/bin
+server/coverage.out
+storage
+*.log
+.env
+.env.*
+.share.local
+**/.DS_Store

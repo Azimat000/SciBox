@@ -569,3 +569,19 @@ func TestLoadObservability(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAllowDestructive(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	for _, tc := range []struct {
+		val  string
+		want bool
+		err  bool
+	}{
+		{"", false, false}, {"off", false, false}, {"on", true, false}, {"1", true, false}, {"maybe", false, true},
+	} {
+		cfg, err := Load(envMap(map[string]string{"SCIBOX_PRODUCT_CONFIG": p, "SCIBOX_ALLOW_DESTRUCTIVE": tc.val}))
+		if (err != nil) != tc.err || cfg.AllowDestructive != tc.want {
+			t.Errorf("%q: allow = %v, err = %v; want %v, error %v", tc.val, cfg.AllowDestructive, err, tc.want, tc.err)
+		}
+	}
+}

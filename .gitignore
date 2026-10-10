@@ -34,3 +34,9 @@ monitoring/glitchtip-login.txt
 loadtest/.fixtures.json
 loadtest/.summary.json
 loadtest/.run/
+
+# Выкладка (срез 28): секреты, окружение, сгенерированные конфиги и ключи репетиции
+deploy/secrets/
+deploy/.env
+deploy/generated/
+deploy/local/pki/

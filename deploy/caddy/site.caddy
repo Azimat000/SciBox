@@ -1,0 +1,59 @@
+# Общая часть сайта (срез 28): подключается и боевым Caddyfile, и локальным (Caddyfile.local) через `import`.
+# Всё, что касается проксирования к двум копиям сервера, живёт здесь один раз.
+
+(scibox_site) {
+	encode zstd gzip
+	header -Server
+
+	# Тело запроса: загрузка откликов до 64 МиБ (httpguard), остальное меньше. Лишнее Caddy отсекает до сервера.
+	request_body {
+		max_size 70MB
+	}
+
+	# Журнал доступа не должен хранить то, что сервер у себя маскирует (T-18): адреса людей обрезаются до сети
+	# (IPv4 /24, IPv6 /48), заголовки (cookie, авторизация) не пишутся, одноразовые токены из писем в адресе
+	# закрываются. Остальное (метод, адрес, код, время ответа, номер запроса из ответа) остаётся для разбора.
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip ip_mask {
+					ipv4 24
+					ipv6 48
+				}
+				request>client_ip ip_mask {
+					ipv4 24
+					ipv6 48
+				}
+				request>remote_port delete
+				request>headers delete
+				request>tls delete
+				request>uri query {
+					replace token REDACTED
+				}
+				resp_headers>Set-Cookie delete
+			}
+		}
+	}
+
+	reverse_proxy app1:8080 app2:8080 {
+		# Меньше занятая копия получает следующий запрос; при остановке копии (выкладка) её нет в выборе.
+		lb_policy least_conn
+		# Если копия не ответила на соединение, запрос уходит на другую в течение 5 секунд (выкладка без простоя).
+		lb_try_duration 5s
+		lb_try_interval 250ms
+
+		# Готовность копии спрашивается у внутреннего порта (/readyz: база и миграции; при остановке «не готов»).
+		health_uri /readyz
+		health_port 9100
+		health_interval 2s
+		health_timeout 1s
+		health_status 200
+
+		transport http {
+			dial_timeout 2s
+			response_header_timeout 90s
+		}
+	}
+}

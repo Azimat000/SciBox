@@ -1,0 +1,62 @@
+# Общие функции копий и проверки восстановления (срез 28). Подключается через `. scibox-backup-lib`.
+
+log() { # log уровень "сообщение"
+    local msg=${2//\\/\\\\}
+    msg=${msg//\"/\\\"}
+    printf '{"time":"%s","level":"%s","service":"backup","msg":"%s"}\n' "$(date -u +%FT%TZ)" "$1" "$msg"
+}
+
+# Подключение к базе внутри контейнера копий: суперпользователь по сокету (pg_hba: local trust).
+PSQL=(psql -h "${PGSOCKET:-/var/run/postgresql}" -U postgres -d scibox -At -q -v ON_ERROR_STOP=1)
+
+# Таблицы, по которым сверяется восстановление: только растущие (строки не удаляются), с датой последней записи.
+CHECK_TABLES="users:created_at organizations:created_at vacancies:created_at applications:created_at profiles:created_at audit_log:at"
+
+# snapshot_counts печатает JSON: по таблице число строк и самая поздняя запись (эпоха, секунды), версию миграций.
+snapshot_counts() {
+    local out="{" sep="" t col
+    for pair in $CHECK_TABLES; do
+        t=${pair%%:*}; col=${pair##*:}
+        local row
+        row=$("${PSQL[@]}" -F ' ' -c "SELECT count(*), COALESCE(floor(extract(epoch FROM max($col)))::bigint, 0) FROM $t")
+        out+="$sep\"$t\":{\"count\":${row% *},\"latest\":${row#* }}"
+        sep=","
+    done
+    local ver
+    ver=$("${PSQL[@]}" -c "SELECT COALESCE(max(version_id), 0) FROM goose_db_version WHERE is_applied")
+    out+=",\"schema_version\":$ver,\"taken_at\":$(date +%s)}"
+    printf '%s' "$out"
+}
+
+# files_rclone_env задаёт удалённые хранилища rclone через переменные окружения (файлов на диске нет):
+#   SRC  — хранилище файлов приложения (читаем);
+#   RAW  — бакет копий (как есть);
+#   DST  — шифрованный слой над RAW:<бакет>/files (имена и содержимое шифруются паролем из файла);
+#   DELETED — тот же шифр над RAW:<бакет>/files-deleted (файлы, удалённые из хранилища).
+files_rclone_env() {
+    : "${FILES_S3_ENDPOINT:?}" "${FILES_S3_BUCKET:?}" "${BACKUP_S3_ENDPOINT:?}" "${BACKUP_S3_BUCKET:?}"
+    local scheme=https
+    export RCLONE_CONFIG_SRC_TYPE=s3 RCLONE_CONFIG_SRC_PROVIDER=Other
+    export RCLONE_CONFIG_SRC_ENDPOINT="$scheme://$FILES_S3_ENDPOINT"
+    export RCLONE_CONFIG_SRC_REGION="${FILES_S3_REGION:-us-east-1}"
+    export RCLONE_CONFIG_SRC_ACCESS_KEY_ID RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY
+    RCLONE_CONFIG_SRC_ACCESS_KEY_ID=$(cat "$FILES_S3_ACCESS_KEY_FILE")
+    RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY=$(cat "$FILES_S3_SECRET_KEY_FILE")
+    export RCLONE_CONFIG_SRC_FORCE_PATH_STYLE=$([ "${FILES_S3_PATH_STYLE:-off}" = on ] && echo true || echo false)
+    export RCLONE_CONFIG_RAW_TYPE=s3 RCLONE_CONFIG_RAW_PROVIDER=Other
+    export RCLONE_CONFIG_RAW_ENDPOINT="$scheme://$BACKUP_S3_ENDPOINT"
+    export RCLONE_CONFIG_RAW_REGION="${BACKUP_S3_REGION:-us-east-1}"
+    export RCLONE_CONFIG_RAW_ACCESS_KEY_ID RCLONE_CONFIG_RAW_SECRET_ACCESS_KEY
+    RCLONE_CONFIG_RAW_ACCESS_KEY_ID=$(cat "$BACKUP_S3_ACCESS_KEY_FILE")
+    RCLONE_CONFIG_RAW_SECRET_ACCESS_KEY=$(cat "$BACKUP_S3_SECRET_KEY_FILE")
+    export RCLONE_CONFIG_RAW_FORCE_PATH_STYLE=$([ "${BACKUP_S3_URI_STYLE:-path}" = path ] && echo true || echo false)
+    export RCLONE_CONFIG_DST_TYPE=crypt RCLONE_CONFIG_DST_REMOTE="RAW:$BACKUP_S3_BUCKET/files"
+    export RCLONE_CONFIG_DST_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_DST_DIRECTORY_NAME_ENCRYPTION=true
+    export RCLONE_CONFIG_DST_PASSWORD
+    RCLONE_CONFIG_DST_PASSWORD=$(rclone obscure "$(cat "$BACKUP_FILES_CRYPT_PASS_FILE")")
+    # Удалённые из хранилища файлы лежат рядом с копией (другой каталог бакета, тот же пароль): rclone не позволяет
+    # держать каталог «удалённого» внутри каталога назначения.
+    export RCLONE_CONFIG_DELETED_TYPE=crypt RCLONE_CONFIG_DELETED_REMOTE="RAW:$BACKUP_S3_BUCKET/files-deleted"
+    export RCLONE_CONFIG_DELETED_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_DELETED_DIRECTORY_NAME_ENCRYPTION=true
+    export RCLONE_CONFIG_DELETED_PASSWORD=$RCLONE_CONFIG_DST_PASSWORD
+}

@@ -99,6 +99,10 @@ type Config struct {
 	Ops Ops
 	// ErrorDSN — адрес приёма ошибок GlitchTip (SCIBOX_ERROR_DSN, срез 26); пусто — ошибки никуда не отправляются.
 	ErrorDSN string
+	// AllowDestructive разрешает в боевом режиме команды, которые стирают или подменяют данные: `migrate down`,
+	// `migrate reset` и `seed` (SCIBOX_ALLOW_DESTRUCTIVE, срез 28). Образ сервера боевой по умолчанию, и без этой
+	// защиты одна команда `docker compose run app migrate reset` уничтожила бы базу.
+	AllowDestructive bool
 }
 
 // Log — настройки журнала сервера.
@@ -165,6 +169,11 @@ func (c Config) HTTPS() bool {
 
 // Load читает настройки. getenv обычно os.Getenv; в тестах подставляется своя функция.
 func Load(getenv func(string) string) (Config, error) {
+	// Секреты можно передать файлами (X_FILE, срез 28): дальше код видит их как обычные переменные.
+	getenv, err := withSecretFiles(getenv, strings.EqualFold(strings.TrimSpace(getenv("SCIBOX_ENV")), EnvProduction))
+	if err != nil {
+		return Config{}, err
+	}
 	cfg := Config{
 		HTTPAddr:    envOr(getenv, "SCIBOX_HTTP_ADDR", DefaultHTTPAddr),
 		DatabaseURL: envOr(getenv, "DATABASE_URL", DefaultDatabaseURL),
@@ -226,6 +235,9 @@ func Load(getenv func(string) string) (Config, error) {
 			}
 			cfg.SearchCacheTTL = d
 		}
+	}
+	if cfg.AllowDestructive, err = envBool(getenv, "SCIBOX_ALLOW_DESTRUCTIVE", false); err != nil {
+		return Config{}, err
 	}
 	if cfg.Log, err = loadLog(getenv, cfg.Env == EnvProduction); err != nil {
 		return Config{}, err

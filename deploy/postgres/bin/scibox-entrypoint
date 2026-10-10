@@ -1,0 +1,52 @@
+#!/bin/sh
+# Точка входа образа базы (срез 28). Работает от root, читает файлы секретов, кладёт их значения в окружение и
+# передаёт управление официальной точке входа PostgreSQL (она сама переходит на пользователя postgres) или, для
+# служебных команд (scibox-*), запускает их от postgres.
+#
+#   PGBACKREST_<ПАРАМЕТР>_FROM_FILE=/run/secrets/x   →   PGBACKREST_<ПАРАМЕТР>=<содержимое файла>
+#   SCIBOX_DB_PASSWORD_FROM_FILE=/run/secrets/x      →   SCIBOX_DB_PASSWORD=<содержимое>  (для скрипта initdb)
+#
+# Суффикс именно _FROM_FILE: у pgBackRest есть свои параметры, оканчивающиеся на _FILE (repo1-s3-ca-file).
+#
+# Значения остаются только в окружении процессов базы и копий внутри контейнера. Файлы секретов в образ не попадают.
+set -eu
+
+# Пустое значение параметра pgBackRest (необязательная переменная из compose) — это «не задано», а не пустая строка.
+for var in $(env | sed -n 's/^\(PGBACKREST_[A-Z0-9_]*\)=$/\1/p'); do
+    unset "$var"
+done
+
+for var in $(env | sed -n 's/^\(\(PGBACKREST\|SCIBOX\)_[A-Z0-9_]*_FROM_FILE\)=.*/\1/p'); do
+    base=${var%_FROM_FILE}
+    eval "path=\${$var}"
+    [ -s "$path" ] || { echo "scibox-entrypoint: $var=$path: файла нет или он пуст" >&2; exit 1; }
+    # Один перевод строки в конце файла отбрасывается (так пишут `echo` и редакторы).
+    value=$(cat "$path")
+    export "$base=$value"
+    unset "$var"
+done
+
+# Срок хранения копий базы задаётся днями (BACKUP_RETENTION_DAYS, решение D-185: 30). Полная копия делается раз в
+# BACKUP_FULL_EVERY_DAYS (7) дней, а pgBackRest оставляет ещё одну полную копию старше срока, чтобы вернуть любой
+# момент внутри срока: поэтому срок полных копий = срок минус интервал, и самая старая копия не старше срока.
+days=${BACKUP_RETENTION_DAYS:-30}
+full_every=${BACKUP_FULL_EVERY_DAYS:-7}
+case "$days$full_every" in *[!0-9]*|'') echo "scibox-entrypoint: BACKUP_RETENTION_DAYS и BACKUP_FULL_EVERY_DAYS должны быть числами" >&2; exit 1 ;; esac
+keep=$((days - full_every))
+[ "$keep" -ge 1 ] || { echo "scibox-entrypoint: BACKUP_RETENTION_DAYS ($days) должен быть больше BACKUP_FULL_EVERY_DAYS ($full_every)" >&2; exit 1; }
+export PGBACKREST_REPO1_RETENTION_FULL_TYPE=time
+export PGBACKREST_REPO1_RETENTION_FULL=$keep
+
+case "${1:-}" in
+    scibox-*)
+        # Служебные команды копий и проверки восстановления работают от postgres: pgBackRest читает файлы базы.
+        # Тома состояния, метрик и временной копии создаются Docker от root: отдаём их postgres.
+        for dir in /state /textfile /restore; do
+            [ -d "$dir" ] && chown postgres:postgres "$dir"
+        done
+        exec gosu postgres "$@"
+        ;;
+    *)
+        exec docker-entrypoint.sh "$@"
+        ;;
+esac

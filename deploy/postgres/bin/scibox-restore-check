@@ -1,0 +1,105 @@
+#!/bin/bash
+# Проверка восстановления (срез 28, T-26): поднимает копию базы из хранилища копий во временном каталоге, на
+# отдельном порту и без архивации, и сверяет её с живой базой. Живая база и хранилище копий не меняются.
+#
+# Что проверяется:
+#   1. pgBackRest восстанавливает последнюю копию с журналом до конца архива (так же, как при аварии);
+#   2. база стартует, выходит из восстановления и принимает запросы;
+#   3. версия миграций совпадает с живой базой, а в ключевых таблицах строк не меньше, чем в снимке живой базы
+#      (`scibox-archive-now` снял его до отправки журнала в архив), и самая поздняя запись не старше снимка;
+#   4. индексы целы (pg_amcheck);
+#   5. файлы откликов, на которые ссылается восстановленная база и которые старше последней копии файлов, есть в
+#      копии файлов.
+# Код выхода 0 — всё сошлось, 1 — нет; итог печатается строками «проверка: …».
+set -uo pipefail
+. scibox-backup-lib
+
+STANZA=${PGBACKREST_STANZA:-main}
+STATE_DIR=${BACKUP_STATE_DIR:-/state}
+DATA=${RESTORE_DIR:-/restore}/data
+PORT=5439
+SOCKET=/tmp/restore-check-socket
+fail=0
+say() { printf 'проверка: %s\n' "$*"; }
+bad() { printf 'ОШИБКА: %s\n' "$*"; fail=1; }
+
+[ -s "$STATE_DIR/snapshot.json" ] || { bad "нет снимка живой базы ($STATE_DIR/snapshot.json): сначала scibox-archive-now"; exit 1; }
+snapshot=$(cat "$STATE_DIR/snapshot.json")
+
+cleanup() {
+    pg_ctl -D "$DATA" -m immediate stop >/dev/null 2>&1 || true
+    rm -rf "$DATA" "$SOCKET"
+}
+trap cleanup EXIT
+rm -rf "$DATA" "$SOCKET"
+mkdir -p "$DATA" "$SOCKET"
+chmod 700 "$DATA" "$SOCKET"
+
+started=$(date +%s)
+say "восстановление из копии (последняя полная, разностная и журнал до конца архива)"
+if ! pgbackrest --stanza="$STANZA" --pg1-path="$DATA" --target-action=promote restore; then
+    bad "pgBackRest не смог восстановить копию"
+    exit 1
+fi
+say "восстановлено за $(( $(date +%s) - started )) с"
+
+# Сервер восстановленной копии: свой порт и сокет, без сети, без архивации в рабочее хранилище.
+if ! pg_ctl -D "$DATA" -w -t 600 -o "-c port=$PORT -c listen_addresses='' -c unix_socket_directories=$SOCKET -c archive_mode=off -c archive_command=/bin/true" start >/tmp/restore-pg.log 2>&1; then
+    bad "восстановленная база не запустилась:"
+    tail -20 /tmp/restore-pg.log
+    exit 1
+fi
+RPSQL=(psql -h "$SOCKET" -p "$PORT" -U postgres -d scibox -At -q -v ON_ERROR_STOP=1)
+for _ in $(seq 1 120); do
+    [ "$("${RPSQL[@]}" -c "SELECT NOT pg_is_in_recovery()" 2>/dev/null || echo f)" = t ] && break
+    sleep 1
+done
+[ "$("${RPSQL[@]}" -c "SELECT NOT pg_is_in_recovery()" 2>/dev/null || echo f)" = t ] || { bad "база не вышла из восстановления"; exit 1; }
+say "база запущена и приняла запросы"
+
+want_version=$(jq -r '.schema_version' <<<"$snapshot")
+got_version=$("${RPSQL[@]}" -c "SELECT COALESCE(max(version_id),0) FROM goose_db_version WHERE is_applied")
+if [ "$got_version" -ge "$want_version" ]; then say "версия схемы $got_version (в живой базе $want_version)"; else bad "версия схемы $got_version меньше, чем в живой базе ($want_version)"; fi
+
+for pair in $CHECK_TABLES; do
+    t=${pair%%:*}; col=${pair##*:}
+    want_count=$(jq -r ".$t.count" <<<"$snapshot")
+    want_latest=$(jq -r ".$t.latest" <<<"$snapshot")
+    row=$("${RPSQL[@]}" -F ' ' -c "SELECT count(*), COALESCE(floor(extract(epoch FROM max($col)))::bigint, 0) FROM $t")
+    got_count=${row% *}; got_latest=${row#* }
+    if [ "$got_count" -ge "$want_count" ] && [ "$got_latest" -ge "$want_latest" ]; then
+        say "$t: строк $got_count (в снимке $want_count), последняя запись не старше снимка"
+    else
+        bad "$t: строк $got_count (в снимке $want_count), последняя запись $got_latest (в снимке $want_latest)"
+    fi
+done
+
+if [ "${RESTORE_CHECK_AMCHECK:-on}" = on ]; then
+    "${RPSQL[@]}" -c "CREATE EXTENSION IF NOT EXISTS amcheck" >/dev/null
+    if pg_amcheck -h "$SOCKET" -p "$PORT" -U postgres -d scibox --install-missing --jobs 2 >/tmp/amcheck.log 2>&1; then
+        say "индексы целы (pg_amcheck)"
+    else
+        bad "pg_amcheck нашёл повреждения:"; head -20 /tmp/amcheck.log
+    fi
+fi
+
+# Файлы: ссылки восстановленной базы против копии файлов. Файлы новее последней копии файлов ещё не копировались.
+if [ -n "${FILES_S3_BUCKET:-}" ]; then
+    files_ok=$(cat "$STATE_DIR/files_last_ok" 2>/dev/null || echo 0)
+    if [ "$files_ok" -eq 0 ]; then
+        say "копия файлов ещё не делалась: проверка файлов пропущена"
+    else
+        files_rclone_env
+        "${RPSQL[@]}" -c "SELECT storage_key FROM application_files WHERE storage_key IS NOT NULL AND created_at < to_timestamp($files_ok) ORDER BY 1" > /tmp/wanted.txt
+        if rclone lsf DST: -R --files-only 2>/tmp/rclone.err | sort > /tmp/have.txt; then
+            missing=$(comm -23 <(sort /tmp/wanted.txt) /tmp/have.txt | wc -l | tr -d ' ')
+            total=$(wc -l < /tmp/wanted.txt | tr -d ' ')
+            if [ "$missing" = 0 ]; then say "файлы: все $total файлов, на которые ссылается база, есть в копии"; else bad "файлы: в копии нет $missing из $total"; fi
+        else
+            bad "не удалось прочитать копию файлов: $(head -3 /tmp/rclone.err)"
+        fi
+    fi
+fi
+
+if [ "$fail" = 0 ]; then say "ВОССТАНОВЛЕНИЕ ПРОВЕРЕНО: копия цела и содержит всё, что было записано до снимка"; fi
+exit "$fail"

@@ -1,0 +1,19 @@
+# Входная точка боевого стенда (срез 28): HTTPS с автоматическим сертификатом (Let's Encrypt, при отказе ZeroSSL) и
+# проксирование к двум копиям сервера. Домен и почта для уведомлений о сертификате берутся из deploy/.env.
+{
+	email {$ACME_EMAIL}
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 5m
+			write 5m
+			idle 2m
+		}
+	}
+}
+
+import /etc/caddy/site.caddy
+
+{$SCIBOX_DOMAIN} {
+	import scibox_site
+}
