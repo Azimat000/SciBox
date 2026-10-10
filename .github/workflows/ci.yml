@@ -113,3 +113,45 @@ jobs:
       - uses: actions/checkout@v7
       - name: syntax and tests of the Prometheus alert rules
         run: make monitoring-check
+
+  # Образы и боевая конфигурация (срез 28, T-27): образ собирается, в нём нет исправимых HIGH/CRITICAL, боевой compose
+  # проходит проверку с тестовыми значениями, скрипты копий и выкладки синтаксически верны.
+  image:
+    name: image (build, trivy, compose config)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: build the server image
+        run: docker build --build-arg VERSION=ci-${{ github.sha }} -t scibox:ci .
+      - name: image runs as non-root with read-only filesystem and refuses unsafe settings
+        run: |
+          test "$(docker inspect -f '{{.Config.User}}' scibox:ci)" = "65532:65532"
+          docker run --rm --read-only scibox:ci version
+          ! docker run --rm --read-only scibox:ci serve
+      - name: trivy scan of the server image
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: scibox:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          scanners: vuln,secret
+          exit-code: "1"
+      - name: build the database and backup image
+        run: docker build -t scibox-postgres:ci deploy/postgres
+      - name: trivy scan of the database image (OS packages)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: scibox-postgres:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          scanners: vuln
+          exit-code: "1"
+      - name: production compose is valid (rehearsal values)
+        run: |
+          deploy/local/prepare.sh
+          SCIBOX_DEPLOY_LOCAL=1 deploy/compose config -q
+      - name: deploy scripts are valid shell
+        run: |
+          for f in deploy/*.sh deploy/compose deploy/local/*.sh deploy/postgres/initdb/*.sh deploy/postgres/bin/scibox-entrypoint; do sh -n "$f"; done
+          for f in deploy/postgres/bin/scibox-backup deploy/postgres/bin/scibox-backup-lib deploy/postgres/bin/scibox-archive-now deploy/postgres/bin/scibox-restore-check deploy/postgres/initdb/10-scibox.sh; do bash -n "$f"; done

@@ -1,0 +1,12 @@
+# TLS-вход к хранилищу репетиции (срез 28): pgBackRest ходит в S3 только по https, а боевая проверка требует
+# шифрованный канал к файлам. Сертификат выпущен собственным центром репетиции (deploy/local/make-pki.sh).
+{
+	auto_https off
+	https_port 8443
+	admin off
+}
+
+https://s3.scibox.test:8443 {
+	tls /pki/leaf/s3.crt /pki/leaf/s3.key
+	reverse_proxy s3:8333
+}

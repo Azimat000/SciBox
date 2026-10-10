@@ -1,0 +1,41 @@
+# Prometheus боевого стенда (срез 28, T-52): те же правила тревог, что в разработке (monitoring/prometheus/rules), но
+# цели — копии сервера и воркер внутри сети compose, а внутренний порт закрыт секретом (SCIBOX_OPS_TOKEN).
+# Prometheus слушает только 127.0.0.1 сервера: заходить через `ssh -L 9190:localhost:9190 сервер`.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: scibox-serve
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/ops_token
+    static_configs:
+      - targets: ["app1:9100"]
+        labels: { service: serve, instance_name: app1 }
+      - targets: ["app2:9100"]
+        labels: { service: serve, instance_name: app2 }
+  - job_name: scibox-worker
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/ops_token
+    static_configs:
+      - targets: ["worker:9101"]
+        labels: { service: worker }
+  # Состояние сервера (диск, память) и копии (файл метрик scibox-backup).
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

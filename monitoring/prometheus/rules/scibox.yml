@@ -275,3 +275,55 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "Свободной памяти меньше 10%"
+
+  # Копии (срез 28, T-26): метрики пишет планировщик копий `scibox-backup` в файл для textfile-сборщика node-exporter.
+  # Копия, о которой никто не знает, что она перестала делаться, хуже, чем её отсутствие.
+  - name: scibox-backup
+    rules:
+      - alert: BackupSchedulerSilent
+        expr: time() - scibox_backup_scheduler_timestamp_seconds > 600
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Планировщик копий молчит"
+          description: "Файл метрик копий не обновлялся {{ $value | humanizeDuration }}: контейнер backup остановлен или завис, копии не делаются."
+
+      - alert: BackupDatabaseTooOld
+        expr: time() - scibox_backup_last_success_timestamp_seconds{kind="database"} > 36 * 3600
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "Последняя копия базы старше 36 часов"
+          description: "Копии базы не делаются больше {{ $value | humanizeDuration }}: журнал backup и `pgbackrest info`."
+
+      - alert: BackupFullTooOld
+        expr: time() - scibox_backup_last_success_timestamp_seconds{kind="database_full"} > 10 * 86400
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Последняя полная копия базы старше 10 дней"
+          description: "Полная копия делается раз в неделю; старше {{ $value | humanizeDuration }} значит, что она не удаётся."
+
+      - alert: BackupFilesTooOld
+        expr: time() - scibox_backup_last_success_timestamp_seconds{kind="files"} > 36 * 3600
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "Копия файлов откликов старше 36 часов"
+          description: "Файлы откликов не копируются {{ $value | humanizeDuration }}."
+
+      - alert: BackupAttemptFailed
+        expr: scibox_backup_last_attempt_failed == 1
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Последняя попытка копии ({{ $labels.kind }}) не удалась"
+          description: "Планировщик повторяет попытку каждые 15 минут; причина в журнале контейнера backup."
+
+      - alert: WalArchiveFailing
+        expr: increase(scibox_backup_wal_archive_failures_total[15m]) > 0
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: "База не может отправить журнал изменений в архив"
+          description: "Журнал копится на диске сервера, пока архив недоступен: он заполнит диск, а при аварии потеряются все изменения с последней отправки."

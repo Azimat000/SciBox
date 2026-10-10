@@ -23,8 +23,9 @@ x-app-env: &app-env
   SCIBOX_BACKGROUND: "off"
   SCIBOX_OPS_ADDR: 0.0.0.0:9100
   SCIBOX_PPROF: "off"
-  # Доверяем X-Forwarded-For только Caddy (его адрес в сети edge задан жёстко): посетитель подделать его не может.
-  SCIBOX_TRUSTED_PROXIES: ${CADDY_IP:-172.28.10.2}/32
+  # Доверяем X-Forwarded-For только Caddy (его адрес в сети edge задан жёстко, CADDY_IP): посетитель подделать его
+  # не может. Если меняете CADDY_IP или подсеть, меняйте и TRUSTED_PROXIES.
+  SCIBOX_TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.28.10.2/32}
   SCIBOX_SMTP_ADDR: ${SMTP_ADDR:?задайте SMTP_ADDR (хост:порт почтового сервиса)}
   SCIBOX_SMTP_TLS: ${SMTP_TLS:-starttls}
   SCIBOX_SMTP_USER: ${SMTP_USER:-}
@@ -443,6 +444,9 @@ networks:
     ipam:
       config:
         - subnet: ${EDGE_SUBNET:-172.28.10.0/24}
+          # Остальным контейнерам адреса выдаются из верхней половины: младшие (в том числе CADDY_IP) остаются свободными,
+          # иначе копия сервера, запущенная раньше Caddy, заняла бы его адрес.
+          ip_range: ${EDGE_IP_RANGE:-172.28.10.128/25}
   backend:
     driver: bridge
 

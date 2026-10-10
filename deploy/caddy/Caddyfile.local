@@ -13,10 +13,3 @@ import /etc/caddy/site.caddy
 localhost {
 	import scibox_site
 }
-
-# Хранилища репетиции за TLS: pgBackRest разговаривает с S3 только по https, а боевая проверка требует шифрованный
-# канал к файлам. Названия видны только внутри сети compose.
-s3.scibox.test {
-	tls /pki/leaf/s3.crt /pki/leaf/s3.key
-	reverse_proxy s3:8333
-}

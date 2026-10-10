@@ -1,5 +1,5 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev share worker load-test load-smoke test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check monitoring-up monitoring-down monitoring-check glitchtip-setup errors-up
+.PHONY: prod-up prod-down prod-e2e prod-restore-check prod-config dev share worker load-test load-smoke test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check monitoring-up monitoring-down monitoring-check glitchtip-setup errors-up
 
 SCIBOX = cd server && go run ./cmd/api
 
@@ -111,3 +111,24 @@ monitoring-check:
 ## glitchtip-setup: создать в локальном GlitchTip администратора, организацию и проект; печатает SCIBOX_ERROR_DSN для сервера
 glitchtip-setup:
 	./scripts/glitchtip-setup
+
+## prod-up: репетиция боевого стенда на этом компьютере (срез 28): образ, Caddy с самоподписанным сертификатом, две копии
+## сервера, воркер, база с архивом, копии, антивирус; https://localhost:8443, письма http://localhost:8026
+prod-up:
+	./deploy/local/up.sh
+
+## prod-down: остановить репетицию (данные остаются; `make prod-down CLEAN=1` стирает и тома)
+prod-down:
+	SCIBOX_DEPLOY_LOCAL=1 ./deploy/compose down $(if $(CLEAN),-v,)
+
+## prod-e2e: сквозные сценарии против репетиции боевого стенда (после `make prod-up`)
+prod-e2e: e2e/node_modules/.package-lock.json
+	cd e2e && npx tsc -p . && E2E_TARGET=https://localhost:8443 E2E_MAILPIT_URL=http://localhost:8026 npx playwright test
+
+## prod-restore-check: проверка восстановления из копии (срез 28, T-26): поднимает копию базы рядом и сверяет с рабочей
+prod-restore-check:
+	SCIBOX_DEPLOY_LOCAL=1 ./deploy/restore-check.sh
+
+## prod-config: проверить конфигурацию compose боевого стенда и репетиции без запуска
+prod-config:
+	SCIBOX_DEPLOY_LOCAL=1 ./deploy/compose config -q

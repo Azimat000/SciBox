@@ -6,7 +6,8 @@ root=$(dirname "$(dirname "$here")")
 # macOS: iCloud Drive выгружает файлы папки «Документы» (флаг dataless), и контейнер читает их с ошибкой «Resource
 # deadlock avoided». Читаем такие файлы на самом компьютере: они снова становятся настоящими. На сервере не нужно.
 if [ "$(uname)" = Darwin ]; then
-    find "$root/deploy" "$root/monitoring" "$root/docker" -type f -flags +dataless -exec cat {} + >/dev/null 2>&1 || true
+    find "$root/deploy" "$root/monitoring" "$root/docker" "$root/server" "$root/web" "$root/config" "$root/Dockerfile" "$root/.dockerignore" \
+        -path "$root/web/node_modules" -prune -o -type f -flags +dataless -exec cat {} + >/dev/null 2>&1 || true
 fi
 deploy=$(dirname "$here")
 "$here/make-pki.sh"

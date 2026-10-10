@@ -5,7 +5,7 @@
 #      между ними журнал изменений (WAL) уходит в архив самой базой каждые минуту (archive_timeout), поэтому
 #      потерять при аварии можно минуты, а не сутки;
 #   2. копия файлов откликов (rclone sync в шифрованное хранилище) раз в BACKUP_FILES_EVERY_HOURS часов; удалённые из
-#      хранилища файлы переезжают в `files-deleted/<дата>` и стираются через BACKUP_RETENTION_DAYS дней;
+#      хранилища файлы переезжают в `deleted/<дата>` и стираются через BACKUP_RETENTION_DAYS дней;
 #   3. метрики для Prometheus (файл для textfile-сборщика node-exporter).
 # Срок хранения полных копий pgBackRest считает сам по PGBACKREST_REPO1_RETENTION_FULL (задаёт scibox-entrypoint).
 set -u
@@ -83,7 +83,7 @@ run_files_backup() {
     files_rclone_env
     local today
     today=$(date -u +%F)
-    if rclone sync SRC:"$FILES_S3_BUCKET" DST: --backup-dir "DELETED:$today" --size-only \
+    if rclone sync SRC:"$FILES_S3_BUCKET" DST:current --backup-dir "DST:deleted/$today" --size-only \
         --transfers 4 --checkers 8 --stats 0 --log-level NOTICE --s3-no-check-bucket 2>&1 | while read -r l; do log info "rclone: $l"; done \
         && [ "${PIPESTATUS[0]}" = 0 ]; then
         write_state files_last_ok "$(date +%s)"
@@ -97,15 +97,15 @@ run_files_backup() {
     fi
 }
 
-# Удалённые из хранилища файлы лежат в files-deleted/<дата> и стираются через срок хранения копий (D-185): человек,
+# Удалённые из хранилища файлы лежат в files/deleted/<дата> и стираются через срок хранения копий (D-185): человек,
 # удаливший аккаунт, не остаётся в копиях дольше срока.
 prune_deleted_files() {
     local cutoff dir
     cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%F)
-    rclone lsf DELETED: --dirs-only 2>/dev/null | while read -r dir; do
+    rclone lsf DST:deleted --dirs-only 2>/dev/null | while read -r dir; do
         dir=${dir%/}
         if [[ "$dir" < "$cutoff" ]]; then
-            rclone purge "DELETED:$dir" >/dev/null 2>&1 && log info "removed the deleted files of $dir from the copy"
+            rclone purge "DST:deleted/$dir" >/dev/null 2>&1 && log info "removed the deleted files of $dir from the copy"
         fi
     done
 }

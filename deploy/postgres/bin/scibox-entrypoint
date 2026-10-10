@@ -38,11 +38,11 @@ export PGBACKREST_REPO1_RETENTION_FULL_TYPE=time
 export PGBACKREST_REPO1_RETENTION_FULL=$keep
 
 case "${1:-}" in
-    scibox-*)
+    scibox-*|pgbackrest|rclone|psql|pg_*)
         # Служебные команды копий и проверки восстановления работают от postgres: pgBackRest читает файлы базы.
         # Тома состояния, метрик и временной копии создаются Docker от root: отдаём их postgres.
         for dir in /state /textfile /restore; do
-            [ -d "$dir" ] && chown postgres:postgres "$dir"
+            [ -d "$dir" ] && { chown postgres:postgres "$dir" 2>/dev/null || true; }
         done
         exec gosu postgres "$@"
         ;;

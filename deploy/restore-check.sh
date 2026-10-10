@@ -9,6 +9,6 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 dc="$here/compose"
 echo "== снимок рабочей базы и отправка журнала в архив"
-"$dc" exec -T backup scibox-archive-now
+"$dc" exec -T backup scibox-entrypoint scibox-archive-now
 echo "== восстановление и сверка"
 "$dc" --profile tools run --rm --no-deps -T restore-check

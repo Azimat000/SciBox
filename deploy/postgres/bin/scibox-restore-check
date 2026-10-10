@@ -37,7 +37,7 @@ chmod 700 "$DATA" "$SOCKET"
 
 started=$(date +%s)
 say "восстановление из копии (последняя полная, разностная и журнал до конца архива)"
-if ! pgbackrest --stanza="$STANZA" --pg1-path="$DATA" --target-action=promote restore; then
+if ! pgbackrest --stanza="$STANZA" --pg1-path="$DATA" restore; then
     bad "pgBackRest не смог восстановить копию"
     exit 1
 fi
@@ -91,7 +91,7 @@ if [ -n "${FILES_S3_BUCKET:-}" ]; then
     else
         files_rclone_env
         "${RPSQL[@]}" -c "SELECT storage_key FROM application_files WHERE storage_key IS NOT NULL AND created_at < to_timestamp($files_ok) ORDER BY 1" > /tmp/wanted.txt
-        if rclone lsf DST: -R --files-only 2>/tmp/rclone.err | sort > /tmp/have.txt; then
+        if rclone lsf DST:current -R --files-only 2>/tmp/rclone.err | sort > /tmp/have.txt; then
             missing=$(comm -23 <(sort /tmp/wanted.txt) /tmp/have.txt | wc -l | tr -d ' ')
             total=$(wc -l < /tmp/wanted.txt | tr -d ' ')
             if [ "$missing" = 0 ]; then say "файлы: все $total файлов, на которые ссылается база, есть в копии"; else bad "файлы: в копии нет $missing из $total"; fi

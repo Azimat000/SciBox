@@ -70,7 +70,8 @@ export SCIBOX_IMAGE=$image
 # --- 2. образ ---
 if [ "$build" = 1 ]; then
     say "сборка образа $image"
-    docker build --build-arg "VERSION=$version" -t "$image" "$root"
+    # shellcheck disable=SC2086
+    docker build ${SCIBOX_DOCKER_BUILD_ARGS:-} --build-arg "VERSION=$version" -t "$image" "$root"
 elif [ "${SCIBOX_DEPLOY_LOCAL:-}" != 1 ] && [ "$mode" != rollback ]; then
     say "скачивание образа $image"
     "$dc" pull release || die "образ $image не скачался: он есть в реестре? для локального образа используйте --build"
@@ -78,7 +79,8 @@ fi
 docker image inspect "$image" >/dev/null 2>&1 || die "образа $image нет на этом сервере"
 
 say "образ базы и копий"
-docker build -t "${DB_IMAGE:-scibox-postgres:16.15}" "$here/postgres"
+# shellcheck disable=SC2086
+docker build ${SCIBOX_DOCKER_BUILD_ARGS:-} -t "${DB_IMAGE:-scibox-postgres:16.15}" "$here/postgres"
 
 # --- 3. секреты ---
 say "секреты"
@@ -105,8 +107,14 @@ for svc in app1 app2 worker; do
 done
 say "вход (Caddy) и остальное"
 "$dc" up -d --no-deps caddy
-if "$dc" config --profiles 2>/dev/null | grep -q monitoring && [ "${SCIBOX_MONITORING:-}" = 1 ]; then
-    "$dc" --profile monitoring up -d
+# Мониторинг (Prometheus, Alertmanager, Grafana, node-exporter) работает по умолчанию; выключается MONITORING=off в
+# env-файле (на очень маленьком сервере; в репетиции на компьютере по умолчанию выключен). Порты только на 127.0.0.1 сервера (docs/DEPLOY.md, «Мониторинг»).
+if [ "${SCIBOX_DEPLOY_LOCAL:-}" = 1 ]; then envfile="$here/local/local.env"; default_monitoring=off; else envfile="$here/.env"; default_monitoring=on; fi
+monitoring=${MONITORING:-$(sed -n 's/^MONITORING=//p' "$envfile" | tail -1)}
+if [ "${monitoring:-$default_monitoring}" != off ]; then
+    say "мониторинг"
+    "$here/render-alertmanager.sh"
+    "$dc" --profile monitoring up -d --no-deps prometheus alertmanager node-exporter grafana
 fi
 
 # --- 7. проверка снаружи ---

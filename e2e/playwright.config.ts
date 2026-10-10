@@ -4,7 +4,10 @@ import { defineConfig, devices } from '@playwright/test'
 // чтобы не мешать `make dev`. Базу готовит scripts/e2e-db (его вызывает `make e2e`).
 const apiPort = 8090
 const webPort = 5174
-export const mailpitURL = 'http://localhost:8025'
+// E2E_TARGET: проверить уже работающий стенд (например, репетицию боевой сборки `make prod-e2e`: https://localhost:8443)
+// вместо запуска своего сервера и Vite; письма тогда читаются из E2E_MAILPIT_URL.
+const target = process.env.E2E_TARGET
+export const mailpitURL = process.env.E2E_MAILPIT_URL ?? 'http://localhost:8025'
 
 export default defineConfig({
   testDir: './tests',
@@ -17,7 +20,9 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'report' }]],
   outputDir: 'results',
   use: {
-    baseURL: `http://localhost:${webPort}`,
+    baseURL: target ?? `http://localhost:${webPort}`,
+    // Репетиция боевой сборки с самоподписанным сертификатом.
+    ignoreHTTPSErrors: Boolean(target),
     locale: 'ru-RU',
     timezoneId: 'Europe/Moscow',
     trace: 'retain-on-failure',
@@ -27,7 +32,7 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'phone', use: { ...devices['Pixel 7'] }, grep: /@phone/ },
   ],
-  webServer: [
+  webServer: target ? undefined : [
     {
       // Сервер отвечает на запросы, воркер рядом делает фоновую работу (письма уходят в Mailpit именно им). Журналы
       // пишутся в e2e/server.log и e2e/worker.log, чтобы не засорять вывод тестов. Playwright останавливает группу

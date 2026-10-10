@@ -40,3 +40,4 @@ deploy/secrets/
 deploy/.env
 deploy/generated/
 deploy/local/pki/
+deploy/.state/

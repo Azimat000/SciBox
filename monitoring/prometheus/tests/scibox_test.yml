@@ -311,3 +311,104 @@ tests:
             exp_annotations:
               summary: "Часы w:9101 разошлись с часами базы: фоновые задачи остановлены"
               description: "Нужна синхронизация времени (NTP) на этой машине."
+
+  # Метрика времени считается от time(): серии идут раз в минуту, иначе между точками данных нет и `for` не накопится.
+  - name: backups healthy are silent
+    interval: 1m
+    input_series:
+      - series: 'scibox_backup_scheduler_timestamp_seconds'
+        values: '0+60x2000'
+      - series: 'scibox_backup_last_success_timestamp_seconds{kind="database"}'
+        values: '0+60x2000'
+      - series: 'scibox_backup_last_success_timestamp_seconds{kind="database_full"}'
+        values: '0+60x2000'
+      - series: 'scibox_backup_last_success_timestamp_seconds{kind="files"}'
+        values: '0+60x2000'
+      - series: 'scibox_backup_last_attempt_failed{kind="database"}'
+        values: '0x2000'
+      - series: 'scibox_backup_wal_archive_failures_total'
+        values: '0x2000'
+    alert_rule_test:
+      - eval_time: 30h
+        alertname: BackupSchedulerSilent
+        exp_alerts: []
+      - eval_time: 30h
+        alertname: BackupDatabaseTooOld
+        exp_alerts: []
+      - eval_time: 30h
+        alertname: BackupAttemptFailed
+        exp_alerts: []
+      - eval_time: 30h
+        alertname: WalArchiveFailing
+        exp_alerts: []
+
+  - name: backups stop
+    interval: 1m
+    input_series:
+      # Метрики остановились в нулевой секунде: к 40-му часу всем уже по 40 часов.
+      - series: 'scibox_backup_scheduler_timestamp_seconds'
+        values: '0x17400'
+      - series: 'scibox_backup_last_success_timestamp_seconds{kind="database"}'
+        values: '0x17400'
+      - series: 'scibox_backup_last_success_timestamp_seconds{kind="database_full"}'
+        values: '0x17400'
+      - series: 'scibox_backup_last_success_timestamp_seconds{kind="files"}'
+        values: '0x17400'
+      - series: 'scibox_backup_last_attempt_failed{kind="files"}'
+        values: '0x60 1x17340'
+    alert_rule_test:
+      - eval_time: 40h
+        alertname: BackupSchedulerSilent
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "Планировщик копий молчит"
+              description: "Файл метрик копий не обновлялся 1d 16h 0m 0s: контейнер backup остановлен или завис, копии не делаются."
+      - eval_time: 40h
+        alertname: BackupDatabaseTooOld
+        exp_alerts:
+          - exp_labels: { severity: critical, kind: database }
+            exp_annotations:
+              summary: "Последняя копия базы старше 36 часов"
+              description: "Копии базы не делаются больше 1d 16h 0m 0s: журнал backup и `pgbackrest info`."
+      - eval_time: 40h
+        alertname: BackupFilesTooOld
+        exp_alerts:
+          - exp_labels: { severity: critical, kind: files }
+            exp_annotations:
+              summary: "Копия файлов откликов старше 36 часов"
+              description: "Файлы откликов не копируются 1d 16h 0m 0s."
+      - eval_time: 40h
+        alertname: BackupFullTooOld
+        exp_alerts: []
+      - eval_time: 11d
+        alertname: BackupFullTooOld
+        exp_alerts:
+          - exp_labels: { severity: warning, kind: database_full }
+            exp_annotations:
+              summary: "Последняя полная копия базы старше 10 дней"
+              description: "Полная копия делается раз в неделю; старше 11d 0h 0m 0s значит, что она не удаётся."
+      - eval_time: 80m
+        alertname: BackupAttemptFailed
+        exp_alerts: []
+      - eval_time: 100m
+        alertname: BackupAttemptFailed
+        exp_alerts:
+          - exp_labels: { severity: warning, kind: files }
+            exp_annotations:
+              summary: "Последняя попытка копии (files) не удалась"
+              description: "Планировщик повторяет попытку каждые 15 минут; причина в журнале контейнера backup."
+
+  - name: wal archive failing
+    interval: 1m
+    input_series:
+      - series: 'scibox_backup_wal_archive_failures_total'
+        values: '0 0 0 1+1x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: WalArchiveFailing
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: "База не может отправить журнал изменений в архив"
+              description: "Журнал копится на диске сервера, пока архив недоступен: он заполнит диск, а при аварии потеряются все изменения с последней отправки."

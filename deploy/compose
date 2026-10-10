@@ -6,6 +6,12 @@
 #   SCIBOX_DEPLOY_LOCAL=1 ./compose ps репетиция на этом компьютере (deploy/local/local.env, самоподписанный сертификат)
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
+# Версия образа, выложенная последней (deploy.sh пишет её в .state): без неё compose взял бы образ по умолчанию и
+# пересоздал бы контейнеры с чужой версией.
+if [ -z "${SCIBOX_IMAGE:-}" ] && [ -s "$here/.state/current-image" ]; then
+    SCIBOX_IMAGE=$(cat "$here/.state/current-image")
+    export SCIBOX_IMAGE
+fi
 if [ "${SCIBOX_DEPLOY_LOCAL:-}" = 1 ]; then
     exec docker compose -f "$here/docker-compose.prod.yml" -f "$here/docker-compose.local.yml" \
         --env-file "$here/local/local.env" "$@"

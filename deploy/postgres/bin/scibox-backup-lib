@@ -31,8 +31,8 @@ snapshot_counts() {
 # files_rclone_env задаёт удалённые хранилища rclone через переменные окружения (файлов на диске нет):
 #   SRC  — хранилище файлов приложения (читаем);
 #   RAW  — бакет копий (как есть);
-#   DST  — шифрованный слой над RAW:<бакет>/files (имена и содержимое шифруются паролем из файла);
-#   DELETED — тот же шифр над RAW:<бакет>/files-deleted (файлы, удалённые из хранилища).
+#   DST  — шифрованный слой над RAW:<бакет>/files (имена и содержимое шифруются паролем из файла): в DST:current
+#          лежит копия, в DST:deleted/<дата> — файлы, удалённые из хранилища (стираются через срок хранения).
 files_rclone_env() {
     : "${FILES_S3_ENDPOINT:?}" "${FILES_S3_BUCKET:?}" "${BACKUP_S3_ENDPOINT:?}" "${BACKUP_S3_BUCKET:?}"
     local scheme=https
@@ -54,9 +54,4 @@ files_rclone_env() {
     export RCLONE_CONFIG_DST_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_DST_DIRECTORY_NAME_ENCRYPTION=true
     export RCLONE_CONFIG_DST_PASSWORD
     RCLONE_CONFIG_DST_PASSWORD=$(rclone obscure "$(cat "$BACKUP_FILES_CRYPT_PASS_FILE")")
-    # Удалённые из хранилища файлы лежат рядом с копией (другой каталог бакета, тот же пароль): rclone не позволяет
-    # держать каталог «удалённого» внутри каталога назначения.
-    export RCLONE_CONFIG_DELETED_TYPE=crypt RCLONE_CONFIG_DELETED_REMOTE="RAW:$BACKUP_S3_BUCKET/files-deleted"
-    export RCLONE_CONFIG_DELETED_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_DELETED_DIRECTORY_NAME_ENCRYPTION=true
-    export RCLONE_CONFIG_DELETED_PASSWORD=$RCLONE_CONFIG_DST_PASSWORD
 }
