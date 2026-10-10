@@ -554,3 +554,24 @@ func TestSendTestWithABrokenContext(t *testing.T) {
 		t.Fatal("want an error for a nil context")
 	}
 }
+
+// Недоступный GlitchTip не задерживает остановку процесса дольше предела, сколько бы отчётов ни стояло в очереди.
+func TestCloseDoesNotHangOnAnUnreachableTracker(t *testing.T) {
+	s := newSink(t)
+	s.block = make(chan struct{})
+	r, _ := newReporter(t, s, func(c *errreport.Config) { c.Burst = 100; c.Client = &http.Client{Timeout: time.Minute} })
+	logger := slog.New(errreport.NewHandler(slog.NewTextHandler(io.Discard, nil), r))
+	for i := range 20 {
+		logger.Error(fmt.Sprintf("failure %d", i))
+	}
+	start := time.Now()
+	r.Close()
+	took := time.Since(start)
+	close(s.block)
+	if took < errreport.CloseWait || took > errreport.CloseWait+3*time.Second {
+		t.Fatalf("Close took %v, want about %v", took, errreport.CloseWait)
+	}
+	if st := r.Stats(); st.Sent != 0 || st.Failed < 1 {
+		t.Errorf("stats = %+v", st)
+	}
+}

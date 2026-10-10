@@ -144,7 +144,7 @@ func startOps(ctx context.Context, cfg config.Config, logger *slog.Logger, obs o
 	}
 	h := &opsHandle{srv: srv, done: make(chan error, 1)}
 	go func() { h.done <- srv.Serve(ln) }()
-	logger.Info("internal port started", "addr", ln.Addr().String(), "pprof", cfg.Ops.Pprof, "token", cfg.Ops.Token != "")
+	logger.Info("internal port started", "addr", ln.Addr().String(), "pprof", cfg.Ops.Pprof, "protected", cfg.Ops.Token != "")
 	if p.onListen != nil {
 		p.onListen(ln.Addr())
 	}

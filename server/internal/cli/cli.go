@@ -348,7 +348,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, obs obse
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()
-	logger.Info("server started", "addr", ln.Addr().String(), "product", cfg.Product.Name, "env", cfg.Env,
+	logger.Info("server started", "addr", ln.Addr().String(), "product", cfg.Product.Name,
 		"trusted_proxies", !cfg.TrustedProxies.Empty(), "background", cfg.Background)
 	if onListen != nil {
 		onListen(ln.Addr())
@@ -427,7 +427,7 @@ func runWorker(ctx context.Context, cfg config.Config, logger *slog.Logger, obs 
 		}
 	}()
 	context.AfterFunc(ctx, ops.drain)
-	logger.Info("worker started", "product", cfg.Product.Name, "env", cfg.Env, "jobs", len(list), "holder", runner.Holder())
+	logger.Info("worker started", "product", cfg.Product.Name, "jobs", len(list), "holder", runner.Holder())
 	if err := runner.Run(ctx, list...); err != nil {
 		return err
 	}

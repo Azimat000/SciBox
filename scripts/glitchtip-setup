@@ -1,0 +1,50 @@
+#!/bin/sh
+# Первичная настройка GlitchTip для локальной работы (срез 26): администратор, организация, команда, проект «scibox» и
+# адрес приёма ошибок (DSN). Повторный запуск ничего не дублирует и печатает тот же адрес.
+#
+#   make glitchtip-setup
+#
+# Печатает вход в GlitchTip и строку SCIBOX_ERROR_DSN=… для сервера и воркера. Пароль администратора случайный; он
+# записывается в monitoring/glitchtip-login.txt (файл не входит в git, права 600), чтобы его не потерять.
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+login="$root/monitoring/glitchtip-login.txt"
+if [ ! -f "$login" ]; then
+  ( umask 077; printf 'admin@scibox.local\n%s\n' "$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)" > "$login" )
+fi
+export GT_EMAIL=$(sed -n 1p "$login") GT_PASSWORD=$(sed -n 2p "$login")
+docker compose -f docker-compose.monitoring.yml exec -T -e GT_EMAIL -e GT_PASSWORD glitchtip ./manage.py shell -c '
+import os
+from django.apps import apps
+User = apps.get_model("users.User")
+Org = apps.get_model("organizations_ext.Organization")
+Team = apps.get_model("teams.Team")
+Project = apps.get_model("projects.Project")
+Key = apps.get_model("projects.ProjectKey")
+from apps.organizations_ext.models import OrganizationUserRole
+
+email, password = os.environ["GT_EMAIL"], os.environ["GT_PASSWORD"]
+user = User.objects.filter(email=email).first()
+if user is None:
+    user = User.objects.create_superuser(email=email, password=password)
+else:
+    user.set_password(password)
+    user.save()
+org = Org.objects.filter(name="ИОН").first()
+if org is None:
+    org = Org.objects.create(name="ИОН", slug="scibox", scrub_ip_addresses=True)
+    org.add_user(user, role=OrganizationUserRole.OWNER)
+team = Team.objects.filter(organization=org).first() or Team.objects.create(organization=org, slug="scibox")
+project = Project.objects.filter(organization=org, name="scibox-server").order_by("id").first()
+if project is None:
+    project = Project.objects.create(name="scibox-server", slug="scibox-server", organization=org, platform="go", scrub_ip_addresses=True)
+project.teams.add(team)
+key = Key.objects.filter(project=project).first() or Key.objects.create(project=project, name="scibox")
+print("EMAIL=" + email)
+print("DSN=http://%s@localhost:8100/%s" % (key.public_key.hex, project.id))
+' 2>/dev/null | awk -F= '
+  /^EMAIL=/    { print "Вход в GlitchTip (http://localhost:8100): " $2 }
+  /^DSN=/      { sub(/^DSN=/, ""); print "Для сервера и воркера: SCIBOX_ERROR_DSN=" $0 }
+'
+echo "Пароль администратора лежит в monitoring/glitchtip-login.txt"

@@ -108,7 +108,7 @@ func TestErrorResponses(t *testing.T) {
 func TestRecovererReturnsJSON500(t *testing.T) {
 	var logs bytes.Buffer
 	m := metrics.New("serve", "test")
-	h := recoverer(slog.New(slog.NewTextHandler(&logs, nil)), m)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := recoverer(slog.New(slog.NewTextHandler(&logs, nil)), m, metrics.RouteNamer{})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("kaboom")
 	}))
 	rec := do(t, h, http.MethodGet, "/x")
@@ -133,14 +133,14 @@ func TestRecovererReturnsJSON500(t *testing.T) {
 	if panics != 1 {
 		t.Fatalf("panics counted = %v", panics)
 	}
-	bare := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)), nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("x") }))
+	bare := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, metrics.RouteNamer{})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("x") }))
 	if rec := do(t, bare, http.MethodGet, "/x"); rec.Code != http.StatusInternalServerError {
 		t.Fatalf("without metrics: %d", rec.Code)
 	}
 }
 
 func TestRecovererRepanicsAbort(t *testing.T) {
-	h := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)), nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, metrics.RouteNamer{})(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic(http.ErrAbortHandler)
 	}))
 	defer func() {

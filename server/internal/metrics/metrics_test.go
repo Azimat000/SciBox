@@ -3,7 +3,9 @@ package metrics_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -245,5 +247,111 @@ func TestRouteLabelOutsideARouter(t *testing.T) {
 		if got := metrics.RouteLabel(httptest.NewRequest(http.MethodGet, path, nil)); got != want {
 			t.Errorf("%s: got %q, want %q", path, got, want)
 		}
+	}
+}
+
+// Ответ, написанный промежуточным обработчиком подроутера раньше выбора маршрута (проверка входа, 429, ошибка базы),
+// считается по адресу, которому он предназначался, а не теряется в «неизвестных».
+func TestResponsesWrittenBeforeRoutingAreCountedByTheirRoute(t *testing.T) {
+	m := metrics.New("serve", "test")
+	r := chi.NewRouter()
+	r.Use(m.MiddlewareFor(r))
+	r.Route("/api", func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				if req.Header.Get("X-Abort") != "" {
+					w.WriteHeader(http.StatusTooManyRequests)
+					return
+				}
+				next.ServeHTTP(w, req)
+			})
+		})
+		r.Get("/vacancies/{id}", func(w http.ResponseWriter, _ *http.Request) {})
+	})
+	for _, target := range []string{"/api/vacancies/1", "/api/vacancies/2", "/api/no/such"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.Header.Set("X-Abort", "1")
+		r.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	got := series(t, m, "scibox_http_requests_total")
+	if got["method=GET,route=/api/vacancies/{id},status=429"] != 2 || got["method=GET,route=api_unknown,status=429"] != 1 || len(got) != 2 {
+		t.Fatalf("series = %v", got)
+	}
+}
+
+func TestJobObserverMethods(t *testing.T) {
+	m := metrics.New("worker", "test")
+	m.JobFinished("retention", true, 2*time.Second, nil)
+	m.JobFinished("retention", true, time.Second, errors.New("down"))
+	m.JobFinished("outbox.send", false, time.Millisecond, fmt.Errorf("stopped: %w", context.Canceled))
+	m.JobPanicked("retention")
+	runs := series(t, m, "scibox_job_runs_total")
+	for k, want := range map[string]float64{
+		"result=ok,task=retention": 1, "result=failed,task=retention": 1, "result=interrupted,task=outbox.send": 1,
+	} {
+		if runs[k] != want {
+			t.Errorf("%s = %v, want %v (all: %v)", k, runs[k], want, runs)
+		}
+	}
+	if got := series(t, m, "scibox_job_duration_seconds"); got["task=retention"] != 2 || got["task=outbox.send"] != 1 {
+		t.Errorf("durations = %v", got)
+	}
+	if got := series(t, m, "scibox_panics_total"); got["where=job"] != 1 {
+		t.Errorf("panics = %v", got)
+	}
+}
+
+// Расширенные возможности писателя (Flush, дедлайны) доходят до настоящего писателя через обёртку счёта запросов.
+func TestWrapperKeepsFlushingAvailable(t *testing.T) {
+	m := metrics.New("serve", "test")
+	flushed := false
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("part"))
+		flushed = http.NewResponseController(w).Flush() == nil
+	}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/stream", nil))
+	if !flushed || !rec.Flushed {
+		t.Fatalf("flushed = %v, recorder flushed = %v", flushed, rec.Flushed)
+	}
+}
+
+func TestDebugRecordsAreCountedAndLabelsAreSafe(t *testing.T) {
+	m := metrics.New("serve", "test")
+	logger := slog.New(m.NewLogHandler(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	logger.Debug("noise")
+	if got := series(t, m, "scibox_log_events_total"); got["level=debug"] != 1 {
+		t.Errorf("debug = %v", got)
+	}
+	// Пустое имя запроса, управляющие знаки и длинная строка в метке.
+	m.ObserveQuery("", time.Second, true, false)
+	m.ObserveQuery("bad\x00name\n", time.Second, true, false)
+	m.ObserveQuery(strings.Repeat("я", 300), time.Second, true, false)
+	got := series(t, m, "scibox_db_slow_queries_total")
+	if got["query=unknown"] != 1 || got["query=bad_name_"] != 1 || got["query="+strings.Repeat("я", 100)] != 1 {
+		t.Errorf("slow = %v", got)
+	}
+}
+
+// BenchmarkMiddleware: цена счёта одного запроса (docs/SCALING.md): запись в счётчик и гистограмму плюс поиск
+// метки.
+func BenchmarkMiddleware(b *testing.B) {
+	m := metrics.New("serve", "bench")
+	h := router(m)
+	req := httptest.NewRequest(http.MethodGet, "/api/vacancies/6e1a7f0e-3b0a-4f6e-9a77-0b8d3a5f1c11", nil)
+	b.ReportAllocs()
+	for b.Loop() {
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+}
+
+// BenchmarkBare — тот же роутер без счёта: разница между двумя и есть цена метрик.
+func BenchmarkBare(b *testing.B) {
+	r := chi.NewRouter()
+	r.Get("/api/vacancies/{id}", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	req := httptest.NewRequest(http.MethodGet, "/api/vacancies/6e1a7f0e-3b0a-4f6e-9a77-0b8d3a5f1c11", nil)
+	b.ReportAllocs()
+	for b.Loop() {
+		r.ServeHTTP(httptest.NewRecorder(), req)
 	}
 }

@@ -104,3 +104,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:coverage
+
+  monitoring:
+    name: alert rules (promtool)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: syntax and tests of the Prometheus alert rules
+        run: make monitoring-check

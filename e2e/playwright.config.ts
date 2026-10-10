@@ -42,6 +42,8 @@ export default defineConfig({
         SCIBOX_S3_BUCKET: 'scibox-e2e',
         SCIBOX_HTTP_ADDR: `127.0.0.1:${apiPort}`,
         SCIBOX_BACKGROUND: 'off',
+        // Внутренний порт сквозным тестам не нужен, а 9100/9101 может занимать `make dev`.
+        SCIBOX_OPS_ADDR: 'off',
         SCIBOX_PUBLIC_URL: `http://localhost:${webPort}`,
       },
     },

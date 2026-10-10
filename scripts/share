@@ -121,10 +121,11 @@ fi
 # Все запросы приходят от программы туннеля на этом же Mac (127.0.0.1): ей доверяем X-Forwarded-For,
 # чтобы гости считались по своим адресам, а не одним на всех (срез 19, D-141).
 (cd "$root/server" && SCIBOX_HTTP_ADDR="127.0.0.1:$port" SCIBOX_WEB_DIR="$root/web/dist" \
-  SCIBOX_PUBLIC_URL="$url" SCIBOX_TRUSTED_PROXIES="127.0.0.1,::1" SCIBOX_BACKGROUND=off exec ./bin/scibox serve) &
+  SCIBOX_PUBLIC_URL="$url" SCIBOX_TRUSTED_PROXIES="127.0.0.1,::1" SCIBOX_BACKGROUND=off \
+  SCIBOX_OPS_ADDR=127.0.0.1:9120 exec ./bin/scibox serve) &
 pids="$pids $!"
 # Воркер делает фоновую работу (письма, подбор, напоминания, чистка); ссылки в его письмах строятся от того же адреса.
-(cd "$root/server" && SCIBOX_PUBLIC_URL="$url" exec ./bin/scibox worker) &
+(cd "$root/server" && SCIBOX_PUBLIC_URL="$url" SCIBOX_OPS_ADDR=127.0.0.1:9121 exec ./bin/scibox worker) &
 pids="$pids $!"
 
 i=0

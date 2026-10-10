@@ -123,13 +123,13 @@ func TestEverySourceIsExported(t *testing.T) {
 		"scibox_db_size_bytes":                                       1 << 20,
 		"scibox_db_server_connections":                               12,
 		"scibox_db_server_max_connections":                           100,
-		"scibox_job_interval_seconds{job=retention}":                 3600,
-		"scibox_job_interval_seconds{job=outbox.send}":               2,
-		"scibox_job_last_success_timestamp_seconds{job=retention}":   float64(now.Add(-30 * time.Minute).Unix()),
-		"scibox_job_last_success_timestamp_seconds{job=files.sweep}": 0,
-		"scibox_job_consecutive_failures{job=matching.digests}":      3,
-		"scibox_job_running{job=matching.digests}":                   1,
-		"scibox_job_running{job=retention}":                          0,
+		"scibox_job_interval_seconds{task=retention}":                 3600,
+		"scibox_job_interval_seconds{task=outbox.send}":               2,
+		"scibox_job_last_success_timestamp_seconds{task=retention}":   float64(now.Add(-30 * time.Minute).Unix()),
+		"scibox_job_last_success_timestamp_seconds{task=files.sweep}": 0,
+		"scibox_job_consecutive_failures{task=matching.digests}":      3,
+		"scibox_job_running{task=matching.digests}":                   1,
+		"scibox_job_running{task=retention}":                          0,
 		"scibox_breaker_state{name=mail}":                            float64(resilience.Open),
 		"scibox_breaker_trips_total{name=mail}":                      1,
 		"scibox_limiter_in_flight{name=crossref}":                    1,
@@ -150,10 +150,10 @@ func TestEverySourceIsExported(t *testing.T) {
 			t.Errorf("%s = %v, want %v", k, g, v)
 		}
 	}
-	if _, bad := got["scibox_job_last_success_timestamp_seconds{job=outbox.send}"]; bad {
+	if _, bad := got["scibox_job_last_success_timestamp_seconds{task=outbox.send}"]; bad {
 		t.Error("a per-copy job got a cluster schedule metric")
 	}
-	if _, bad := got["scibox_job_last_success_timestamp_seconds{job=not-in-definitions}"]; bad {
+	if _, bad := got["scibox_job_last_success_timestamp_seconds{task=not-in-definitions}"]; bad {
 		t.Error("a job missing from the definitions was exported")
 	}
 	for _, name := range []string{"scibox_db_pool_max_connections", "scibox_db_pool_acquires_total", "scibox_breaker_retry_after_seconds{name=mail}"} {
@@ -280,15 +280,15 @@ func TestRunnerStateIsExportedWhileJobsRun(t *testing.T) {
 	var got values
 	for range 200 {
 		got = gather(t, reg)
-		if got["scibox_job_local_last_success_timestamp_seconds{job=local.ok}"] > 0 && got["scibox_job_local_consecutive_failures{job=local.bad}"] > 0 {
+		if got["scibox_job_local_last_success_timestamp_seconds{task=local.ok}"] > 0 && got["scibox_job_local_consecutive_failures{task=local.bad}"] > 0 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if got["scibox_job_local_last_success_timestamp_seconds{job=local.ok}"] <= 0 || got["scibox_job_local_consecutive_failures{job=local.bad}"] < 1 {
+	if got["scibox_job_local_last_success_timestamp_seconds{task=local.ok}"] <= 0 || got["scibox_job_local_consecutive_failures{task=local.bad}"] < 1 {
 		t.Fatalf("runner state not exported: %v", got)
 	}
-	if got["scibox_job_local_last_success_timestamp_seconds{job=local.bad}"] != 0 {
+	if got["scibox_job_local_last_success_timestamp_seconds{task=local.bad}"] != 0 {
 		t.Errorf("a job that never succeeded shows a success time: %v", got)
 	}
 }

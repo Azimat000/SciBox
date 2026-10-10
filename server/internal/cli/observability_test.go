@@ -103,7 +103,7 @@ func TestServeInternalPortAndRequestIds(t *testing.T) {
 			`scibox_db_pool_connections{state="idle"}`, `scibox_db_pool_max_connections 20`,
 			`scibox_mail_queue_messages{state="waiting"}`, `scibox_mail_queue_oldest_waiting_seconds`,
 			`scibox_files_pending_scan`, `scibox_files_blob_deletions_queued`,
-			`scibox_job_interval_seconds{job="outbox.send"}`, `scibox_job_last_success_timestamp_seconds{job="retention"}`,
+			`scibox_job_interval_seconds{task="outbox.send"}`, `scibox_job_last_success_timestamp_seconds{task="retention"}`,
 			`scibox_breaker_state{name="crossref"} 0`, `scibox_breaker_state{name="mail"} 0`, `scibox_limiter_capacity{name="crossref"} 1`,
 			`scibox_source_up{source="mail_queue"} 1`, `scibox_source_up{source="job_schedule"} 1`, `scibox_source_up{source="database"} 1`,
 			`scibox_db_size_bytes`, `scibox_build_info{`, `scibox_panics_total{where="http"} 0`, `go_goroutines`,
@@ -183,15 +183,15 @@ func TestWorkerInternalPort(t *testing.T) {
 	var metrics string
 	for range 100 {
 		_, _, metrics = fetch(t, http.MethodGet, base+"/metrics", bearer)
-		if strings.Contains(metrics, `scibox_job_runs_total{job="outbox.send",result="ok"}`) {
+		if strings.Contains(metrics, `scibox_job_runs_total{result="ok",task="outbox.send"}`) {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	for _, want := range []string{
-		`scibox_job_runs_total{job="outbox.send",result="ok"}`, `scibox_job_duration_seconds_bucket{job="outbox.send"`,
-		`scibox_job_local_last_success_timestamp_seconds{job="outbox.send"}`, `scibox_jobs_clock_skewed 0`,
-		`scibox_job_last_success_timestamp_seconds{job="retention"}`, `scibox_build_info{go_version=`,
+		`scibox_job_runs_total{result="ok",task="outbox.send"}`, `scibox_job_duration_seconds_bucket{task="outbox.send"`,
+		`scibox_job_local_last_success_timestamp_seconds{task="outbox.send"}`, `scibox_jobs_clock_skewed 0`,
+		`scibox_job_last_success_timestamp_seconds{task="retention"}`, `scibox_build_info{go_version=`,
 	} {
 		if !strings.Contains(metrics, want) && failure == "" {
 			failure = "worker metrics lack " + want

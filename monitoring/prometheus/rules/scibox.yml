@@ -1,0 +1,277 @@
+# Тревоги SciBox/ИОН (срез 26, T-25, T-44, T-49). Каждое правило проверено тестом tests/scibox_test.yml:
+# `make monitoring-check`. Пороги взяты из docs/SCALING.md (чтение p95 ≤ 200 мс, p99 ≤ 1 с, 5xx < 0,1% под нагрузкой).
+#
+# Серьёзность: critical — будить человека; warning — разобрать в рабочее время; none — служебная.
+# Метка job у метрик сервера занята Prometheus (scibox-serve, scibox-worker), поэтому у задач она названа task.
+groups:
+  - name: scibox-availability
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels: { severity: none }
+        annotations:
+          summary: "Служебная: горит всегда. Если её нет в списке тревог, не работает сама система тревог."
+
+      - alert: ServerDown
+        expr: up{job="scibox-serve"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Сервер не отвечает на внутреннем порту"
+          description: "Prometheus не может прочитать метрики сервера {{ $labels.instance }} больше минуты: процесс остановлен, порт закрыт или сеть."
+
+      - alert: WorkerDown
+        expr: up{job="scibox-worker"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Воркер фоновых задач не отвечает"
+          description: "Письма, подбор, напоминания и проверка файлов не идут, пока воркер не работает (T-49). Копия сервера с фоновыми задачами их тоже покрывает, но в схеме с воркером он обязателен."
+
+  - name: scibox-errors
+    rules:
+      - alert: ServerErrorsHigh
+        expr: |
+          sum(rate(scibox_http_requests_total{status=~"5.."}[5m])) / sum(rate(scibox_http_requests_total[5m])) > 0.01
+          and sum(rate(scibox_http_requests_total[5m])) > 0.1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Больше 1% запросов заканчиваются ошибкой сервера"
+          description: "Доля ответов 5xx за 5 минут: {{ $value | humanizePercentage }}. Подробности по номеру запроса в журнале и в GlitchTip."
+
+      - alert: ServerErrorsCritical
+        expr: |
+          sum(rate(scibox_http_requests_total{status=~"5.."}[2m])) / sum(rate(scibox_http_requests_total[2m])) > 0.05
+          and sum(rate(scibox_http_requests_total[2m])) > 0.1
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Больше 5% запросов заканчиваются ошибкой сервера"
+          description: "Доля ответов 5xx за 2 минуты: {{ $value | humanizePercentage }}. Скорее всего не работает база или внешний сервис."
+
+      - alert: PanicInHandler
+        expr: increase(scibox_panics_total[10m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Паника в {{ $labels.where }}"
+          description: "Перехвачена паника ({{ $labels.where }}) на {{ $labels.service }}: это ошибка в коде. Стек в журнале и в GlitchTip."
+
+      - alert: ErrorsInLog
+        expr: sum by (service) (increase(scibox_log_events_total{level="error"}[5m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "В журнале {{ $labels.service }} есть записи уровня error"
+          description: "За 5 минут: {{ $value | humanize }}. Записи уровня error пишутся только для того, что требует внимания человека."
+
+      - alert: ErrorReportsNotDelivered
+        expr: increase(scibox_error_reports_total{result="failed"}[10m]) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Отчёты об ошибках не доходят до GlitchTip"
+          description: "Сервер не может отправить отчёты ({{ $labels.service }}): проверьте GlitchTip и SCIBOX_ERROR_DSN (`scibox error-test`)."
+
+  - name: scibox-latency
+    rules:
+      - alert: SlowRequests
+        # Медленными по природе бывают выдача файлов, PDF-резюме, выгрузка данных и приём откликов с файлами: их не считаем.
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(scibox_http_request_duration_seconds_bucket{route!~"/api/profile/cv|/api/scientists/\\{id\\}/cv|/api/applications/\\{id\\}/files/\\{fileId\\}|/api/account/export|/api/applications|/api/recommendations/submit"}[5m]))) > 0.5
+          and sum(rate(scibox_http_requests_total[5m])) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 времени ответа больше 0,5 с"
+          description: "p95 за 5 минут: {{ $value | humanizeDuration }} (цель из docs/SCALING.md: 0,2 с для чтения)."
+
+      - alert: VerySlowRequests
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(scibox_http_request_duration_seconds_bucket{route!~"/api/profile/cv|/api/scientists/\\{id\\}/cv|/api/applications/\\{id\\}/files/\\{fileId\\}|/api/account/export|/api/applications|/api/recommendations/submit"}[5m]))) > 2
+          and sum(rate(scibox_http_requests_total[5m])) > 0.5
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "p99 времени ответа больше 2 с"
+          description: "p99 за 5 минут: {{ $value | humanizeDuration }} (цель: 1 с)."
+
+  - name: scibox-database
+    rules:
+      - alert: DatabasePoolSaturated
+        expr: scibox_db_pool_connections{state="acquired"} / ignoring (state) scibox_db_pool_max_connections > 0.9
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Пул соединений {{ $labels.service }} занят больше чем на 90%"
+          description: "Запросы начнут ждать соединение. Проверьте медленные запросы и число копий."
+
+      - alert: DatabaseConnectionsWait
+        expr: sum by (instance) (rate(scibox_db_pool_empty_acquires_total[5m])) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Запросам к базе не хватает соединений"
+          description: "{{ $value | humanize }} в секунду ждут свободного соединения на {{ $labels.instance }}."
+
+      - alert: DatabaseConnectionsNearLimit
+        expr: scibox_db_server_connections / scibox_db_server_max_connections > 0.8
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Использовано больше 80% соединений базы"
+          description: "Все копии сервера и воркеры вместе держат {{ $value | humanizePercentage }} от max_connections."
+
+      - alert: DatabaseQueryTimeouts
+        expr: sum by (query) (increase(scibox_db_query_timeouts_total[10m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "База остановила запрос {{ $labels.query }} по сроку"
+          description: "statement_timeout сработал {{ $value | humanize }} раз за 10 минут: людям отвечено «сервер занят»."
+
+      - alert: DatabaseSlowQueries
+        expr: sum(rate(scibox_db_slow_queries_total[5m])) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Больше одного медленного запроса к базе в секунду"
+          description: "Какие именно, видно в журнале («slow query») и в панели по имени запроса."
+
+      - alert: MetricsSourceDown
+        expr: scibox_source_up == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Не читается источник метрик {{ $labels.source }}"
+          description: "Скорее всего база недоступна или перегружена; значения метрик устарели."
+
+  - name: scibox-mail
+    rules:
+      - alert: MailQueueStale
+        expr: max(scibox_mail_queue_oldest_waiting_seconds) > 900
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Самое старое письмо ждёт отправки больше 15 минут"
+          description: "Ждёт {{ $value | humanizeDuration }}. Проверьте воркер, почтовый сервис и предохранитель почты."
+
+      - alert: MailQueueVeryStale
+        expr: max(scibox_mail_queue_oldest_waiting_seconds) > 3600
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Письма не уходят больше часа"
+          description: "Ссылки подтверждения, сброса пароля и уведомления не доходят до людей."
+
+      - alert: MailUndelivered
+        expr: max(delta(scibox_mail_queue_messages{state="undelivered"}[1h])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Появились окончательно недоставленные письма"
+          description: "Получатель отказал или письму больше 3 суток. Подробности в журнале («mail given up»)."
+
+      - alert: MailServiceBreakerOpen
+        expr: max(scibox_breaker_state{name="mail"}) == 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Почтовый сервис не отвечает: отправка приостановлена"
+          description: "Предохранитель почты открыт больше 5 минут."
+
+      - alert: CrossrefBreakerOpen
+        expr: max(scibox_breaker_state{name="crossref"}) == 1
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Crossref недоступен или ограничивает нас"
+          description: "Поиск публикаций по DOI не работает; люди заполняют публикации вручную."
+
+  - name: scibox-jobs
+    rules:
+      - alert: JobNotRunning
+        # Задачи кластера: общее расписание из базы. Если не выполнялась дольше трёх сроков, воркер не справляется или стоит.
+        expr: |
+          max by (task) (time() - scibox_job_last_success_timestamp_seconds)
+            > max by (task) (3 * scibox_job_interval_seconds) + 600
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Задача {{ $labels.task }} не выполнялась успешно дольше трёх сроков"
+          description: "Прошло {{ $value | humanizeDuration }}. Проверьте воркер и журнал (T-49)."
+
+      - alert: JobFailing
+        expr: max by (task) (scibox_job_consecutive_failures) >= 3
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Задача {{ $labels.task }} падает {{ $value }} раз подряд"
+          description: "Причина в журнале («job keeps failing») и в GlitchTip."
+
+      - alert: LocalJobNotRunning
+        # Задачи «в каждой копии» (письма, проверка файлов): состояние в самом процессе.
+        expr: |
+          (time() - scibox_job_local_last_success_timestamp_seconds)
+            > on (instance, task) (10 * scibox_job_interval_seconds + 120)
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Задача {{ $labels.task }} на {{ $labels.instance }} давно не завершалась успешно"
+          description: "Прошло {{ $value | humanizeDuration }}."
+
+      - alert: JobsPausedByClock
+        expr: scibox_jobs_clock_skewed == 1
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Часы {{ $labels.instance }} разошлись с часами базы: фоновые задачи остановлены"
+          description: "Нужна синхронизация времени (NTP) на этой машине."
+
+  - name: scibox-files
+    rules:
+      - alert: FileScanBacklog
+        expr: max(scibox_files_oldest_pending_scan_seconds) > 1800
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Файл ждёт проверки на вирусы больше 30 минут"
+          description: "Ждёт {{ $value | humanizeDuration }}, всего в очереди {{ with query \"max(scibox_files_pending_scan)\" }}{{ . | first | value }}{{ end }}. Скорее всего антивирус ClamAV недоступен: до проверки файлы организациям не выдаются (T-44)."
+
+      - alert: BlobDeletionBacklog
+        expr: max(scibox_files_blob_deletions_queued) > 1000
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Очередь удаления объектов из хранилища выросла (больше 1000)"
+          description: "Хранилище файлов недоступно или удаление не успевает (T-44)."
+
+  - name: scibox-host
+    rules:
+      - alert: DiskSpaceLow
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "На диске осталось меньше 15%"
+          description: "Свободно {{ $value | humanizePercentage }}."
+
+      - alert: DiskSpaceCritical
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "На диске осталось меньше 5%"
+          description: "Свободно {{ $value | humanizePercentage }}: база и хранилище вот-вот перестанут писать."
+
+      - alert: DiskWillFillIn24Hours
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Диск закончится в течение суток при нынешнем росте"
+
+      - alert: MemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Свободной памяти меньше 10%"

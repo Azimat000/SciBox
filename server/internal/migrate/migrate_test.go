@@ -114,9 +114,11 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00022_job_runs.sql", 2, allTables},
+		{"up", "00023_observability.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
+		// Метрики очереди писем (00023) таблиц не добавляют: частичный индекс по недоставленным.
+		{"down", "00023_observability.sql", 2, allTables},
 		{"down", "00022_job_runs.sql", 2, scaleTables},
 		{"down", "00021_vacancy_search_open.sql", 2, scaleTables},
 		{"down", "00020_scale.sql", 2, fileTables},
@@ -141,7 +143,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00022_job_runs.sql", 2, allTables},
+		{"up", "00023_observability.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

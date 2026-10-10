@@ -1,5 +1,5 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev share worker test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check
+.PHONY: dev share worker test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check monitoring-up monitoring-down monitoring-check glitchtip-setup errors-up
 
 SCIBOX = cd server && go run ./cmd/api
 
@@ -16,7 +16,7 @@ share: install migrate
 	./scripts/share
 
 ## test: линтер, проверка уязвимостей и все тесты с проверкой порогов покрытия (срез 18)
-test: install db-up lint vulncheck test-server test-web
+test: install db-up lint vulncheck monitoring-check test-server test-web
 
 test-server:
 	./scripts/coverage-check
@@ -82,3 +82,23 @@ db-reset: db-up
 ## sqlc: пересобрать код запросов из server/db/queries
 sqlc:
 	cd server && go tool sqlc generate
+
+## monitoring-up / monitoring-down: Prometheus (9190), Grafana (3100), GlitchTip (8100) и node-exporter (срез 26)
+monitoring-up:
+	docker compose -f docker-compose.monitoring.yml up -d --wait
+
+## errors-up: добавить к мониторингу сбор ошибок GlitchTip (8100); первый раз затем `make glitchtip-setup`
+errors-up:
+	docker compose -f docker-compose.monitoring.yml --profile errors up -d --wait
+
+monitoring-down:
+	docker compose -f docker-compose.monitoring.yml --profile errors down
+
+## monitoring-check: синтаксис и тесты правил тревог (promtool из образа Prometheus); входит в `make test`
+monitoring-check:
+	docker run --rm --entrypoint /bin/promtool -v "$(CURDIR)/monitoring/prometheus:/p:ro" prom/prometheus:v3.15.0 check rules /p/rules/scibox.yml
+	docker run --rm --entrypoint /bin/promtool -v "$(CURDIR)/monitoring/prometheus:/p:ro" prom/prometheus:v3.15.0 test rules /p/tests/scibox_test.yml
+
+## glitchtip-setup: создать в локальном GlitchTip администратора, организацию и проект; печатает SCIBOX_ERROR_DSN для сервера
+glitchtip-setup:
+	./scripts/glitchtip-setup

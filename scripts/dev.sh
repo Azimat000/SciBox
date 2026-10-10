@@ -19,6 +19,8 @@ echo
 echo "  Сайт:      http://localhost:5173"
 echo "  Сервер:    http://127.0.0.1:8080/api/health"
 echo "  Воркер:    фоновые задачи (журнал в этом же окне)"
+echo "  Метрики:   http://127.0.0.1:9100/metrics (сервер), :9101 (воркер); готовность /readyz; профили /debug/pprof/"
+echo "  Панель:    make monitoring-up, затем http://localhost:3100"
 echo "  Почта:     http://localhost:8025"
 echo "  Остановить: Ctrl+C"
 echo

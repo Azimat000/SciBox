@@ -98,11 +98,12 @@ func NewRouter(d Deps) http.Handler {
 	// Номер запроса создаёт сервер и никогда не берёт у посетителя (reqid); счёт запросов стоит снаружи перехвата
 	// паники, чтобы упавший запрос попал в счёт как 500.
 	r.Use(reqid.Middleware)
+	namer := metrics.RouteNamer{Finder: r}
 	if d.Metrics != nil {
-		r.Use(d.Metrics.Middleware)
+		r.Use(d.Metrics.MiddlewareFor(r))
 	}
-	r.Use(requestLogger(d.Logger))
-	r.Use(recoverer(d.Logger, d.Metrics))
+	r.Use(requestLogger(d.Logger, namer))
+	r.Use(recoverer(d.Logger, d.Metrics, namer))
 	r.Use(guard.Perimeter)
 
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
@@ -211,7 +212,7 @@ func recordSource(next http.Handler) http.Handler {
 // requestLogger пишет по строке на запрос: шаблон адреса, код, время и размер ответа. Номер запроса дописывает
 // обработчик журнала (reqid) из контекста. Запрос с ошибкой сервера идёт предупреждением: сама ошибка уже записана
 // с подробностями там, где случилась (apierr.WriteInternal), и вторая запись уровня Error была бы дублем.
-func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+func requestLogger(logger *slog.Logger, namer metrics.RouteNamer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
@@ -224,7 +225,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			logger.LogAttrs(r.Context(), level, "request",
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
-				slog.String("route", metrics.RouteLabel(r)),
+				slog.String("route", namer.Label(r)),
 				slog.Int("status", ww.Status()),
 				slog.Duration("duration", time.Since(start)),
 				slog.Int("bytes", ww.BytesWritten()),
@@ -233,7 +234,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-func recoverer(logger *slog.Logger, m *metrics.Metrics) func(http.Handler) http.Handler {
+func recoverer(logger *slog.Logger, m *metrics.Metrics, namer metrics.RouteNamer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
@@ -245,7 +246,7 @@ func recoverer(logger *slog.Logger, m *metrics.Metrics) func(http.Handler) http.
 						m.Panic("http")
 					}
 					logger.ErrorContext(r.Context(), "panic in handler", "panic", fmt.Sprint(rec), "path", r.URL.Path,
-						"route", metrics.RouteLabel(r), "stack", string(debug.Stack()))
+						"route", namer.Label(r), "stack", string(debug.Stack()))
 					WriteError(w, http.StatusInternalServerError, CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
 				}
 			}()

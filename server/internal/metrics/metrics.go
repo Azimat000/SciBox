@@ -85,11 +85,11 @@ func New(service, version string) *Metrics {
 		jobRuns: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace, Subsystem: "job", Name: "runs_total",
 			Help: "Проходы фоновых задач этого процесса по имени и итогу: ok, failed, interrupted (остановка процесса).",
-		}, []string{"job", "result"}),
+		}, []string{"task", "result"}),
 		jobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: Namespace, Subsystem: "job", Name: "duration_seconds",
 			Help: "Время прохода фоновой задачи этого процесса.", Buckets: []float64{0.01, 0.1, 0.5, 1, 5, 15, 60, 300, 900},
-		}, []string{"job"}),
+		}, []string{"task"}),
 		queryDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: Namespace, Subsystem: "db", Name: "query_duration_seconds",
 			Help: "Время запросов к базе.", Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1, 2.5, 5, 10},
@@ -122,16 +122,30 @@ func New(service, version string) *Metrics {
 // maxQueryNames — сколько разных имён запросов получают свою метку; остальные собираются в «other».
 const maxQueryNames = 300
 
-// Middleware считает запросы. Ставится первым в роутере (внутри только номер запроса), чтобы в счёт попали и отказы
-// периметра, и ответы с ошибкой. Шаблон адреса читается после обработки: роутер заполняет его по ходу.
-func (m *Metrics) Middleware(next http.Handler) http.Handler {
+// Finder — роутер, который умеет назвать шаблон маршрута по методу и пути без обработки запроса (chi.Mux).
+type Finder interface {
+	Find(rctx *chi.Context, method, path string) string
+}
+
+// Middleware считает запросы без поиска маршрута для ответов, написанных до его разбора (см. MiddlewareFor).
+func (m *Metrics) Middleware(next http.Handler) http.Handler { return m.MiddlewareFor(nil)(next) }
+
+// MiddlewareFor считает запросы. Ставится первым в роутере (внутри только номер запроса), чтобы в счёт попали и отказы
+// периметра, и ответы с ошибкой. Шаблон адреса читается после обработки: роутер заполняет его по ходу. Ответ, написанный
+// промежуточным обработчиком раньше, чем роутер выбрал маршрут (проверка входа, ограничение частоты, ошибка базы при
+// проверке сеанса), остался бы без шаблона; для него шаблон ищется у роутера по методу и пути (finder).
+func (m *Metrics) MiddlewareFor(finder Finder) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler { return m.middleware(next, RouteNamer{Finder: finder}) }
+}
+
+func (m *Metrics) middleware(next http.Handler, namer RouteNamer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.inFlight.Inc()
 		defer m.inFlight.Dec()
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w}
 		next.ServeHTTP(rec, r)
-		method, route := methodLabel(r.Method), RouteLabel(r)
+		method, route := methodLabel(r.Method), namer.Label(r)
 		m.requests.WithLabelValues(method, route, statusLabel(rec.code)).Inc()
 		m.duration.WithLabelValues(method, route).Observe(time.Since(start).Seconds())
 	})
@@ -179,11 +193,23 @@ func (s *statusRecorder) Write(p []byte) (int, error) {
 
 func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
 
-// RouteLabel — значение метки route для запроса: шаблон маршрута chi. Путь запроса в метку не попадает никогда.
-func RouteLabel(r *http.Request) string {
+// RouteNamer даёт запросу метку route: шаблон маршрута chi. Путь запроса в метку не попадает никогда.
+type RouteNamer struct {
+	// Finder ищет шаблон по методу и пути, когда запрос завершился раньше, чем роутер выбрал маршрут; nil — не ищет.
+	Finder Finder
+}
+
+// Label — метка route запроса.
+func (n RouteNamer) Label(r *http.Request) string {
 	if rc := chi.RouteContext(r.Context()); rc != nil {
-		// «/api/*» — подроутер, не нашедший адрес: это не маршрут, а «такого адреса нет».
-		if p := rc.RoutePattern(); p != "" && !strings.HasSuffix(p, "/*") {
+		if p := rc.RoutePattern(); usable(p) {
+			return label(p)
+		}
+	}
+	// «/api/*» (или пусто): ответ написан до выбора маршрута или адреса нет. Роутер может сказать, какой маршрут
+	// подошёл бы этому запросу, и тогда ошибка проверки входа или 429 попадут в счёт своего адреса.
+	if n.Finder != nil {
+		if p := n.Finder.Find(chi.NewRouteContext(), r.Method, r.URL.Path); usable(p) {
 			return label(p)
 		}
 	}
@@ -192,6 +218,12 @@ func RouteLabel(r *http.Request) string {
 	}
 	return RouteSite
 }
+
+// usable — шаблон настоящего маршрута: не пустой и не «подроутер, не нашедший адрес» («/api/*»).
+func usable(pattern string) bool { return pattern != "" && !strings.HasSuffix(pattern, "/*") }
+
+// RouteLabel — метка route без поиска у роутера.
+func RouteLabel(r *http.Request) string { return RouteNamer{}.Label(r) }
 
 var knownMethods = map[string]bool{
 	http.MethodGet: true, http.MethodHead: true, http.MethodPost: true, http.MethodPut: true, http.MethodPatch: true,

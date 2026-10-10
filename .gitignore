@@ -26,3 +26,6 @@ web/coverage/
 
 # Постоянный адрес туннеля tuna для make share (D-133)
 .share.local
+
+# Мониторинг (срез 26): пароль локального GlitchTip
+monitoring/glitchtip-login.txt

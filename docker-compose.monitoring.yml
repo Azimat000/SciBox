@@ -1,0 +1,122 @@
+# Наблюдение за сервером SciBox/ИОН (срез 26, D-172, D-173): метрики (Prometheus), панель (Grafana), состояние компьютера
+# (node-exporter) и сбор ошибок (GlitchTip). Отдельно от docker-compose.yml: рабочему окружению разработчика это не нужно,
+# а на хостинге оно живёт на своей машине (docs/DEPLOY.md, срез 28).
+#
+#   make monitoring-up      поднять Prometheus, Grafana и node-exporter (около 0,5 ГБ памяти);
+#   make errors-up          добавить GlitchTip (ещё около 0,3 ГБ; профиль `errors`), затем make glitchtip-setup;
+#   make monitoring-down    остановить всё; make monitoring-check — проверить правила тревог.
+#   Grafana     http://localhost:3100   (без входа, только просмотр; панель «ИОН: сервер»)
+#   Prometheus  http://localhost:9190   (тревоги: /alerts)
+#   GlitchTip   http://localhost:8100   (ошибки)
+# Памяти у Docker на этом компьютере мало (3,8 ГБ на все проекты, ClamAV один занимает ~1,5 ГБ): если ClamAV
+# становится unhealthy, сначала остановите мониторинг.
+#
+# Prometheus ходит за метриками на внутренние порты сервера (127.0.0.1:9100) и воркера (127.0.0.1:9101) через
+# host.docker.internal: сервер и воркер из `make dev` работают на этом Mac, не в контейнере.
+name: scibox-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9190:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  node-exporter:
+    image: prom/node-exporter:v1.10.2
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/containerd/.+)($|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      # Локальный просмотр без входа; в бою вход включён и задаётся через docs/DEPLOY.md.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_USERS_DEFAULT_THEME: "light"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/scibox.json
+    ports:
+      - "127.0.0.1:3100:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+  # GlitchTip: сбор ошибок, совместимый с протоколом Sentry. Одна служба «всё в одном» (SERVER_ROLE=all_in_one) и база
+  # PostgreSQL; без Valkey (очередь и кеш в PostgreSQL), без журналов и проверки доступности — меньше памяти.
+  glitchtip-db:
+    image: postgres:18-alpine
+    profiles: ["errors"]
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: glitchtip-dev
+      POSTGRES_DB: glitchtip
+    volumes:
+      - glitchtip-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.6
+    profiles: ["errors"]
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://glitchtip:glitchtip-dev@glitchtip-db:5432/glitchtip
+      VALKEY_URL: ""
+      SECRET_KEY: dev-only-secret-key-change-me-in-production-0123456789abcdef
+      GLITCHTIP_DOMAIN: http://localhost:8100
+      DEFAULT_FROM_EMAIL: glitchtip@scibox.local
+      EMAIL_URL: consolemail://
+      SERVER_ROLE: all_in_one
+      ENABLE_USER_REGISTRATION: "False"
+      ENABLE_ORGANIZATION_CREATION: "False"
+      GLITCHTIP_ENABLE_LOGS: "False"
+      GLITCHTIP_ENABLE_UPTIME: "False"
+      # Срок хранения событий: отчёты об ошибках не должны жить дольше нужного (152-ФЗ, docs/SECURITY.md, T-51).
+      GLITCHTIP_MAX_EVENT_LIFE_DAYS: "30"
+    ports:
+      - "127.0.0.1:8100:8000"
+    volumes:
+      - glitchtip-uploads:/code/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/_health/', timeout=3).status == 200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  glitchtip-db:
+  glitchtip-uploads:

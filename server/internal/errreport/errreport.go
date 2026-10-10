@@ -103,6 +103,9 @@ type Reporter struct {
 	// closeMu не даёт закрыть очередь в тот момент, когда в неё пишут.
 	closeMu sync.RWMutex
 	closed  bool
+	// ctx отменяется, когда Close устал ждать: отправка в этот момент прерывается, остаток очереди отбрасывается.
+	ctx    context.Context //nolint:containedctx // жизнь отправителя: один контекст на фоновую горутину отправки
+	cancel context.CancelFunc
 
 	mu       sync.Mutex
 	tokens   float64
@@ -146,7 +149,9 @@ func New(cfg Config) (*Reporter, error) {
 	if cfg.Client == nil {
 		cfg.Client = &http.Client{Timeout: defaultTimeout}
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	r := &Reporter{
+		ctx: ctx, cancel: cancel,
 		cfg: cfg, endpoint: endpoint,
 		auth:     fmt.Sprintf("Sentry sentry_version=7, sentry_client=scibox/%s, sentry_key=%s", cleanToken(cfg.Release), key),
 		queue:    make(chan []byte, cfg.Queue),
@@ -223,7 +228,11 @@ func (r *Reporter) Stats() Stats {
 	return Stats{Sent: r.sent.Load(), Failed: r.failed.Load(), Dropped: r.dropped.Load(), Suppressed: r.suppressed.Load()}
 }
 
-// Close дожидается отправки того, что уже в очереди (не дольше срока клиента на каждый отчёт), и останавливает отправителя.
+// CloseWait — сколько Close ждёт отправки очереди при остановке процесса: недоступный GlitchTip не должен задерживать
+// выход (сто отчётов по пять секунд — это восемь минут).
+const CloseWait = 5 * time.Second
+
+// Close дожидается отправки того, что уже в очереди, но не дольше CloseWait, и останавливает отправителя.
 func (r *Reporter) Close() {
 	if r == nil {
 		return
@@ -236,12 +245,20 @@ func (r *Reporter) Close() {
 	r.closed = true
 	close(r.queue)
 	r.closeMu.Unlock()
-	r.wg.Wait()
+	finished := make(chan struct{})
+	go func() { r.wg.Wait(); close(finished) }()
+	select {
+	case <-finished:
+	case <-time.After(CloseWait):
+		r.cancel() // прерывает текущую отправку; остаток очереди пройдёт мгновенными сбоями
+		<-finished
+	}
+	r.cancel()
 }
 
 func (r *Reporter) run() {
 	for body := range r.queue {
-		r.post(context.Background(), body)
+		r.post(r.ctx, body)
 	}
 }
 
