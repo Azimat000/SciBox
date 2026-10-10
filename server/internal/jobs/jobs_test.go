@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -620,4 +621,69 @@ func TestACopyWithAWrongClockRunsNothingUntilItIsFixed(t *testing.T) {
 	}
 	clk.Advance(-6 * time.Hour) // часы исправили
 	waitFor(t, "jobs to start after the fix", func() bool { return clusterRuns.Load() >= 1 && localRuns.Load() >= 1 })
+}
+
+type recordingObserver struct {
+	mu       sync.Mutex
+	finished []string
+	panics   []string
+}
+
+func (o *recordingObserver) JobFinished(name string, cluster bool, took time.Duration, err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.finished = append(o.finished, fmt.Sprintf("%s cluster=%v err=%v took>=0:%v", name, cluster, err, took >= 0))
+}
+
+func (o *recordingObserver) JobPanicked(name string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.panics = append(o.panics, name)
+}
+
+func (o *recordingObserver) snapshot() (finished, panics []string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return slices.Clone(o.finished), slices.Clone(o.panics)
+}
+
+// Наблюдатель (метрики среза 26) получает итог каждого прохода: успех, сбой и панику с именем задачи.
+func TestObserverSeesEveryPass(t *testing.T) {
+	obs := &recordingObserver{}
+	log, _ := newLog()
+	r := jobs.New(testkit.Pool, log, jobs.Config{Poll: 5 * time.Millisecond, Grace: 300 * time.Millisecond, Holder: "observed", Observer: obs})
+	okName, badName, panicName := name("obs-ok"), name("obs-bad"), name("obs-panic")
+	start(t, r,
+		jobs.Job{Name: okName, Every: time.Hour, Cluster: true, Run: func(context.Context) error { return nil }},
+		jobs.Job{Name: badName, Every: time.Hour, Cluster: true, Run: func(context.Context) error { return errors.New("down") }},
+		jobs.Job{Name: panicName, Every: time.Hour, Run: func(context.Context) error { panic("boom") }},
+	)
+	waitFor(t, "three passes", func() bool { f, _ := obs.snapshot(); return len(f) >= 3 })
+	finished, panics := obs.snapshot()
+	joined := strings.Join(finished, "\n")
+	for _, want := range []string{okName + " cluster=true err=<nil>", badName + " cluster=true err=down", panicName + " cluster=false err=jobs: " + panicName + " panicked: boom"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("no %q in\n%s", want, joined)
+		}
+	}
+	if len(panics) != 1 || panics[0] != panicName {
+		t.Errorf("panics = %v", panics)
+	}
+	if r.ClockSkewed() {
+		t.Error("a runner with a right clock reports a skew")
+	}
+}
+
+func TestClockSkewedIsReportedForMetrics(t *testing.T) {
+	clk := newClock()
+	clk.Advance(6 * time.Hour)
+	log, buf := newLog()
+	r := jobs.New(testkit.Pool, log, jobs.Config{Poll: 5 * time.Millisecond, Grace: 300 * time.Millisecond, Holder: "skewed-2", Now: clk.Now, SkewRecheck: 20 * time.Millisecond})
+	start(t, r, jobs.Job{Name: name("skew-flag"), Every: time.Hour, Cluster: true, Run: func(context.Context) error { return nil }})
+	waitFor(t, "the skew to be noticed", func() bool { return strings.Contains(buf.String(), "clock differs") })
+	if !r.ClockSkewed() {
+		t.Fatal("ClockSkewed() = false while the clock is 6 hours off")
+	}
+	clk.Advance(-6 * time.Hour)
+	waitFor(t, "the skew to clear", func() bool { return !r.ClockSkewed() })
 }

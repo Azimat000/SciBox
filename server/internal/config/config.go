@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/mail"
 	"net/netip"
 	"net/url"
@@ -17,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"scibox/server/internal/dbpool"
+	"scibox/server/internal/errreport"
 	"scibox/server/internal/httpguard"
 )
 
@@ -87,7 +90,40 @@ type Config struct {
 	// CrossrefMaxConcurrent — сколько запросов к Crossref одна копия ведёт одновременно (SCIBOX_CROSSREF_MAX_CONCURRENT,
 	// срез 25, T-24). Публичный пул Crossref допускает 1 одновременный запрос на адрес, «вежливый» 3; по умолчанию 1.
 	CrossrefMaxConcurrent int
+	// Log — формат и уровень журнала (SCIBOX_LOG_FORMAT, SCIBOX_LOG_LEVEL, срез 26).
+	Log Log
+	// Ops — внутренний порт: проверки живости, метрики, pprof (SCIBOX_OPS_*, срез 26, T-25).
+	Ops Ops
+	// ErrorDSN — адрес приёма ошибок GlitchTip (SCIBOX_ERROR_DSN, срез 26); пусто — ошибки никуда не отправляются.
+	ErrorDSN string
 }
+
+// Log — настройки журнала сервера.
+type Log struct {
+	// JSON — строка журнала это один объект JSON (в бою, чтобы системы сбора логов разбирали поля); иначе читаемый текст.
+	JSON  bool
+	Level slog.Level
+}
+
+// Ops — внутренний порт сервера и воркера. Он не для людей и не для интернета: проверки для оркестратора, метрики для
+// Prometheus и pprof для разработчика. Сайт и API на нём не отдаются, а его адреса не отдаются на публичном порту.
+type Ops struct {
+	// Addr — адрес «хост:порт»; пусто — взять адрес процесса по умолчанию (у сервера свой, у воркера свой), OpsOff —
+	// порт выключен.
+	Addr string
+	// Token — общий секрет: если задан, каждый запрос к внутреннему порту должен нести `Authorization: Bearer <секрет>`.
+	// В бою обязателен, когда порт слушает не петлю и не частную сеть.
+	Token string
+	// Pprof — отдавать ли /debug/pprof/. В разработке включён, в бою выключен: профиль раскрывает внутренности процесса
+	// и сам стоит процессора.
+	Pprof bool
+}
+
+// OpsOff выключает внутренний порт.
+const OpsOff = "off"
+
+// minOpsToken — наименьшая длина секрета внутреннего порта.
+const minOpsToken = 24
 
 // Значения срока остановки и числа обращений к Crossref по умолчанию и пределы.
 const (
@@ -173,6 +209,18 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("SCIBOX_CROSSREF_MAX_CONCURRENT: want a number from 1 to %d, got %q", maxCrossrefMaxConcurrent, v)
 		}
 		cfg.CrossrefMaxConcurrent = n
+	}
+	if cfg.Log, err = loadLog(getenv, cfg.Env == EnvProduction); err != nil {
+		return Config{}, err
+	}
+	if cfg.Ops, err = loadOps(getenv, dev); err != nil {
+		return Config{}, err
+	}
+	cfg.ErrorDSN = strings.TrimSpace(getenv("SCIBOX_ERROR_DSN"))
+	if cfg.ErrorDSN != "" {
+		if err := errreport.ValidateDSN(cfg.ErrorDSN); err != nil {
+			return Config{}, fmt.Errorf("SCIBOX_ERROR_DSN: %w (the address is not printed: it carries a key)", err)
+		}
 	}
 	switch cfg.SMTPTLS {
 	case "off", "starttls", "tls":
@@ -281,6 +329,7 @@ func checkProduction(cfg Config) error {
 			"so that mail with sign-in links is encrypted on the way to the mail service"))
 	}
 	problems = append(problems, checkFileStorage(cfg)...)
+	problems = append(problems, checkObservability(cfg)...)
 	if from, err := mail.ParseAddress(cfg.MailFrom); err != nil || strings.HasSuffix(strings.ToLower(from.Address), ".local") {
 		problems = append(problems, fmt.Errorf("SCIBOX_MAIL_FROM must be a real address on the site's domain, got %q: "+
 			"mail services reject letters from .local addresses", cfg.MailFrom))
@@ -374,4 +423,92 @@ func envOr(getenv func(string) string, key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// loadLog читает формат и уровень журнала. По умолчанию в бою JSON (по строке на запись, поля разбирает система
+// сбора), локально читаемый текст.
+func loadLog(getenv func(string) string, production bool) (Log, error) {
+	l := Log{JSON: production, Level: slog.LevelInfo}
+	switch raw := strings.ToLower(strings.TrimSpace(getenv("SCIBOX_LOG_FORMAT"))); raw {
+	case "":
+	case "json":
+		l.JSON = true
+	case "text":
+		l.JSON = false
+	default:
+		return Log{}, fmt.Errorf("SCIBOX_LOG_FORMAT: want json or text, got %q", raw)
+	}
+	switch raw := strings.ToLower(strings.TrimSpace(getenv("SCIBOX_LOG_LEVEL"))); raw {
+	case "":
+	case "debug":
+		l.Level = slog.LevelDebug
+	case "info":
+		l.Level = slog.LevelInfo
+	case "warn", "warning":
+		l.Level = slog.LevelWarn
+	case "error":
+		l.Level = slog.LevelError
+	default:
+		return Log{}, fmt.Errorf("SCIBOX_LOG_LEVEL: want debug, info, warn or error, got %q", raw)
+	}
+	return l, nil
+}
+
+// loadOps читает настройки внутреннего порта. Опечатка в адресе не молчит.
+func loadOps(getenv func(string) string, dev bool) (Ops, error) {
+	o := Ops{Addr: strings.TrimSpace(getenv("SCIBOX_OPS_ADDR")), Token: strings.TrimSpace(getenv("SCIBOX_OPS_TOKEN"))}
+	if o.Addr != "" && !strings.EqualFold(o.Addr, OpsOff) {
+		if _, port, err := net.SplitHostPort(o.Addr); err != nil || port == "" {
+			return Ops{}, fmt.Errorf("SCIBOX_OPS_ADDR: want host:port like 127.0.0.1:9100 or off, got %q", o.Addr)
+		}
+	}
+	if strings.EqualFold(o.Addr, OpsOff) {
+		o.Addr = OpsOff
+	}
+	if o.Token != "" && len(o.Token) < minOpsToken {
+		return Ops{}, fmt.Errorf("SCIBOX_OPS_TOKEN: at least %d characters are required (use `openssl rand -hex 32`)", minOpsToken)
+	}
+	var err error
+	if o.Pprof, err = envBool(getenv, "SCIBOX_PPROF", dev); err != nil {
+		return Ops{}, err
+	}
+	return o, nil
+}
+
+// checkObservability: внутренний порт в бою не слушает чужие сети без секрета, а ошибки уходят только по шифрованному
+// каналу (или внутри закрытой сети самого сервера).
+func checkObservability(cfg Config) []error {
+	var problems []error
+	if addr := cfg.Ops.Addr; addr != "" && addr != OpsOff && cfg.Ops.Token == "" {
+		host, _, _ := net.SplitHostPort(addr)
+		if !internalHost(host) {
+			problems = append(problems, fmt.Errorf("SCIBOX_OPS_ADDR %q listens on a network that may be reachable from outside: "+
+				"bind it to 127.0.0.1 or a private address, or set SCIBOX_OPS_TOKEN (metrics and profiles must not be open)", addr))
+		}
+	}
+	if cfg.Ops.Pprof && cfg.Ops.Token == "" && cfg.Ops.Addr != OpsOff {
+		problems = append(problems, errors.New("SCIBOX_PPROF is on without SCIBOX_OPS_TOKEN: profiles show the inside of the process, "+
+			"set a token or switch SCIBOX_PPROF off"))
+	}
+	if cfg.ErrorDSN != "" {
+		// Формат проверен при чтении настроек (errreport.ValidateDSN).
+		if u, err := url.Parse(cfg.ErrorDSN); err == nil && u.Scheme != "https" && !internalHost(u.Hostname()) {
+			problems = append(problems, errors.New("SCIBOX_ERROR_DSN goes over http to another network: use https, "+
+				"error reports must not travel unencrypted"))
+		}
+	}
+	return problems
+}
+
+// internalHost — адрес, который не виден из интернета: петля, частная сеть, link-local или имя без точки (сервис в сети
+// docker compose). Пустой хост и 0.0.0.0 (все сети) внутренними не считаются.
+func internalHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return host != "" && !strings.Contains(host, ".")
+	}
+	return a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast()
 }

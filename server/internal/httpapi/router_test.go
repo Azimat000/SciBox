@@ -14,6 +14,7 @@ import (
 
 	"scibox/server/internal/audit"
 	"scibox/server/internal/health"
+	"scibox/server/internal/metrics"
 )
 
 type fakeHealth struct {
@@ -106,20 +107,40 @@ func TestErrorResponses(t *testing.T) {
 
 func TestRecovererReturnsJSON500(t *testing.T) {
 	var logs bytes.Buffer
-	h := recoverer(slog.New(slog.NewTextHandler(&logs, nil)))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	m := metrics.New("serve", "test")
+	h := recoverer(slog.New(slog.NewTextHandler(&logs, nil)), m)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("kaboom")
 	}))
 	rec := do(t, h, http.MethodGet, "/x")
 	if rec.Code != http.StatusInternalServerError || decodeError(t, rec).Code != CodeInternal {
 		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(logs.String(), "kaboom") {
-		t.Fatal("panic not logged")
+	if !strings.Contains(logs.String(), "kaboom") || !strings.Contains(logs.String(), "stack=") || !strings.Contains(logs.String(), "level=ERROR") {
+		t.Fatalf("panic not logged with its stack: %s", logs.String())
+	}
+	// Паника считается в метриках; без метрик перехват тоже работает.
+	families, _ := m.Registry.Gather()
+	var panics float64
+	for _, f := range families {
+		if f.GetName() == "scibox_panics_total" {
+			for _, s := range f.GetMetric() {
+				if s.GetLabel()[0].GetValue() == "http" {
+					panics = s.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	if panics != 1 {
+		t.Fatalf("panics counted = %v", panics)
+	}
+	bare := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)), nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("x") }))
+	if rec := do(t, bare, http.MethodGet, "/x"); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("without metrics: %d", rec.Code)
 	}
 }
 
 func TestRecovererRepanicsAbort(t *testing.T) {
-	h := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := recoverer(slog.New(slog.NewTextHandler(io.Discard, nil)), nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic(http.ErrAbortHandler)
 	}))
 	defer func() {

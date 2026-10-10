@@ -68,3 +68,13 @@ FROM application_files f
 JOIN applications a ON a.id = f.application_id
 JOIN vacancies v ON v.id = a.vacancy_id
 WHERE f.id = $1;
+
+-- Очереди файловой работы для метрик и тревог (срез 26, T-44): сколько файлов ждёт проверки на вирусы и как давно ждёт
+-- самый старый, сколько объектов ждёт удаления из хранилища, сколько старых файлов ещё в базе. Идёт по частичным
+-- индексам application_files_scan_due_idx, application_files_legacy_idx и blob_deletions_queued_idx.
+-- name: FilesQueueStats :one
+SELECT
+    (SELECT count(*) FROM application_files WHERE scan_status = 'pending' AND storage_key IS NOT NULL)::bigint AS pending,
+    COALESCE((SELECT min(created_at) FROM application_files WHERE scan_status = 'pending' AND storage_key IS NOT NULL), to_timestamp(0))::timestamptz AS oldest_pending,
+    (SELECT count(*) FROM blob_deletions)::bigint AS deletions,
+    (SELECT count(*) FROM application_files WHERE legacy_data IS NOT NULL)::bigint AS legacy;

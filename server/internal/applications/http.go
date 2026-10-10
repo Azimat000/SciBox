@@ -89,7 +89,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrDeadlinePassed):
 		apierr.WriteError(w, http.StatusConflict, CodeDeadlinePassed, "Срок подачи заявок прошёл")
 	case errors.Is(err, files.ErrStorage):
-		h.logger.Error("applications storage failed", "path", r.URL.Path, "err", err)
+		h.logger.ErrorContext(r.Context(), "applications storage failed", "path", r.URL.Path, "err", err)
 		files.WriteStorageUnavailable(w)
 	case errors.Is(err, ErrFilePending):
 		apierr.WriteError(w, http.StatusConflict, CodeFilePending, "Файл ещё проверяется на вирусы. Это занимает несколько минут: попробуйте позже")
@@ -142,7 +142,7 @@ func (h *Handler) failUpload(w http.ResponseWriter, r *http.Request, err error) 
 		return
 	}
 	if errors.Is(err, files.ErrStorage) {
-		h.logger.Error("applications storage failed", "path", r.URL.Path, "err", err)
+		h.logger.ErrorContext(r.Context(), "applications storage failed", "path", r.URL.Path, "err", err)
 	}
 	files.WriteError(w, err, "files")
 }
@@ -199,7 +199,7 @@ func (h *Handler) file(w http.ResponseWriter, r *http.Request) {
 	defer f.Body.Close() //nolint:errcheck // чтение закончено; закрытие ничего не пишет
 	if err := files.Serve(w, f.Name, f.Size, f.Body); err != nil {
 		// Заголовки уже ушли: статус не изменить. Обрыв потока виден браузеру как неполная загрузка (Content-Length).
-		h.logger.Error("applications file stream failed", "path", r.URL.Path, "err", err)
+		h.logger.ErrorContext(r.Context(), "applications file stream failed", "path", r.URL.Path, "err", err)
 	}
 }
 

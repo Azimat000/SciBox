@@ -28,6 +28,7 @@ import (
 	"scibox/server/internal/dataexport"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/dbpool"
+	"scibox/server/internal/errreport"
 	"scibox/server/internal/files"
 	"scibox/server/internal/filework"
 	"scibox/server/internal/health"
@@ -39,6 +40,7 @@ import (
 	"scibox/server/internal/logmask"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/matching"
+	"scibox/server/internal/metrics"
 	"scibox/server/internal/migrate"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/offers"
@@ -46,6 +48,7 @@ import (
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
 	"scibox/server/internal/references"
+	"scibox/server/internal/reqid"
 	"scibox/server/internal/resilience"
 	"scibox/server/internal/vacancies"
 	"scibox/server/seed"
@@ -59,6 +62,7 @@ const usage = `Использование: scibox <команда>
 Команды:
   serve                      запустить HTTP-сервер (по умолчанию); с SCIBOX_BACKGROUND=off без фоновых задач
   worker                     запустить только фоновые задачи (письма, подбор, напоминания, чистка, файлы)
+  error-test                 отправить пробный отчёт в GlitchTip (проверка SCIBOX_ERROR_DSN)
   migrate up|down|reset|status   миграции базы данных
   seed                       загрузить демо-данные
   journals load [--force] [файл]  загрузить справочник журналов SCImago (без файла — встроенный в сервер)
@@ -72,6 +76,8 @@ type Env struct {
 	Stderr io.Writer
 	// OnListen вызывается, когда сервер начал принимать соединения (для тестов).
 	OnListen func(addr net.Addr)
+	// OnOpsListen вызывается, когда внутренний порт начал принимать соединения (для тестов).
+	OnOpsListen func(addr net.Addr)
 }
 
 // Run выполняет команду и возвращает код выхода процесса.
@@ -81,8 +87,11 @@ func Run(ctx context.Context, args []string, env Env) int {
 		cmd = args[0]
 		args = args[1:]
 	}
-	logger := newLogger(env.Stderr)
-	defer useAsDefault(logger)()
+	// До разбора настроек журнал простой: уровень Info, читаемый текст. Настоящий журнал (формат, уровень, сбор ошибок)
+	// строится по настройкам сразу после их чтения.
+	logger := newLogger(env.Stderr, logOptions{})
+	restoreDefault := useAsDefault(logger)
+	defer func() { restoreDefault() }()
 
 	switch cmd {
 	case "version":
@@ -91,7 +100,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
-	case "serve", "worker", "migrate", "seed", "journals":
+	case "serve", "worker", "migrate", "seed", "journals", "error-test":
 	default:
 		fmt.Fprintf(env.Stderr, "неизвестная команда %q\n\n%s", cmd, usage)
 		return 2
@@ -102,6 +111,14 @@ func Run(ctx context.Context, args []string, env Env) int {
 		logger.Error("load config", "err", err)
 		return 1
 	}
+	// Журнал по настройкам: каждая строка несёт имя процесса, версию и режим, чтобы строки нескольких копий и воркера,
+	// собранные в одном месте, различались.
+	obs := newObservability(cfg, cmd)
+	defer obs.reporter.Close()
+	restoreDefault()
+	logger = newLogger(env.Stderr, logOptions{json: cfg.Log.JSON, level: cfg.Log.Level, reporter: obs.reporter, metrics: obs.metrics}).
+		With("service", cmd, "version", Version, "env", cfg.Env)
+	restoreDefault = useAsDefault(logger)
 
 	switch cmd {
 	case "migrate":
@@ -127,14 +144,16 @@ func Run(ctx context.Context, args []string, env Env) int {
 			return 1
 		}
 		return 0
+	case "error-test":
+		return runErrorTest(ctx, obs, env)
 	case "worker":
-		if err := runWorker(ctx, cfg, logger); err != nil {
+		if err := runWorker(ctx, cfg, logger, obs, env.OnOpsListen); err != nil {
 			logger.Error("worker", "err", err)
 			return 1
 		}
 		return 0
 	default:
-		if err := serve(ctx, cfg, logger, env.OnListen); err != nil {
+		if err := serve(ctx, cfg, logger, obs, env.OnListen, env.OnOpsListen); err != nil {
 			logger.Error("serve", "err", err)
 			return 1
 		}
@@ -142,10 +161,39 @@ func Run(ctx context.Context, args []string, env Env) int {
 	}
 }
 
-// newLogger — единственное место, где создаётся журнал сервера: всё, что в него пишется, проходит через logmask (T-18),
-// поэтому почты, адреса людей и токены не попадают в записи, где бы их ни написали по ошибке.
-func newLogger(w io.Writer) *slog.Logger {
-	return slog.New(logmask.NewHandler(slog.NewTextHandler(w, nil)))
+// logOptions — как собрать журнал. Нулевое значение: читаемый текст, уровень Info, без метрик и сбора ошибок.
+type logOptions struct {
+	// json — по объекту JSON на запись (в бою), иначе читаемый текст.
+	json  bool
+	level slog.Level
+	// reporter получает записи уровня Error (сбор ошибок, срез 26); nil — никому.
+	reporter *errreport.Reporter
+	// metrics считает записи по уровню; nil — не считает.
+	metrics *metrics.Metrics
+}
+
+// newLogger — единственное место, где создаётся журнал сервера. Порядок слоёв важен:
+//  1. logmask чистит сообщение и значения (T-18): почты, адреса людей и токены не попадают в запись, где бы их ни
+//     написали по ошибке, и не уходят ни в журнал, ни в сбор ошибок;
+//  2. reqid дописывает номер запроса к записям, написанным с контекстом запроса;
+//  3. счётчик записей по уровню (метрики);
+//  4. errreport отправляет уже очищенные записи уровня Error в GlitchTip и передаёт их дальше;
+//  5. обработчик вывода (JSON в бою, текст локально).
+func newLogger(w io.Writer, o logOptions) *slog.Logger {
+	hopts := &slog.HandlerOptions{Level: o.level}
+	var out slog.Handler = slog.NewTextHandler(w, hopts)
+	if o.json {
+		out = slog.NewJSONHandler(w, hopts)
+	}
+	if o.reporter != nil {
+		// О своих сбоях отправитель пишет в журнал без отправки ошибок: иначе сбой отправки породил бы ещё одну ошибку.
+		o.reporter.SetLogger(slog.New(logmask.NewHandler(out)))
+		out = errreport.NewHandler(out, o.reporter)
+	}
+	if o.metrics != nil {
+		out = o.metrics.NewLogHandler(out)
+	}
+	return slog.New(logmask.NewHandler(reqid.NewHandler(out)))
 }
 
 // useAsDefault делает logger журналом по умолчанию: его используют slog.Info и пр. без логгера и стандартный log
@@ -219,7 +267,7 @@ func runSeed(ctx context.Context, databaseURL string, vault *files.Vault, out io
 	return nil
 }
 
-func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen func(net.Addr)) error {
+func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, obs observability, onListen, onOpsListen func(net.Addr)) error {
 	// Сайт проверяется до базы и фоновых задач: несобранный сайт — ошибка запуска, а не пустые страницы.
 	var web http.Handler
 	if cfg.WebDir != "" {
@@ -231,6 +279,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 
 	// Пул сервера со сроками для базы и журналом медленных запросов (T-22). Команды администратора (migrate, seed,
 	// journals) открывают обычные соединения без этих сроков: загрузка справочника или миграция может идти долго.
+	cfg.DB.Observer = obs.metrics // у serve метрики есть всегда
 	pool, err := dbpool.New(ctx, cfg.DatabaseURL, cfg.DB, logger)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
@@ -253,6 +302,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	}
 	svc := newServices(cfg, pool, vault, logger, time.Now, nil)
+	svc.metrics = obs.metrics
 	handler := svc.router(health.Checker{Queries: dbgen.New(pool), Migrations: migrations}, web)
 
 	// Фоновые задачи (если их не вынесли в `worker`) останавливаются отменой jobCtx; сервер дожидается их до закрытия
@@ -264,16 +314,31 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	for _, flush := range svc.flushers() {
 		defer flush()
 	}
+	list := svc.jobs()
+	var runner *jobs.Runner
 	if cfg.Background {
-		list := svc.jobs()
 		if err := jobs.Validate(list); err != nil {
 			return err
 		}
-		runner := jobs.New(pool, logger, jobs.Config{Grace: cfg.ShutdownTimeout})
+		runner = jobs.New(pool, logger, jobs.Config{Grace: cfg.ShutdownTimeout, Observer: obs.metrics})
 		background.Go(func() { _ = runner.Run(jobCtx, list...) }) // описание проверено выше: Run не вернёт ошибку
 	} else {
 		logger.Info("background jobs are off in this process: run `worker` for them")
 	}
+	if err := svc.registerSources(obs, runner, list); err != nil {
+		return fmt.Errorf("register metrics: %w", err)
+	}
+	ops, err := startOps(ctx, cfg, logger, obs, opsParams{defaultAddr: defaultServeOpsAddr, pool: pool, schema: migrations, runner: runner, onListen: onOpsListen})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := ops.stop(stopCtx); err != nil {
+			logger.Warn("internal port stopped with an error", "err", err)
+		}
+	}()
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
@@ -294,8 +359,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	case <-ctx.Done():
 	}
-	// Сервер перестаёт принимать новые соединения и дожидается текущих запросов; фоновые задачи в это время тоже
+	// Оркестратору сначала сообщается «не готов» (/readyz): пока сервер дописывает запросы, новых ему не шлют. Затем
+	// сервер перестаёт принимать новые соединения и дожидается текущих запросов; фоновые задачи в это время тоже
 	// дописывают свою порцию (их остановка началась с той же отмены ctx).
+	ops.drain()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -310,20 +377,32 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 
 // runWorker — отдельный процесс фоновых задач: те же задачи, что у `serve` с включённым SCIBOX_BACKGROUND, но без
 // HTTP. Копий воркера может быть несколько: общее расписание лежит в базе (internal/jobs).
-func runWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+func runWorker(ctx context.Context, cfg config.Config, logger *slog.Logger, obs observability, onOpsListen func(net.Addr)) error {
 	// Задачи идут по одной на каждый вид и почти не держат соединений: воркеру хватает половины обычного пула, остальное
 	// остаётся копиям сервера (в базе всего 100 соединений на все процессы).
 	cfg.DB.MaxConns = min(cfg.DB.MaxConns, workerMaxConns)
+	cfg.DB.Observer = obs.metrics // у worker метрики есть всегда
 	pool, err := dbpool.New(ctx, cfg.DatabaseURL, cfg.DB, logger)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
 	defer pool.Close()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			logger.Warn("close database handle", "err", err)
+		}
+	}()
+	migrations, err := migrate.NewProvider(sqlDB)
+	if err != nil {
+		return err
+	}
 	vault, err := openVault(ctx, cfg, logger)
 	if err != nil {
 		return err
 	}
 	svc := newServices(cfg, pool, vault, logger, time.Now, nil)
+	svc.metrics = obs.metrics
 	for _, flush := range svc.flushers() {
 		defer flush()
 	}
@@ -331,7 +410,23 @@ func runWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) erro
 	if err := jobs.Validate(list); err != nil {
 		return err
 	}
-	runner := jobs.New(pool, logger, jobs.Config{Grace: cfg.ShutdownTimeout})
+	runner := jobs.New(pool, logger, jobs.Config{Grace: cfg.ShutdownTimeout, Observer: obs.metrics})
+	if err := svc.registerSources(obs, runner, list); err != nil {
+		return fmt.Errorf("register metrics: %w", err)
+	}
+	ops, err := startOps(ctx, cfg, logger, obs, opsParams{defaultAddr: defaultWorkerOpsAddr, pool: pool, schema: migrations, runner: runner, onListen: onOpsListen})
+	if err != nil {
+		return err
+	}
+	// Порт закрывается после остановки задач: пока они дописывают, /readyz отвечает «не готов», /livez «жив».
+	defer func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := ops.stop(stopCtx); err != nil {
+			logger.Warn("internal port stopped with an error", "err", err)
+		}
+	}()
+	context.AfterFunc(ctx, ops.drain)
 	logger.Info("worker started", "product", cfg.Product.Name, "env", cfg.Env, "jobs", len(list), "holder", runner.Holder())
 	if err := runner.Run(ctx, list...); err != nil {
 		return err
@@ -378,6 +473,12 @@ type services struct {
 	vault         *files.Vault
 	authHandler   *auth.Handler
 	queue         *notifications.Queue
+
+	// metrics считает запросы роутера; nil — без метрик (тесты). Задаётся после сборки (serve, worker).
+	metrics *metrics.Metrics
+	// breakers и limiters — предохранители и ограничители внешних сервисов по имени (для метрик).
+	breakers map[string]*resilience.Breaker
+	limiters map[string]*resilience.Limiter
 }
 
 // workerMaxConns — предел пула воркера (SCIBOX_DB_MAX_CONNS ниже этого предела действует как есть).
@@ -426,6 +527,8 @@ func newServices(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logg
 		counters:    httpguard.NewPostgresStore(pool),
 		fileWork:    filework.NewService(pool, vault, notes, filework.DefaultConfig(), logger),
 		authHandler: auth.NewHandler(accounts, logger),
+		breakers:    map[string]*resilience.Breaker{"mail": outbox.Breaker, "crossref": cross.Gate.Breaker},
+		limiters:    map[string]*resilience.Limiter{"crossref": cross.Gate.Limiter},
 	}
 }
 
@@ -452,6 +555,7 @@ func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.
 		Export:        dataexport.NewHandler(dataexport.NewService(pool, s.vault, dataexport.DefaultConfig(cfg.Product.Name)), logger, requireUser),
 		Web:           web,
 		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: s.counters, Now: s.now},
+		Metrics:       s.metrics,
 	})
 }
 

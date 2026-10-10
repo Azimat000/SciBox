@@ -67,6 +67,17 @@ type Config struct {
 	Holder string
 	// Now — часы; в тестах подменяются.
 	Now func() time.Time
+	// Observer получает итоги проходов (метрики и сбор ошибок, срез 26); nil — никому.
+	Observer Observer
+}
+
+// Observer получает итоги проходов задач. Вызовы идут из горутин задач и не должны блокироваться.
+type Observer interface {
+	// JobFinished — проход закончился: сколько шёл и чем. err == nil — успех; остановка копии приходит как
+	// context.Canceled (сбоем она не считается).
+	JobFinished(name string, cluster bool, took time.Duration, err error)
+	// JobPanicked — задача упала с паникой (JobFinished за ней тоже придёт, с ошибкой).
+	JobPanicked(name string)
 }
 
 // Normalized заменяет нулевые и отрицательные значения обычными: «0» не значит «без паузы» или «без срока».
@@ -159,6 +170,14 @@ func New(db DB, logger *slog.Logger, cfg Config) *Runner {
 
 // Holder — имя этой копии в расписании.
 func (r *Runner) Holder() string { return r.cfg.Holder }
+
+// ClockSkewed сообщает, что при последней сверке часы копии разошлись с часами базы больше допуска: копия не исполняет
+// никаких задач, пока часы не поправят (D-171).
+func (r *Runner) ClockSkewed() bool {
+	r.skewMu.Lock()
+	defer r.skewMu.Unlock()
+	return r.skewBad
+}
 
 // Snapshot — состояние всех задач этой копии, по имени.
 func (r *Runner) Snapshot() []Status {
@@ -350,8 +369,14 @@ func (r *Runner) exec(ctx context.Context, j Job, timeout time.Duration, prior i
 		if p := recover(); p != nil {
 			err = fmt.Errorf("jobs: %s panicked: %v", j.Name, p)
 			r.log.Error("job panicked", "job", j.Name, "panic", fmt.Sprint(p), "stack", string(debug.Stack()))
+			if r.cfg.Observer != nil {
+				r.cfg.Observer.JobPanicked(j.Name)
+			}
 		}
 		r.finished(j, err, prior)
+		if r.cfg.Observer != nil {
+			r.cfg.Observer.JobFinished(j.Name, j.Cluster, r.cfg.Now().Sub(start), err)
+		}
 	}()
 	return j.Run(runCtx)
 }

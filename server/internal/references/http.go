@@ -188,7 +188,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if files.IsUploadError(err) {
 			if errors.Is(err, files.ErrStorage) {
-				h.logger.Error("references storage failed", "path", r.URL.Path, "err", err)
+				h.logger.ErrorContext(r.Context(), "references storage failed", "path", r.URL.Path, "err", err)
 			}
 			files.WriteError(w, err, "file")
 			return

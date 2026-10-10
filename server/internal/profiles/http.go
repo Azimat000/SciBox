@@ -100,7 +100,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrDOINotFound):
 		apierr.WriteError(w, http.StatusNotFound, CodeDOINotFound, "Crossref не знает такого DOI. Проверьте номер или заполните публикацию вручную")
 	case errors.Is(err, ErrDOIUnavailable):
-		h.logger.Warn("crossref lookup failed", "err", err)
+		h.logger.WarnContext(r.Context(), "crossref lookup failed", "err", err)
 		apierr.WriteError(w, http.StatusBadGateway, CodeDOIUnavailable, "Crossref сейчас недоступен. Заполните публикацию вручную")
 	default:
 		apierr.WriteInternal(w, r, h.logger, "profiles", err)

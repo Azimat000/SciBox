@@ -71,17 +71,17 @@ const StatusClientClosed = 499
 // чтобы настоящие сбои не терялись среди обрывов.
 func WriteInternal(w http.ResponseWriter, r *http.Request, logger *slog.Logger, what string, err error) {
 	if r.Context().Err() != nil {
-		logger.Info(what+" cancelled by client", "path", r.URL.Path)
+		logger.InfoContext(r.Context(), what+" cancelled by client", "path", r.URL.Path)
 		w.WriteHeader(StatusClientClosed)
 		return
 	}
 	if dbpool.IsTimeout(err) {
 		// Запрос остановила база по сроку: это перегрузка, а не поломка; человеку предлагаем повторить.
-		logger.Warn(what+" request stopped by the database timeout", "path", r.URL.Path)
+		logger.WarnContext(r.Context(), what+" request stopped by the database timeout", "path", r.URL.Path)
 		w.Header().Set("Retry-After", "5")
 		WriteError(w, http.StatusServiceUnavailable, CodeDatabaseBusy, "Сервер сейчас занят. Попробуйте ещё раз через несколько секунд")
 		return
 	}
-	logger.Error(what+" request failed", "path", r.URL.Path, "err", err)
+	logger.ErrorContext(r.Context(), what+" request failed", "path", r.URL.Path, "err", err)
 	WriteError(w, http.StatusInternalServerError, CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
 }

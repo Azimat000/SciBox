@@ -53,6 +53,10 @@ func run(ctx context.Context, args []string, env map[string]string, onListen fun
 	if _, ok := env["SCIBOX_S3_BUCKET"]; !ok {
 		env["SCIBOX_S3_BUCKET"] = testBucket
 	}
+	// Внутренний порт тестов на любом свободном порту: тесты идут параллельно и не делят 9100.
+	if _, ok := env["SCIBOX_OPS_ADDR"]; !ok {
+		env["SCIBOX_OPS_ADDR"] = "127.0.0.1:0"
+	}
 	code := Run(ctx, args, Env{
 		Getenv:   func(k string) string { return env[k] },
 		Stdout:   &out,

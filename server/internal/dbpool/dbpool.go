@@ -47,6 +47,14 @@ type Config struct {
 	IdleInTxTimeout time.Duration
 	// SlowQuery — запросы дольше этого срока попадают в журнал (только имя запроса и время, значения параметров — никогда).
 	SlowQuery time.Duration
+	// Observer получает итог каждого запроса (метрики, срез 26); nil — никому. В настройки из окружения не читается.
+	Observer Observer
+}
+
+// Observer получает итоги запросов к базе: имя запроса из комментария sqlc, время, «медленный» (дольше SlowQuery) и
+// «остановлен по сроку» (statement_timeout). Значения параметров и текст запроса сюда не попадают (I-54).
+type Observer interface {
+	ObserveQuery(name string, took time.Duration, slow, timedOut bool)
 }
 
 // Default — настройки по умолчанию.
@@ -105,8 +113,8 @@ func PoolConfig(databaseURL string, cfg Config, logger *slog.Logger) (*pgxpool.C
 	// всех облачных хостингов и ноутбуков диски твёрдотельные: рекомендация PostgreSQL для них 1,1.
 	setDefault("random_page_cost", "1.1")
 
-	if logger != nil {
-		pc.ConnConfig.Tracer = &SlowQueryTracer{Logger: logger, Threshold: cfg.SlowQuery, Now: time.Now}
+	if logger != nil || cfg.Observer != nil {
+		pc.ConnConfig.Tracer = &SlowQueryTracer{Logger: logger, Threshold: cfg.SlowQuery, Now: time.Now, Observer: cfg.Observer}
 	}
 	return pc, nil
 }
@@ -138,6 +146,8 @@ type SlowQueryTracer struct {
 	Logger    *slog.Logger
 	Threshold time.Duration
 	Now       func() time.Time
+	// Observer получает итог каждого запроса; nil — никому.
+	Observer Observer
 }
 
 type queryStart struct {
@@ -159,10 +169,17 @@ func (t *SlowQueryTracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data p
 		return
 	}
 	took := t.Now().Sub(start.at)
+	timedOut, slow := IsTimeout(data.Err), took >= t.Threshold
+	if t.Observer != nil {
+		t.Observer.ObserveQuery(start.name, took, slow, timedOut)
+	}
+	if t.Logger == nil {
+		return
+	}
 	switch {
-	case IsTimeout(data.Err):
+	case timedOut:
 		t.Logger.Error("query stopped by statement_timeout", "query", start.name, "ms", took.Milliseconds())
-	case took >= t.Threshold:
+	case slow:
 		t.Logger.Warn("slow query", "query", start.name, "ms", took.Milliseconds(), "rows", data.CommandTag.RowsAffected())
 	}
 }

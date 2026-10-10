@@ -4,8 +4,10 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,12 +22,14 @@ import (
 	"scibox/server/internal/journals"
 	"scibox/server/internal/landing"
 	"scibox/server/internal/matching"
+	"scibox/server/internal/metrics"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/offers"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
 	"scibox/server/internal/references"
+	"scibox/server/internal/reqid"
 	"scibox/server/internal/vacancies"
 )
 
@@ -72,6 +76,8 @@ type Deps struct {
 	// Perimeter — прокси, https, хранилище счётчиков частоты. Периметр работает всегда; нулевое значение —
 	// без доверенных прокси, без HSTS, счётчики в памяти.
 	Perimeter Perimeter
+	// Metrics считает запросы и паники (срез 26); nil — без метрик (тесты).
+	Metrics *metrics.Metrics
 }
 
 // healthTimeout ограничивает проверку базы, чтобы /api/health не зависал.
@@ -89,9 +95,14 @@ func NewRouter(d Deps) http.Handler {
 		// Таблица PerimeterRoutes() постоянная: ошибка в ней — ошибка в коде, её ловит TestPerimeter в internal/cli.
 		panic(err)
 	}
-	r.Use(middleware.RequestID)
+	// Номер запроса создаёт сервер и никогда не берёт у посетителя (reqid); счёт запросов стоит снаружи перехвата
+	// паники, чтобы упавший запрос попал в счёт как 500.
+	r.Use(reqid.Middleware)
+	if d.Metrics != nil {
+		r.Use(d.Metrics.Middleware)
+	}
 	r.Use(requestLogger(d.Logger))
-	r.Use(recoverer(d.Logger))
+	r.Use(recoverer(d.Logger, d.Metrics))
 	r.Use(guard.Perimeter)
 
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
@@ -197,24 +208,32 @@ func recordSource(next http.Handler) http.Handler {
 	})
 }
 
+// requestLogger пишет по строке на запрос: шаблон адреса, код, время и размер ответа. Номер запроса дописывает
+// обработчик журнала (reqid) из контекста. Запрос с ошибкой сервера идёт предупреждением: сама ошибка уже записана
+// с подробностями там, где случилась (apierr.WriteInternal), и вторая запись уровня Error была бы дублем.
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			start := time.Now()
 			next.ServeHTTP(ww, r)
-			logger.Info("request",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"status", ww.Status(),
-				"duration", time.Since(start),
-				"request_id", middleware.GetReqID(r.Context()),
+			level := slog.LevelInfo
+			if ww.Status() >= http.StatusInternalServerError {
+				level = slog.LevelWarn
+			}
+			logger.LogAttrs(r.Context(), level, "request",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.String("route", metrics.RouteLabel(r)),
+				slog.Int("status", ww.Status()),
+				slog.Duration("duration", time.Since(start)),
+				slog.Int("bytes", ww.BytesWritten()),
 			)
 		})
 	}
 }
 
-func recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
+func recoverer(logger *slog.Logger, m *metrics.Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
@@ -222,7 +241,11 @@ func recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 					if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
 						panic(rec)
 					}
-					logger.Error("panic in handler", "panic", rec, "path", r.URL.Path)
+					if m != nil {
+						m.Panic("http")
+					}
+					logger.ErrorContext(r.Context(), "panic in handler", "panic", fmt.Sprint(rec), "path", r.URL.Path,
+						"route", metrics.RouteLabel(r), "stack", string(debug.Stack()))
 					WriteError(w, http.StatusInternalServerError, CodeInternal, "Что-то сломалось на сервере. Попробуйте ещё раз")
 				}
 			}()

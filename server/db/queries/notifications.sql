@@ -78,13 +78,15 @@ UPDATE outbox SET next_attempt_at = @now, attempts = GREATEST(attempts - 1, 0)
 WHERE id = ANY(@ids::bigint[]) AND sent_at IS NULL AND failed_at IS NULL AND next_attempt_at = @lease_until;
 
 -- Состояние очереди для журнала и метрик: ждут, повторяются, недоставлены и когда поставлено самое старое ждущее письмо (1970-01-01, если ждущих нет).
+-- Каждое число считается отдельным подзапросом, чтобы идти по своему частичному индексу (outbox_due_idx для ждущих,
+-- outbox_failed_idx для недоставленных), а не читать всю таблицу вместе с отправленными письмами: метрики спрашивают
+-- это каждые несколько секунд из каждой копии (срез 26).
 -- name: OutboxStats :one
 SELECT
-    (count(*) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL))::bigint AS waiting,
-    (count(*) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL AND attempts > 0))::bigint AS retrying,
-    (count(*) FILTER (WHERE failed_at IS NOT NULL))::bigint AS undelivered,
-    COALESCE(min(created_at) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL), to_timestamp(0))::timestamptz AS oldest_waiting
-FROM outbox;
+    (SELECT count(*) FROM outbox WHERE sent_at IS NULL AND failed_at IS NULL)::bigint AS waiting,
+    (SELECT count(*) FROM outbox WHERE sent_at IS NULL AND failed_at IS NULL AND attempts > 0)::bigint AS retrying,
+    (SELECT count(*) FROM outbox WHERE failed_at IS NOT NULL)::bigint AS undelivered,
+    COALESCE((SELECT min(created_at) FROM outbox WHERE sent_at IS NULL AND failed_at IS NULL), to_timestamp(0))::timestamptz AS oldest_waiting;
 
 -- Старые отправленные и окончательно неудавшиеся письма больше не нужны.
 -- name: DeleteOldOutbox :exec

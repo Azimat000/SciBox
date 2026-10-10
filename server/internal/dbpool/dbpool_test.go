@@ -257,3 +257,57 @@ func (b *lockedBuffer) Reset() {
 	defer b.mu.Unlock()
 	b.buf.Reset()
 }
+
+type queryEvent struct {
+	name           string
+	took           time.Duration
+	slow, timedOut bool
+}
+
+type recorder struct {
+	mu     sync.Mutex
+	events []queryEvent
+}
+
+func (r *recorder) ObserveQuery(name string, took time.Duration, slow, timedOut bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, queryEvent{name, took, slow, timedOut})
+}
+
+func (r *recorder) last() queryEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.events[len(r.events)-1]
+}
+
+// Наблюдатель (метрики среза 26) получает каждый запрос: имя, время, «медленный», «остановлен по сроку». Журнал при
+// этом может быть выключен вовсе: метрики не зависят от него.
+func TestObserverSeesEveryQueryEvenWithoutALogger(t *testing.T) {
+	url := testdb.Create(t, false)
+	rec := &recorder{}
+	pool, err := dbpool.New(t.Context(), url, dbpool.Config{SlowQuery: 20 * time.Millisecond, StatementTimeout: time.Second, Observer: rec}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+
+	if _, err := pool.Exec(t.Context(), "-- name: QuickQuery :exec\nSELECT 1"); err != nil {
+		t.Fatal(err)
+	}
+	if e := rec.last(); e.name != "QuickQuery" || e.slow || e.timedOut {
+		t.Errorf("quick: %+v", e)
+	}
+	if _, err := pool.Exec(t.Context(), "-- name: SleepyQuery :exec\nSELECT pg_sleep(0.1)"); err != nil {
+		t.Fatal(err)
+	}
+	if e := rec.last(); e.name != "SleepyQuery" || !e.slow || e.timedOut || e.took < 100*time.Millisecond {
+		t.Errorf("slow: %+v", e)
+	}
+	if _, err := pool.Exec(t.Context(), "-- name: StuckQuery :exec\nSELECT pg_sleep(5)"); !dbpool.IsTimeout(err) {
+		t.Fatalf("want a timeout: %v", err)
+	}
+	if e := rec.last(); e.name != "StuckQuery" || !e.timedOut {
+		t.Errorf("timeout: %+v", e)
+	}
+}

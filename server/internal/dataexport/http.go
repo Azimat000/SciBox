@@ -44,7 +44,7 @@ func (h *Handler) export(w http.ResponseWriter, r *http.Request) {
 	hdr.Set("Content-Disposition", `attachment; filename="`+arch.FileName()+`"`)
 	if err := h.svc.Write(r.Context(), w, arch); err != nil {
 		if r.Context().Err() == nil {
-			h.logger.Error("data export stream failed", "path", r.URL.Path, "err", err)
+			h.logger.ErrorContext(r.Context(), "data export stream failed", "path", r.URL.Path, "err", err)
 		}
 		// Заголовки уже ушли: честно оборвать передачу, чтобы браузер не принял недописанный архив за готовый.
 		panic(http.ErrAbortHandler)

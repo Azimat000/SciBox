@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
@@ -408,6 +409,133 @@ func TestLoadBackgroundAndShutdown(t *testing.T) {
 			_, err := load(map[string]string{tc.key: tc.value})
 			if err == nil || !strings.Contains(err.Error(), tc.key) {
 				t.Fatalf("err = %v, want one naming %s", err, tc.key)
+			}
+		})
+	}
+}
+
+func TestLoadObservability(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	load := func(m map[string]string) (Config, error) {
+		env := map[string]string{"SCIBOX_PRODUCT_CONFIG": p}
+		maps.Copy(env, m)
+		return Load(envMap(env))
+	}
+	token := strings.Repeat("t", 24)
+
+	// Значения по умолчанию: читаемый текст, Info, порт процесса по умолчанию, pprof включён, ошибки никуда не уходят.
+	cfg, err := load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Log.JSON || cfg.Log.Level != slog.LevelInfo || cfg.Ops.Addr != "" || cfg.Ops.Token != "" || !cfg.Ops.Pprof || cfg.ErrorDSN != "" {
+		t.Fatalf("development defaults: %+v", cfg)
+	}
+
+	good := []struct {
+		name string
+		env  map[string]string
+		ok   func(Config) bool
+	}{
+		{"json", map[string]string{"SCIBOX_LOG_FORMAT": " JSON "}, func(c Config) bool { return c.Log.JSON }},
+		{"debug", map[string]string{"SCIBOX_LOG_LEVEL": "debug"}, func(c Config) bool { return c.Log.Level == slog.LevelDebug }},
+		{"warning", map[string]string{"SCIBOX_LOG_LEVEL": "WARNING"}, func(c Config) bool { return c.Log.Level == slog.LevelWarn }},
+		{"error", map[string]string{"SCIBOX_LOG_LEVEL": "error"}, func(c Config) bool { return c.Log.Level == slog.LevelError }},
+		{"port off", map[string]string{"SCIBOX_OPS_ADDR": "OFF"}, func(c Config) bool { return c.Ops.Addr == OpsOff }},
+		{"port address", map[string]string{"SCIBOX_OPS_ADDR": " 127.0.0.1:9200 "}, func(c Config) bool { return c.Ops.Addr == "127.0.0.1:9200" }},
+		{"token", map[string]string{"SCIBOX_OPS_TOKEN": token}, func(c Config) bool { return c.Ops.Token == token }},
+		{"pprof off", map[string]string{"SCIBOX_PPROF": "off"}, func(c Config) bool { return !c.Ops.Pprof }},
+		{"dsn", map[string]string{"SCIBOX_ERROR_DSN": " https://abc@glitchtip.example.ru/3 "}, func(c Config) bool { return c.ErrorDSN == "https://abc@glitchtip.example.ru/3" }},
+	}
+	for _, tc := range good {
+		t.Run(tc.name, func(t *testing.T) {
+			c, err := load(tc.env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.ok != nil && !tc.ok(c) {
+				t.Fatalf("config = %+v", c)
+			}
+		})
+	}
+	// В бою журнал по умолчанию JSON, а pprof выключен.
+	prodEnv := map[string]string{
+		"SCIBOX_ENV": "production", "SCIBOX_PUBLIC_URL": "https://scibox.example",
+		"DATABASE_URL":    "postgres://app:Long-Random-Secret@localhost:5432/scibox?sslmode=disable",
+		"SCIBOX_SMTP_TLS": "starttls", "SCIBOX_MAIL_FROM": "SciBox <no-reply@scibox.example>", "SCIBOX_S3_TLS": "on",
+		"SCIBOX_S3_ACCESS_KEY": "real-access-key", "SCIBOX_S3_SECRET_KEY": "Real-Secret-Key-Of-The-Service-Account",
+	}
+	prod, err := load(prodEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prod.Log.JSON || prod.Ops.Pprof {
+		t.Fatalf("production defaults: json = %v, pprof = %v", prod.Log.JSON, prod.Ops.Pprof)
+	}
+	prodEnv["SCIBOX_LOG_FORMAT"] = "text"
+	if prod, err = load(prodEnv); err != nil || prod.Log.JSON {
+		t.Fatalf("text in production: %+v, %v", prod.Log, err)
+	}
+	delete(prodEnv, "SCIBOX_LOG_FORMAT")
+
+	bad := []struct{ name, key, val, want string }{
+		{"format", "SCIBOX_LOG_FORMAT", "xml", "SCIBOX_LOG_FORMAT"},
+		{"level", "SCIBOX_LOG_LEVEL", "loud", "SCIBOX_LOG_LEVEL"},
+		{"address without port", "SCIBOX_OPS_ADDR", "127.0.0.1", "SCIBOX_OPS_ADDR"},
+		{"address with scheme", "SCIBOX_OPS_ADDR", "http://127.0.0.1:9100", "SCIBOX_OPS_ADDR"},
+		{"short token", "SCIBOX_OPS_TOKEN", "short", "at least 24"},
+		{"pprof typo", "SCIBOX_PPROF", "yes please", "SCIBOX_PPROF"},
+		{"dsn without key", "SCIBOX_ERROR_DSN", "https://glitchtip.example.ru/3", "SCIBOX_ERROR_DSN"},
+		{"dsn with secret part", "SCIBOX_ERROR_DSN", "https://abc:def@glitchtip.example.ru/3", "SCIBOX_ERROR_DSN"},
+		{"dsn without project", "SCIBOX_ERROR_DSN", "https://abc@glitchtip.example.ru", "SCIBOX_ERROR_DSN"},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := load(map[string]string{tc.key: tc.val})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v", err)
+			}
+			if tc.key == "SCIBOX_ERROR_DSN" && strings.Contains(err.Error(), "abc") {
+				t.Fatalf("the key reached the error: %v", err)
+			}
+		})
+	}
+
+	// В бою: внутренний порт не в чужих сетях без секрета, pprof только с секретом, ошибки по шифрованному каналу.
+	prodCases := []struct {
+		name string
+		env  map[string]string
+		want string // пусто — настройки приняты
+	}{
+		{"loopback", map[string]string{"SCIBOX_OPS_ADDR": "127.0.0.1:9100"}, ""},
+		{"ipv6 loopback", map[string]string{"SCIBOX_OPS_ADDR": "[::1]:9100"}, ""},
+		{"private network", map[string]string{"SCIBOX_OPS_ADDR": "10.1.2.3:9100"}, ""},
+		{"localhost name", map[string]string{"SCIBOX_OPS_ADDR": "localhost:9100"}, ""},
+		{"service name in the compose network", map[string]string{"SCIBOX_OPS_ADDR": "api:9100"}, ""},
+		{"all networks without token", map[string]string{"SCIBOX_OPS_ADDR": "0.0.0.0:9100"}, "may be reachable from outside"},
+		{"empty host without token", map[string]string{"SCIBOX_OPS_ADDR": ":9100"}, "may be reachable from outside"},
+		{"public address without token", map[string]string{"SCIBOX_OPS_ADDR": "203.0.113.7:9100"}, "may be reachable from outside"},
+		{"public host name without token", map[string]string{"SCIBOX_OPS_ADDR": "ops.example.ru:9100"}, "may be reachable from outside"},
+		{"all networks with token", map[string]string{"SCIBOX_OPS_ADDR": "0.0.0.0:9100", "SCIBOX_OPS_TOKEN": token}, ""},
+		{"pprof without token", map[string]string{"SCIBOX_PPROF": "on"}, "SCIBOX_PPROF is on without SCIBOX_OPS_TOKEN"},
+		{"pprof with token", map[string]string{"SCIBOX_PPROF": "on", "SCIBOX_OPS_TOKEN": token}, ""},
+		{"pprof on a port that is off", map[string]string{"SCIBOX_PPROF": "on", "SCIBOX_OPS_ADDR": "off"}, ""},
+		{"tracker over https", map[string]string{"SCIBOX_ERROR_DSN": "https://abc@glitchtip.example.ru/3"}, ""},
+		{"tracker over http in the compose network", map[string]string{"SCIBOX_ERROR_DSN": "http://abc@glitchtip:8000/3"}, ""},
+		{"tracker over http in a private network", map[string]string{"SCIBOX_ERROR_DSN": "http://abc@10.0.0.7:8000/3"}, ""},
+		{"tracker over http on the internet", map[string]string{"SCIBOX_ERROR_DSN": "http://abc@glitchtip.example.ru/3"}, "must not travel unencrypted"},
+		{"tracker over http by a public address", map[string]string{"SCIBOX_ERROR_DSN": "http://abc@203.0.113.9/3"}, "must not travel unencrypted"},
+	}
+	for _, tc := range prodCases {
+		t.Run("production "+tc.name, func(t *testing.T) {
+			env := maps.Clone(prodEnv)
+			maps.Copy(env, tc.env)
+			_, err := load(env)
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("refused: %v", err)
+			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+				t.Fatalf("err = %v, want containing %q", err, tc.want)
 			}
 		})
 	}

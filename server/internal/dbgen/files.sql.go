@@ -170,6 +170,36 @@ func (q *Queries) ExistingFileKeys(ctx context.Context, keys []string) ([]string
 	return items, nil
 }
 
+const filesQueueStats = `-- name: FilesQueueStats :one
+SELECT
+    (SELECT count(*) FROM application_files WHERE scan_status = 'pending' AND storage_key IS NOT NULL)::bigint AS pending,
+    COALESCE((SELECT min(created_at) FROM application_files WHERE scan_status = 'pending' AND storage_key IS NOT NULL), to_timestamp(0))::timestamptz AS oldest_pending,
+    (SELECT count(*) FROM blob_deletions)::bigint AS deletions,
+    (SELECT count(*) FROM application_files WHERE legacy_data IS NOT NULL)::bigint AS legacy
+`
+
+type FilesQueueStatsRow struct {
+	Pending       int64
+	OldestPending time.Time
+	Deletions     int64
+	Legacy        int64
+}
+
+// Очереди файловой работы для метрик и тревог (срез 26, T-44): сколько файлов ждёт проверки на вирусы и как давно ждёт
+// самый старый, сколько объектов ждёт удаления из хранилища, сколько старых файлов ещё в базе. Идёт по частичным
+// индексам application_files_scan_due_idx, application_files_legacy_idx и blob_deletions_queued_idx.
+func (q *Queries) FilesQueueStats(ctx context.Context) (FilesQueueStatsRow, error) {
+	row := q.db.QueryRow(ctx, filesQueueStats)
+	var i FilesQueueStatsRow
+	err := row.Scan(
+		&i.Pending,
+		&i.OldestPending,
+		&i.Deletions,
+		&i.Legacy,
+	)
+	return i, err
+}
+
 const finishLegacyFile = `-- name: FinishLegacyFile :execrows
 UPDATE application_files SET storage_key = $1, sha256 = $2, legacy_data = NULL
 WHERE id = $3 AND legacy_data IS NOT NULL AND storage_key IS NULL
