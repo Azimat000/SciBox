@@ -30,3 +30,8 @@ WHERE name = @name AND holder = @holder;
 -- name: ListJobRuns :many
 SELECT name, next_run_at, leased_until, holder, started_at, finished_at, last_ok_at, failures, last_error, runs
 FROM job_runs ORDER BY name;
+
+-- Время базы: по нему копия сверяет свои часы. Расписание сравнивает сроки с часами копии, и копия с часами, ушедшими на
+-- дни вперёд, могла бы поставить задачу «на потом» для всех (срез 25).
+-- name: DatabaseNow :one
+SELECT now()::timestamptz;

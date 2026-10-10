@@ -42,6 +42,19 @@ func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (int32, erro
 	return failures, err
 }
 
+const databaseNow = `-- name: DatabaseNow :one
+SELECT now()::timestamptz
+`
+
+// Время базы: по нему копия сверяет свои часы. Расписание сравнивает сроки с часами копии, и копия с часами, ушедшими на
+// дни вперёд, могла бы поставить задачу «на потом» для всех (срез 25).
+func (q *Queries) DatabaseNow(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRow(ctx, databaseNow)
+	var column_1 time.Time
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const finishJobFailed = `-- name: FinishJobFailed :execrows
 UPDATE job_runs SET next_run_at = $1::timestamptz, leased_until = NULL, holder = '', finished_at = $2::timestamptz,
                     failures = failures + 1, last_error = $3

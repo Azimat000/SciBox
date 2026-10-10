@@ -696,3 +696,28 @@ func TestStatsHandled(t *testing.T) {
 func claimParams(now time.Time, w *Worker) dbgen.ClaimOutboxParams {
 	return dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: num.Int32(w.Batch)}
 }
+
+// Отправитель, у которого аренда истекла посреди отправки, не может переписать итог письма, которое уже закончено
+// другим отправителем: ни повтор, ни «недоставлено» к отправленному письму не применяются.
+func TestLateMarksCannotChangeAFinishedMail(t *testing.T) {
+	addr := queueMails(t, "latemark", 1)[0]
+	drain(t, newWorker(&flaky{}, nil))
+	if _, sent, _, _, _ := rowOf(t, addr); !sent {
+		t.Fatal("setup: the mail was not sent")
+	}
+	w := newWorker(&flaky{}, nil)
+	var id int64
+	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM outbox WHERE to_email = $1`, addr).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().UTC().Add(time.Hour)
+	if err := w.q.MarkOutboxRetry(bg, dbgen.MarkOutboxRetryParams{ID: id, NextAttemptAt: later, LastError: "late"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.q.MarkOutboxFailed(bg, dbgen.MarkOutboxFailedParams{ID: id, Now: later, LastError: "late"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, sent, failed, lastErr, next := rowOf(t, addr); !sent || failed || lastErr != "" || next.After(later.Add(-30*time.Minute)) {
+		t.Errorf("a finished mail was changed by a late sender: sent=%v failed=%v err=%q next=%v", sent, failed, lastErr, next)
+	}
+}

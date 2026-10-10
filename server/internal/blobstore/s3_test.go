@@ -380,6 +380,9 @@ func TestMemoryFaultsAndHelpers(t *testing.T) {
 // scriptedS3 — подставной S3, который отвечает по сценарию: нужен там, где настоящее хранилище не воспроизводит сбой.
 type scriptedS3 struct {
 	bucketExists bool
+	// existsAfterCreate — бакет появляется после попытки его создать (его создал другой процесс: сервер и воркер стартуют вместе).
+	existsAfterCreate bool
+	createAttempted   atomic.Bool
 	headObject   int // код ответа на HEAD объекта
 	deleteObject int // код ответа на DELETE объекта
 	createBucket int // код ответа на PUT бакета
@@ -396,7 +399,7 @@ func (c *scriptedS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodHead && !isObject:
-		if c.bucketExists {
+		if c.bucketExists || (c.existsAfterCreate && c.createAttempted.Load()) {
 			w.WriteHeader(http.StatusOK)
 		} else {
 			w.WriteHeader(http.StatusNotFound)
@@ -404,6 +407,7 @@ func (c *scriptedS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodHead:
 		w.WriteHeader(c.headObject)
 	case r.Method == http.MethodPut && !isObject:
+		c.createAttempted.Store(true)
 		if c.createBucket == http.StatusOK {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -441,6 +445,11 @@ func TestS3ErrorMapping(t *testing.T) {
 	t.Run("the bucket cannot be created", func(t *testing.T) {
 		if _, err := scripted(t, &scriptedS3{createBucket: http.StatusForbidden}, true); err == nil || !strings.Contains(err.Error(), "create bucket") {
 			t.Errorf("err = %v", err)
+		}
+	})
+	t.Run("the bucket was created by another process at the same moment", func(t *testing.T) {
+		if _, err := scripted(t, &scriptedS3{createBucket: http.StatusConflict, existsAfterCreate: true}, true); err != nil {
+			t.Errorf("err = %v: a bucket that exists after the attempt is not a failure", err)
 		}
 	})
 	t.Run("the bucket is created", func(t *testing.T) {

@@ -57,6 +57,12 @@ type Config struct {
 	Grace time.Duration
 	// MaxBackoff — предел паузы после сбоев (по умолчанию 15 минут).
 	MaxBackoff time.Duration
+	// MaxSkew — на сколько часы копии могут отличаться от часов базы (по умолчанию 2 минуты). Копия с часами дальше этого
+	// предела не исполняет задачи вовсе и пишет об этом в журнал: расписание и аренды сравниваются с часами копии, и
+	// ушедшие вперёд часы одной копии отложили бы задачи для всех.
+	MaxSkew time.Duration
+	// SkewRecheck — как часто часы сверяются с базой (по умолчанию 30 секунд).
+	SkewRecheck time.Duration
 	// Holder — имя копии для расписания; по умолчанию «хост-pid-случайное».
 	Holder string
 	// Now — часы; в тестах подменяются.
@@ -73,6 +79,12 @@ func (c Config) Normalized() Config {
 	}
 	if c.MaxBackoff <= 0 {
 		c.MaxBackoff = 15 * time.Minute
+	}
+	if c.MaxSkew <= 0 {
+		c.MaxSkew = 2 * time.Minute
+	}
+	if c.SkewRecheck <= 0 {
+		c.SkewRecheck = 30 * time.Second
 	}
 	if c.Holder == "" {
 		c.Holder = newHolder()
@@ -133,6 +145,11 @@ type Runner struct {
 	cfg  Config
 	mu   sync.Mutex
 	stat map[string]*Status
+
+	// Сверка часов с базой: результат помнится SkewRecheck (по настоящему времени: часы теста могут стоять).
+	skewMu      sync.Mutex
+	skewChecked time.Time
+	skewBad     bool
 }
 
 // New собирает исполнитель.
@@ -218,9 +235,12 @@ func (r *Runner) loop(ctx context.Context, drain <-chan struct{}, j Job) {
 	failures := 0 // подряд упавших проходов или неудачных попыток занять задачу, считает только эта копия
 	for {
 		var wait time.Duration
-		if j.Cluster {
+		switch {
+		case !r.clockOK(ctx):
+			wait = r.cfg.Poll
+		case j.Cluster:
 			wait = r.clusterPass(ctx, j, &failures)
-		} else {
+		default:
 			wait = r.localPass(ctx, j, &failures)
 		}
 		timer := time.NewTimer(jitter(wait))
@@ -231,6 +251,28 @@ func (r *Runner) loop(ctx context.Context, drain <-chan struct{}, j Job) {
 		case <-timer.C:
 		}
 	}
+}
+
+// clockOK сверяет часы копии с часами базы (не чаще SkewRecheck). Недоступная база не повод останавливаться: задачи сами
+// упадут и повторят с паузой.
+func (r *Runner) clockOK(ctx context.Context) bool {
+	r.skewMu.Lock()
+	defer r.skewMu.Unlock()
+	if !r.skewChecked.IsZero() && time.Since(r.skewChecked) < r.cfg.SkewRecheck {
+		return !r.skewBad
+	}
+	dbNow, err := r.q.DatabaseNow(ctx)
+	if err != nil {
+		return true
+	}
+	r.skewChecked = time.Now()
+	skew := r.cfg.Now().Sub(dbNow)
+	r.skewBad = skew > r.cfg.MaxSkew || skew < -r.cfg.MaxSkew
+	if r.skewBad {
+		r.log.Error("clock differs from the database: background jobs of this copy are paused until the clock is fixed",
+			"skew", skew.Round(time.Second), "allowed", r.cfg.MaxSkew)
+	}
+	return !r.skewBad
 }
 
 // localPass — один проход задачи «в каждой копии»; возвращает, сколько ждать до следующего.

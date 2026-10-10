@@ -70,7 +70,8 @@ func name(prefix string) string { return fmt.Sprintf("%s-%d", prefix, testkit.Se
 
 func newRunner(db jobs.DB, c *clock, holder string) (*jobs.Runner, *logBuf) {
 	log, buf := newLog()
-	cfg := jobs.Config{Poll: 5 * time.Millisecond, Grace: 300 * time.Millisecond, MaxBackoff: time.Minute, Holder: holder}
+	// Часы тестов уходят вперёд на часы: допустимое расхождение с базой большое (его проверяет отдельный тест).
+	cfg := jobs.Config{Poll: 5 * time.Millisecond, Grace: 300 * time.Millisecond, MaxBackoff: time.Minute, Holder: holder, MaxSkew: 48 * time.Hour}
 	if c != nil {
 		cfg.Now = c.Now
 	}
@@ -438,6 +439,7 @@ func TestLocalJobsRunInEveryCopyAndBackOffAfterFailures(t *testing.T) {
 }
 
 func TestScheduleDatabaseFailuresAreLoggedAndRetried(t *testing.T) {
+	// Обращения копии к базе по порядку: 1 — сверка часов, 2 — занять задачу, 3 — записать итог.
 	for n := int32(1); n <= 3; n++ {
 		db, calls := testkit.Faulty(testkit.Pool, n)
 		jobName := name(fmt.Sprintf("fault-%d", n))
@@ -445,14 +447,22 @@ func TestScheduleDatabaseFailuresAreLoggedAndRetried(t *testing.T) {
 		job := jobs.Job{Name: jobName, Every: time.Hour, Cluster: true, Run: func(context.Context) error { runs.Add(1); return nil }}
 		r, log := newRunner(db, nil, "copy")
 		stop := start(t, r, job)
-		// Сбой при занятии задачи (1) или при записи итога (2): копия не падает и доводит дело до конца.
+		// Копия не падает при сбое базы и доводит дело до конца.
 		waitFor(t, "the job to run at least once and settle", func() bool { return runs.Load() >= 1 && calls.Load() >= n+1 })
 		stop()
-		if n == 1 && !strings.Contains(log.String(), "job schedule is unavailable") {
-			t.Errorf("fault %d: schedule failure is not logged:\n%s", n, log)
-		}
-		if n == 2 && !strings.Contains(log.String(), "job result was not recorded") {
-			t.Errorf("fault %d: failure to record the result is not logged:\n%s", n, log)
+		switch n {
+		case 1: // не удалось сверить часы: это не повод стоять, задача идёт
+			if strings.Contains(log.String(), "clock differs") {
+				t.Errorf("fault %d: a failed clock check must not stop the jobs:\n%s", n, log)
+			}
+		case 2:
+			if !strings.Contains(log.String(), "job schedule is unavailable") {
+				t.Errorf("fault %d: schedule failure is not logged:\n%s", n, log)
+			}
+		case 3:
+			if !strings.Contains(log.String(), "job result was not recorded") {
+				t.Errorf("fault %d: failure to record the result is not logged:\n%s", n, log)
+			}
 		}
 	}
 }
@@ -585,4 +595,29 @@ func TestErrorTextInTheScheduleIsMasked(t *testing.T) {
 			t.Errorf("Snapshot leaks personal data: %q", s.LastError)
 		}
 	}
+}
+
+// Копия с часами, ушедшими вперёд, не исполняет ничего (ни чужое расписание, ни письма): иначе она поставила бы задачи
+// «на потом» для всех копий. Когда часы исправлены, задачи идут.
+func TestACopyWithAWrongClockRunsNothingUntilItIsFixed(t *testing.T) {
+	clk := newClock()
+	clk.Advance(6 * time.Hour)
+	jobName, local := name("skew-cluster"), name("skew-local")
+	var clusterRuns, localRuns atomic.Int64
+	log, buf := newLog()
+	r := jobs.New(testkit.Pool, log, jobs.Config{Poll: 5 * time.Millisecond, Grace: 300 * time.Millisecond, Holder: "skewed", Now: clk.Now, SkewRecheck: 20 * time.Millisecond})
+	start(t, r,
+		jobs.Job{Name: jobName, Every: time.Hour, Cluster: true, Run: func(context.Context) error { clusterRuns.Add(1); return nil }},
+		jobs.Job{Name: local, Every: 5 * time.Millisecond, Run: func(context.Context) error { localRuns.Add(1); return nil }},
+	)
+	waitFor(t, "the clock error in the log", func() bool { return strings.Contains(buf.String(), "clock differs from the database") })
+	time.Sleep(60 * time.Millisecond)
+	if clusterRuns.Load() != 0 || localRuns.Load() != 0 {
+		t.Fatalf("a copy with a clock 6 hours ahead ran jobs: cluster=%d local=%d", clusterRuns.Load(), localRuns.Load())
+	}
+	if _, ok := maybeRow(t, jobName); ok {
+		t.Fatal("a copy with a wrong clock wrote to the shared schedule")
+	}
+	clk.Advance(-6 * time.Hour) // часы исправили
+	waitFor(t, "jobs to start after the fix", func() bool { return clusterRuns.Load() >= 1 && localRuns.Load() >= 1 })
 }

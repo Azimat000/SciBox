@@ -60,10 +60,10 @@ RETURNING id, to_email, subject, body, attempts, created_at;
 UPDATE outbox SET sent_at = @now::timestamptz, last_error = '', subject = '', body = '' WHERE id = @id;
 
 -- name: MarkOutboxRetry :exec
-UPDATE outbox SET next_attempt_at = @next_attempt_at, last_error = @last_error WHERE id = @id;
+UPDATE outbox SET next_attempt_at = @next_attempt_at, last_error = @last_error WHERE id = @id AND sent_at IS NULL AND failed_at IS NULL;
 
 -- name: MarkOutboxFailed :exec
-UPDATE outbox SET failed_at = @now::timestamptz, last_error = @last_error, subject = '', body = '' WHERE id = @id;
+UPDATE outbox SET failed_at = @now::timestamptz, last_error = @last_error, subject = '', body = '' WHERE id = @id AND sent_at IS NULL AND failed_at IS NULL;
 
 -- Сбой самого почтового сервиса (нет связи, вход отвергнут): вина не письма, поэтому попытка не засчитывается, письмо
 -- ждёт и пробуется снова (срез 25, D-168). Иначе долгий сбой почты сжигал бы все попытки у всех писем.

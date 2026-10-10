@@ -66,7 +66,10 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3, error) {
 			return nil, fmt.Errorf("blobstore: bucket %q does not exist", cfg.Bucket)
 		}
 		if err := c.MakeBucket(ctx, cfg.Bucket, minio.MakeBucketOptions{Region: cfg.Region}); err != nil {
-			return nil, fmt.Errorf("blobstore: create bucket: %w", err)
+			// Сервер и воркер стартуют одновременно: бакет мог появиться между проверкой и созданием (срез 25).
+			if exists, checkErr := c.BucketExists(ctx, cfg.Bucket); checkErr != nil || !exists {
+				return nil, fmt.Errorf("blobstore: create bucket: %w", err)
+			}
 		}
 	}
 	return s, nil

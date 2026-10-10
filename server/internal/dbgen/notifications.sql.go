@@ -318,7 +318,7 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 }
 
 const markOutboxFailed = `-- name: MarkOutboxFailed :exec
-UPDATE outbox SET failed_at = $1::timestamptz, last_error = $2, subject = '', body = '' WHERE id = $3
+UPDATE outbox SET failed_at = $1::timestamptz, last_error = $2, subject = '', body = '' WHERE id = $3 AND sent_at IS NULL AND failed_at IS NULL
 `
 
 type MarkOutboxFailedParams struct {
@@ -333,7 +333,7 @@ func (q *Queries) MarkOutboxFailed(ctx context.Context, arg MarkOutboxFailedPara
 }
 
 const markOutboxRetry = `-- name: MarkOutboxRetry :exec
-UPDATE outbox SET next_attempt_at = $1, last_error = $2 WHERE id = $3
+UPDATE outbox SET next_attempt_at = $1, last_error = $2 WHERE id = $3 AND sent_at IS NULL AND failed_at IS NULL
 `
 
 type MarkOutboxRetryParams struct {
