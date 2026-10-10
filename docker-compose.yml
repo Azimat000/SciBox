@@ -19,6 +19,11 @@ services:
       - work_mem=16MB
       - -c
       - random_page_cost=1.1
+      # Статистика запросов (срез 27): какие запросы съедают время базы под нагрузкой. Читается из pg_stat_statements.
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
     shm_size: 1gb
     environment:
       POSTGRES_USER: scibox

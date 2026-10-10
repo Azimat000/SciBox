@@ -1,5 +1,5 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev share worker test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check monitoring-up monitoring-down monitoring-check glitchtip-setup errors-up
+.PHONY: dev share worker load-test load-smoke test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check monitoring-up monitoring-down monitoring-check glitchtip-setup errors-up
 
 SCIBOX = cd server && go run ./cmd/api
 
@@ -42,6 +42,15 @@ load-data: db-up
 ## load-check: замер горячих запросов на объёмных данных (нужен `make load-data`); медленнее 50 мс — тест красный
 load-check: db-up
 	cd server && SCIBOX_LOAD_DATABASE_URL='postgres://scibox:scibox@localhost:5433/scibox_load?sslmode=disable' go test ./internal/cli -run TestHotQueriesOnLoadData -count=1 -v -timeout 20m
+
+## load-test: нагрузочный тест (срез 27): две копии сервера и воркер на базе scibox_load, k6, ступени скорости (нужен `make load-data`).
+## Свои ступени: make load-test STEPS=100,300 DURATION=30s
+load-test:
+	DURATION=$(or $(DURATION),60s) ./scripts/load-test $(or $(STEPS),100,200,300,400,500,600)
+
+## load-smoke: короткая проверка сценария (одна ступень 30 зап/с, 20 секунд), без профилей; годится после правок сервера
+load-smoke:
+	PROFILE=0 DURATION=20s ./scripts/load-test 30
 
 ## e2e: сквозные сценарии в настоящем браузере (Playwright) на отдельной базе scibox_e2e.
 ## Нужен свободный порт 8090 и 5174; `make dev` может работать параллельно.

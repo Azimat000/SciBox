@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"scibox/server/internal/errreport"
+	"scibox/server/internal/httpcache"
 	"scibox/server/internal/jobs"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/resilience"
@@ -74,6 +75,8 @@ type Sources struct {
 	Limiters map[string]*resilience.Limiter
 	// Reporter — отправитель отчётов об ошибках.
 	Reporter *errreport.Reporter
+	// Caches — короткие кеши ответов по имени (срез 27): сколько запросов ответил кеш.
+	Caches map[string]func() httpcache.Stats
 
 	// TTL — как долго годится ответ базы; Timeout — срок на один запрос к базе. Нулевые — по умолчанию.
 	TTL, Timeout time.Duration
@@ -175,6 +178,8 @@ var (
 	descLimiterBusy    = desc("limiter_in_flight", "Обращения к внешнему сервису, идущие сейчас.", "name")
 	descLimiterCap     = desc("limiter_capacity", "Сколько обращений к внешнему сервису одновременно разрешено.", "name")
 	descLimiterReject  = desc("limiter_rejected_total", "Сколько обращений отклонено ограничителем (не хватило места за срок).", "name")
+	descCacheRequests  = desc("cache_requests_total", "Запросы к кешу ответов по исходу: hit (ответ был готов), shared (дождался чужого сбора), miss (собирался заново).", "cache", "result")
+	descCacheEntries   = desc("cache_entries", "Сколько ответов лежит в кеше сейчас.", "cache")
 	descReports        = desc("error_reports_total", "Отчёты об ошибках по исходу: sent, failed, dropped, suppressed.", "result")
 	descSourceUp       = desc("source_up", "1 — источник метрик ответил в последний раз, 0 — нет (значения взяты из прошлого ответа).", "source")
 )
@@ -293,6 +298,13 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 		gauge(descLimiterBusy, float64(l.InFlight()), name)
 		gauge(descLimiterCap, float64(l.Capacity()), name)
 		counter(descLimiterReject, float64(l.Rejected()), name)
+	}
+	for name, stats := range c.src.Caches {
+		st := stats()
+		counter(descCacheRequests, float64(st.Hits), name, "hit")
+		counter(descCacheRequests, float64(st.Shared), name, "shared")
+		counter(descCacheRequests, float64(st.Misses), name, "miss")
+		gauge(descCacheEntries, float64(st.Entries), name)
 	}
 	if rep := c.src.Reporter; rep != nil {
 		s := rep.Stats()

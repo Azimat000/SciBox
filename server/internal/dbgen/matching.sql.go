@@ -494,7 +494,8 @@ func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([
 }
 
 const listMatchCandidates = `-- name: ListMatchCandidates :many
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name FROM vacancy_view v
+SELECT v.id, v.degree_required, v.title_required, v.region_code, v.work_format, v.career_level, v.deadline
+FROM vacancies v
 JOIN vacancy_search s ON s.vacancy_id = v.id
 WHERE v.status = 'published'
   AND (v.deadline IS NULL OR v.deadline >= $1::date)
@@ -514,10 +515,23 @@ type ListMatchCandidatesParams struct {
 	Batch    int32
 }
 
+type ListMatchCandidatesRow struct {
+	ID             uuid.UUID
+	DegreeRequired string
+	TitleRequired  string
+	RegionCode     *string
+	WorkFormat     *string
+	CareerLevel    *int16
+	Deadline       *time.Time
+}
+
 // Кандидаты в подборку: опубликованные, срок не прошёл, хотя бы одна специальность из тех же групп ВАК (vacancy_search.codes
 // хранит коды специальностей вместе с кодами групп и областей), нет живого
 // отклика человека, не вакансии организаций, где человек сам разбирает отклики. Точные баллы считает код (matching.Score).
-func (q *Queries) ListMatchCandidates(ctx context.Context, arg ListMatchCandidatesParams) ([]VacancyView, error) {
+// Берутся только поля, нужные правилам (срез 27): полная карточка с описаниями и названиями организации нужна лишь
+// страницам выдачи и берётся для них отдельно (ListVacancyViewsByIDs); раньше все 500 кандидатов тянули за собой
+// шесть соединений и тексты описаний (154 мс против 14 мс на половине объёма «вся наука РФ»).
+func (q *Queries) ListMatchCandidates(ctx context.Context, arg ListMatchCandidatesParams) ([]ListMatchCandidatesRow, error) {
 	rows, err := q.db.Query(ctx, listMatchCandidates,
 		arg.Today,
 		arg.Groups,
@@ -530,50 +544,17 @@ func (q *Queries) ListMatchCandidates(ctx context.Context, arg ListMatchCandidat
 		return nil, err
 	}
 	defer rows.Close()
-	var items []VacancyView
+	var items []ListMatchCandidatesRow
 	for rows.Next() {
-		var i VacancyView
+		var i ListMatchCandidatesRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OrgID,
-			&i.UnitID,
-			&i.CreatedBy,
-			&i.Status,
-			&i.Title,
-			&i.PositionCode,
-			&i.Summary,
-			&i.Description,
-			&i.Requirements,
-			&i.Focus,
-			&i.CareerLevel,
-			&i.WorkFormat,
-			&i.RegionCode,
-			&i.City,
-			&i.Housing,
-			&i.RatePercent,
-			&i.SalaryFrom,
-			&i.SalaryTo,
-			&i.ContractType,
-			&i.ContractMonths,
-			&i.FundingSource,
-			&i.FundingNote,
 			&i.DegreeRequired,
 			&i.TitleRequired,
-			&i.IsCompetition,
+			&i.RegionCode,
+			&i.WorkFormat,
+			&i.CareerLevel,
 			&i.Deadline,
-			&i.PublishedAt,
-			&i.ClosedAt,
-			&i.ArchivedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.PositionName,
-			&i.PositionType,
-			&i.RegionName,
-			&i.OrgSlug,
-			&i.OrgName,
-			&i.OrgKind,
-			&i.OrgCity,
-			&i.UnitName,
 		); err != nil {
 			return nil, err
 		}

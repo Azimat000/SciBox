@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"math"
@@ -13,6 +14,7 @@ import (
 
 	"scibox/server/internal/apierr"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/httpcache"
 )
 
 // maxBody — самый большой допустимый размер тела запроса (самое длинное поле, «о себе», до 3000 знаков по-русски).
@@ -30,6 +32,19 @@ type Handler struct {
 	svc         *Service
 	logger      *slog.Logger
 	requireUser func(http.Handler) http.Handler
+	// catalogCache — короткий кеш каталога для гостей (срез 27); nil — без кеша.
+	catalogCache *httpcache.Keyed
+}
+
+// maxCachedCatalogBody — ответ каталога больше этого размера не запоминается.
+const maxCachedCatalogBody = 128 << 10
+
+// WithCatalogCache включает короткий кеш каталога учёных для гостей (срез 27, D-179). Гость видит только публичные
+// профили и одинаков для всех, поэтому ключ — сам запрос; вошедшего человека (его не показывают самому себе, сотрудникам
+// организаций видны профили «организациям») кеш не касается.
+func (h *Handler) WithCatalogCache(c *httpcache.Keyed) *Handler {
+	h.catalogCache = c
+	return h
 }
 
 // NewHandler собирает обработчики. requireUser — проверка входа из пакета auth (auth.Handler.RequireUser).
@@ -271,10 +286,24 @@ func (h *Handler) catalog(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	res, err := h.svc.Catalog(r.Context(), p, viewer(r))
+	who := viewer(r)
+	if h.catalogCache == nil || who != nil {
+		res, err := h.svc.Catalog(r.Context(), p, who)
+		if err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		apierr.WriteJSON(w, http.StatusOK, res)
+		return
+	}
+	doc, err := h.catalogCache.Get(r.Context(), r.URL.Query().Encode(), maxCachedCatalogBody, func(ctx context.Context) (any, error) {
+		return h.svc.Catalog(ctx, p, nil)
+	})
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	apierr.WriteJSON(w, http.StatusOK, res)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(doc.Body) // клиент мог уйти: писать больше некуда
 }

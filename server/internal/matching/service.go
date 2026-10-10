@@ -351,7 +351,7 @@ func (s *Service) Matches(ctx context.Context, user auth.User, limit, offset int
 		specs[c.VacancyID] = append(specs[c.VacancyID], c.SpecialtyCode)
 	}
 	type scored struct {
-		row dbgen.VacancyView
+		row dbgen.ListMatchCandidatesRow
 		m   Match
 	}
 	var found []scored
@@ -383,9 +383,23 @@ func (s *Service) Matches(ctx context.Context, user auth.User, limit, offset int
 	from := min(int(off), len(found))
 	to := min(from+int(lim), len(found))
 	page := found[from:to]
-	views := make([]dbgen.VacancyView, len(page))
+	// Полные карточки нужны только странице: правилам хватило коротких строк (срез 27). Вакансия, которую успели закрыть
+	// между двумя запросами, в ответ не попадает.
+	pageIDs := make([]uuid.UUID, len(page))
+	scoreOf := make(map[uuid.UUID]scored, len(page))
 	for i, f := range page {
-		views[i] = f.row
+		pageIDs[i] = f.row.ID
+		scoreOf[f.row.ID] = f
+	}
+	viewRows, err := s.q.ListPublishedVacancyViewsByIDs(ctx, pageIDs)
+	if err != nil {
+		return MatchList{}, fmt.Errorf("matching: load vacancy cards: %w", err)
+	}
+	views := make([]dbgen.VacancyView, len(viewRows))
+	page = make([]scored, len(viewRows))
+	for i, r := range viewRows {
+		views[i] = r.VacancyView
+		page[i] = scoreOf[r.VacancyView.ID]
 	}
 	cards, err := vacancies.CardsFrom(ctx, s.q, views)
 	if err != nil {

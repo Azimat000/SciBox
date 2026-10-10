@@ -1,6 +1,7 @@
 package vacancies
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"math"
@@ -12,6 +13,7 @@ import (
 
 	"scibox/server/internal/apierr"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/httpcache"
 )
 
 // maxBody — самый большой допустимый размер тела запроса (описание до 10 000 знаков по-русски занимает до 20 КБ).
@@ -29,6 +31,19 @@ type Handler struct {
 	svc         *Service
 	logger      *slog.Logger
 	requireUser func(http.Handler) http.Handler
+	// searchCache — короткий кеш ответов поиска (срез 27); nil — без кеша.
+	searchCache *httpcache.Keyed
+}
+
+// maxCachedSearchBody — ответ поиска больше этого размера не запоминается: страница из двадцати карточек укладывается
+// в несколько десятков килобайт, а сто — уже ошибка данных, которую не нужно тиражировать.
+const maxCachedSearchBody = 128 << 10
+
+// WithSearchCache включает короткий кеш ответов поиска вакансий (срез 27, D-179). Результат поиска не зависит от того,
+// кто спрашивает, поэтому ключ — сам запрос.
+func (h *Handler) WithSearchCache(c *httpcache.Keyed) *Handler {
+	h.searchCache = c
+	return h
 }
 
 // NewHandler собирает обработчики. requireUser — проверка входа из пакета auth (auth.Handler.RequireUser).
@@ -257,12 +272,26 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	res, err := h.svc.Search(r.Context(), p)
+	if h.searchCache == nil {
+		res, err := h.svc.Search(r.Context(), p)
+		if err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		apierr.WriteJSON(w, http.StatusOK, res)
+		return
+	}
+	// Ключ — запрос в каноническом виде (параметры по алфавиту): те же условия в другом порядке дают тот же ответ.
+	doc, err := h.searchCache.Get(r.Context(), r.URL.Query().Encode(), maxCachedSearchBody, func(ctx context.Context) (any, error) {
+		return h.svc.Search(ctx, p)
+	})
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
-	apierr.WriteJSON(w, http.StatusOK, res)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(doc.Body) // клиент мог уйти: писать больше некуда
 }
 
 func (h *Handler) mine(w http.ResponseWriter, r *http.Request) {

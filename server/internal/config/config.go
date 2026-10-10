@@ -90,6 +90,9 @@ type Config struct {
 	// CrossrefMaxConcurrent — сколько запросов к Crossref одна копия ведёт одновременно (SCIBOX_CROSSREF_MAX_CONCURRENT,
 	// срез 25, T-24). Публичный пул Crossref допускает 1 одновременный запрос на адрес, «вежливый» 3; по умолчанию 1.
 	CrossrefMaxConcurrent int
+	// SearchCacheTTL — сколько копия сервера помнит ответ поиска вакансий и каталога учёных (для гостя) на один и тот же
+	// запрос (SCIBOX_SEARCH_CACHE_TTL, срез 27, D-179). 0 — кеш выключен.
+	SearchCacheTTL time.Duration
 	// Log — формат и уровень журнала (SCIBOX_LOG_FORMAT, SCIBOX_LOG_LEVEL, срез 26).
 	Log Log
 	// Ops — внутренний порт: проверки живости, метрики, pprof (SCIBOX_OPS_*, срез 26, T-25).
@@ -128,6 +131,8 @@ const minOpsToken = 24
 // Значения срока остановки и числа обращений к Crossref по умолчанию и пределы.
 const (
 	DefaultShutdownTimeout       = 20 * time.Second
+	DefaultSearchCacheTTL        = 15 * time.Second
+	maxSearchCacheTTL            = 5 * time.Minute
 	DefaultCrossrefMaxConcurrent = 1
 	maxCrossrefMaxConcurrent     = 10
 )
@@ -209,6 +214,18 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("SCIBOX_CROSSREF_MAX_CONCURRENT: want a number from 1 to %d, got %q", maxCrossrefMaxConcurrent, v)
 		}
 		cfg.CrossrefMaxConcurrent = n
+	}
+	cfg.SearchCacheTTL = DefaultSearchCacheTTL
+	if v := strings.ToLower(strings.TrimSpace(getenv("SCIBOX_SEARCH_CACHE_TTL"))); v != "" {
+		if v == "off" || v == "0" {
+			cfg.SearchCacheTTL = 0
+		} else {
+			d, err := time.ParseDuration(v)
+			if err != nil || d <= 0 || d > maxSearchCacheTTL {
+				return Config{}, fmt.Errorf("SCIBOX_SEARCH_CACHE_TTL: want off or a duration from 1s to %v like 15s, got %q", maxSearchCacheTTL, v)
+			}
+			cfg.SearchCacheTTL = d
+		}
 	}
 	if cfg.Log, err = loadLog(getenv, cfg.Env == EnvProduction); err != nil {
 		return Config{}, err

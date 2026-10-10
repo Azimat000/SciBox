@@ -47,6 +47,15 @@ INSERT INTO vacancy_specialties (vacancy_id, specialty_code) SELECT @vacancy_id,
 -- name: GetVacancyView :one
 SELECT * FROM vacancy_view WHERE id = $1;
 
+-- Карточки опубликованных вакансий пачкой, в порядке переданных номеров (срез 27). Закрытая или снятая между двумя
+-- запросами вакансия пропадает из ответа.
+-- name: ListPublishedVacancyViewsByIDs :many
+SELECT sqlc.embed(v)
+FROM unnest(@ids::uuid[]) WITH ORDINALITY AS u(id, ord)
+JOIN vacancy_view v ON v.id = u.id
+WHERE v.status = 'published'
+ORDER BY u.ord;
+
 -- name: ListVacancySpecialties :many
 SELECT vs.vacancy_id, s.code, s.name
 FROM vacancy_specialties vs JOIN specialties s ON s.code = vs.specialty_code
@@ -68,6 +77,9 @@ ORDER BY vs.vacancy_id, string_to_array(s.code, '.')::int[];
 -- склейки с названиями), page считает число найденных и отрезает страницу, и только страница подтягивает карточки.
 -- Ключи порядка k_* пусты, когда порядок не выбран: планировщик (план под значения, plan_cache_mode) выбрасывает их
 -- и идёт по индексу порядка «новые сверху», останавливаясь на row_cap-й строке.
+-- Отбор (found) идёт по самой таблице vacancies, без соединения с организациями, должностями, регионами и подразделениями
+-- (срез 27): они нужны только карточкам страницы, которые берутся в конце; тип позиции и вид организации проверяются
+-- подзапросом, только если такой фильтр задан. Раньше каждая из тысячи найденных вакансий тянула четыре соединения.
 -- name: SearchVacancies :many
 WITH hits AS MATERIALIZED (
   SELECT m.vacancy_id, ts_rank_cd(m.doc, websearch_to_tsquery('russian', @q::text)) AS rank
@@ -86,41 +98,43 @@ WITH hits AS MATERIALIZED (
     LIMIT @hit_cap
   ) f
 ), found AS (
-  SELECT v.id, v.published_at,
+  SELECT fv.id, fv.published_at,
          CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN h.rank END AS k_rank,
-         CASE WHEN @sort::text = 'deadline' THEN v.deadline END AS k_deadline,
-         CASE WHEN @sort::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END AS k_pay
-  FROM vacancy_view v
-  LEFT JOIN hits h ON h.vacancy_id = v.id
-  LEFT JOIN vacancy_search s ON s.vacancy_id = v.id
-  WHERE v.status = 'published'
-    AND (v.deadline IS NULL OR v.deadline >= @today::date)
-    AND (sqlc.narg(org_id)::uuid IS NULL OR v.org_id = sqlc.narg(org_id)::uuid)
-    AND (sqlc.narg(unit_id)::uuid IS NULL OR v.unit_id = sqlc.narg(unit_id)::uuid)
+         CASE WHEN @sort::text = 'deadline' THEN fv.deadline END AS k_deadline,
+         CASE WHEN @sort::text = 'salary' THEN COALESCE(fv.salary_to, fv.salary_from) END AS k_pay
+  FROM vacancies fv
+  LEFT JOIN hits h ON h.vacancy_id = fv.id
+  LEFT JOIN vacancy_search s ON s.vacancy_id = fv.id
+  WHERE fv.status = 'published'
+    AND (fv.deadline IS NULL OR fv.deadline >= @today::date)
+    AND (sqlc.narg(org_id)::uuid IS NULL OR fv.org_id = sqlc.narg(org_id)::uuid)
+    AND (sqlc.narg(unit_id)::uuid IS NULL OR fv.unit_id = sqlc.narg(unit_id)::uuid)
     AND (@q::text = '' OR h.vacancy_id IS NOT NULL)
     AND (cardinality(@fields::text[]) = 0 OR (s.open AND s.codes && @fields::text[]))
-    AND (@region::text = '' OR v.region_code = @region::text)
-    AND (cardinality(@formats::text[]) = 0 OR v.work_format = ANY(@formats::text[]))
-    AND (cardinality(@types::text[]) = 0 OR v.position_type = ANY(@types::text[]))
-    AND (cardinality(@levels::int[]) = 0 OR v.career_level = ANY(@levels::int[]))
-    AND (cardinality(@degrees::text[]) = 0 OR v.degree_required = ANY(@degrees::text[]))
-    AND (cardinality(@org_kinds::text[]) = 0 OR v.org_kind = ANY(@org_kinds::text[]))
-    AND (cardinality(@fundings::text[]) = 0 OR v.funding_source = ANY(@fundings::text[]))
-    AND (cardinality(@rates::int[]) = 0 OR v.rate_percent = ANY(@rates::int[]))
+    AND (@region::text = '' OR fv.region_code = @region::text)
+    AND (cardinality(@formats::text[]) = 0 OR fv.work_format = ANY(@formats::text[]))
+    AND (cardinality(@types::text[]) = 0 OR EXISTS (
+           SELECT 1 FROM positions pos WHERE pos.code = fv.position_code AND pos.position_type = ANY(@types::text[])))
+    AND (cardinality(@levels::int[]) = 0 OR fv.career_level = ANY(@levels::int[]))
+    AND (cardinality(@degrees::text[]) = 0 OR fv.degree_required = ANY(@degrees::text[]))
+    AND (cardinality(@org_kinds::text[]) = 0 OR EXISTS (
+           SELECT 1 FROM organizations org WHERE org.id = fv.org_id AND org.kind = ANY(@org_kinds::text[])))
+    AND (cardinality(@fundings::text[]) = 0 OR fv.funding_source = ANY(@fundings::text[]))
+    AND (cardinality(@rates::int[]) = 0 OR fv.rate_percent = ANY(@rates::int[]))
     AND (cardinality(@terms::text[]) = 0 OR (CASE
-           WHEN v.contract_type = 'permanent' THEN 'permanent'
-           WHEN v.contract_months <= 12 THEN 'short'
-           WHEN v.contract_months <= 36 THEN 'medium'
-           WHEN v.contract_months > 36 THEN 'long'
+           WHEN fv.contract_type = 'permanent' THEN 'permanent'
+           WHEN fv.contract_months <= 12 THEN 'short'
+           WHEN fv.contract_months <= 36 THEN 'medium'
+           WHEN fv.contract_months > 36 THEN 'long'
          END) = ANY(@terms::text[]))
-    AND (@salary_min::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= @salary_min::int)
-    AND (NOT @housing::bool OR v.housing <> 'none')
-    AND (NOT @competition::bool OR v.is_competition)
-    AND (NOT @no_deadline::bool OR v.deadline IS NULL)
-    AND (sqlc.narg(deadline_to)::date IS NULL OR v.deadline <= sqlc.narg(deadline_to)::date)
-    AND (sqlc.narg(published_after)::timestamptz IS NULL OR v.published_at > sqlc.narg(published_after)::timestamptz)
-    AND (sqlc.narg(published_until)::timestamptz IS NULL OR v.published_at <= sqlc.narg(published_until)::timestamptz)
-  ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, v.published_at DESC, v.id
+    AND (@salary_min::int = 0 OR COALESCE(fv.salary_to, fv.salary_from) >= @salary_min::int)
+    AND (NOT @housing::bool OR fv.housing <> 'none')
+    AND (NOT @competition::bool OR fv.is_competition)
+    AND (NOT @no_deadline::bool OR fv.deadline IS NULL)
+    AND (sqlc.narg(deadline_to)::date IS NULL OR fv.deadline <= sqlc.narg(deadline_to)::date)
+    AND (sqlc.narg(published_after)::timestamptz IS NULL OR fv.published_at > sqlc.narg(published_after)::timestamptz)
+    AND (sqlc.narg(published_until)::timestamptz IS NULL OR fv.published_at <= sqlc.narg(published_until)::timestamptz)
+  ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, fv.published_at DESC, fv.id
   LIMIT @row_cap
 ), page AS (
   SELECT f.id, count(*) OVER () AS total,

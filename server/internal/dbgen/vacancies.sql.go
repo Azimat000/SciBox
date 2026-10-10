@@ -296,6 +296,81 @@ func (q *Queries) ListMyVacancies(ctx context.Context, arg ListMyVacanciesParams
 	return items, nil
 }
 
+const listPublishedVacancyViewsByIDs = `-- name: ListPublishedVacancyViewsByIDs :many
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name
+FROM unnest($1::uuid[]) WITH ORDINALITY AS u(id, ord)
+JOIN vacancy_view v ON v.id = u.id
+WHERE v.status = 'published'
+ORDER BY u.ord
+`
+
+type ListPublishedVacancyViewsByIDsRow struct {
+	VacancyView VacancyView
+}
+
+// Карточки опубликованных вакансий пачкой, в порядке переданных номеров (срез 27). Закрытая или снятая между двумя
+// запросами вакансия пропадает из ответа.
+func (q *Queries) ListPublishedVacancyViewsByIDs(ctx context.Context, ids []uuid.UUID) ([]ListPublishedVacancyViewsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listPublishedVacancyViewsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublishedVacancyViewsByIDsRow
+	for rows.Next() {
+		var i ListPublishedVacancyViewsByIDsRow
+		if err := rows.Scan(
+			&i.VacancyView.ID,
+			&i.VacancyView.OrgID,
+			&i.VacancyView.UnitID,
+			&i.VacancyView.CreatedBy,
+			&i.VacancyView.Status,
+			&i.VacancyView.Title,
+			&i.VacancyView.PositionCode,
+			&i.VacancyView.Summary,
+			&i.VacancyView.Description,
+			&i.VacancyView.Requirements,
+			&i.VacancyView.Focus,
+			&i.VacancyView.CareerLevel,
+			&i.VacancyView.WorkFormat,
+			&i.VacancyView.RegionCode,
+			&i.VacancyView.City,
+			&i.VacancyView.Housing,
+			&i.VacancyView.RatePercent,
+			&i.VacancyView.SalaryFrom,
+			&i.VacancyView.SalaryTo,
+			&i.VacancyView.ContractType,
+			&i.VacancyView.ContractMonths,
+			&i.VacancyView.FundingSource,
+			&i.VacancyView.FundingNote,
+			&i.VacancyView.DegreeRequired,
+			&i.VacancyView.TitleRequired,
+			&i.VacancyView.IsCompetition,
+			&i.VacancyView.Deadline,
+			&i.VacancyView.PublishedAt,
+			&i.VacancyView.ClosedAt,
+			&i.VacancyView.ArchivedAt,
+			&i.VacancyView.CreatedAt,
+			&i.VacancyView.UpdatedAt,
+			&i.VacancyView.PositionName,
+			&i.VacancyView.PositionType,
+			&i.VacancyView.RegionName,
+			&i.VacancyView.OrgSlug,
+			&i.VacancyView.OrgName,
+			&i.VacancyView.OrgKind,
+			&i.VacancyView.OrgCity,
+			&i.VacancyView.UnitName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnitNames = `-- name: ListUnitNames :many
 SELECT id, name FROM units WHERE org_id = $1 ORDER BY lower(name), id
 `
@@ -422,41 +497,43 @@ WITH hits AS MATERIALIZED (
     LIMIT $6
   ) f
 ), found AS (
-  SELECT v.id, v.published_at,
+  SELECT fv.id, fv.published_at,
          CASE WHEN $7::text = 'relevance' AND $4::text <> '' THEN h.rank END AS k_rank,
-         CASE WHEN $7::text = 'deadline' THEN v.deadline END AS k_deadline,
-         CASE WHEN $7::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END AS k_pay
-  FROM vacancy_view v
-  LEFT JOIN hits h ON h.vacancy_id = v.id
-  LEFT JOIN vacancy_search s ON s.vacancy_id = v.id
-  WHERE v.status = 'published'
-    AND (v.deadline IS NULL OR v.deadline >= $8::date)
-    AND ($9::uuid IS NULL OR v.org_id = $9::uuid)
-    AND ($10::uuid IS NULL OR v.unit_id = $10::uuid)
+         CASE WHEN $7::text = 'deadline' THEN fv.deadline END AS k_deadline,
+         CASE WHEN $7::text = 'salary' THEN COALESCE(fv.salary_to, fv.salary_from) END AS k_pay
+  FROM vacancies fv
+  LEFT JOIN hits h ON h.vacancy_id = fv.id
+  LEFT JOIN vacancy_search s ON s.vacancy_id = fv.id
+  WHERE fv.status = 'published'
+    AND (fv.deadline IS NULL OR fv.deadline >= $8::date)
+    AND ($9::uuid IS NULL OR fv.org_id = $9::uuid)
+    AND ($10::uuid IS NULL OR fv.unit_id = $10::uuid)
     AND ($4::text = '' OR h.vacancy_id IS NOT NULL)
     AND (cardinality($11::text[]) = 0 OR (s.open AND s.codes && $11::text[]))
-    AND ($12::text = '' OR v.region_code = $12::text)
-    AND (cardinality($13::text[]) = 0 OR v.work_format = ANY($13::text[]))
-    AND (cardinality($14::text[]) = 0 OR v.position_type = ANY($14::text[]))
-    AND (cardinality($15::int[]) = 0 OR v.career_level = ANY($15::int[]))
-    AND (cardinality($16::text[]) = 0 OR v.degree_required = ANY($16::text[]))
-    AND (cardinality($17::text[]) = 0 OR v.org_kind = ANY($17::text[]))
-    AND (cardinality($18::text[]) = 0 OR v.funding_source = ANY($18::text[]))
-    AND (cardinality($19::int[]) = 0 OR v.rate_percent = ANY($19::int[]))
+    AND ($12::text = '' OR fv.region_code = $12::text)
+    AND (cardinality($13::text[]) = 0 OR fv.work_format = ANY($13::text[]))
+    AND (cardinality($14::text[]) = 0 OR EXISTS (
+           SELECT 1 FROM positions pos WHERE pos.code = fv.position_code AND pos.position_type = ANY($14::text[])))
+    AND (cardinality($15::int[]) = 0 OR fv.career_level = ANY($15::int[]))
+    AND (cardinality($16::text[]) = 0 OR fv.degree_required = ANY($16::text[]))
+    AND (cardinality($17::text[]) = 0 OR EXISTS (
+           SELECT 1 FROM organizations org WHERE org.id = fv.org_id AND org.kind = ANY($17::text[])))
+    AND (cardinality($18::text[]) = 0 OR fv.funding_source = ANY($18::text[]))
+    AND (cardinality($19::int[]) = 0 OR fv.rate_percent = ANY($19::int[]))
     AND (cardinality($20::text[]) = 0 OR (CASE
-           WHEN v.contract_type = 'permanent' THEN 'permanent'
-           WHEN v.contract_months <= 12 THEN 'short'
-           WHEN v.contract_months <= 36 THEN 'medium'
-           WHEN v.contract_months > 36 THEN 'long'
+           WHEN fv.contract_type = 'permanent' THEN 'permanent'
+           WHEN fv.contract_months <= 12 THEN 'short'
+           WHEN fv.contract_months <= 36 THEN 'medium'
+           WHEN fv.contract_months > 36 THEN 'long'
          END) = ANY($20::text[]))
-    AND ($21::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= $21::int)
-    AND (NOT $22::bool OR v.housing <> 'none')
-    AND (NOT $23::bool OR v.is_competition)
-    AND (NOT $24::bool OR v.deadline IS NULL)
-    AND ($25::date IS NULL OR v.deadline <= $25::date)
-    AND ($26::timestamptz IS NULL OR v.published_at > $26::timestamptz)
-    AND ($27::timestamptz IS NULL OR v.published_at <= $27::timestamptz)
-  ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, v.published_at DESC, v.id
+    AND ($21::int = 0 OR COALESCE(fv.salary_to, fv.salary_from) >= $21::int)
+    AND (NOT $22::bool OR fv.housing <> 'none')
+    AND (NOT $23::bool OR fv.is_competition)
+    AND (NOT $24::bool OR fv.deadline IS NULL)
+    AND ($25::date IS NULL OR fv.deadline <= $25::date)
+    AND ($26::timestamptz IS NULL OR fv.published_at > $26::timestamptz)
+    AND ($27::timestamptz IS NULL OR fv.published_at <= $27::timestamptz)
+  ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, fv.published_at DESC, fv.id
   LIMIT $28
 ), page AS (
   SELECT f.id, count(*) OVER () AS total,
@@ -520,6 +597,9 @@ type SearchVacanciesRow struct {
 // склейки с названиями), page считает число найденных и отрезает страницу, и только страница подтягивает карточки.
 // Ключи порядка k_* пусты, когда порядок не выбран: планировщик (план под значения, plan_cache_mode) выбрасывает их
 // и идёт по индексу порядка «новые сверху», останавливаясь на row_cap-й строке.
+// Отбор (found) идёт по самой таблице vacancies, без соединения с организациями, должностями, регионами и подразделениями
+// (срез 27): они нужны только карточкам страницы, которые берутся в конце; тип позиции и вид организации проверяются
+// подзапросом, только если такой фильтр задан. Раньше каждая из тысячи найденных вакансий тянула четыре соединения.
 func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams) ([]SearchVacanciesRow, error) {
 	rows, err := q.db.Query(ctx, searchVacancies,
 		arg.MaxResults,

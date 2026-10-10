@@ -29,3 +29,8 @@ web/coverage/
 
 # Мониторинг (срез 26): пароль локального GlitchTip
 monitoring/glitchtip-login.txt
+
+# Нагрузочный тест (срез 27): данные и результаты прогонов
+loadtest/.fixtures.json
+loadtest/.summary.json
+loadtest/.run/

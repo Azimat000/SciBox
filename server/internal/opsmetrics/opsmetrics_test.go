@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"scibox/server/internal/errreport"
+	"scibox/server/internal/httpcache"
 	"scibox/server/internal/jobs"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/opsmetrics"
@@ -237,6 +238,24 @@ func TestMissingSourcesProduceNoMetrics(t *testing.T) {
 	got := gather(t, register(t, opsmetrics.Sources{}))
 	if len(got) != 0 {
 		t.Fatalf("an empty set of sources exported %v", got)
+	}
+}
+
+// Кеши ответов (срез 27): исходы запросов и число записей по имени кеша.
+func TestCachesAreExported(t *testing.T) {
+	got := gather(t, register(t, opsmetrics.Sources{Caches: map[string]func() httpcache.Stats{
+		"vacancy_search": func() httpcache.Stats { return httpcache.Stats{Hits: 7, Shared: 2, Misses: 3, Entries: 5} },
+	}}))
+	want := values{
+		"scibox_cache_requests_total{cache=vacancy_search,result=hit}":    7,
+		"scibox_cache_requests_total{cache=vacancy_search,result=shared}": 2,
+		"scibox_cache_requests_total{cache=vacancy_search,result=miss}":   3,
+		"scibox_cache_entries{cache=vacancy_search}":                      5,
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %v, want %v (all: %v)", k, got[k], v, got)
+		}
 	}
 }
 

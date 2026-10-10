@@ -33,6 +33,7 @@ import (
 	"scibox/server/internal/filework"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
+	"scibox/server/internal/httpcache"
 	"scibox/server/internal/httpguard"
 	"scibox/server/internal/jobs"
 	"scibox/server/internal/journals"
@@ -476,10 +477,16 @@ type services struct {
 
 	// metrics считает запросы роутера; nil — без метрик (тесты). Задаётся после сборки (serve, worker).
 	metrics *metrics.Metrics
+	// searchCache и catalogCache — короткие кеши ответов поиска вакансий и каталога учёных для гостей (срез 27);
+	// nil — кеш выключен (SCIBOX_SEARCH_CACHE_TTL=off).
+	searchCache, catalogCache *httpcache.Keyed
 	// breakers и limiters — предохранители и ограничители внешних сервисов по имени (для метрик).
 	breakers map[string]*resilience.Breaker
 	limiters map[string]*resilience.Limiter
 }
+
+// searchCacheEntries — сколько ответов поиска копия держит в памяти (страница из двадцати карточек — десятки килобайт, ответ больше 128 КБ не запоминается).
+const searchCacheEntries = 500
 
 // workerMaxConns — предел пула воркера (SCIBOX_DB_MAX_CONNS ниже этого предела действует как есть).
 const workerMaxConns = 10
@@ -517,7 +524,13 @@ func newServices(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logg
 	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
 	matchingCfg := matching.DefaultConfig()
 	matchingCfg.Now = now
+	var searchCache, catalogCache *httpcache.Keyed
+	if cfg.SearchCacheTTL > 0 {
+		searchCache = httpcache.NewKeyed(cfg.SearchCacheTTL, searchCacheEntries)
+		catalogCache = httpcache.NewKeyed(cfg.SearchCacheTTL, searchCacheEntries)
+	}
 	return &services{
+		searchCache: searchCache, catalogCache: catalogCache,
 		cfg: cfg, pool: pool, logger: logger, now: now, vault: vault,
 		accounts: accounts, organizations: organizations, notes: notes, outbox: outbox, queue: queue,
 		profiles: profileSvc, references: refSvc, vacancies: vacancySvc,
@@ -542,8 +555,8 @@ func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.
 		Logger:        logger,
 		Auth:          s.authHandler,
 		Orgs:          orgs.NewHandler(s.organizations, logger, requireUser),
-		Vacancies:     vacancies.NewHandler(s.vacancies, logger, requireUser),
-		Profiles:      profiles.NewHandler(s.profiles, logger, requireUser),
+		Vacancies:     vacancies.NewHandler(s.vacancies, logger, requireUser).WithSearchCache(s.searchCache),
+		Profiles:      profiles.NewHandler(s.profiles, logger, requireUser).WithCatalogCache(s.catalogCache),
 		Applications:  applications.NewHandler(s.applications, logger, requireUser),
 		References:    references.NewHandler(s.references, logger, requireUser),
 		Notifications: notifications.NewHandler(s.notes, logger, requireUser),

@@ -18,8 +18,10 @@ SciBox/
 │   ├── dev.sh            собирает сервер, запускает сервер (без фоновых задач), воркер и Vite вместе
 │   ├── glitchtip-setup   создаёт в локальном GlitchTip администратора, организацию и проект, печатает SCIBOX_ERROR_DSN (срез 26)
 │   ├── coverage-check    go vet + go test -race с покрытием + проверка порогов
+│   ├── load-test         нагрузочный тест (срез 27, D-177): две копии сервера и воркер на базе scibox_load, k6, ступени скорости, профили и метрики в `loadtest/.run/` (`make load-test`, `make load-smoke`)
 │   ├── load-data         пересоздаёт базу scibox_load и заливает объёмные данные по масштабу (срез 24; генератор `server/loadgen/generate.sql`)
 │   └── e2e-db            пересоздаёт базу scibox_e2e и заливает демо-данные (для `make e2e`)
+├── loadtest/             нагрузочный сценарий k6 `scenario.js` (смесь запросов, бюджеты) и `fixtures.sql` (сеансы, пары «человек — вакансия»); результаты прогонов в `.run/` не в git (срез 27)
 ├── e2e/                  сквозные тесты Playwright (свой package.json): playwright.config.ts поднимает сервер на 8090
 │                         и Vite на 5174 с базой scibox_e2e; tests/helpers.ts (письма из Mailpit, вход, режим, слежка за 5xx);
 │                         сценарии scientist-and-organization и new-organization, каждый на компьютере и телефоне (Pixel 7)
@@ -27,6 +29,7 @@ SciBox/
 ├── server/               Go 1.26 (строка `toolchain go1.26.6` в go.mod закрепляет версию), модуль scibox/server
 │   ├── cmd/api/          точка входа: команды serve | worker | migrate up|down|reset|status | journals load [--force] [файл] | seed | version
 │   ├── cmd/covercheck/   проверка порогов покрытия (логика в internal/covercheck)
+│   ├── cmd/smtpsink/     приёмник писем с настраиваемой паузой на ответ для замеров очереди писем (срез 27, вне покрытия)
 │   ├── db/migrations/    goose, встроены в бинарник (db/embed.go)
 │   ├── db/queries/       SQL для sqlc
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
@@ -59,7 +62,7 @@ SciBox/
 │       ├── opsserver/    внутренний порт (срез 26, критичная зона): `/livez`, `/readyz`, `/metrics`, `/debug/pprof`; секрет `Authorization: Bearer`, pprof выключен по умолчанию в бою
 │       ├── errreport/    отправка ошибок в GlitchTip (срез 26, критичная зона): записи уровня Error, разрешённые поля, текст базы сведён к коду, очередь, предел, сворачивание повторов
 │       ├── dbpool/       пул соединений с PostgreSQL (срез 24, T-22): размер, жизнь соединений, `statement_timeout`, `idle_in_transaction_session_timeout`, `plan_cache_mode`, `random_page_cost`, журнал медленных запросов без значений параметров (`SlowQueryTracer`), `IsTimeout`
-│       ├── httpcache/    короткий кеш публичных ответов (срез 24): `Cache` на срок в памяти копии, `Serve` с `ETag` и `Cache-Control`, 304 на `If-None-Match`; используют `landing` и `refdata`
+│       ├── httpcache/    короткий кеш публичных ответов (срез 24): `Cache` на срок в памяти копии (`refdata`), `Serve` с `ETag` и `Cache-Control`, 304 на `If-None-Match`; срез 27 (D-179, D-181): `Keyed` — кеш по ключу запроса с одним сбором на одинаковые запросы, пределом записей, сбором без отмены посетителя и «запасом» (`WithStale`: старый ответ, пока он обновляется в фоне); используют поиск вакансий, каталог гостя и `landing`
 │       ├── landing/      числа для главной (`GET /api/landing`): открытые вакансии, организации, учёные для гостя, разбивка по областям и видам позиций; HTTP
 │       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами (`worker.go`: виды сбоя, предохранитель, возврат при остановке, `QueueStats`), переключатели писем (`settings.go`), HTTP
 │       ├── testkit/      помощники для тестов с базой (временная база, сервисы, люди, организация со всеми ролями, «поломка» n-го запроса); вне покрытия
@@ -193,6 +196,7 @@ SciBox/
 | `SCIBOX_DB_SLOW_QUERY` | `200ms` (запросы дольше пишутся в журнал: имя и время) |
 | `SCIBOX_BACKGROUND` | `on`: `serve` сам исполняет фоновые задачи; `off` — только HTTP, задачи исполняет `worker` (срез 25, D-170). `make dev`, `make share` и сквозные тесты ставят `off` |
 | `SCIBOX_SHUTDOWN_TIMEOUT` | `20s`: сколько после сигнала остановки сервер ждёт текущие запросы, а задачи дописывают порцию (срез 25) |
+| `SCIBOX_SEARCH_CACHE_TTL` | `15s`: сколько копия помнит ответ поиска вакансий и каталога учёных (для гостя) на один и тот же запрос; `off` выключает, не больше 5 минут (срез 27, D-179) |
 | `SCIBOX_CROSSREF_MAX_CONCURRENT` | `1`: одновременных запросов к Crossref от одной копии, 1–10 (срез 25, D-169) |
 | `SCIBOX_LOG_FORMAT` | `json` в production, `text` иначе (срез 26) |
 | `SCIBOX_LOG_LEVEL` | `info` (debug, info, warn, error) |
@@ -252,6 +256,7 @@ SciBox/
 - Миграция `00019_file_storage.sql` (срез 23, D-157): `application_files.data` переименован в `legacy_data` (необязателен, обнуляется после переноса, новые строки содержимого не несут: ограничение `application_files_no_content`), новые столбцы `storage_key` (ключ объекта, уникален), `sha256`, `scan_status` (`pending|clean|infected`, по умолчанию `pending`), `scanned_at`, `scan_signature`, `scan_attempts`, `scan_next_at` (пауза до следующей проверки и «аренда» файла на время проверки); ограничения: чистый файл имеет дату проверки, заражённый не хранит ключ, содержимое есть либо в хранилище, либо в старом столбце; индексы под фоновую проверку и перенос; таблица `blob_deletions` (ключи объектов на удаление из хранилища, их кладёт стирание аккаунта). Столбец `legacy_data` удаляется в срезе 28.
 - Миграция `00020_scale.sql` (срез 24, D-162): `profile_search` (profile_id, doc tsvector, fuzzy_text, updated_at, codes text[]; GIN по `doc`, по триграммам `fuzzy_text` и по `codes`) со сборкой триггерами (`refresh_profile_search`: профиль, специальности, имя в аккаунте); `profiles.q12_total` (число статей в Q1–Q2, триггер на `profile_items`), `profiles.h_max` (лучший из четырёх h-index, вычисляемый столбец, `NOT NULL`); индексы `profiles_catalog_idx`, `profiles_h_idx`, `profiles_region_idx`, `users_display_name_idx`.
 - Миграция `00021_vacancy_search_open.sql` (срез 24, D-162, D-163): `vacancy_search` + `open` (опубликована), `published_at`, `fuzzy_text` (название, должность, организация), `codes` (коды специальностей вместе с кодами групп и областей); GIN по тексту, триграммам и кодам только для открытых; триггер `vacancy_search_status`; `vacancies_open_order_idx (published_at DESC, id)` вместо `vacancies_published_idx`; `ALTER DATABASE … SET pg_trgm.word_similarity_threshold = 0.5`.
+- Миграция `00024_load_indexes.sql` (срез 27, D-181): частичный индекс `profiles_visible_idx (visibility) WHERE headline <> ''` и `vacancies_open_order_idx` пересоздан с `INCLUDE (deadline, org_id)`: числа главной считаются по индексу.
 - Миграция `00022_job_runs.sql` (срез 25, D-167): `job_runs` (name — ключ, next_run_at, leased_until, holder, started_at, finished_at, last_ok_at, failures, last_error, runs): общее расписание фоновых задач «на весь кластер»; строка на задачу, ПДн нет.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час фоновой задачей (`accounts.cleanup`, `orgs.cleanup`, `rate-counters.cleanup`, `retention`, `outbox.cleanup`).
 

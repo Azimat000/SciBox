@@ -128,8 +128,12 @@ SELECT specialty_code FROM profile_specialties WHERE profile_id = $1;
 -- Кандидаты в подборку: опубликованные, срок не прошёл, хотя бы одна специальность из тех же групп ВАК (vacancy_search.codes
 -- хранит коды специальностей вместе с кодами групп и областей), нет живого
 -- отклика человека, не вакансии организаций, где человек сам разбирает отклики. Точные баллы считает код (matching.Score).
+-- Берутся только поля, нужные правилам (срез 27): полная карточка с описаниями и названиями организации нужна лишь
+-- страницам выдачи и берётся для них отдельно (ListVacancyViewsByIDs); раньше все 500 кандидатов тянули за собой
+-- шесть соединений и тексты описаний (154 мс против 14 мс на половине объёма «вся наука РФ»).
 -- name: ListMatchCandidates :many
-SELECT v.* FROM vacancy_view v
+SELECT v.id, v.degree_required, v.title_required, v.region_code, v.work_format, v.career_level, v.deadline
+FROM vacancies v
 JOIN vacancy_search s ON s.vacancy_id = v.id
 WHERE v.status = 'published'
   AND (v.deadline IS NULL OR v.deadline >= @today::date)

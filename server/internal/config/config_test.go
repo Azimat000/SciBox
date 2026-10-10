@@ -414,6 +414,35 @@ func TestLoadBackgroundAndShutdown(t *testing.T) {
 	}
 }
 
+// Кеш поиска (срез 27, D-179): по умолчанию 15 секунд, off и 0 выключают, ошибка называет настройку.
+func TestLoadSearchCacheTTL(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	load := func(value string) (Config, error) {
+		env := map[string]string{"SCIBOX_PRODUCT_CONFIG": p}
+		if value != "" {
+			env["SCIBOX_SEARCH_CACHE_TTL"] = value
+		}
+		return Load(envMap(env))
+	}
+	for _, tc := range []struct {
+		value string
+		want  time.Duration
+	}{
+		{"", DefaultSearchCacheTTL}, {"30s", 30 * time.Second}, {" 2m ", 2 * time.Minute}, {"5m", 5 * time.Minute},
+		{"off", 0}, {"OFF", 0}, {"0", 0},
+	} {
+		cfg, err := load(tc.value)
+		if err != nil || cfg.SearchCacheTTL != tc.want {
+			t.Errorf("%q: ttl=%v err=%v, want %v", tc.value, cfg.SearchCacheTTL, err, tc.want)
+		}
+	}
+	for _, bad := range []string{"-1s", "10", "скоро", "6m", "1h"} {
+		if _, err := load(bad); err == nil || !strings.Contains(err.Error(), "SCIBOX_SEARCH_CACHE_TTL") {
+			t.Errorf("%q: err = %v, want one naming SCIBOX_SEARCH_CACHE_TTL", bad, err)
+		}
+	}
+}
+
 func TestLoadObservability(t *testing.T) {
 	p := writeFile(t, `{"name":"SciBox"}`)
 	load := func(m map[string]string) (Config, error) {

@@ -14,6 +14,7 @@ import (
 	"scibox/server/internal/config"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/errreport"
+	"scibox/server/internal/httpcache"
 	"scibox/server/internal/jobs"
 	"scibox/server/internal/metrics"
 	"scibox/server/internal/opsmetrics"
@@ -175,9 +176,15 @@ func (p promLogger) Println(v ...any) { p.l.Error("metrics handler failed", "err
 // registerSources подключает к реестру метрики состояния: очереди, задачи, предохранители, пул.
 func (s *services) registerSources(obs observability, runner *jobs.Runner, defs []jobs.Job) error {
 	q := dbgen.New(s.pool)
+	caches := map[string]func() httpcache.Stats{}
+	if s.searchCache != nil {
+		caches["vacancy_search"] = s.searchCache.Stats
+		caches["scientist_catalog"] = s.catalogCache.Stats
+	}
 	return opsmetrics.Register(obs.metrics.Registry, opsmetrics.Sources{
-		Pool: s.pool,
-		Mail: s.outbox.QueueStats,
+		Pool:   s.pool,
+		Caches: caches,
+		Mail:   s.outbox.QueueStats,
 		Files: func(ctx context.Context) (opsmetrics.FileQueues, error) {
 			row, err := q.FilesQueueStats(ctx)
 			if err != nil {

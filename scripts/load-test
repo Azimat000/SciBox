@@ -1,0 +1,113 @@
+#!/bin/sh
+# Нагрузочный тест (срез 27, D-177): две копии сервера и воркер на базе scibox_load, смесь запросов из loadtest/scenario.js
+# ступенями по скорости. Нужны: `make load-data` (база scibox_load), k6, Docker (PostgreSQL, хранилище, антивирус).
+#
+# Использование: scripts/load-test [ступени через запятую, зап/с]   (по умолчанию 100,200,300,400,500,600)
+# Переменные: DURATION (по умолчанию 60s на ступень), PROFILE=0 (не снимать профили), KEEP=1 (не гасить процессы),
+# LOAD_DB (база, по умолчанию scibox_load; для проверки самого сценария можно взять scibox с MIN_VACANCIES=10).
+# Результаты: loadtest/.run/<время>/ (таблицы ступеней, профили pprof, снимки метрик, журналы процессов).
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+steps=${1:-100,200,300,400,500,600}
+duration=${DURATION:-60s}
+profile=${PROFILE:-1}
+db=${LOAD_DB:-scibox_load}
+out="loadtest/.run/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$out"
+
+command -v k6 >/dev/null || { echo "Нет k6. Установка: brew install k6"; exit 1; }
+# Антивирус (около 1 ГБ памяти) по умолчанию не поднимается: у Docker на этом Mac 3,8 ГБ, и они нужны кешу базы. Без него
+# файлы откликов принимаются в статусе «на проверке» (D-158), путь записи в хранилище остаётся. CLAMAV=1 — с антивирусом.
+# Память под страницы базы: при 256 МБ по умолчанию и базе в несколько гигабайт замер упирается в диск, а не в запросы.
+export SCIBOX_PG_SHARED_BUFFERS="${SCIBOX_PG_SHARED_BUFFERS:-1GB}"
+services="postgres mailpit s3"
+[ "${CLAMAV:-0}" = 1 ] && services="$services clamav"
+# shellcheck disable=SC2086
+docker compose up -d --wait $services >/dev/null
+count=$(docker compose exec -T postgres psql -U scibox -d "$db" -Atc "SELECT count(*) FROM vacancies" 2>/dev/null || echo 0)
+[ "${count:-0}" -gt "${MIN_VACANCIES:-1000}" ] || { echo "В базе $db нет объёмных данных. Сначала: make load-data"; exit 1; }
+
+(cd server && GOFLAGS=-buildvcs=false go build -o bin/scibox ./cmd/api)
+
+# Пароль вымышленных людей — пароль демо-аккаунтов (server/seed/seed.go): хеш у них общий.
+password=$(sed -n 's/^const DemoPassword = "\(.*\)"/\1/p' server/seed/seed.go)
+
+echo "Данные для сценария…"
+docker compose exec -T postgres psql -q -At -U scibox -d "$db" -v applicants=4000 -v staff=300 \
+  < loadtest/fixtures.sql > loadtest/.fixtures.json
+[ -s loadtest/.fixtures.json ] || { echo "Не удалось подготовить данные"; exit 1; }
+
+pids=""
+stop() {
+  # shellcheck disable=SC2086
+  [ -n "$pids" ] && kill $pids 2>/dev/null || true
+  wait 2>/dev/null || true
+}
+[ "${KEEP:-0}" = 1 ] || trap stop EXIT INT TERM
+
+export DATABASE_URL="postgres://scibox:scibox@localhost:5433/$db?sslmode=disable"
+export SCIBOX_TRUSTED_PROXIES=127.0.0.1
+export SCIBOX_PUBLIC_URL=http://127.0.0.1:8091
+# Копии сервера без фона, фон — в отдельном воркере (как в бою, D-170). Запуск из server/: там относительные пути настроек.
+(cd server && SCIBOX_BACKGROUND=off SCIBOX_HTTP_ADDR=127.0.0.1:8091 SCIBOX_OPS_ADDR=127.0.0.1:9100 \
+  exec ./bin/scibox serve) > "$out/server1.log" 2>&1 &
+pids="$pids $!"
+(cd server && SCIBOX_BACKGROUND=off SCIBOX_HTTP_ADDR=127.0.0.1:8092 SCIBOX_OPS_ADDR=127.0.0.1:9102 \
+  exec ./bin/scibox serve) > "$out/server2.log" 2>&1 &
+pids="$pids $!"
+(cd server && SCIBOX_OPS_ADDR=127.0.0.1:9101 exec ./bin/scibox worker) > "$out/worker.log" 2>&1 &
+pids="$pids $!"
+
+for port in 9100 9102 9101; do
+  n=0
+  until curl -fsS "http://127.0.0.1:$port/readyz" >/dev/null 2>&1; do
+    n=$((n + 1)); [ $n -lt 60 ] || { echo "Процесс на порту $port не готов, см. $out/*.log"; exit 1; }
+    sleep 1
+  done
+done
+echo "Сервер 1 :8091, сервер 2 :8092, воркер: готовы. Результаты: $out"
+
+# Лёгкий сборщик нагрузки на машину: процессор процессов и контейнера базы раз в 5 секунд.
+sampler() {
+  while :; do
+    {
+      date +%H:%M:%S
+      docker stats --no-stream --format '  {{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' scibox-postgres-1 2>/dev/null || true
+      ps -o pid=,pcpu=,rss=,comm= -p "$(echo "$pids" | tr ' ' ',' | sed 's/^,//')" 2>/dev/null | sed 's/^/  /' || true
+    } >> "$out/machine.log"
+    sleep 5
+  done
+}
+sampler &
+sampler_pid=$!
+pids="$pids $sampler_pid"
+
+offset=0
+for rps in $(echo "$steps" | tr ',' ' '); do
+  echo
+  echo "=== ступень $rps зап/с, $duration ==="
+  prof_pids=""
+  if [ "$profile" = 1 ]; then
+    # Профиль процессора каждой копии на середине ступени (20 секунд).
+    (sleep 20; for p in 9100 9102 9101; do
+       curl -fsS "http://127.0.0.1:$p/debug/pprof/profile?seconds=20" -o "$out/cpu-$rps-$p.pprof" 2>/dev/null &
+     done; wait) &
+    prof_pids=$!
+  fi
+  k6 run --quiet \
+    -e BASES=http://127.0.0.1:8091,http://127.0.0.1:8092 \
+    -e FIXTURES="$root/loadtest/.fixtures.json" \
+    -e RPS="$rps" -e DURATION="$duration" -e PASSWORD="$password" -e PAIR_OFFSET="$offset" \
+    -e SUMMARY_OUT="$out/step-$rps.json" \
+    loadtest/scenario.js 2>&1 | tee "$out/step-$rps.txt" || true
+  [ -n "$prof_pids" ] && wait "$prof_pids" 2>/dev/null || true
+  offset=$((offset + 2000))
+  # Снимок метрик после ступени: по ним видно очереди, пул и медленные запросы.
+  for p in 9100 9102 9101; do curl -fsS "http://127.0.0.1:$p/metrics" -o "$out/metrics-$rps-$p.txt" 2>/dev/null || true; done
+  sleep 10
+done
+
+echo
+echo "Готово. Таблицы: $out/step-*.txt; профили: go tool pprof -top -nodecount=25 server/bin/scibox $out/cpu-<зап/с>-<порт>.pprof"
