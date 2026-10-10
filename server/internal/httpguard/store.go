@@ -2,7 +2,6 @@ package httpguard
 
 import (
 	"context"
-	"log/slog"
 	"net/netip"
 	"sync"
 	"time"
@@ -49,22 +48,6 @@ func (s *PostgresStore) Hit(ctx context.Context, kind, key string, window time.T
 // Cleanup удаляет счётчики, окна которых начались раньше now − KeepCounters.
 func (s *PostgresStore) Cleanup(ctx context.Context, now time.Time) error {
 	return s.q.DeleteOldRateCounters(ctx, now.Add(-KeepCounters))
-}
-
-// RunCleanup раз в every удаляет старые счётчики, пока не отменят ctx.
-func (s *PostgresStore) RunCleanup(ctx context.Context, every time.Duration, logger *slog.Logger) {
-	ticker := time.NewTicker(every)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := s.Cleanup(ctx, time.Now()); err != nil && ctx.Err() == nil {
-				logger.Error("rate counters cleanup", "err", err)
-			}
-		}
-	}
 }
 
 // MemoryStore держит счётчики в памяти процесса. Годится для одной копии сервера и тестов;

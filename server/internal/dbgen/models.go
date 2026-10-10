@@ -112,6 +112,19 @@ type Favorite struct {
 	CreatedAt time.Time
 }
 
+type JobRun struct {
+	Name        string
+	NextRunAt   time.Time
+	LeasedUntil *time.Time
+	Holder      string
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+	LastOkAt    *time.Time
+	Failures    int32
+	LastError   string
+	Runs        int64
+}
+
 type Journal struct {
 	ID        int64
 	Title     string

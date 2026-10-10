@@ -42,8 +42,10 @@ type Config struct {
 	Settle time.Duration
 	// MaxListed — сколько вакансий перечислять в одном письме о новых; остальные учитываются числом.
 	MaxListed int
-	// Batch — сколько записей фоновый цикл берёт за один раз.
+	// Batch — сколько записей фоновая задача берёт за один раз.
 	Batch int
+	// Now — часы сервиса; nil — настоящие. Подменяются в тестах сборки сервера (расписание писем зависит от часа по Москве).
+	Now func() time.Time
 }
 
 // DefaultConfig — боевые настройки: 200 избранных и 20 поисков на человека, письмо перечисляет до 10 вакансий.
@@ -79,7 +81,11 @@ func NewService(pool *pgxpool.Pool, vac *vacancies.Service, notes *notifications
 }
 
 func newService(db DB, vac Searcher, notes *notifications.Service, cfg Config, log *slog.Logger) *Service {
-	return &Service{db: db, q: dbgen.New(db), cfg: cfg, vac: vac, notes: notes, log: log, now: func() time.Time { return time.Now().UTC() }}
+	now := func() time.Time { return time.Now().UTC() }
+	if cfg.Now != nil {
+		now = func() time.Time { return cfg.Now().UTC() }
+	}
+	return &Service{db: db, q: dbgen.New(db), cfg: cfg, vac: vac, notes: notes, log: log, now: now}
 }
 
 func (s *Service) inTx(ctx context.Context, fn func(q *dbgen.Queries) error) error {

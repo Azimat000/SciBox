@@ -370,3 +370,45 @@ func TestLoadDB(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadBackgroundAndShutdown(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	load := func(extra map[string]string) (Config, error) {
+		env := map[string]string{"SCIBOX_PRODUCT_CONFIG": p}
+		for k, v := range extra {
+			env[k] = v
+		}
+		return Load(envMap(env))
+	}
+	t.Run("по умолчанию", func(t *testing.T) {
+		cfg, err := load(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !cfg.Background || cfg.ShutdownTimeout != DefaultShutdownTimeout || cfg.CrossrefMaxConcurrent != DefaultCrossrefMaxConcurrent {
+			t.Fatalf("Background=%v ShutdownTimeout=%v CrossrefMaxConcurrent=%d", cfg.Background, cfg.ShutdownTimeout, cfg.CrossrefMaxConcurrent)
+		}
+	})
+	t.Run("свои значения", func(t *testing.T) {
+		cfg, err := load(map[string]string{"SCIBOX_BACKGROUND": "off", "SCIBOX_SHUTDOWN_TIMEOUT": " 45s ", "SCIBOX_CROSSREF_MAX_CONCURRENT": "3"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Background || cfg.ShutdownTimeout != 45*time.Second || cfg.CrossrefMaxConcurrent != 3 {
+			t.Fatalf("Background=%v ShutdownTimeout=%v CrossrefMaxConcurrent=%d", cfg.Background, cfg.ShutdownTimeout, cfg.CrossrefMaxConcurrent)
+		}
+	})
+	bad := []struct{ key, value string }{
+		{"SCIBOX_BACKGROUND", "fasle"},
+		{"SCIBOX_SHUTDOWN_TIMEOUT", "0"}, {"SCIBOX_SHUTDOWN_TIMEOUT", "-1s"}, {"SCIBOX_SHUTDOWN_TIMEOUT", "20"}, {"SCIBOX_SHUTDOWN_TIMEOUT", "скоро"},
+		{"SCIBOX_CROSSREF_MAX_CONCURRENT", "0"}, {"SCIBOX_CROSSREF_MAX_CONCURRENT", "-1"}, {"SCIBOX_CROSSREF_MAX_CONCURRENT", "11"}, {"SCIBOX_CROSSREF_MAX_CONCURRENT", "три"},
+	}
+	for _, tc := range bad {
+		t.Run("ошибка "+tc.key+"="+tc.value, func(t *testing.T) {
+			_, err := load(map[string]string{tc.key: tc.value})
+			if err == nil || !strings.Contains(err.Error(), tc.key) {
+				t.Fatalf("err = %v, want one naming %s", err, tc.key)
+			}
+		})
+	}
+}

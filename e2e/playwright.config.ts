@@ -29,8 +29,10 @@ export default defineConfig({
   ],
   webServer: [
     {
-      // Журнал сервера пишется в e2e/server.log, чтобы не засорять вывод тестов.
-      command: './bin/scibox serve > ../e2e/server.log 2>&1',
+      // Сервер отвечает на запросы, воркер рядом делает фоновую работу (письма уходят в Mailpit именно им). Журналы
+      // пишутся в e2e/server.log и e2e/worker.log, чтобы не засорять вывод тестов. Playwright останавливает группу
+      // процессов целиком, поэтому воркер, запущенный в фоне командной оболочки, останавливается вместе с сервером.
+      command: './bin/scibox worker > ../e2e/worker.log 2>&1 & exec ./bin/scibox serve > ../e2e/server.log 2>&1',
       cwd: '../server',
       url: `http://127.0.0.1:${apiPort}/api/health`,
       reuseExistingServer: Boolean(process.env.E2E_REUSE),
@@ -39,6 +41,7 @@ export default defineConfig({
         DATABASE_URL: 'postgres://scibox:scibox@localhost:5433/scibox_e2e?sslmode=disable',
         SCIBOX_S3_BUCKET: 'scibox-e2e',
         SCIBOX_HTTP_ADDR: `127.0.0.1:${apiPort}`,
+        SCIBOX_BACKGROUND: 'off',
         SCIBOX_PUBLIC_URL: `http://localhost:${webPort}`,
       },
     },

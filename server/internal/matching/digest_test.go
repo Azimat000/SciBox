@@ -491,17 +491,3 @@ func TestDigestNeverMovesTheBoundaryBack(t *testing.T) {
 		t.Errorf("уведомлений %d", d.notices())
 	}
 }
-
-func TestRunStopsWhenCancelled(t *testing.T) {
-	w := newWorld(t)
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { w.svc.Run(ctx, 10*time.Millisecond); close(done) }()
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("цикл не остановился")
-	}
-}

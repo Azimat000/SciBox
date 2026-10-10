@@ -33,6 +33,7 @@ import (
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpapi"
 	"scibox/server/internal/httpguard"
+	"scibox/server/internal/jobs"
 	"scibox/server/internal/journals"
 	"scibox/server/internal/landing"
 	"scibox/server/internal/logmask"
@@ -45,22 +46,9 @@ import (
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/refdata"
 	"scibox/server/internal/references"
-	"scibox/server/internal/retention"
+	"scibox/server/internal/resilience"
 	"scibox/server/internal/vacancies"
 	"scibox/server/seed"
-)
-
-// outboxInterval — как часто отправитель смотрит в очередь писем.
-const outboxInterval = 2 * time.Second
-
-// matchingInterval — как часто фоновый цикл смотрит, не пора ли слать письма о новых вакансиях и напоминания о сроках.
-const matchingInterval = 5 * time.Minute
-
-// fileWorkInterval — как часто фоновая задача файлов смотрит, не пора ли проверить файл, перенести старый или удалить
-// объект из очереди; fileSweepInterval — как часто чистит осиротевшие объекты.
-const (
-	fileWorkInterval  = 30 * time.Second
-	fileSweepInterval = 6 * time.Hour
 )
 
 // Version задаётся при сборке через -ldflags; при локальном запуске "dev".
@@ -69,7 +57,8 @@ var Version = "dev"
 const usage = `Использование: scibox <команда>
 
 Команды:
-  serve                      запустить HTTP-сервер (по умолчанию)
+  serve                      запустить HTTP-сервер (по умолчанию); с SCIBOX_BACKGROUND=off без фоновых задач
+  worker                     запустить только фоновые задачи (письма, подбор, напоминания, чистка, файлы)
   migrate up|down|reset|status   миграции базы данных
   seed                       загрузить демо-данные
   journals load [--force] [файл]  загрузить справочник журналов SCImago (без файла — встроенный в сервер)
@@ -102,7 +91,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 	case "help", "-h", "--help":
 		fmt.Fprint(env.Stdout, usage)
 		return 0
-	case "serve", "migrate", "seed", "journals":
+	case "serve", "worker", "migrate", "seed", "journals":
 	default:
 		fmt.Fprintf(env.Stderr, "неизвестная команда %q\n\n%s", cmd, usage)
 		return 2
@@ -135,6 +124,12 @@ func Run(ctx context.Context, args []string, env Env) int {
 		}
 		if err := runSeed(ctx, cfg.DatabaseURL, vault, env.Stdout); err != nil {
 			logger.Error("seed", "err", err)
+			return 1
+		}
+		return 0
+	case "worker":
+		if err := runWorker(ctx, cfg, logger); err != nil {
+			logger.Error("worker", "err", err)
 			return 1
 		}
 		return 0
@@ -257,19 +252,28 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	if err != nil {
 		return err
 	}
-	a := newApp(cfg, pool, vault, logger, health.Checker{Queries: dbgen.New(pool), Migrations: migrations}, web, time.Now)
-	// Фоновые задачи останавливаются отменой cleanupCtx; сервер дожидается их до закрытия базы и выхода.
+	svc := newServices(cfg, pool, vault, logger, time.Now, nil)
+	handler := svc.router(health.Checker{Queries: dbgen.New(pool), Migrations: migrations}, web)
+
+	// Фоновые задачи (если их не вынесли в `worker`) останавливаются отменой jobCtx; сервер дожидается их до закрытия
+	// базы и выхода. Остановка мягкая: задачи видят сигнал и дописывают текущую порцию (jobs.Draining).
 	var background sync.WaitGroup
 	defer background.Wait()
-	cleanupCtx, stopCleanup := context.WithCancel(ctx)
-	defer stopCleanup()
-	for _, flush := range a.flush {
+	jobCtx, stopJobs := context.WithCancel(ctx)
+	defer stopJobs()
+	for _, flush := range svc.flushers() {
 		defer flush()
 	}
-	for _, run := range a.background {
-		background.Go(func() { run(cleanupCtx) })
+	if cfg.Background {
+		list := svc.jobs()
+		if err := jobs.Validate(list); err != nil {
+			return err
+		}
+		runner := jobs.New(pool, logger, jobs.Config{Grace: cfg.ShutdownTimeout})
+		background.Go(func() { _ = runner.Run(jobCtx, list...) }) // описание проверено выше: Run не вернёт ошибку
+	} else {
+		logger.Info("background jobs are off in this process: run `worker` for them")
 	}
-	handler := a.handler
 
 	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
 	if err != nil {
@@ -280,7 +284,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()
 	logger.Info("server started", "addr", ln.Addr().String(), "product", cfg.Product.Name, "env", cfg.Env,
-		"trusted_proxies", !cfg.TrustedProxies.Empty())
+		"trusted_proxies", !cfg.TrustedProxies.Empty(), "background", cfg.Background)
 	if onListen != nil {
 		onListen(ln.Addr())
 	}
@@ -290,7 +294,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 		return err
 	case <-ctx.Done():
 	}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Сервер перестаёт принимать новые соединения и дожидается текущих запросов; фоновые задачи в это время тоже
+	// дописывают свою порцию (их остановка началась с той же отмены ctx).
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
@@ -302,11 +308,43 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, onListen
 	return nil
 }
 
+// runWorker — отдельный процесс фоновых задач: те же задачи, что у `serve` с включённым SCIBOX_BACKGROUND, но без
+// HTTP. Копий воркера может быть несколько: общее расписание лежит в базе (internal/jobs).
+func runWorker(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	// Задачи идут по одной на каждый вид и почти не держат соединений: воркеру хватает половины обычного пула, остальное
+	// остаётся копиям сервера (в базе всего 100 соединений на все процессы).
+	cfg.DB.MaxConns = min(cfg.DB.MaxConns, workerMaxConns)
+	pool, err := dbpool.New(ctx, cfg.DatabaseURL, cfg.DB, logger)
+	if err != nil {
+		return fmt.Errorf("connect database: %w", err)
+	}
+	defer pool.Close()
+	vault, err := openVault(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	svc := newServices(cfg, pool, vault, logger, time.Now, nil)
+	for _, flush := range svc.flushers() {
+		defer flush()
+	}
+	list := svc.jobs()
+	if err := jobs.Validate(list); err != nil {
+		return err
+	}
+	runner := jobs.New(pool, logger, jobs.Config{Grace: cfg.ShutdownTimeout})
+	logger.Info("worker started", "product", cfg.Product.Name, "env", cfg.Env, "jobs", len(list), "holder", runner.Holder())
+	if err := runner.Run(ctx, list...); err != nil {
+		return err
+	}
+	logger.Info("worker stopped")
+	return nil
+}
+
 // app — собранный сервер: обработчик всех адресов и фоновые задачи, которые запускает serve.
 type app struct {
 	handler http.Handler
-	// background — фоновые циклы; каждый работает, пока не отменят ctx.
-	background []func(ctx context.Context)
+	// jobs — фоновые задачи.
+	jobs []jobs.Job
 	// flush дожидается писем, которые сервисы отправляют в фоне, перед выходом.
 	flush []func()
 }
@@ -314,60 +352,112 @@ type app struct {
 // newApp собирает сервисы и роутер так же, как в работе. Отдельно от serve, чтобы тесты проверяли
 // настоящую сборку (например, что каждый адрес ограничивает тело запроса). now — часы ограничения частоты.
 func newApp(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logger *slog.Logger, checker httpapi.HealthChecker, web http.Handler, now func() time.Time) app {
+	svc := newServices(cfg, pool, vault, logger, now, nil)
+	return app{handler: svc.router(checker, web), jobs: svc.jobs(), flush: svc.flushers()}
+}
+
+// services — все сервисы сервера. Из них собираются и роутер (serve), и список фоновых задач (serve и worker): так
+// оба процесса работают с одними и теми же настройками и правилами.
+type services struct {
+	cfg    config.Config
+	pool   *pgxpool.Pool
+	logger *slog.Logger
+	now    func() time.Time
+
+	accounts      *auth.Service
+	organizations *orgs.Service
+	notes         *notifications.Service
+	outbox        *notifications.Worker
+	profiles      *profiles.Service
+	references    *references.Service
+	applications  *applications.Service
+	vacancies     *vacancies.Service
+	matching      *matching.Service
+	counters      *httpguard.PostgresStore
+	fileWork      *filework.Service
+	vault         *files.Vault
+	authHandler   *auth.Handler
+	queue         *notifications.Queue
+}
+
+// workerMaxConns — предел пула воркера (SCIBOX_DB_MAX_CONNS ниже этого предела действует как есть).
+const workerMaxConns = 10
+
+// Предохранитель внешних сервисов (T-24): после стольких сбоев подряд обращений нет, пауза от 30 секунд до 5 минут.
+const (
+	breakerThreshold   = 5
+	breakerCooldown    = 30 * time.Second
+	breakerMaxCooldown = 5 * time.Minute
+	// crossrefMaxWait — сколько запрос ждёт свободное место для обращения к Crossref: человек ждёт ответа в форме.
+	crossrefMaxWait = 2 * time.Second
+)
+
+// newServices собирает сервисы. mailer — отправитель писем из очереди (nil — настоящий SMTP по настройкам); подменяется
+// в тестах.
+func newServices(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logger *slog.Logger, now func() time.Time, mailer mail.Sender) *services {
+	if mailer == nil {
+		mailer = mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom, TLS: cfg.SMTPTLS, Username: cfg.SMTPUser, Password: cfg.SMTPPassword}
+	}
 	// Письма сначала попадают в очередь в базе и уходят оттуда в фоне: они переживают падение сервера и повторяются при сбоях.
-	smtp := mail.SMTP{Addr: cfg.SMTPAddr, From: cfg.MailFrom, TLS: cfg.SMTPTLS, Username: cfg.SMTPUser, Password: cfg.SMTPPassword}
 	queue := notifications.NewQueue(pool)
 	accounts := auth.NewService(pool, queue, auth.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
 	organizations := orgs.NewService(pool, queue, orgs.DefaultConfig(cfg.Product.Name, cfg.PublicURL), logger)
-	worker := notifications.NewWorker(pool, smtp, logger)
-	authHandler := auth.NewHandler(accounts, logger)
+	outbox := notifications.NewWorker(pool, mailer, logger)
+	outbox.Breaker = resilience.NewBreaker(resilience.BreakerConfig{Threshold: breakerThreshold, Cooldown: breakerCooldown, MaxCooldown: breakerMaxCooldown})
 
 	notes := notifications.NewService(pool, notifications.Config{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL})
-	profileSvc := profiles.NewService(pool, crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto), profiles.DefaultConfig(cfg.Product.Name))
+	cross := crossref.NewClient(cfg.CrossrefURL, cfg.CrossrefMailto)
+	cross.Gate = &resilience.Gate{
+		Limiter: resilience.NewLimiter(cfg.CrossrefMaxConcurrent, crossrefMaxWait),
+		Breaker: resilience.NewBreaker(resilience.BreakerConfig{Threshold: breakerThreshold, Cooldown: breakerCooldown, MaxCooldown: breakerMaxCooldown}),
+	}
+	profileSvc := profiles.NewService(pool, cross, profiles.DefaultConfig(cfg.Product.Name))
 	refSvc := references.NewService(pool, notes, vault, references.DefaultConfig(cfg.Product.Name, cfg.PublicURL))
-	appSvc := applications.NewService(pool, profileSvc, refSvc, notes, vault, applications.DefaultConfig())
 	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
-	matchingSvc := matching.NewService(pool, vacancySvc, notes, matching.DefaultConfig(), logger)
-	// Счётчики частоты в базе: лимит общий для всех копий сервера (D-141).
-	counters := httpguard.NewPostgresStore(pool)
-	fileWork := filework.NewService(pool, vault, notes, filework.DefaultConfig(), logger)
+	matchingCfg := matching.DefaultConfig()
+	matchingCfg.Now = now
+	return &services{
+		cfg: cfg, pool: pool, logger: logger, now: now, vault: vault,
+		accounts: accounts, organizations: organizations, notes: notes, outbox: outbox, queue: queue,
+		profiles: profileSvc, references: refSvc, vacancies: vacancySvc,
+		applications: applications.NewService(pool, profileSvc, refSvc, notes, vault, applications.DefaultConfig()),
+		matching:     matching.NewService(pool, vacancySvc, notes, matchingCfg, logger),
+		// Счётчики частоты в базе: лимит общий для всех копий сервера (D-141).
+		counters:    httpguard.NewPostgresStore(pool),
+		fileWork:    filework.NewService(pool, vault, notes, filework.DefaultConfig(), logger),
+		authHandler: auth.NewHandler(accounts, logger),
+	}
+}
 
-	handler := httpapi.NewRouter(httpapi.Deps{
+// router собирает обработчики всех адресов.
+func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.Handler {
+	cfg, pool, logger, requireUser := s.cfg, s.pool, s.logger, s.authHandler.RequireUser
+	return httpapi.NewRouter(httpapi.Deps{
 		ProductName:   cfg.Product.Name,
 		Version:       Version,
 		Health:        checker,
 		Logger:        logger,
-		Auth:          authHandler,
-		Orgs:          orgs.NewHandler(organizations, logger, authHandler.RequireUser),
-		Vacancies:     vacancies.NewHandler(vacancySvc, logger, authHandler.RequireUser),
-		Profiles:      profiles.NewHandler(profileSvc, logger, authHandler.RequireUser),
-		Applications:  applications.NewHandler(appSvc, logger, authHandler.RequireUser),
-		References:    references.NewHandler(refSvc, logger, authHandler.RequireUser),
-		Notifications: notifications.NewHandler(notes, logger, authHandler.RequireUser),
-		Offers:        offers.NewHandler(offers.NewService(pool, notes, offers.DefaultConfig()), logger, authHandler.RequireUser),
-		Matching:      matching.NewHandler(matchingSvc, logger, authHandler.RequireUser),
+		Auth:          s.authHandler,
+		Orgs:          orgs.NewHandler(s.organizations, logger, requireUser),
+		Vacancies:     vacancies.NewHandler(s.vacancies, logger, requireUser),
+		Profiles:      profiles.NewHandler(s.profiles, logger, requireUser),
+		Applications:  applications.NewHandler(s.applications, logger, requireUser),
+		References:    references.NewHandler(s.references, logger, requireUser),
+		Notifications: notifications.NewHandler(s.notes, logger, requireUser),
+		Offers:        offers.NewHandler(offers.NewService(pool, s.notes, offers.DefaultConfig()), logger, requireUser),
+		Matching:      matching.NewHandler(s.matching, logger, requireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
-		Journals:      journals.NewHandler(journals.NewService(pool), logger, authHandler.RequireUser),
-		Export:        dataexport.NewHandler(dataexport.NewService(pool, vault, dataexport.DefaultConfig(cfg.Product.Name)), logger, authHandler.RequireUser),
+		Journals:      journals.NewHandler(journals.NewService(pool), logger, requireUser),
+		Export:        dataexport.NewHandler(dataexport.NewService(pool, s.vault, dataexport.DefaultConfig(cfg.Product.Name)), logger, requireUser),
 		Web:           web,
-		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: counters, Now: now},
+		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: s.counters, Now: s.now},
 	})
-	return app{
-		handler: handler,
-		background: []func(ctx context.Context){
-			func(ctx context.Context) { accounts.RunCleanup(ctx, time.Hour) },
-			func(ctx context.Context) { organizations.RunCleanup(ctx, time.Hour) },
-			func(ctx context.Context) { worker.Run(ctx, outboxInterval) },
-			func(ctx context.Context) { matchingSvc.Run(ctx, matchingInterval) },
-			func(ctx context.Context) { counters.RunCleanup(ctx, time.Hour, logger) },
-			func(ctx context.Context) {
-				retention.NewService(pool, retention.DefaultConfig(), logger).Run(ctx, time.Hour)
-			},
-			func(ctx context.Context) { fileWork.Run(ctx, fileWorkInterval, fileSweepInterval) },
-		},
-		flush: []func(){accounts.Flush, organizations.Flush},
-	}
+}
+
+// flushers — что дождаться перед выходом: письма, которые сервисы отправляют в очередь в фоне.
+func (s *services) flushers() []func() {
+	return []func(){s.accounts.Flush, s.organizations.Flush}
 }
 
 // openVault подключает хранилище файлов и антивирус. Хранилище, которое не отвечает при запуске, — ошибка запуска:

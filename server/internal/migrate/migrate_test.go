@@ -102,7 +102,10 @@ func TestUpDownUp(t *testing.T) {
 	fileTables := append(slices.Clone(auditTables), "blob_deletions")
 	slices.Sort(fileTables)
 	// Текст профиля для поиска (00020); 00021 таблиц не добавляет.
-	allTables := append(slices.Clone(fileTables), "profile_search")
+	scaleTables := append(slices.Clone(fileTables), "profile_search")
+	slices.Sort(scaleTables)
+	// Общее расписание фоновых задач (00022).
+	allTables := append(slices.Clone(scaleTables), "job_runs")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -111,10 +114,11 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00021_vacancy_search_open.sql", 2, allTables},
+		{"up", "00022_job_runs.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
-		{"down", "00021_vacancy_search_open.sql", 2, allTables},
+		{"down", "00022_job_runs.sql", 2, scaleTables},
+		{"down", "00021_vacancy_search_open.sql", 2, scaleTables},
 		{"down", "00020_scale.sql", 2, fileTables},
 		{"down", "00019_file_storage.sql", 2, auditTables},
 		// Сроки хранения (00018) таблиц не добавляют: меняют защиту журнала и добавляют индексы.
@@ -137,7 +141,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00021_vacancy_search_open.sql", 2, allTables},
+		{"up", "00022_job_runs.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

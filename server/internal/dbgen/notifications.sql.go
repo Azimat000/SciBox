@@ -21,7 +21,7 @@ WHERE id IN (
     LIMIT $3
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, to_email, subject, body, attempts
+RETURNING id, to_email, subject, body, attempts, created_at
 `
 
 type ClaimOutboxParams struct {
@@ -31,11 +31,12 @@ type ClaimOutboxParams struct {
 }
 
 type ClaimOutboxRow struct {
-	ID       int64
-	ToEmail  string
-	Subject  string
-	Body     string
-	Attempts int32
+	ID        int64
+	ToEmail   string
+	Subject   string
+	Body      string
+	Attempts  int32
+	CreatedAt time.Time
 }
 
 // Берём письма «в аренду»: пока аренда не истекла, другой отправитель их не возьмёт. Попытка засчитывается сразу.
@@ -54,6 +55,7 @@ func (q *Queries) ClaimOutbox(ctx context.Context, arg ClaimOutboxParams) ([]Cla
 			&i.Subject,
 			&i.Body,
 			&i.Attempts,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -112,6 +114,24 @@ func (q *Queries) CountUnreadNotifications(ctx context.Context, userID uuid.UUID
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const deferOutbox = `-- name: DeferOutbox :exec
+UPDATE outbox SET next_attempt_at = $1, attempts = GREATEST(attempts - 1, 0), last_error = $2
+WHERE id = $3 AND sent_at IS NULL AND failed_at IS NULL
+`
+
+type DeferOutboxParams struct {
+	NextAttemptAt time.Time
+	LastError     string
+	ID            int64
+}
+
+// Сбой самого почтового сервиса (нет связи, вход отвергнут): вина не письма, поэтому попытка не засчитывается, письмо
+// ждёт и пробуется снова (срез 25, D-168). Иначе долгий сбой почты сжигал бы все попытки у всех писем.
+func (q *Queries) DeferOutbox(ctx context.Context, arg DeferOutboxParams) error {
+	_, err := q.db.Exec(ctx, deferOutbox, arg.NextAttemptAt, arg.LastError, arg.ID)
+	return err
 }
 
 const deleteOldOutbox = `-- name: DeleteOldOutbox :exec
@@ -357,4 +377,54 @@ func (q *Queries) NotificationExists(ctx context.Context, arg NotificationExists
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const outboxStats = `-- name: OutboxStats :one
+SELECT
+    (count(*) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL))::bigint AS waiting,
+    (count(*) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL AND attempts > 0))::bigint AS retrying,
+    (count(*) FILTER (WHERE failed_at IS NOT NULL))::bigint AS undelivered,
+    COALESCE(min(created_at) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL), to_timestamp(0))::timestamptz AS oldest_waiting
+FROM outbox
+`
+
+type OutboxStatsRow struct {
+	Waiting       int64
+	Retrying      int64
+	Undelivered   int64
+	OldestWaiting time.Time
+}
+
+// Состояние очереди для журнала и метрик: ждут, повторяются, недоставлены и когда поставлено самое старое ждущее письмо (1970-01-01, если ждущих нет).
+func (q *Queries) OutboxStats(ctx context.Context) (OutboxStatsRow, error) {
+	row := q.db.QueryRow(ctx, outboxStats)
+	var i OutboxStatsRow
+	err := row.Scan(
+		&i.Waiting,
+		&i.Retrying,
+		&i.Undelivered,
+		&i.OldestWaiting,
+	)
+	return i, err
+}
+
+const releaseOutbox = `-- name: ReleaseOutbox :execrows
+UPDATE outbox SET next_attempt_at = $1, attempts = GREATEST(attempts - 1, 0)
+WHERE id = ANY($2::bigint[]) AND sent_at IS NULL AND failed_at IS NULL AND next_attempt_at = $3
+`
+
+type ReleaseOutboxParams struct {
+	Now        time.Time
+	Ids        []int64
+	LeaseUntil time.Time
+}
+
+// Отправитель остановлен или пауза предохранителя: взятые, но не отправленные письма возвращаются в очередь сразу, их
+// попытка не засчитывается. Только письма, которые всё ещё в аренде этого отправителя (next_attempt_at = конец аренды).
+func (q *Queries) ReleaseOutbox(ctx context.Context, arg ReleaseOutboxParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseOutbox, arg.Now, arg.Ids, arg.LeaseUntil)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

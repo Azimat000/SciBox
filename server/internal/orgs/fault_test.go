@@ -403,34 +403,3 @@ func TestCleanup(t *testing.T) {
 		t.Fatalf("expired long ago must go: %d, %v", count(), err)
 	}
 }
-
-func TestRunCleanupStopsOnCancel(t *testing.T) {
-	w := newWorld(t)
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { w.svc.RunCleanup(ctx, 5*time.Millisecond); close(done) }()
-	time.Sleep(30 * time.Millisecond) // несколько срабатываний
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("RunCleanup did not stop after cancel")
-	}
-}
-
-func TestRunCleanupLogsFailures(t *testing.T) {
-	w := newWorld(t)
-	s, _ := w.faulty(1)
-	logs := &syncBuffer{}
-	s.logger = slog.New(slog.NewTextHandler(logs, nil))
-	ctx, cancel := context.WithCancel(bg)
-	defer cancel()
-	go s.RunCleanup(ctx, 5*time.Millisecond)
-	deadline := time.Now().Add(2 * time.Second)
-	for !strings.Contains(logs.String(), "orgs cleanup") {
-		if time.Now().After(deadline) {
-			t.Fatal("a cleanup failure was not logged")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}

@@ -438,37 +438,3 @@ func (s *Service) Sweep(ctx context.Context) (int, error) {
 	}
 	return len(orphans), nil
 }
-
-// ---- цикл ----
-
-// Run гоняет проход раз в interval, а чистку осиротевших раз в sweepEvery, пока не отменён ctx. Первый проход сразу:
-// сервер, который простоял выключенным, наверстывает пропущенное, а старые файлы переезжают в хранилище.
-func (s *Service) Run(ctx context.Context, interval, sweepEvery time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	var lastSweep time.Time
-	for {
-		rep, err := s.Pass(ctx)
-		if err != nil && ctx.Err() == nil {
-			s.logger.Error("file work pass failed", "err", err)
-		}
-		if rep.Total() > 0 {
-			s.logger.Info("file work pass", "deleted", rep.Deleted, "moved", rep.Moved, "clean", rep.Clean, "infected", rep.Infected, "deferred", rep.Deferred)
-		}
-		if now := s.now(); now.Sub(lastSweep) >= sweepEvery {
-			lastSweep = now
-			if n, err := s.Sweep(ctx); err != nil {
-				if ctx.Err() == nil {
-					s.logger.Error("orphan sweep failed", "err", err)
-				}
-			} else if n > 0 {
-				s.logger.Info("orphan objects removed", "count", n)
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}

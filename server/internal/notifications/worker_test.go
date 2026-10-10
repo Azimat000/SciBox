@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/jobs"
 	"scibox/server/internal/mail"
 	"scibox/server/internal/num"
+	"scibox/server/internal/resilience"
 	"scibox/server/internal/testkit"
 )
 
@@ -364,61 +366,19 @@ func TestCleanupRemovesOnlyOldFinishedMail(t *testing.T) {
 	}
 }
 
-func TestRunLoopSendsAndStops(t *testing.T) {
-	addr := queueMails(t, "loop", 1)[0]
-	f := &flaky{}
-	w := newWorker(f, nil)
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		w.Run(ctx, 20*time.Millisecond)
-	}()
-	deadline := time.Now().Add(5 * time.Second)
-	for f.to(addr) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	// Письмо, поставленное уже во время работы, тоже уходит.
-	late := queueMails(t, "late", 1)[0]
-	for f.to(late) == 0 && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Run did not stop after cancel")
-	}
-	if f.to(addr) != 1 || f.to(late) != 1 {
-		t.Errorf("delivered: first=%d late=%d", f.to(addr), f.to(late))
-	}
-}
-
-func TestRunKeepsGoingAfterBatchIsFull(t *testing.T) {
-	// Очередь больше пачки: Run не ждёт паузы между пачками.
+func TestDrainTakesEveryBatchWithoutPauses(t *testing.T) {
+	// Очередь больше пачки: Drain разбирает её целиком, не дожидаясь следующего прохода по таймеру.
 	addrs := queueMails(t, "big", 9)
 	f := &flaky{}
 	w := newWorker(f, nil)
 	w.Batch = 2
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		w.Run(ctx, time.Hour) // пауза в час: за неё без «сразу следующей пачки» ничего бы не ушло
-	}()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		all := true
-		for _, a := range addrs {
-			all = all && f.to(a) == 1
-		}
-		if all {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	st, err := w.Drain(bg)
+	if err != nil {
+		t.Fatal(err)
 	}
-	cancel()
-	<-done
+	if st.Sent < 9 {
+		t.Errorf("Drain sent %d, want at least 9", st.Sent)
+	}
 	for _, a := range addrs {
 		if f.to(a) != 1 {
 			t.Errorf("%s delivered %d times", a, f.to(a))
@@ -426,10 +386,313 @@ func TestRunKeepsGoingAfterBatchIsFull(t *testing.T) {
 	}
 }
 
-func claimParams(now time.Time, w *Worker) dbgen.ClaimOutboxParams {
-	return dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: num.Int32(w.Batch)}
+func TestDrainStopsOnDatabaseFailure(t *testing.T) {
+	queueMails(t, "drainfault", 1)
+	db, _ := testkit.Faulty(testkit.Pool, 1)
+	w := NewWorker(db, &flaky{}, quiet)
+	if _, err := w.Drain(bg); !errors.Is(err, testkit.ErrFault) {
+		t.Fatalf("Drain error = %v, want the injected failure", err)
+	}
 }
 
-func contextWithTimeout(d time.Duration) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(bg, d)
+// ---- вид сбоя решает судьбу письма (срез 25, D-168) ----
+
+func kindErr(kind mail.Kind, text string) error {
+	return &mail.Error{Kind: kind, Err: errors.New(text)}
+}
+
+func TestServiceFailureDoesNotSpendTheMailsAttempts(t *testing.T) {
+	addr := queueMails(t, "svcdown", 1)[0]
+	down := true
+	f := &flaky{err: func(m mail.Message) error {
+		if m.To == addr && down {
+			return kindErr(mail.KindService, "connect refused")
+		}
+		return nil
+	}}
+	clock := time.Now().UTC().Truncate(time.Microsecond)
+	w := newWorker(f, &clock)
+	// Месяц сбоев почтовой службы: у письма по-прежнему нет потраченных попыток, и оно не отброшено.
+	for range 40 {
+		drain(t, w)
+		clock = clock.Add(w.Backoff(1) + time.Second)
+	}
+	att, sent, failed, lastErr, _ := rowOf(t, addr)
+	if att != 0 || sent || failed || lastErr != "connect refused" {
+		t.Fatalf("row after the outage: attempts=%d sent=%v failed=%v err=%q; want an untouched waiting mail", att, sent, failed, lastErr)
+	}
+	if f.attempts(addr) < 40 {
+		t.Errorf("service was asked %d times, want it asked on every pass", f.attempts(addr))
+	}
+	down = false
+	drain(t, w)
+	if _, sent, _, _, _ := rowOf(t, addr); !sent {
+		t.Error("the mail was not sent once the service came back")
+	}
+}
+
+func TestPermanentRefusalGivesUpAtOnce(t *testing.T) {
+	addr := queueMails(t, "nosuchuser", 1)[0]
+	f := &flaky{err: func(m mail.Message) error {
+		if m.To == addr {
+			return kindErr(mail.KindPermanent, "550 no such user")
+		}
+		return nil
+	}}
+	drain(t, newWorker(f, nil))
+	att, _, failed, lastErr, _ := rowOf(t, addr)
+	if att != 1 || !failed || lastErr != "550 no such user" {
+		t.Fatalf("attempts=%d failed=%v err=%q; want given up after the first refusal", att, failed, lastErr)
+	}
+	if f.attempts(addr) != 1 {
+		t.Errorf("refused address was tried %d times", f.attempts(addr))
+	}
+	if subject, body := textOf(t, addr); subject != "" || body != "" {
+		t.Error("the text of an undelivered mail must be erased")
+	}
+}
+
+func TestMailThatIsTooOldIsGivenUp(t *testing.T) {
+	addr := queueMails(t, "stale", 1)[0]
+	f := &flaky{err: func(m mail.Message) error {
+		if m.To == addr {
+			return kindErr(mail.KindService, "service is down")
+		}
+		return nil
+	}}
+	clock := time.Now().UTC().Truncate(time.Microsecond)
+	w := newWorker(f, &clock)
+	clock = clock.Add(w.MaxAge + time.Hour)
+	drain(t, w)
+	if _, _, failed, _, _ := rowOf(t, addr); !failed {
+		t.Error("a mail older than MaxAge must be given up when it fails, however many attempts are left")
+	}
+}
+
+// Остановка посреди пачки: отправляемое письмо дописывается, остальные возвращаются в очередь без траты попытки.
+// Порядок писем внутри пачки не определён (база отдаёт строки как найдёт), поэтому «первое» — то, что пришло первым.
+func TestShutdownFinishesTheMailInFlightAndReleasesTheRest(t *testing.T) {
+	drain(t, newWorker(&flaky{}, nil)) // очередь пуста: пачка из шести писем состоит только из наших
+	addrs := queueMails(t, "shutdown", 6)
+	ctx, stop := context.WithCancel(bg)
+	defer stop()
+	var started sync.Once
+	f := &flaky{err: func(m mail.Message) error {
+		started.Do(stop) // сигнал остановки приходит, пока первое письмо отправляется
+		return nil
+	}}
+	w := newWorker(f, nil)
+	w.Batch = 6
+	var st Stats
+	var runErr error
+	runner := jobs.New(testkit.Pool, quiet, jobs.Config{Grace: 5 * time.Second})
+	err := runner.Run(ctx, jobs.Job{Name: fmt.Sprintf("outbox-shutdown-%d", testkit.Seq()), Every: time.Hour, Run: func(ctx context.Context) error {
+		st, runErr = w.RunOnce(ctx)
+		return runErr
+	}})
+	if err != nil || runErr != nil {
+		t.Fatalf("Run: %v, RunOnce: %v", err, runErr)
+	}
+	if st.Sent != 1 || st.Released != 5 {
+		t.Fatalf("stats = %+v: want the mail in flight sent and the other five released", st)
+	}
+	delivered := 0
+	for _, a := range addrs {
+		delivered += f.to(a)
+		if f.to(a) == 1 {
+			continue
+		}
+		att, sent, failed, _, next := rowOf(t, a)
+		if att != 0 || sent || failed || next.After(time.Now().Add(time.Minute)) {
+			t.Errorf("%s: attempts=%d sent=%v failed=%v next=%v; want a mail back in the queue with its attempt refunded", a, att, sent, failed, next)
+		}
+	}
+	if delivered != 1 {
+		t.Errorf("%d mails left during the shutdown, want exactly the one in flight", delivered)
+	}
+	// Другая копия забирает возвращённые письма сразу, без ожидания конца аренды, и никто не получает письмо дважды.
+	other := &flaky{}
+	drain(t, newWorker(other, nil))
+	for _, a := range addrs {
+		if n := f.to(a) + other.to(a); n != 1 {
+			t.Errorf("%s delivered %d times, want exactly once", a, n)
+		}
+	}
+}
+
+func TestDrainingBeforeTheStartTakesNothing(t *testing.T) {
+	addr := queueMails(t, "alreadystopping", 1)[0]
+	ctx, cancel := context.WithCancel(bg)
+	cancel()
+	f := &flaky{}
+	st, err := newWorker(f, nil).RunOnce(ctx)
+	if err != nil || st != (Stats{}) {
+		t.Fatalf("RunOnce under a stop signal = %+v, %v; want nothing", st, err)
+	}
+	if att, _, _, _, _ := rowOf(t, addr); att != 0 {
+		t.Error("a stopping sender must not even claim mail")
+	}
+}
+
+func TestMailIsNotStartedIfTheLeaseWouldEndBeforeItIsSent(t *testing.T) {
+	drain(t, newWorker(&flaky{}, nil))
+	addrs := queueMails(t, "shortlease", 3)
+	clock := time.Now().UTC().Truncate(time.Microsecond)
+	f := &flaky{}
+	w := newWorker(f, &clock)
+	w.Batch, w.Lease, w.SendTimeout = 3, 30*time.Second, 15*time.Second
+	// Первое письмо «идёт» 20 секунд: до конца аренды остаётся меньше срока на отправку следующего.
+	var first sync.Once
+	f.err = func(mail.Message) error {
+		first.Do(func() { clock = clock.Add(20 * time.Second) })
+		return nil
+	}
+	st, err := w.RunOnce(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Sent != 1 || st.Released != 2 {
+		t.Fatalf("stats = %+v: want one mail sent and two released because the lease was about to end", st)
+	}
+	tried := 0
+	for _, a := range addrs {
+		tried += f.attempts(a)
+	}
+	if tried != 1 {
+		t.Errorf("the service was asked %d times, want 1: the others must not be started", tried)
+	}
+}
+
+func TestBreakerPausesTheQueueAndResumesAfterTheProbe(t *testing.T) {
+	drain(t, newWorker(&flaky{}, nil))
+	addrs := queueMails(t, "breaker", 5)
+	clock := time.Now().UTC().Truncate(time.Microsecond)
+	down := true
+	f := &flaky{err: func(m mail.Message) error {
+		if down {
+			return kindErr(mail.KindService, "smtp is down")
+		}
+		return nil
+	}}
+	w := newWorker(f, &clock)
+	w.Batch = 5
+	w.Breaker = resilience.NewBreaker(resilience.BreakerConfig{Threshold: 2, Cooldown: time.Minute, Now: func() time.Time { return clock }})
+
+	st, err := w.RunOnce(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Deferred != 2 || st.Released == 0 {
+		t.Fatalf("stats = %+v: want two failures that open the breaker and the rest released unsent", st)
+	}
+	calls := f.calls
+	// Пока предохранитель открыт, отправитель даже не берёт письма.
+	st, err = w.RunOnce(bg)
+	if err != nil || !st.Paused || f.calls != calls {
+		t.Fatalf("second pass = %+v, %v, calls %d→%d: want a paused pass without calls", st, err, calls, f.calls)
+	}
+	for _, a := range addrs {
+		if att, _, failed, _, _ := rowOf(t, a); att != 0 || failed {
+			t.Errorf("%s: attempts=%d failed=%v; the outage must not spend attempts", a, att, failed)
+		}
+	}
+	// Пауза кончилась, служба поднялась: проба проходит, очередь разбирается.
+	down = false
+	clock = clock.Add(2 * time.Minute)
+	if _, err := w.Drain(bg); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range addrs {
+		if f.to(a) != 1 {
+			t.Errorf("%s delivered %d times after the service came back", a, f.to(a))
+		}
+	}
+}
+
+// Отправку оборвала отмена контекста (остановка не дождалась): письмо возвращается, предохранитель этого не считает сбоем.
+func TestAbortedSendIsNeitherAFailureNorALostMail(t *testing.T) {
+	drain(t, newWorker(&flaky{}, nil))
+	addr := queueMails(t, "aborted", 1)[0]
+	ctx, cancel := context.WithCancel(bg)
+	f := &flaky{err: func(m mail.Message) error {
+		cancel()
+		return kindErr(mail.KindService, "context canceled")
+	}}
+	w := newWorker(f, nil)
+	w.Breaker = resilience.NewBreaker(resilience.BreakerConfig{Threshold: 1})
+	st, err := w.RunOnce(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Released != 1 || st.Deferred != 0 || st.Failed != 0 {
+		t.Errorf("stats = %+v, want the aborted mail released", st)
+	}
+	if w.Breaker.State() != resilience.Closed {
+		t.Errorf("breaker is %v: an aborted send says nothing about the service", w.Breaker.State())
+	}
+	if att, sent, failed, _, _ := rowOf(t, addr); att != 0 || sent || failed {
+		t.Errorf("row: attempts=%d sent=%v failed=%v; want the mail waiting with its attempt refunded", att, sent, failed)
+	}
+}
+
+func TestMailRefusalsDoNotOpenTheBreaker(t *testing.T) {
+	queueMails(t, "alive", 4)
+	f := &flaky{err: func(mail.Message) error { return kindErr(mail.KindPermanent, "550 no such user") }}
+	w := newWorker(f, nil)
+	w.Breaker = resilience.NewBreaker(resilience.BreakerConfig{Threshold: 2})
+	drain(t, w)
+	if w.Breaker.State() != resilience.Closed {
+		t.Errorf("breaker is %v: an answering service that refuses letters is alive", w.Breaker.State())
+	}
+}
+
+func TestQueueStats(t *testing.T) {
+	// Состояние читается по всей очереди: общая база теста не пуста, поэтому сравниваем приращения.
+	w := newWorker(&flaky{}, nil)
+	drain(t, w)
+	before, err := w.QueueStats(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waiting := queueMails(t, "stats", 3)
+	after, err := w.QueueStats(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Waiting-before.Waiting != 3 || after.Retrying != before.Retrying {
+		t.Errorf("stats %+v → %+v: want three more waiting mails", before, after)
+	}
+	if after.OldestWaiting < 0 || after.OldestWaiting > time.Hour {
+		t.Errorf("OldestWaiting = %v, want a small positive age", after.OldestWaiting)
+	}
+	// Одно письмо отказали навсегда: оно в «недоставлено», а не в «ждёт».
+	w2 := newWorker(&flaky{err: func(m mail.Message) error {
+		if m.To == waiting[0] {
+			return kindErr(mail.KindPermanent, "550")
+		}
+		return errors.New("later")
+	}}, nil)
+	w2.Batch = 1
+	if _, err := w2.RunOnce(bg); err != nil {
+		t.Fatal(err)
+	}
+	empty := newWorker(&flaky{}, nil)
+	drain(t, empty)
+	end, err := empty.QueueStats(bg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if end.Waiting != 0 || end.OldestWaiting != 0 || end.Undelivered < 1 {
+		t.Errorf("stats after draining = %+v: want an empty queue and at least one undelivered mail", end)
+	}
+}
+
+func TestStatsHandled(t *testing.T) {
+	if got := (Stats{Sent: 1, Retry: 2, Failed: 3, Deferred: 4, Released: 5}).Handled(); got != 10 {
+		t.Errorf("Handled() = %d, want 10 (released mails were not handled)", got)
+	}
+}
+
+func claimParams(now time.Time, w *Worker) dbgen.ClaimOutboxParams {
+	return dbgen.ClaimOutboxParams{LeaseUntil: now.Add(w.Lease), Now: now, Batch: num.Int32(w.Batch)}
 }

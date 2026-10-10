@@ -254,19 +254,3 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	}
 	return nil
 }
-
-// RunCleanup чистит базу раз в interval, пока не отменён ctx.
-func (s *Service) RunCleanup(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := s.Cleanup(ctx); err != nil && ctx.Err() == nil {
-				s.logger.Error("orgs cleanup", "err", err)
-			}
-		}
-	}
-}

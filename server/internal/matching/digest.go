@@ -17,32 +17,8 @@ import (
 	"scibox/server/internal/vacancies"
 )
 
-// maxPasses — сколько пачек фоновый цикл разбирает за один проход: чтобы один сбой не крутил цикл бесконечно.
+// maxPasses — сколько пачек фоновая задача разбирает за один проход: чтобы один сбой не крутил её бесконечно.
 const maxPasses = 20
-
-// Run — фоновая работа в процессе сервера: рассылка по сохранённым поискам и напоминания о сроках. Каждый проход
-// самостоятелен, ошибки пишутся в журнал, цикл живёт до отмены ctx.
-func (s *Service) Run(ctx context.Context, every time.Duration) {
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
-		s.pass(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
-}
-
-func (s *Service) pass(ctx context.Context) {
-	if n, err := s.SendDigests(ctx); err != nil {
-		s.log.Error("saved search digests failed", "sent", n, "err", err)
-	}
-	if n, err := s.SendReminders(ctx); err != nil {
-		s.log.Error("deadline reminders failed", "sent", n, "err", err)
-	}
-}
 
 // SendDigests делает один проход по сохранённым поискам, до которых дошла очередь, и возвращает, сколько уведомлений
 // отправлено. Сбой одного поиска не мешает остальным; ошибки собираются в одну.

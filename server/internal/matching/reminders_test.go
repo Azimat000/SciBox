@@ -339,16 +339,3 @@ func TestRemindersHandleMoreThanOneBatch(t *testing.T) {
 		}
 	}
 }
-
-func TestPassDoesBothJobsAndSurvivesErrors(t *testing.T) {
-	r := newRemindWorld(t)
-	r.favorite(r.who, oct(12), msk(2026, 10, 1, 12, 0))
-	r.svc.pass(bg)
-	if r.notices(r.who) != 1 {
-		t.Errorf("напоминание не ушло")
-	}
-	// Отменённый контекст: оба дела падают, проход всё равно возвращается.
-	ctx, cancel := contextCancelled()
-	cancel()
-	r.svc.pass(ctx)
-}

@@ -53,7 +53,7 @@ WHERE id IN (
     LIMIT @batch
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, to_email, subject, body, attempts;
+RETURNING id, to_email, subject, body, attempts, created_at;
 
 -- Текст отправленного письма больше не нужен, а в нём ссылки с живыми токенами и имена: тема и тело стираются сразу (T-19).
 -- name: MarkOutboxSent :exec
@@ -64,6 +64,27 @@ UPDATE outbox SET next_attempt_at = @next_attempt_at, last_error = @last_error W
 
 -- name: MarkOutboxFailed :exec
 UPDATE outbox SET failed_at = @now::timestamptz, last_error = @last_error, subject = '', body = '' WHERE id = @id;
+
+-- Сбой самого почтового сервиса (нет связи, вход отвергнут): вина не письма, поэтому попытка не засчитывается, письмо
+-- ждёт и пробуется снова (срез 25, D-168). Иначе долгий сбой почты сжигал бы все попытки у всех писем.
+-- name: DeferOutbox :exec
+UPDATE outbox SET next_attempt_at = @next_attempt_at, attempts = GREATEST(attempts - 1, 0), last_error = @last_error
+WHERE id = @id AND sent_at IS NULL AND failed_at IS NULL;
+
+-- Отправитель остановлен или пауза предохранителя: взятые, но не отправленные письма возвращаются в очередь сразу, их
+-- попытка не засчитывается. Только письма, которые всё ещё в аренде этого отправителя (next_attempt_at = конец аренды).
+-- name: ReleaseOutbox :execrows
+UPDATE outbox SET next_attempt_at = @now, attempts = GREATEST(attempts - 1, 0)
+WHERE id = ANY(@ids::bigint[]) AND sent_at IS NULL AND failed_at IS NULL AND next_attempt_at = @lease_until;
+
+-- Состояние очереди для журнала и метрик: ждут, повторяются, недоставлены и когда поставлено самое старое ждущее письмо (1970-01-01, если ждущих нет).
+-- name: OutboxStats :one
+SELECT
+    (count(*) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL))::bigint AS waiting,
+    (count(*) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL AND attempts > 0))::bigint AS retrying,
+    (count(*) FILTER (WHERE failed_at IS NOT NULL))::bigint AS undelivered,
+    COALESCE(min(created_at) FILTER (WHERE sent_at IS NULL AND failed_at IS NULL), to_timestamp(0))::timestamptz AS oldest_waiting
+FROM outbox;
 
 -- Старые отправленные и окончательно неудавшиеся письма больше не нужны.
 -- name: DeleteOldOutbox :exec

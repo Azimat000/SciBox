@@ -1,7 +1,6 @@
 package matching
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -234,6 +233,5 @@ func sameIDs(t *testing.T, name string, got []uuid.UUID, want ...uuid.UUID) {
 
 func intp(n int) *int { return &n }
 
-func contextCancelled() (context.Context, context.CancelFunc) { return context.WithCancel(bg) }
 
 func dbgenOn(db testkit.DB) *dbgen.Queries { return dbgen.New(db) }

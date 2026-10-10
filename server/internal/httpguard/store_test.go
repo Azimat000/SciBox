@@ -1,9 +1,6 @@
 package httpguard
 
 import (
-	"bytes"
-	"context"
-	"log/slog"
 	"net/netip"
 	"slices"
 	"strings"
@@ -127,22 +124,6 @@ func TestPostgresStore(t *testing.T) {
 		t.Fatalf("after cleanup: %v (%v)", left, rows.Err())
 	}
 
-	// Цикл очистки: работает до отмены, сбой пишет в журнал.
-	logs := &lockedBuffer{}
-	logger := slog.New(slog.NewTextHandler(logs, nil))
-	loopCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		s.RunCleanup(loopCtx, 10*time.Millisecond, logger)
-		close(done)
-	}()
-	time.Sleep(50 * time.Millisecond)
-	stop()
-	<-done
-	if logs.String() != "" {
-		t.Fatalf("healthy cleanup logged: %s", logs.String())
-	}
-
 	broken := testdb.New(t)
 	bs := NewPostgresStore(broken)
 	if _, err := broken.Exec(ctx, "DROP TABLE rate_counters"); err != nil {
@@ -151,37 +132,4 @@ func TestPostgresStore(t *testing.T) {
 	if _, err := bs.Hit(ctx, "a", "k", w); err == nil {
 		t.Fatal("hit on a broken table must fail")
 	}
-	loopCtx, stop = context.WithCancel(ctx)
-	done = make(chan struct{})
-	go func() {
-		bs.RunCleanup(loopCtx, 10*time.Millisecond, logger)
-		close(done)
-	}()
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(logs.String(), "rate counters cleanup") && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	stop()
-	<-done
-	if !strings.Contains(logs.String(), "rate counters cleanup") {
-		t.Fatalf("broken cleanup not logged: %q", logs.String())
-	}
-}
-
-// lockedBuffer — журнал, в который пишет горутина очистки, пока тест его читает.
-type lockedBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (l *lockedBuffer) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.b.Write(p)
-}
-
-func (l *lockedBuffer) String() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.b.String()
 }

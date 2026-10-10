@@ -266,25 +266,3 @@ func (s *Service) batch(ctx context.Context, t task, at cutoffs) (n int64, locke
 	}
 	return n, true, nil
 }
-
-// Run гоняет проход раз в interval, пока не отменён ctx. Первый проход сразу: сервер, который простоял выключенным,
-// наверстывает пропущенное.
-func (s *Service) Run(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		report, err := s.Pass(ctx)
-		if err != nil && ctx.Err() == nil {
-			s.logger.Error("retention pass failed", "err", err)
-		}
-		if report.Total() > 0 {
-			s.logger.Info("retention pass", "read_notifications", report.ReadNotifications, "unread_notifications", report.UnreadNotifications,
-				"audit_log", report.AuditLog, "audit_addresses", report.AuditAddresses, "unconfirmed_accounts", report.UnconfirmedAccounts)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}

@@ -738,56 +738,6 @@ func TestPassKeepsGoingAfterOneKindFails(t *testing.T) {
 	}
 }
 
-func TestRunWorksUntilCancelledAndSweepsOnTheFirstTurn(t *testing.T) {
-	e := newEnv(t)
-	app := e.application(e.Applicant("Мария"))
-	id, _ := e.pendingFile(app, "a.pdf", pdfData("x"))
-	orphan := files.NewKey()
-	e.objectAged(orphan, 72*time.Hour)
-	e.Store.Now = nil
-	e.svc.cfg.MaxOrphans = 10
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { e.svc.Run(ctx, 10*time.Millisecond, time.Hour); close(done) }()
-	deadline := time.After(5 * time.Second)
-	for e.file(id).status != "clean" || e.Store.Has(orphan) {
-		select {
-		case <-deadline:
-			t.Fatalf("Run did not do the work: file %s, orphan present %v\n%s", e.file(id).status, e.Store.Has(orphan), e.log)
-		case <-time.After(20 * time.Millisecond):
-		}
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Run did not stop after cancellation")
-	}
-	if !contains(e.log.String(), "file work pass") || !contains(e.log.String(), "orphan objects removed") {
-		t.Errorf("the work is not in the log:\n%s", e.log)
-	}
-}
-
-func TestRunReportsFailuresAndSurvivesThem(t *testing.T) {
-	e := newEnv(t)
-	e.Store.Fault = func(op, _ string) error { return errors.New("storage is down") }
-	k := files.NewKey()
-	_, _ = testkit.Pool.Exec(bg, `INSERT INTO blob_deletions (storage_key, queued_at) VALUES ($1, now())`, k)
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { e.svc.Run(ctx, 10*time.Millisecond, time.Hour); close(done) }()
-	deadline := time.After(5 * time.Second)
-	for !contains(e.log.String(), "file work pass failed") || !contains(e.log.String(), "orphan sweep failed") {
-		select {
-		case <-deadline:
-			t.Fatalf("failures are not in the log:\n%s", e.log)
-		case <-time.After(20 * time.Millisecond):
-		}
-	}
-	cancel()
-	<-done
-}
-
 func TestOnePassIsBounded(t *testing.T) {
 	e := newEnv(t)
 	e.svc.cfg.MaxBatches = 1

@@ -78,7 +78,23 @@ type Config struct {
 	ClamAVAddr string
 	// DB — пул соединений с базой и сроки для неё (SCIBOX_DB_*, срез 24, T-22).
 	DB dbpool.Config
+	// Background — выполняет ли `serve` фоновые задачи (SCIBOX_BACKGROUND, срез 25). По умолчанию да: сервер без
+	// воркера работает целиком. Для нескольких копий и отдельного процесса `worker` ставится off.
+	Background bool
+	// ShutdownTimeout — сколько после сигнала остановки сервер ждёт текущие запросы, а воркер дописывает текущие задачи
+	// (SCIBOX_SHUTDOWN_TIMEOUT, срез 25). Контейнеру нужно оставить не меньше этого срока до принудительной остановки.
+	ShutdownTimeout time.Duration
+	// CrossrefMaxConcurrent — сколько запросов к Crossref одна копия ведёт одновременно (SCIBOX_CROSSREF_MAX_CONCURRENT,
+	// срез 25, T-24). Публичный пул Crossref допускает 1 одновременный запрос на адрес, «вежливый» 3; по умолчанию 1.
+	CrossrefMaxConcurrent int
 }
+
+// Значения срока остановки и числа обращений к Crossref по умолчанию и пределы.
+const (
+	DefaultShutdownTimeout       = 20 * time.Second
+	DefaultCrossrefMaxConcurrent = 1
+	maxCrossrefMaxConcurrent     = 10
+)
 
 // S3 — настройки S3-совместимого хранилища.
 type S3 struct {
@@ -138,6 +154,25 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if cfg.DB, err = loadDB(getenv); err != nil {
 		return Config{}, err
+	}
+	if cfg.Background, err = envBool(getenv, "SCIBOX_BACKGROUND", true); err != nil {
+		return Config{}, err
+	}
+	cfg.ShutdownTimeout = DefaultShutdownTimeout
+	if v := strings.TrimSpace(getenv("SCIBOX_SHUTDOWN_TIMEOUT")); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return Config{}, fmt.Errorf("SCIBOX_SHUTDOWN_TIMEOUT: want a positive duration like 20s, got %q", v)
+		}
+		cfg.ShutdownTimeout = d
+	}
+	cfg.CrossrefMaxConcurrent = DefaultCrossrefMaxConcurrent
+	if v := strings.TrimSpace(getenv("SCIBOX_CROSSREF_MAX_CONCURRENT")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxCrossrefMaxConcurrent {
+			return Config{}, fmt.Errorf("SCIBOX_CROSSREF_MAX_CONCURRENT: want a number from 1 to %d, got %q", maxCrossrefMaxConcurrent, v)
+		}
+		cfg.CrossrefMaxConcurrent = n
 	}
 	switch cfg.SMTPTLS {
 	case "off", "starttls", "tls":

@@ -8,8 +8,11 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"scibox/server/internal/resilience"
 )
 
 func TestNormalizeDOI(t *testing.T) {
@@ -266,5 +269,150 @@ func TestJoinAuthorsTruncates(t *testing.T) {
 	}
 	if got := joinAuthors(nil); got != "" {
 		t.Errorf("пустой список: %q", got)
+	}
+}
+
+// ---- ограничитель и предохранитель (срез 25, T-24) ----
+
+// countingServer считает обращения и одновременные обращения; ответ задаёт respond.
+type countingServer struct {
+	calls, cur, peak atomic.Int64
+	respond          func(w http.ResponseWriter, n int64)
+}
+
+func (c *countingServer) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	n := c.calls.Add(1)
+	cur := c.cur.Add(1)
+	for p := c.peak.Load(); cur > p && !c.peak.CompareAndSwap(p, cur); p = c.peak.Load() {
+	}
+	defer c.cur.Add(-1)
+	c.respond(w, n)
+}
+
+func gated(t *testing.T, h http.Handler, gate *resilience.Gate) *Client {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	c := NewClient(srv.URL, "")
+	c.Gate = gate
+	return c
+}
+
+func ok(w http.ResponseWriter, _ int64) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(fullBody))
+}
+
+func TestGateLimitsConcurrentLookups(t *testing.T) {
+	srv := &countingServer{respond: func(w http.ResponseWriter, n int64) {
+		time.Sleep(80 * time.Millisecond)
+		ok(w, n)
+	}}
+	c := gated(t, srv, &resilience.Gate{Limiter: resilience.NewLimiter(1, 10*time.Millisecond)})
+	var okN, unavailable atomic.Int64
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() {
+			_, err := c.Lookup(context.Background(), "10.1038/nature12373")
+			switch {
+			case err == nil:
+				okN.Add(1)
+			case errors.Is(err, ErrUnavailable) && errors.Is(err, resilience.ErrBusy):
+				unavailable.Add(1)
+			default:
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+	wg.Wait()
+	if srv.peak.Load() != 1 {
+		t.Errorf("Crossref saw %d concurrent requests, want 1", srv.peak.Load())
+	}
+	if okN.Load() < 1 || unavailable.Load() < 1 || okN.Load()+unavailable.Load() != 5 {
+		t.Errorf("ok=%d busy=%d, want at least one of each and five in total", okN.Load(), unavailable.Load())
+	}
+}
+
+func TestBreakerStopsAskingADeadCrossrefAndRecovers(t *testing.T) {
+	var down atomic.Bool
+	down.Store(true)
+	srv := &countingServer{respond: func(w http.ResponseWriter, n int64) {
+		if down.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		ok(w, n)
+	}}
+	now := time.Now()
+	var mu sync.Mutex
+	clock := func() time.Time { mu.Lock(); defer mu.Unlock(); return now }
+	br := resilience.NewBreaker(resilience.BreakerConfig{Threshold: 3, Cooldown: time.Minute, Now: clock})
+	c := gated(t, srv, &resilience.Gate{Breaker: br})
+
+	for range 3 {
+		if _, err := c.Lookup(context.Background(), "10.1038/nature12373"); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("error = %v, want ErrUnavailable", err)
+		}
+	}
+	if srv.calls.Load() != 3 {
+		t.Fatalf("calls = %d, want 3", srv.calls.Load())
+	}
+	// Предохранитель открыт: Crossref не получает обращений, человек сразу видит «недоступно».
+	for range 10 {
+		_, err := c.Lookup(context.Background(), "10.1038/nature12373")
+		if !errors.Is(err, ErrUnavailable) || !errors.Is(err, resilience.ErrOpen) {
+			t.Fatalf("error = %v, want ErrUnavailable caused by an open breaker", err)
+		}
+	}
+	if srv.calls.Load() != 3 {
+		t.Fatalf("calls = %d: an open breaker must not call Crossref", srv.calls.Load())
+	}
+	// Служба поднялась, пауза прошла: проба успешна, обращения идут.
+	down.Store(false)
+	mu.Lock()
+	now = now.Add(2 * time.Minute)
+	mu.Unlock()
+	if _, err := c.Lookup(context.Background(), "10.1038/nature12373"); err != nil {
+		t.Fatalf("lookup after recovery: %v", err)
+	}
+	if br.State() != resilience.Closed {
+		t.Errorf("breaker is %v, want closed", br.State())
+	}
+}
+
+func TestNotFoundAndCancelAreNotServiceFailures(t *testing.T) {
+	srv := &countingServer{respond: func(w http.ResponseWriter, _ int64) { w.WriteHeader(http.StatusNotFound) }}
+	br := resilience.NewBreaker(resilience.BreakerConfig{Threshold: 1})
+	c := gated(t, srv, &resilience.Gate{Breaker: br})
+	for range 5 {
+		if _, err := c.Lookup(context.Background(), "10.1038/none"); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("error = %v, want ErrNotFound", err)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.Lookup(ctx, "10.1038/none"); err == nil {
+		t.Fatal("a cancelled lookup must fail")
+	}
+	if br.State() != resilience.Closed {
+		t.Errorf("breaker is %v: unknown DOIs and cancelled lookups say nothing about the service", br.State())
+	}
+}
+
+func TestRateLimitAnswerOpensTheBreakerAtOnce(t *testing.T) {
+	srv := &countingServer{respond: func(w http.ResponseWriter, _ int64) { w.WriteHeader(http.StatusTooManyRequests) }}
+	br := resilience.NewBreaker(resilience.BreakerConfig{Threshold: 5, Cooldown: time.Minute})
+	c := gated(t, srv, &resilience.Gate{Breaker: br})
+	if _, err := c.Lookup(context.Background(), "10.1038/nature12373"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("error = %v, want ErrUnavailable", err)
+	}
+	if br.State() != resilience.Open {
+		t.Fatalf("breaker is %v after a 429, want open", br.State())
+	}
+	if _, err := c.Lookup(context.Background(), "10.1038/nature12373"); !errors.Is(err, resilience.ErrOpen) {
+		t.Fatalf("second lookup error = %v, want the breaker to refuse", err)
+	}
+	if srv.calls.Load() != 1 {
+		t.Errorf("calls = %d, want 1", srv.calls.Load())
 	}
 }

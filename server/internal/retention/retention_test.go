@@ -1,8 +1,6 @@
 package retention
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -548,74 +546,4 @@ func TestPassDoesNotLeaveAHalfDoneBatch(t *testing.T) {
 	if found, _ := auditExists(t, rec); found {
 		t.Error("the old record must be gone after a clean pass")
 	}
-}
-
-func TestRunPassesAtStartAndStopsWithTheContext(t *testing.T) {
-	now := clock()
-	user := newUser(t)
-	old := now.Add(-2 * 365 * day)
-	read := old
-	id := notification(t, user, old, &read)
-	var logs bytes.Buffer
-	var mu sync.Mutex
-	svc := newService(testkit.Pool, Config{}, slog.New(slog.NewTextHandler(&lockedWriter{w: &logs, mu: &mu}, nil)), func() time.Time { return now })
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { svc.Run(ctx, time.Hour); close(done) }()
-	deadline := time.Now().Add(5 * time.Second)
-	for exists(t, "notifications", id) && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Run did not stop with the context")
-	}
-	if exists(t, "notifications", id) {
-		t.Error("the first pass must run at once")
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if !strings.Contains(logs.String(), "retention pass") || strings.Contains(logs.String(), "failed") {
-		t.Errorf("log = %q", logs.String())
-	}
-}
-
-func TestRunLogsAFailedPassButKeepsRunning(t *testing.T) {
-	var logs bytes.Buffer
-	var mu sync.Mutex
-	db, _ := testkit.Faulty(testkit.Pool, 1)
-	svc := newService(db, Config{}, slog.New(slog.NewTextHandler(&lockedWriter{w: &logs, mu: &mu}, nil)), clock)
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { svc.Run(ctx, time.Hour); close(done) }()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		got := strings.Contains(logs.String(), "retention pass failed")
-		mu.Unlock()
-		if got {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	cancel()
-	<-done
-	mu.Lock()
-	defer mu.Unlock()
-	if !strings.Contains(logs.String(), "retention pass failed") {
-		t.Errorf("a failed pass must be logged: %q", logs.String())
-	}
-}
-
-type lockedWriter struct {
-	w  io.Writer
-	mu *sync.Mutex
-}
-
-func (l *lockedWriter) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.w.Write(p)
 }

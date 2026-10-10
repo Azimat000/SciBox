@@ -15,14 +15,19 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"scibox/server/internal/resilience"
 )
 
 // Ошибки поиска.
 var (
 	// ErrNotFound — Crossref не знает такого DOI.
 	ErrNotFound = errors.New("crossref: doi not found")
-	// ErrUnavailable — Crossref не ответил или ответил непонятно: человек может заполнить поля вручную.
+	// ErrUnavailable — Crossref не ответил или ответил непонятно: человек может заполнить поля вручную. Так же
+	// отвечает клиент, когда сам не стал обращаться: сервис недавно отказывал (предохранитель) или все места заняты.
 	ErrUnavailable = errors.New("crossref: service unavailable")
+	// errRateLimited — Crossref ответил 429: слишком частые обращения. Всегда вместе с ErrUnavailable.
+	errRateLimited = errors.New("crossref: rate limited")
 )
 
 const (
@@ -69,6 +74,8 @@ type Client struct {
 	Mailto string
 	// HTTP — клиент с таймаутом.
 	HTTP *http.Client
+	// Gate — ограничитель одновременных обращений и предохранитель (T-24, срез 25). nil — без них.
+	Gate *resilience.Gate
 }
 
 // NewClient собирает клиента; пустой baseURL означает настоящий Crossref.
@@ -118,8 +125,34 @@ func escapeDOI(doi string) string {
 	return strings.Join(parts, "/")
 }
 
-// Lookup находит публикацию. doi должен быть нормализован (NormalizeDOI).
+// Lookup находит публикацию. doi должен быть нормализован (NormalizeDOI). Обращение идёт через Gate: при серии сбоев
+// Crossref клиент на время перестаёт его беспокоить (ErrUnavailable сразу), а число одновременных обращений ограничено.
+// «Такого DOI нет» сбоем сервиса не считается; ответ 429 открывает предохранитель сразу.
 func (c *Client) Lookup(ctx context.Context, doi string) (Work, error) {
+	var w Work
+	err := c.Gate.Do(ctx, func(ctx context.Context) error {
+		var err error
+		w, err = c.lookup(ctx, doi)
+		return err
+	}, func(err error) resilience.Outcome {
+		switch {
+		case err == nil, errors.Is(err, ErrNotFound):
+			return resilience.Success
+		case errors.Is(err, errRateLimited):
+			return resilience.Trip
+		case ctx.Err() != nil:
+			return resilience.Neutral
+		default:
+			return resilience.Failure
+		}
+	})
+	if resilience.Rejected(err) {
+		return Work{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	return w, err
+}
+
+func (c *Client) lookup(ctx context.Context, doi string) (Work, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/works/"+escapeDOI(doi), nil)
 	if err != nil {
 		return Work{}, fmt.Errorf("%w: build request: %w", ErrUnavailable, err)
@@ -139,6 +172,8 @@ func (c *Client) Lookup(ctx context.Context, doi string) (Work, error) {
 	switch {
 	case res.StatusCode == http.StatusNotFound:
 		return Work{}, ErrNotFound
+	case res.StatusCode == http.StatusTooManyRequests:
+		return Work{}, fmt.Errorf("%w: status 429: %w", ErrUnavailable, errRateLimited)
 	case res.StatusCode != http.StatusOK:
 		return Work{}, fmt.Errorf("%w: status %d", ErrUnavailable, res.StatusCode)
 	}

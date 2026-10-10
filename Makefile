@@ -1,11 +1,15 @@
 # Команды SciBox. Подробности: docs/ARCHITECTURE.md, docs/TESTING.md.
-.PHONY: dev share test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check
+.PHONY: dev share worker test test-server test-web e2e install db-up db-down db-reset migrate seed sqlc lint lint-new vulncheck load-data load-check
 
 SCIBOX = cd server && go run ./cmd/api
 
-## dev: поднять базу и почту, накатить миграции, запустить сервер и сайт
+## dev: поднять базу и почту, накатить миграции, запустить сервер, воркер (фоновые задачи) и сайт
 dev: install migrate
 	./scripts/dev.sh
+
+## worker: только фоновые задачи (письма, подбор, напоминания, чистка, файлы) без сайта и сервера; `make dev` запускает его сам
+worker: db-up
+	$(SCIBOX) worker
 
 ## share: показать сайт другому человеку по публичной ссылке, пока он работает на этом Mac (D-131)
 share: install migrate

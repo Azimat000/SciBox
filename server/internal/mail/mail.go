@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,53 @@ type Message struct {
 // Sender отправляет письма.
 type Sender interface {
 	Send(ctx context.Context, m Message) error
+}
+
+// Kind — вид сбоя отправки: от него зависит, что очередь делает с письмом (срез 25, D-168).
+type Kind int
+
+const (
+	// KindTemporary — письмо сейчас не приняли, позже могут принять (ящик переполнен, «серый список»). Попытка письма
+	// засчитывается, повтор с нарастающей паузой. Так же считается любая ошибка неизвестного вида.
+	KindTemporary Kind = iota
+	// KindService — сбой самой почтовой службы или настройки (нет связи, срок, вход отвергнут, отказ приветствия).
+	// Вина не письма: попытка не засчитывается, а подряд идущие сбои открывают предохранитель.
+	KindService
+	// KindPermanent — письмо не примут никогда (такого адреса нет, содержимое отвергнуто навсегда). Повторять незачем.
+	KindPermanent
+)
+
+// Error — ошибка отправки с видом сбоя.
+type Error struct {
+	Kind Kind
+	Err  error
+}
+
+func (e *Error) Error() string { return e.Err.Error() }
+
+// Unwrap позволяет искать причину через errors.Is и errors.As.
+func (e *Error) Unwrap() error { return e.Err }
+
+// KindOf возвращает вид сбоя; ошибка без вида считается временной.
+func KindOf(err error) Kind {
+	if e, ok := errors.AsType[*Error](err); ok {
+		return e.Kind
+	}
+	return KindTemporary
+}
+
+// refusal превращает ошибку этапа в Error. letter — этап, на котором отказ сервера относится к самому письму
+// (получатель, содержимое): код 4xx временный, 5xx постоянный. На остальных этапах (приветствие, шифрование, вход,
+// отправитель) и при любой сетевой ошибке виновата служба или настройка.
+func refusal(letter bool, op string, err error) error {
+	kind := KindService
+	if te, ok := errors.AsType[*textproto.Error](err); ok && letter {
+		kind = KindTemporary
+		if te.Code >= 500 {
+			kind = KindPermanent
+		}
+	}
+	return &Error{Kind: kind, Err: fmt.Errorf("mail: %s: %w", op, err)}
 }
 
 // Режимы шифрования соединения с почтовым сервером.
@@ -61,22 +109,22 @@ type SMTP struct {
 	Now func() time.Time
 }
 
-// Send отправляет письмо.
+// Send отправляет письмо. Ошибки несут вид сбоя (KindOf).
 func (s SMTP) Send(ctx context.Context, m Message) error {
 	from, err := mail.ParseAddress(s.From)
 	if err != nil {
-		return fmt.Errorf("mail: bad sender %q: %w", s.From, err)
+		return &Error{Kind: KindService, Err: fmt.Errorf("mail: bad sender %q: %w", s.From, err)}
 	}
 	to, err := mail.ParseAddress(m.To)
 	if err != nil {
-		return fmt.Errorf("mail: bad recipient %q: %w", m.To, err)
+		return &Error{Kind: KindPermanent, Err: fmt.Errorf("mail: bad recipient %q: %w", m.To, err)}
 	}
 	if strings.ContainsAny(m.Subject, "\r\n") {
-		return errors.New("mail: subject contains a line break")
+		return &Error{Kind: KindPermanent, Err: errors.New("mail: subject contains a line break")}
 	}
 	raw, err := s.compose(from, to, m)
 	if err != nil {
-		return err
+		return &Error{Kind: KindPermanent, Err: err}
 	}
 
 	timeout := s.Timeout
@@ -88,12 +136,12 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", s.Addr)
 	if err != nil {
-		return fmt.Errorf("mail: connect %s: %w", s.Addr, err)
+		return refusal(false, "connect "+s.Addr, err)
 	}
-	defer func() { _ = conn.Close() }() // уборка: письмо считается принятым по ответу на DATA и QUIT, а не по закрытию
+	defer func() { _ = conn.Close() }() // уборка: письмо считается принятым по ответу на DATA, а не по закрытию
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
-		return fmt.Errorf("mail: set deadline: %w", err)
+		return refusal(false, "set deadline", err)
 	}
 
 	host, _, _ := net.SplitHostPort(s.Addr)
@@ -113,48 +161,51 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	case TLSImplicit:
 		tc := tls.Client(conn, tlsCfg)
 		if err := tc.HandshakeContext(ctx); err != nil {
-			return fmt.Errorf("mail: tls handshake: %w", err)
+			return refusal(false, "tls handshake", err)
 		}
 		conn = tc
 	default:
-		return fmt.Errorf("mail: unknown TLS mode %q", mode)
+		return &Error{Kind: KindService, Err: fmt.Errorf("mail: unknown TLS mode %q", mode)}
 	}
 	if s.Username != "" && mode == TLSOff {
-		return errors.New("mail: login without encryption is not allowed")
+		return &Error{Kind: KindService, Err: errors.New("mail: login without encryption is not allowed")}
 	}
 
 	c, err := smtp.NewClient(conn, host)
 	if err != nil {
-		return fmt.Errorf("mail: smtp greeting: %w", err)
+		return refusal(false, "smtp greeting", err)
 	}
 	defer func() { _ = c.Close() }() // после QUIT соединение уже закрыто сервером, ошибка здесь ожидаема
 	if mode == TLSStartTLS {
 		if err := c.StartTLS(tlsCfg); err != nil {
-			return fmt.Errorf("mail: STARTTLS: %w", err)
+			return refusal(false, "STARTTLS", err)
 		}
 	}
 	if s.Username != "" {
 		if err := c.Auth(smtp.PlainAuth("", s.Username, s.Password, host)); err != nil {
-			return fmt.Errorf("mail: login: %w", err)
+			return refusal(false, "login", err)
 		}
 	}
 	if err := c.Mail(from.Address); err != nil {
-		return fmt.Errorf("mail: MAIL FROM: %w", err)
+		return refusal(false, "MAIL FROM", err)
 	}
 	if err := c.Rcpt(to.Address); err != nil {
-		return fmt.Errorf("mail: RCPT TO: %w", err)
+		return refusal(true, "RCPT TO", err)
 	}
 	w, err := c.Data()
 	if err != nil {
-		return fmt.Errorf("mail: DATA: %w", err)
+		return refusal(true, "DATA", err)
 	}
 	if _, err := w.Write(raw); err != nil {
-		return fmt.Errorf("mail: write body: %w", err)
+		return refusal(true, "write body", err)
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("mail: finish body: %w", err)
+		return refusal(true, "finish body", err)
 	}
-	return c.Quit()
+	// Письмо принято в ответ на конец DATA. Ошибка прощания о письме ничего не говорит: вернуть её значило бы
+	// повторить уже принятое письмо.
+	_ = c.Quit()
+	return nil
 }
 
 func (s SMTP) compose(from, to *mail.Address, m Message) ([]byte, error) {

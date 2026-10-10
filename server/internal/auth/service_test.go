@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"scibox/server/internal/mail"
 )
 
@@ -905,47 +903,6 @@ func TestCleanupRemovesOnlyStaleRows(t *testing.T) {
 	}
 	if countRows(t, `SELECT count(*) FROM auth_tokens WHERE expires_at < $1`, e.clock.Now().Add(-24*time.Hour)) != 0 {
 		t.Fatal("long expired tokens must be removed")
-	}
-}
-
-func TestRunCleanupStopsWithContextAndLogsFailures(t *testing.T) {
-	e := newEnv(t)
-	_, s, _ := e.confirmedUser()
-	e.clock.Advance(31 * 24 * time.Hour)
-
-	ctx, cancel := context.WithCancel(bg)
-	done := make(chan struct{})
-	go func() { e.svc.RunCleanup(ctx, 10*time.Millisecond); close(done) }()
-	deadline := time.Now().Add(5 * time.Second)
-	for countRows(t, `SELECT count(*) FROM sessions WHERE token_hash = $1`, hashToken(s.Token)) != 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("RunCleanup did not clean the expired session")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	cancel()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("RunCleanup must stop when its context is cancelled")
-	}
-
-	// Если база недоступна, ошибка пишется в журнал, а цикл живёт дальше.
-	broken, err := pgxpool.New(bg, sharedPool.Config().ConnString())
-	if err != nil {
-		t.Fatal(err)
-	}
-	broken.Close()
-	e.svc = newService(broken, e.mailer, e.svc.cfg, e.svc.logger)
-	ctx2, cancel2 := context.WithCancel(bg)
-	defer cancel2()
-	go e.svc.RunCleanup(ctx2, 10*time.Millisecond)
-	deadline = time.Now().Add(5 * time.Second)
-	for !strings.Contains(e.logs.String(), "auth cleanup") {
-		if time.Now().After(deadline) {
-			t.Fatal("cleanup failure must be logged")
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
