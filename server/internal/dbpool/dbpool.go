@@ -96,6 +96,14 @@ func PoolConfig(databaseURL string, cfg Config, logger *slog.Logger) (*pgxpool.C
 	setDefault("statement_timeout", strconv.FormatInt(cfg.StatementTimeout.Milliseconds(), 10))
 	setDefault("idle_in_transaction_session_timeout", strconv.FormatInt(cfg.IdleInTxTimeout.Milliseconds(), 10))
 	setDefault("application_name", "scibox")
+	// Поисковые запросы универсальные: десяток необязательных условий и порядок приходят параметрами. Общий план, который
+	// PostgreSQL заводит после пяти выполнений, не знает значений и не может ни воспользоваться индексом порядка, ни
+	// отбросить пустые условия; план под конкретные значения стоит доли миллисекунды и в разы быстрее.
+	setDefault("plan_cache_mode", "force_custom_plan")
+	// Стандартная стоимость случайного чтения (4,0) рассчитана на вращающиеся диски и заставляет планировщик читать
+	// тысячи строк подряд и сортировать вместо того, чтобы идти по индексу порядка и остановиться на нужной строке. У
+	// всех облачных хостингов и ноутбуков диски твёрдотельные: рекомендация PostgreSQL для них 1,1.
+	setDefault("random_page_cost", "1.1")
 
 	if logger != nil {
 		pc.ConnConfig.Tracer = &SlowQueryTracer{Logger: logger, Threshold: cfg.SlowQuery, Now: time.Now}

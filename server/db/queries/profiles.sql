@@ -89,67 +89,77 @@ SELECT EXISTS (
 -- name: IsOrgStaff :one
 SELECT EXISTS (SELECT 1 FROM org_members WHERE user_id = $1);
 
--- Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
--- и с заполненной должностью; сам смотрящий из каталога исключён. Слова ищутся по русской морфологии (имя, должность,
--- город, регион, организация степени, специальности, навыки, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
--- словам» (@fuzzy, имя и должность).
+-- Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14; индексы и предел выдачи — срез 24, D-161, D-162).
+-- Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy) и с заполненной должностью;
+-- сам смотрящий из каталога исключён. Слова ищутся по русской морфологии по готовому тексту профиля (profile_search: имя,
+-- должность, город, регион, организация степени, специальности, навыки, «о себе»); если точных совпадений нет, запрос повторяется
+-- «по похожим словам» (@fuzzy, триграммы имени и должности).
+--
+-- Устройство то же, что у поиска вакансий: hits выбирает подходящие по словам профили по индексу (не больше hit_cap самых
+-- свежих), found отбирает первые row_cap профилей в нужном порядке, page считает число найденных и отрезает страницу, и только
+-- профили страницы получают карточку: число публикаций и «статей за пять лет» считаются для 20 профилей, а не для всех.
 -- name: SearchScientists :many
+WITH hits AS MATERIALIZED (
+  SELECT m.profile_id, ts_rank_cd(m.doc, websearch_to_tsquery('russian', @q::text)) AS rank
+  FROM (
+    SELECT d.profile_id, d.doc FROM profile_search d
+    WHERE @q::text <> '' AND NOT @fuzzy::bool AND d.doc @@ websearch_to_tsquery('russian', @q::text)
+    ORDER BY d.updated_at DESC, d.profile_id
+    LIMIT @hit_cap
+  ) m
+  UNION ALL
+  SELECT f.profile_id, word_similarity(@q::text, f.fuzzy_text) AS rank
+  FROM (
+    SELECT d.profile_id, d.fuzzy_text FROM profile_search d
+    WHERE @q::text <> '' AND @fuzzy::bool AND @q::text <% d.fuzzy_text
+    ORDER BY d.updated_at DESC, d.profile_id
+    LIMIT @hit_cap
+  ) f
+), found AS (
+  SELECT p.id, p.updated_at,
+         CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN h.rank END AS k_rank,
+         CASE WHEN @sort::text = 'h_index' THEN p.h_max END AS k_h,
+         CASE WHEN @sort::text = 'name' THEN u.display_name END AS k_name
+  FROM profiles p
+  JOIN users u ON u.id = p.user_id
+  LEFT JOIN hits h ON h.profile_id = p.id
+  LEFT JOIN profile_search d ON d.profile_id = p.id
+  WHERE p.visibility = ANY(@modes::text[])
+    AND p.headline <> ''
+    AND (sqlc.narg(exclude_user)::uuid IS NULL OR p.user_id <> sqlc.narg(exclude_user)::uuid)
+    AND (@q::text = '' OR h.profile_id IS NOT NULL)
+    AND (cardinality(@fields::text[]) = 0 OR d.codes && @fields::text[])
+    AND (@region::text = '' OR p.region_code = @region::text)
+    AND (cardinality(@degrees::text[]) = 0 OR p.degree = ANY(@degrees::text[]))
+    AND (cardinality(@titles::text[]) = 0 OR p.academic_title = ANY(@titles::text[]))
+    AND (NOT @open_only::bool OR p.open_to_offers)
+    AND (@h_min::int = 0 OR p.h_max >= @h_min::int)
+    AND (@q12_min::int = 0 OR p.q12_total >= @q12_min::int)
+  ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
+  LIMIT @row_cap
+), page AS (
+  SELECT f.id, count(*) OVER () AS total,
+         row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
+  FROM found f
+)
 SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
-       hh.h::int AS h_max,
+       p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
-       qq.total::int AS q12_total, qq.recent::int AS q12_recent,
-       count(*) OVER () AS total
-FROM profiles p
+       p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
+       pg.total
+FROM (SELECT * FROM page WHERE ord <= @max_results::int ORDER BY ord LIMIT @row_limit OFFSET @row_offset) pg
+JOIN profiles p ON p.id = pg.id
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
+-- Статьи в журналах Q1–Q2 за последние годы (срез 14): публикации, чей ISSN есть в справочнике журналов с квартилем 1 или 2.
 LEFT JOIN LATERAL (
-    SELECT string_agg(s.name, ' ') AS names
-    FROM profile_specialties ps JOIN specialties s ON s.code = ps.specialty_code
-    WHERE ps.profile_id = p.id
-) sp ON true
-LEFT JOIN LATERAL (
-    SELECT GREATEST(COALESCE(p.h_rsci, 0), COALESCE(p.h_scopus, 0), COALESCE(p.h_wos, 0), COALESCE(p.h_scholar, 0)) AS h
-) hh ON true
--- Статьи в журналах Q1–Q2 (срез 14): публикации, чей ISSN есть в справочнике журналов с квартилем 1 или 2.
-LEFT JOIN LATERAL (
-    SELECT count(*) AS total,
-           count(*) FILTER (WHERE (i.data ->> 'year')::int >= @recent_from::int) AS recent
+    SELECT count(*) FILTER (WHERE (i.data ->> 'year')::int >= @recent_from::int) AS recent
     FROM profile_items i
     JOIN journal_issns x ON x.issn = i.data ->> 'issn'
     JOIN journals j ON j.id = x.journal_id
     WHERE i.profile_id = p.id AND i.kind = 'publication' AND j.quartile <= 2
 ) qq ON true
-LEFT JOIN LATERAL (
-    SELECT to_tsvector('russian', u.display_name || ' ' || p.headline || ' ' || p.city || ' ' || COALESCE(r.name, '') || ' '
-                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' '
-                                  || array_to_string(p.research_skills, ' ') || ' ' || array_to_string(p.general_skills, ' ') || ' '
-                                  || p.about) AS doc
-) d ON true
-WHERE p.visibility = ANY(@modes::text[])
-  AND p.headline <> ''
-  AND (sqlc.narg(exclude_user)::uuid IS NULL OR p.user_id <> sqlc.narg(exclude_user)::uuid)
-  AND (@q::text = '' OR CASE WHEN @fuzzy::bool
-         THEN word_similarity(@q::text, u.display_name || ' ' || p.headline) >= 0.35
-         ELSE d.doc @@ websearch_to_tsquery('russian', @q::text) END)
-  AND (cardinality(@fields::text[]) = 0 OR EXISTS (
-         SELECT 1 FROM profile_specialties ps, unnest(@fields::text[]) f
-         WHERE ps.profile_id = p.id AND (ps.specialty_code = f OR ps.specialty_code LIKE f || '.%')))
-  AND (@region::text = '' OR p.region_code = @region::text)
-  AND (cardinality(@degrees::text[]) = 0 OR p.degree = ANY(@degrees::text[]))
-  AND (cardinality(@titles::text[]) = 0 OR p.academic_title = ANY(@titles::text[]))
-  AND (NOT @open_only::bool OR p.open_to_offers)
-  AND (@h_min::int = 0 OR hh.h >= @h_min::int)
-  AND (@q12_min::int = 0 OR qq.total >= @q12_min::int)
-ORDER BY
-  CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN
-    CASE WHEN @fuzzy::bool
-      THEN word_similarity(@q::text, u.display_name || ' ' || p.headline)
-      ELSE ts_rank_cd(d.doc, websearch_to_tsquery('russian', @q::text)) END
-  END DESC NULLS LAST,
-  CASE WHEN @sort::text = 'h_index' THEN hh.h END DESC NULLS LAST,
-  CASE WHEN @sort::text = 'name' THEN u.display_name END ASC NULLS LAST,
-  p.updated_at DESC, p.id
-LIMIT @row_limit OFFSET @row_offset;
+ORDER BY pg.ord;
 
 -- Специальности сразу у нескольких профилей (карточки каталога).
 -- name: ListSpecialtiesForProfiles :many

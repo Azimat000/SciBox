@@ -5,6 +5,21 @@ name: scibox
 services:
   postgres:
     image: postgres:16.15-alpine
+    # Настройки ближе к настоящему серверу, чем умолчания PostgreSQL («вращающиеся» диски, 128 МБ памяти под страницы): иначе замеры
+    # на больших данных (make load-check) упираются в диск и неверный план, а не в запросы (срез 24, D-166). Память под страницы
+    # по умолчанию скромная: у Docker на этом Mac её 3,8 ГБ на всё, включая ClamAV (~1,5 ГБ). Для замеров на больших данных:
+    # SCIBOX_PG_SHARED_BUFFERS=768MB docker compose up -d postgres
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${SCIBOX_PG_SHARED_BUFFERS:-256MB}
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - random_page_cost=1.1
+    shm_size: 1gb
     environment:
       POSTGRES_USER: scibox
       POSTGRES_PASSWORD: scibox

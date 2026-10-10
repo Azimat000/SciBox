@@ -25,7 +25,8 @@ export type CatalogCard = {
 }
 
 /** Страница выдачи; fuzzy — точных совпадений со словами нет, показаны похожие (с опечатками). */
-export type CatalogResult = { items: CatalogCard[]; total: number; fuzzy: boolean; recent_from: number }
+// capped — найдено больше, чем доступно для листания: показаны первые `total` (сервер, D-161).
+export type CatalogResult = { items: CatalogCard[]; total: number; capped?: boolean; fuzzy: boolean; recent_from: number }
 
 /**
  * Поиск по каталогу. Что видно, зависит от того, кто смотрит (организациям открыто больше), поэтому кеш лежит под ключом

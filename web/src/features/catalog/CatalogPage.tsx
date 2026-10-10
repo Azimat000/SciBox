@@ -157,7 +157,13 @@ export function CatalogPage() {
             <>
               <div className="results-bar">
                 <p className="results-header" aria-live="polite">
-                  <span className="num">{result.data.fuzzy ? c.similarFound(total, word) : c.found(total, plural(total, c.foundForms), word)}</span>
+                  <span className="num">
+                    {result.data.fuzzy
+                      ? c.similarFound(total, word)
+                      : result.data.capped
+                        ? c.foundMore(total, word)
+                        : c.found(total, plural(total, c.foundForms), word)}
+                  </span>
                 </p>
                 {total > 1 && (
                   <Select
@@ -176,6 +182,11 @@ export function CatalogPage() {
               {result.data.fuzzy && (
                 <Alert kind="info" title={c.fuzzyTitle}>
                   {c.fuzzyText(search.q)}
+                </Alert>
+              )}
+              {result.data.capped && (
+                <Alert kind="info" title={t.find.cappedTitle(total)}>
+                  {t.find.cappedText}
                 </Alert>
               )}
 

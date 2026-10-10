@@ -236,6 +236,8 @@ type Profile struct {
 	ResearchSkills           []string
 	GeneralSkills            []string
 	VisibilityBeforeDeletion *string
+	Q12Total                 int16
+	HMax                     int16
 }
 
 type ProfileItem struct {
@@ -246,6 +248,14 @@ type ProfileItem struct {
 	Data      []byte
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type ProfileSearch struct {
+	ProfileID uuid.UUID
+	Doc       interface{}
+	FuzzyText string
+	UpdatedAt time.Time
+	Codes     []string
 }
 
 type ProfileSpecialty struct {
@@ -413,8 +423,12 @@ type VacancyOffer struct {
 }
 
 type VacancySearch struct {
-	VacancyID uuid.UUID
-	Doc       interface{}
+	VacancyID   uuid.UUID
+	Doc         interface{}
+	Open        bool
+	PublishedAt *time.Time
+	FuzzyText   string
+	Codes       []string
 }
 
 type VacancySpecialty struct {

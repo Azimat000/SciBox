@@ -153,3 +153,56 @@ func TestLoadNeverSwallowsADatabaseFailure(t *testing.T) {
 		}
 	})
 }
+
+// Счётчик статей в Q1–Q2 у профилей (profiles.q12_total) пересчитывается при смене справочника: квартиль журнала мог измениться
+// у уже внесённых публикаций (срез 24).
+func TestLoadRecountsTheArticlesInQ1Q2(t *testing.T) {
+	newProfile := func(issns ...string) string {
+		t.Helper()
+		var user string
+		if err := testkit.Pool.QueryRow(testkit.BG, `INSERT INTO users (email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at)
+			VALUES (gen_random_uuid()::text || '@example.ru', 'Счётчик', 'x', now(), now(), 'v', now(), now()) RETURNING id::text`).Scan(&user); err != nil {
+			t.Fatal(err)
+		}
+		var profile string
+		if err := testkit.Pool.QueryRow(testkit.BG, `INSERT INTO profiles (user_id, created_at, updated_at) VALUES ($1::uuid, now(), now()) RETURNING id::text`, user).Scan(&profile); err != nil {
+			t.Fatal(err)
+		}
+		for _, issn := range issns {
+			if _, err := testkit.Pool.Exec(testkit.BG, `INSERT INTO profile_items (profile_id, kind, data, created_at, updated_at) VALUES ($1::uuid, 'publication', jsonb_build_object('issn', $2::text), now(), now())`, profile, issn); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return profile
+	}
+	counter := func(profile string) int {
+		t.Helper()
+		var n int
+		if err := testkit.Pool.QueryRow(testkit.BG, `SELECT q12_total FROM profiles WHERE id = $1::uuid`, profile).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	// В фикстуре Nature и Physical Review B — Q1, Journal of Physics: CM — Q2, Physics of the Solid State — Q3.
+	loadFixture(t, fixture)
+	a := newProfile("0028-0836", "0953-8984", "1063-7834", "2469-9950") // Q1, Q2, Q3, Q1
+	none := newProfile()
+	other := newProfile("1063-7834")
+	if counter(a) != 3 || counter(none) != 0 || counter(other) != 0 {
+		t.Fatalf("after the first load: %d %d %d", counter(a), counter(none), counter(other))
+	}
+	// Новый выпуск: Nature стал Q4, а Physics of the Solid State — Q1.
+	loadFixture(t, head+
+		row(1, "101", "Nature", "00280836, 14764687", "Nature Research", "18,5", "Q4")+
+		row(2, "102", "Physical Review B", "24699950, 24699969", "APS", "1,3", "Q1")+
+		row(3, "103", "Physics of the Solid State", "10637834", "Pleiades", "0,3", "Q1")+
+		row(4, "104", "Journal of Physics: Condensed Matter", "09538984", "IOP", "0,8", "Q2"))
+	if counter(a) != 3 || counter(other) != 1 || counter(none) != 0 {
+		t.Fatalf("after the new edition: %d %d %d (want 3 1 0)", counter(a), counter(other), counter(none))
+	}
+	// Журнал исчез из справочника: статьи в нём больше не считаются.
+	loadFixture(t, head+row(2, "102", "Physical Review B", "24699950, 24699969", "APS", "1,3", "Q1"))
+	if counter(a) != 1 || counter(other) != 0 {
+		t.Fatalf("after a journal left the catalog: %d %d (want 1 0)", counter(a), counter(other))
+	}
+}

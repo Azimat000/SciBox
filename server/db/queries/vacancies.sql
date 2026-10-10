@@ -54,53 +54,83 @@ WHERE vs.vacancy_id = ANY(@ids::uuid[])
 ORDER BY vs.vacancy_id, string_to_array(s.code, '.')::int[];
 
 -- Поиск среди опубликованных вакансий (срез 6). Вакансии с прошедшим сроком подачи не показываются (today — сегодня по Москве).
--- Пустой список или пустая строка у фильтра значит «любые». total — сколько всего нашлось (до LIMIT).
+-- Пустой список или пустая строка у фильтра значит «любые». Найденных берётся не больше row_cap: сервис передаёт предел
+-- выдачи + 1 (max_results + 1), и если total получился больше max_results, значит «больше предела»; листать можно только
+-- первые max_results (срез 24, D-161).
 -- fuzzy включает поиск с опечатками вместо словоформ: сервис включает его, когда точных совпадений нет.
+--
+-- Слова поиска сначала выбирают подходящие вакансии по индексу (hits: по тексту со словоформами или, с fuzzy, по триграммам
+-- названия; только открытые, условие s.open нужно индексам, они построены по ним), и только потом к ним применяются остальные
+-- условия. Без этого планировщик, не умея оценить частоту слова, обходил все открытые вакансии и сверял каждую с текстом
+-- (около секунды). Если подходящих больше hit_cap, берутся самые свежие: порядок «по совпадению» считается среди них (стоимость
+-- не растёт с частотой слова). Без слов hits пуст и не стоит ничего. Порог сходства оператора <% задан на базу в миграции 00021.
+-- Устройство: found выбирает первые row_cap подходящих вакансий в нужном порядке (только номера и ключи порядка, без
+-- склейки с названиями), page считает число найденных и отрезает страницу, и только страница подтягивает карточки.
+-- Ключи порядка k_* пусты, когда порядок не выбран: планировщик (план под значения, plan_cache_mode) выбрасывает их
+-- и идёт по индексу порядка «новые сверху», останавливаясь на row_cap-й строке.
 -- name: SearchVacancies :many
-SELECT sqlc.embed(v), count(*) OVER () AS total
-FROM vacancy_view v
-JOIN vacancy_search s ON s.vacancy_id = v.id
-WHERE v.status = 'published'
-  AND (v.deadline IS NULL OR v.deadline >= @today::date)
-  AND (sqlc.narg(org_id)::uuid IS NULL OR v.org_id = sqlc.narg(org_id)::uuid)
-  AND (sqlc.narg(unit_id)::uuid IS NULL OR v.unit_id = sqlc.narg(unit_id)::uuid)
-  AND (@q::text = '' OR CASE WHEN @fuzzy::bool
-         THEN word_similarity(@q::text, v.title || ' ' || v.position_name || ' ' || v.org_name) >= 0.35
-         ELSE s.doc @@ websearch_to_tsquery('russian', @q::text) END)
-  AND (cardinality(@fields::text[]) = 0 OR EXISTS (
-         SELECT 1 FROM vacancy_specialties vs, unnest(@fields::text[]) f
-         WHERE vs.vacancy_id = v.id AND (vs.specialty_code = f OR vs.specialty_code LIKE f || '.%')))
-  AND (@region::text = '' OR v.region_code = @region::text)
-  AND (cardinality(@formats::text[]) = 0 OR v.work_format = ANY(@formats::text[]))
-  AND (cardinality(@types::text[]) = 0 OR v.position_type = ANY(@types::text[]))
-  AND (cardinality(@levels::int[]) = 0 OR v.career_level = ANY(@levels::int[]))
-  AND (cardinality(@degrees::text[]) = 0 OR v.degree_required = ANY(@degrees::text[]))
-  AND (cardinality(@org_kinds::text[]) = 0 OR v.org_kind = ANY(@org_kinds::text[]))
-  AND (cardinality(@fundings::text[]) = 0 OR v.funding_source = ANY(@fundings::text[]))
-  AND (cardinality(@rates::int[]) = 0 OR v.rate_percent = ANY(@rates::int[]))
-  AND (cardinality(@terms::text[]) = 0 OR (CASE
-         WHEN v.contract_type = 'permanent' THEN 'permanent'
-         WHEN v.contract_months <= 12 THEN 'short'
-         WHEN v.contract_months <= 36 THEN 'medium'
-         WHEN v.contract_months > 36 THEN 'long'
-       END) = ANY(@terms::text[]))
-  AND (@salary_min::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= @salary_min::int)
-  AND (NOT @housing::bool OR v.housing <> 'none')
-  AND (NOT @competition::bool OR v.is_competition)
-  AND (NOT @no_deadline::bool OR v.deadline IS NULL)
-  AND (sqlc.narg(deadline_to)::date IS NULL OR v.deadline <= sqlc.narg(deadline_to)::date)
-  AND (sqlc.narg(published_after)::timestamptz IS NULL OR v.published_at > sqlc.narg(published_after)::timestamptz)
-  AND (sqlc.narg(published_until)::timestamptz IS NULL OR v.published_at <= sqlc.narg(published_until)::timestamptz)
-ORDER BY
-  CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN
-    CASE WHEN @fuzzy::bool
-      THEN word_similarity(@q::text, v.title || ' ' || v.position_name || ' ' || v.org_name)
-      ELSE ts_rank_cd(s.doc, websearch_to_tsquery('russian', @q::text)) END
-  END DESC NULLS LAST,
-  CASE WHEN @sort::text = 'deadline' THEN v.deadline END ASC NULLS LAST,
-  CASE WHEN @sort::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END DESC NULLS LAST,
-  v.published_at DESC, v.id
-LIMIT @row_limit OFFSET @row_offset;
+WITH hits AS MATERIALIZED (
+  SELECT m.vacancy_id, ts_rank_cd(m.doc, websearch_to_tsquery('russian', @q::text)) AS rank
+  FROM (
+    SELECT s.vacancy_id, s.doc FROM vacancy_search s
+    WHERE @q::text <> '' AND NOT @fuzzy::bool AND s.open AND s.doc @@ websearch_to_tsquery('russian', @q::text)
+    ORDER BY s.published_at DESC, s.vacancy_id
+    LIMIT @hit_cap
+  ) m
+  UNION ALL
+  SELECT f.vacancy_id, word_similarity(@q::text, f.fuzzy_text) AS rank
+  FROM (
+    SELECT s.vacancy_id, s.fuzzy_text FROM vacancy_search s
+    WHERE @q::text <> '' AND @fuzzy::bool AND s.open AND @q::text <% s.fuzzy_text
+    ORDER BY s.published_at DESC, s.vacancy_id
+    LIMIT @hit_cap
+  ) f
+), found AS (
+  SELECT v.id, v.published_at,
+         CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN h.rank END AS k_rank,
+         CASE WHEN @sort::text = 'deadline' THEN v.deadline END AS k_deadline,
+         CASE WHEN @sort::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END AS k_pay
+  FROM vacancy_view v
+  LEFT JOIN hits h ON h.vacancy_id = v.id
+  LEFT JOIN vacancy_search s ON s.vacancy_id = v.id
+  WHERE v.status = 'published'
+    AND (v.deadline IS NULL OR v.deadline >= @today::date)
+    AND (sqlc.narg(org_id)::uuid IS NULL OR v.org_id = sqlc.narg(org_id)::uuid)
+    AND (sqlc.narg(unit_id)::uuid IS NULL OR v.unit_id = sqlc.narg(unit_id)::uuid)
+    AND (@q::text = '' OR h.vacancy_id IS NOT NULL)
+    AND (cardinality(@fields::text[]) = 0 OR (s.open AND s.codes && @fields::text[]))
+    AND (@region::text = '' OR v.region_code = @region::text)
+    AND (cardinality(@formats::text[]) = 0 OR v.work_format = ANY(@formats::text[]))
+    AND (cardinality(@types::text[]) = 0 OR v.position_type = ANY(@types::text[]))
+    AND (cardinality(@levels::int[]) = 0 OR v.career_level = ANY(@levels::int[]))
+    AND (cardinality(@degrees::text[]) = 0 OR v.degree_required = ANY(@degrees::text[]))
+    AND (cardinality(@org_kinds::text[]) = 0 OR v.org_kind = ANY(@org_kinds::text[]))
+    AND (cardinality(@fundings::text[]) = 0 OR v.funding_source = ANY(@fundings::text[]))
+    AND (cardinality(@rates::int[]) = 0 OR v.rate_percent = ANY(@rates::int[]))
+    AND (cardinality(@terms::text[]) = 0 OR (CASE
+           WHEN v.contract_type = 'permanent' THEN 'permanent'
+           WHEN v.contract_months <= 12 THEN 'short'
+           WHEN v.contract_months <= 36 THEN 'medium'
+           WHEN v.contract_months > 36 THEN 'long'
+         END) = ANY(@terms::text[]))
+    AND (@salary_min::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= @salary_min::int)
+    AND (NOT @housing::bool OR v.housing <> 'none')
+    AND (NOT @competition::bool OR v.is_competition)
+    AND (NOT @no_deadline::bool OR v.deadline IS NULL)
+    AND (sqlc.narg(deadline_to)::date IS NULL OR v.deadline <= sqlc.narg(deadline_to)::date)
+    AND (sqlc.narg(published_after)::timestamptz IS NULL OR v.published_at > sqlc.narg(published_after)::timestamptz)
+    AND (sqlc.narg(published_until)::timestamptz IS NULL OR v.published_at <= sqlc.narg(published_until)::timestamptz)
+  ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, v.published_at DESC, v.id
+  LIMIT @row_cap
+), page AS (
+  SELECT f.id, count(*) OVER () AS total,
+         row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_deadline ASC NULLS LAST, f.k_pay DESC NULLS LAST, f.published_at DESC, f.id) AS ord
+  FROM found f
+)
+SELECT sqlc.embed(v), p.total
+FROM (SELECT * FROM page WHERE ord <= @max_results::int ORDER BY ord LIMIT @row_limit OFFSET @row_offset) p
+JOIN vacancy_view v ON v.id = p.id
+ORDER BY p.ord;
 
 -- «Мои вакансии»: вся организация (whole_orgs) или только перечисленные подразделения (units).
 -- name: ListMyVacancies :many

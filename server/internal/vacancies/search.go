@@ -97,10 +97,17 @@ type SearchParams struct {
 // SearchResult — страница выдачи.
 type SearchResult struct {
 	Items []Card `json:"items"`
-	Total int    `json:"total"`
+	// Total — сколько вакансий найдено, но не больше MaxResults.
+	Total int `json:"total"`
+	// Capped — найдено больше MaxResults: показываются только первые MaxResults (срез 24, D-161).
+	Capped bool `json:"capped"`
 	// Fuzzy — точных совпадений со словами поиска не нашлось, показаны похожие (с опечатками).
 	Fuzzy bool `json:"fuzzy"`
 }
+
+// MaxResults — сколько первых результатов поиска доступно для листания. Дальше человек уточняет запрос. Предел держит
+// стоимость любого поиска в пределах нескольких тысяч строк, как бы ни был широк запрос и как бы глубоко ни листали.
+const MaxResults = 1000
 
 func normalizeQuery(q string) string {
 	return strings.Join(strings.Fields(q), " ")
@@ -217,7 +224,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		Levels: num.Int32s(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds), Fundings: nonNil(p.Fundings),
 		Rates: num.Int32s(p.Rates), Terms: nonNil(p.Terms), SalaryMin: num.Int32(p.SalaryMin), Housing: p.Housing,
 		Competition: p.Competition, NoDeadline: p.Deadline == DeadlineNone, Sort: sort, RowLimit: limit, RowOffset: offset,
-		PublishedAfter: p.PublishedAfter, PublishedUntil: p.PublishedUntil,
+		PublishedAfter: p.PublishedAfter, PublishedUntil: p.PublishedUntil, RowCap: num.Int32(s.cfg.maxResults() + 1), HitCap: num.Int32(s.cfg.maxResults() + 1), MaxResults: num.Int32(s.cfg.maxResults()),
 	}
 	switch p.Deadline {
 	case DeadlineWeek:
@@ -248,7 +255,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 	if err != nil {
 		return SearchResult{}, err
 	}
-	return SearchResult{Items: items, Total: total, Fuzzy: fuzzy}, nil
+	return SearchResult{Items: items, Total: min(total, s.cfg.maxResults()), Capped: total > s.cfg.maxResults(), Fuzzy: fuzzy}, nil
 }
 
 // searchPage читает страницу выдачи и общее число найденного. Если страница пуста, а смещение не нулевое (страница

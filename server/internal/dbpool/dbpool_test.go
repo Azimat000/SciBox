@@ -54,7 +54,7 @@ func TestPoolConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 		p := pc.ConnConfig.RuntimeParams
-		if pc.MaxConns != 9 || pc.MinConns != 2 || p["statement_timeout"] != "3000" || p["idle_in_transaction_session_timeout"] != "4000" || p["application_name"] != "scibox" {
+		if pc.MaxConns != 9 || pc.MinConns != 2 || p["statement_timeout"] != "3000" || p["idle_in_transaction_session_timeout"] != "4000" || p["application_name"] != "scibox" || p["plan_cache_mode"] != "force_custom_plan" || p["random_page_cost"] != "1.1" {
 			t.Fatalf("pool: max=%d min=%d params=%v", pc.MaxConns, pc.MinConns, p)
 		}
 		if pc.MaxConnLifetime != dbpool.DefaultMaxConnLifetime || pc.MaxConnLifetimeJitter != dbpool.DefaultMaxConnLifetime/10 || pc.MaxConnIdleTime != dbpool.DefaultMaxConnIdleTime {
@@ -103,12 +103,12 @@ func TestSettingsReachTheDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	var statement, idle, app string
-	if err := pool.QueryRow(t.Context(), `SELECT current_setting('statement_timeout'), current_setting('idle_in_transaction_session_timeout'), current_setting('application_name')`).Scan(&statement, &idle, &app); err != nil {
+	var statement, idle, app, plans, cost string
+	if err := pool.QueryRow(t.Context(), `SELECT current_setting('statement_timeout'), current_setting('idle_in_transaction_session_timeout'), current_setting('application_name'), current_setting('plan_cache_mode'), current_setting('random_page_cost')`).Scan(&statement, &idle, &app, &plans, &cost); err != nil {
 		t.Fatal(err)
 	}
-	if statement != "3s" || idle != "7s" || app != "scibox" {
-		t.Fatalf("statement=%q idle=%q app=%q", statement, idle, app)
+	if statement != "3s" || idle != "7s" || app != "scibox" || plans != "force_custom_plan" || cost != "1.1" {
+		t.Fatalf("statement=%q idle=%q app=%q plans=%q cost=%q", statement, idle, app, plans, cost)
 	}
 }
 

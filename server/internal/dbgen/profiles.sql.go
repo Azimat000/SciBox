@@ -81,7 +81,7 @@ func (q *Queries) EnsureProfile(ctx context.Context, arg EnsureProfileParams) er
 }
 
 const getProfileByID = `-- name: GetProfileByID :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, p.q12_total, p.h_max, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -129,6 +129,8 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 		&i.Profile.ResearchSkills,
 		&i.Profile.GeneralSkills,
 		&i.Profile.VisibilityBeforeDeletion,
+		&i.Profile.Q12Total,
+		&i.Profile.HMax,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -137,7 +139,7 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 }
 
 const getProfileByUser = `-- name: GetProfileByUser :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, p.q12_total, p.h_max, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -185,6 +187,8 @@ func (q *Queries) GetProfileByUser(ctx context.Context, userID uuid.UUID) (GetPr
 		&i.Profile.ResearchSkills,
 		&i.Profile.GeneralSkills,
 		&i.Profile.VisibilityBeforeDeletion,
+		&i.Profile.Q12Total,
+		&i.Profile.HMax,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -396,69 +400,79 @@ func (q *Queries) ProfileHasDOI(ctx context.Context, arg ProfileHasDOIParams) (b
 }
 
 const searchScientists = `-- name: SearchScientists :many
+WITH hits AS MATERIALIZED (
+  SELECT m.profile_id, ts_rank_cd(m.doc, websearch_to_tsquery('russian', $5::text)) AS rank
+  FROM (
+    SELECT d.profile_id, d.doc FROM profile_search d
+    WHERE $5::text <> '' AND NOT $6::bool AND d.doc @@ websearch_to_tsquery('russian', $5::text)
+    ORDER BY d.updated_at DESC, d.profile_id
+    LIMIT $7
+  ) m
+  UNION ALL
+  SELECT f.profile_id, word_similarity($5::text, f.fuzzy_text) AS rank
+  FROM (
+    SELECT d.profile_id, d.fuzzy_text FROM profile_search d
+    WHERE $5::text <> '' AND $6::bool AND $5::text <% d.fuzzy_text
+    ORDER BY d.updated_at DESC, d.profile_id
+    LIMIT $7
+  ) f
+), found AS (
+  SELECT p.id, p.updated_at,
+         CASE WHEN $8::text = 'relevance' AND $5::text <> '' THEN h.rank END AS k_rank,
+         CASE WHEN $8::text = 'h_index' THEN p.h_max END AS k_h,
+         CASE WHEN $8::text = 'name' THEN u.display_name END AS k_name
+  FROM profiles p
+  JOIN users u ON u.id = p.user_id
+  LEFT JOIN hits h ON h.profile_id = p.id
+  LEFT JOIN profile_search d ON d.profile_id = p.id
+  WHERE p.visibility = ANY($9::text[])
+    AND p.headline <> ''
+    AND ($10::uuid IS NULL OR p.user_id <> $10::uuid)
+    AND ($5::text = '' OR h.profile_id IS NOT NULL)
+    AND (cardinality($11::text[]) = 0 OR d.codes && $11::text[])
+    AND ($12::text = '' OR p.region_code = $12::text)
+    AND (cardinality($13::text[]) = 0 OR p.degree = ANY($13::text[]))
+    AND (cardinality($14::text[]) = 0 OR p.academic_title = ANY($14::text[]))
+    AND (NOT $15::bool OR p.open_to_offers)
+    AND ($16::int = 0 OR p.h_max >= $16::int)
+    AND ($17::int = 0 OR p.q12_total >= $17::int)
+  ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
+  LIMIT $18
+), page AS (
+  SELECT f.id, count(*) OVER () AS total,
+         row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
+  FROM found f
+)
 SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
-       hh.h::int AS h_max,
+       p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
-       qq.total::int AS q12_total, qq.recent::int AS q12_recent,
-       count(*) OVER () AS total
-FROM profiles p
+       p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
+       pg.total
+FROM (SELECT id, total, ord FROM page WHERE ord <= $1::int ORDER BY ord LIMIT $3 OFFSET $2) pg
+JOIN profiles p ON p.id = pg.id
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
 LEFT JOIN LATERAL (
-    SELECT string_agg(s.name, ' ') AS names
-    FROM profile_specialties ps JOIN specialties s ON s.code = ps.specialty_code
-    WHERE ps.profile_id = p.id
-) sp ON true
-LEFT JOIN LATERAL (
-    SELECT GREATEST(COALESCE(p.h_rsci, 0), COALESCE(p.h_scopus, 0), COALESCE(p.h_wos, 0), COALESCE(p.h_scholar, 0)) AS h
-) hh ON true
-LEFT JOIN LATERAL (
-    SELECT count(*) AS total,
-           count(*) FILTER (WHERE (i.data ->> 'year')::int >= $1::int) AS recent
+    SELECT count(*) FILTER (WHERE (i.data ->> 'year')::int >= $4::int) AS recent
     FROM profile_items i
     JOIN journal_issns x ON x.issn = i.data ->> 'issn'
     JOIN journals j ON j.id = x.journal_id
     WHERE i.profile_id = p.id AND i.kind = 'publication' AND j.quartile <= 2
 ) qq ON true
-LEFT JOIN LATERAL (
-    SELECT to_tsvector('russian', u.display_name || ' ' || p.headline || ' ' || p.city || ' ' || COALESCE(r.name, '') || ' '
-                                  || p.degree_institution || ' ' || COALESCE(sp.names, '') || ' '
-                                  || array_to_string(p.research_skills, ' ') || ' ' || array_to_string(p.general_skills, ' ') || ' '
-                                  || p.about) AS doc
-) d ON true
-WHERE p.visibility = ANY($2::text[])
-  AND p.headline <> ''
-  AND ($3::uuid IS NULL OR p.user_id <> $3::uuid)
-  AND ($4::text = '' OR CASE WHEN $5::bool
-         THEN word_similarity($4::text, u.display_name || ' ' || p.headline) >= 0.35
-         ELSE d.doc @@ websearch_to_tsquery('russian', $4::text) END)
-  AND (cardinality($6::text[]) = 0 OR EXISTS (
-         SELECT 1 FROM profile_specialties ps, unnest($6::text[]) f
-         WHERE ps.profile_id = p.id AND (ps.specialty_code = f OR ps.specialty_code LIKE f || '.%')))
-  AND ($7::text = '' OR p.region_code = $7::text)
-  AND (cardinality($8::text[]) = 0 OR p.degree = ANY($8::text[]))
-  AND (cardinality($9::text[]) = 0 OR p.academic_title = ANY($9::text[]))
-  AND (NOT $10::bool OR p.open_to_offers)
-  AND ($11::int = 0 OR hh.h >= $11::int)
-  AND ($12::int = 0 OR qq.total >= $12::int)
-ORDER BY
-  CASE WHEN $13::text = 'relevance' AND $4::text <> '' THEN
-    CASE WHEN $5::bool
-      THEN word_similarity($4::text, u.display_name || ' ' || p.headline)
-      ELSE ts_rank_cd(d.doc, websearch_to_tsquery('russian', $4::text)) END
-  END DESC NULLS LAST,
-  CASE WHEN $13::text = 'h_index' THEN hh.h END DESC NULLS LAST,
-  CASE WHEN $13::text = 'name' THEN u.display_name END ASC NULLS LAST,
-  p.updated_at DESC, p.id
-LIMIT $15 OFFSET $14
+ORDER BY pg.ord
 `
 
 type SearchScientistsParams struct {
+	MaxResults  int32
+	RowOffset   int32
+	RowLimit    int32
 	RecentFrom  int32
-	Modes       []string
-	ExcludeUser *uuid.UUID
 	Q           string
 	Fuzzy       bool
+	HitCap      int32
+	Sort        string
+	Modes       []string
+	ExcludeUser *uuid.UUID
 	Fields      []string
 	Region      string
 	Degrees     []string
@@ -466,9 +480,7 @@ type SearchScientistsParams struct {
 	OpenOnly    bool
 	HMin        int32
 	Q12Min      int32
-	Sort        string
-	RowOffset   int32
-	RowLimit    int32
+	RowCap      int32
 }
 
 type SearchScientistsRow struct {
@@ -488,18 +500,28 @@ type SearchScientistsRow struct {
 	Total         int64
 }
 
-// Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14). Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy)
-// и с заполненной должностью; сам смотрящий из каталога исключён. Слова ищутся по русской морфологии (имя, должность,
-// город, регион, организация степени, специальности, навыки, «о себе»); если точных совпадений нет, запрос повторяется «по похожим
-// словам» (@fuzzy, имя и должность).
-// Статьи в журналах Q1–Q2 (срез 14): публикации, чей ISSN есть в справочнике журналов с квартилем 1 или 2.
+// Каталог учёных (срез 10; счётчик и фильтр «статей в Q1–Q2» — срез 14; индексы и предел выдачи — срез 24, D-161, D-162).
+// Показываются только профили в разрешённых режимах приватности (@modes решает пакет privacy) и с заполненной должностью;
+// сам смотрящий из каталога исключён. Слова ищутся по русской морфологии по готовому тексту профиля (profile_search: имя,
+// должность, город, регион, организация степени, специальности, навыки, «о себе»); если точных совпадений нет, запрос повторяется
+// «по похожим словам» (@fuzzy, триграммы имени и должности).
+//
+// Устройство то же, что у поиска вакансий: hits выбирает подходящие по словам профили по индексу (не больше hit_cap самых
+// свежих), found отбирает первые row_cap профилей в нужном порядке, page считает число найденных и отрезает страницу, и только
+// профили страницы получают карточку: число публикаций и «статей за пять лет» считаются для 20 профилей, а не для всех.
+// Статьи в журналах Q1–Q2 за последние годы (срез 14): публикации, чей ISSN есть в справочнике журналов с квартилем 1 или 2.
 func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsParams) ([]SearchScientistsRow, error) {
 	rows, err := q.db.Query(ctx, searchScientists,
+		arg.MaxResults,
+		arg.RowOffset,
+		arg.RowLimit,
 		arg.RecentFrom,
-		arg.Modes,
-		arg.ExcludeUser,
 		arg.Q,
 		arg.Fuzzy,
+		arg.HitCap,
+		arg.Sort,
+		arg.Modes,
+		arg.ExcludeUser,
 		arg.Fields,
 		arg.Region,
 		arg.Degrees,
@@ -507,9 +529,7 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 		arg.OpenOnly,
 		arg.HMin,
 		arg.Q12Min,
-		arg.Sort,
-		arg.RowOffset,
-		arg.RowLimit,
+		arg.RowCap,
 	)
 	if err != nil {
 		return nil, err

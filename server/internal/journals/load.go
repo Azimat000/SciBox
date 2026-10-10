@@ -139,6 +139,9 @@ func store(ctx context.Context, db DB, p Parsed, ed string, downloaded time.Time
 	if _, err := tx.CopyFrom(ctx, pgx.Identifier{"journal_issns"}, []string{"issn", "journal_id", "position"}, pgx.CopyFromRows(issns)); err != nil {
 		return fmt.Errorf("journals: copy issns: %w", err)
 	}
+	if err := q.RecountProfileQ12(ctx); err != nil {
+		return fmt.Errorf("journals: recount articles in Q1-Q2: %w", err)
+	}
 	if err := q.SaveJournalsSource(ctx, dbgen.SaveJournalsSourceParams{Title: SourceTitle, Url: SourceURL, Edition: ed, CheckedOn: downloaded}); err != nil {
 		return fmt.Errorf("journals: save source: %w", err)
 	}

@@ -405,58 +405,81 @@ func (q *Queries) LockVacancy(ctx context.Context, id uuid.UUID) (Vacancy, error
 }
 
 const searchVacancies = `-- name: SearchVacancies :many
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, count(*) OVER () AS total
-FROM vacancy_view v
-JOIN vacancy_search s ON s.vacancy_id = v.id
-WHERE v.status = 'published'
-  AND (v.deadline IS NULL OR v.deadline >= $1::date)
-  AND ($2::uuid IS NULL OR v.org_id = $2::uuid)
-  AND ($3::uuid IS NULL OR v.unit_id = $3::uuid)
-  AND ($4::text = '' OR CASE WHEN $5::bool
-         THEN word_similarity($4::text, v.title || ' ' || v.position_name || ' ' || v.org_name) >= 0.35
-         ELSE s.doc @@ websearch_to_tsquery('russian', $4::text) END)
-  AND (cardinality($6::text[]) = 0 OR EXISTS (
-         SELECT 1 FROM vacancy_specialties vs, unnest($6::text[]) f
-         WHERE vs.vacancy_id = v.id AND (vs.specialty_code = f OR vs.specialty_code LIKE f || '.%')))
-  AND ($7::text = '' OR v.region_code = $7::text)
-  AND (cardinality($8::text[]) = 0 OR v.work_format = ANY($8::text[]))
-  AND (cardinality($9::text[]) = 0 OR v.position_type = ANY($9::text[]))
-  AND (cardinality($10::int[]) = 0 OR v.career_level = ANY($10::int[]))
-  AND (cardinality($11::text[]) = 0 OR v.degree_required = ANY($11::text[]))
-  AND (cardinality($12::text[]) = 0 OR v.org_kind = ANY($12::text[]))
-  AND (cardinality($13::text[]) = 0 OR v.funding_source = ANY($13::text[]))
-  AND (cardinality($14::int[]) = 0 OR v.rate_percent = ANY($14::int[]))
-  AND (cardinality($15::text[]) = 0 OR (CASE
-         WHEN v.contract_type = 'permanent' THEN 'permanent'
-         WHEN v.contract_months <= 12 THEN 'short'
-         WHEN v.contract_months <= 36 THEN 'medium'
-         WHEN v.contract_months > 36 THEN 'long'
-       END) = ANY($15::text[]))
-  AND ($16::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= $16::int)
-  AND (NOT $17::bool OR v.housing <> 'none')
-  AND (NOT $18::bool OR v.is_competition)
-  AND (NOT $19::bool OR v.deadline IS NULL)
-  AND ($20::date IS NULL OR v.deadline <= $20::date)
-  AND ($21::timestamptz IS NULL OR v.published_at > $21::timestamptz)
-  AND ($22::timestamptz IS NULL OR v.published_at <= $22::timestamptz)
-ORDER BY
-  CASE WHEN $23::text = 'relevance' AND $4::text <> '' THEN
-    CASE WHEN $5::bool
-      THEN word_similarity($4::text, v.title || ' ' || v.position_name || ' ' || v.org_name)
-      ELSE ts_rank_cd(s.doc, websearch_to_tsquery('russian', $4::text)) END
-  END DESC NULLS LAST,
-  CASE WHEN $23::text = 'deadline' THEN v.deadline END ASC NULLS LAST,
-  CASE WHEN $23::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END DESC NULLS LAST,
-  v.published_at DESC, v.id
-LIMIT $25 OFFSET $24
+WITH hits AS MATERIALIZED (
+  SELECT m.vacancy_id, ts_rank_cd(m.doc, websearch_to_tsquery('russian', $4::text)) AS rank
+  FROM (
+    SELECT s.vacancy_id, s.doc FROM vacancy_search s
+    WHERE $4::text <> '' AND NOT $5::bool AND s.open AND s.doc @@ websearch_to_tsquery('russian', $4::text)
+    ORDER BY s.published_at DESC, s.vacancy_id
+    LIMIT $6
+  ) m
+  UNION ALL
+  SELECT f.vacancy_id, word_similarity($4::text, f.fuzzy_text) AS rank
+  FROM (
+    SELECT s.vacancy_id, s.fuzzy_text FROM vacancy_search s
+    WHERE $4::text <> '' AND $5::bool AND s.open AND $4::text <% s.fuzzy_text
+    ORDER BY s.published_at DESC, s.vacancy_id
+    LIMIT $6
+  ) f
+), found AS (
+  SELECT v.id, v.published_at,
+         CASE WHEN $7::text = 'relevance' AND $4::text <> '' THEN h.rank END AS k_rank,
+         CASE WHEN $7::text = 'deadline' THEN v.deadline END AS k_deadline,
+         CASE WHEN $7::text = 'salary' THEN COALESCE(v.salary_to, v.salary_from) END AS k_pay
+  FROM vacancy_view v
+  LEFT JOIN hits h ON h.vacancy_id = v.id
+  LEFT JOIN vacancy_search s ON s.vacancy_id = v.id
+  WHERE v.status = 'published'
+    AND (v.deadline IS NULL OR v.deadline >= $8::date)
+    AND ($9::uuid IS NULL OR v.org_id = $9::uuid)
+    AND ($10::uuid IS NULL OR v.unit_id = $10::uuid)
+    AND ($4::text = '' OR h.vacancy_id IS NOT NULL)
+    AND (cardinality($11::text[]) = 0 OR (s.open AND s.codes && $11::text[]))
+    AND ($12::text = '' OR v.region_code = $12::text)
+    AND (cardinality($13::text[]) = 0 OR v.work_format = ANY($13::text[]))
+    AND (cardinality($14::text[]) = 0 OR v.position_type = ANY($14::text[]))
+    AND (cardinality($15::int[]) = 0 OR v.career_level = ANY($15::int[]))
+    AND (cardinality($16::text[]) = 0 OR v.degree_required = ANY($16::text[]))
+    AND (cardinality($17::text[]) = 0 OR v.org_kind = ANY($17::text[]))
+    AND (cardinality($18::text[]) = 0 OR v.funding_source = ANY($18::text[]))
+    AND (cardinality($19::int[]) = 0 OR v.rate_percent = ANY($19::int[]))
+    AND (cardinality($20::text[]) = 0 OR (CASE
+           WHEN v.contract_type = 'permanent' THEN 'permanent'
+           WHEN v.contract_months <= 12 THEN 'short'
+           WHEN v.contract_months <= 36 THEN 'medium'
+           WHEN v.contract_months > 36 THEN 'long'
+         END) = ANY($20::text[]))
+    AND ($21::int = 0 OR COALESCE(v.salary_to, v.salary_from) >= $21::int)
+    AND (NOT $22::bool OR v.housing <> 'none')
+    AND (NOT $23::bool OR v.is_competition)
+    AND (NOT $24::bool OR v.deadline IS NULL)
+    AND ($25::date IS NULL OR v.deadline <= $25::date)
+    AND ($26::timestamptz IS NULL OR v.published_at > $26::timestamptz)
+    AND ($27::timestamptz IS NULL OR v.published_at <= $27::timestamptz)
+  ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, v.published_at DESC, v.id
+  LIMIT $28
+), page AS (
+  SELECT f.id, count(*) OVER () AS total,
+         row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_deadline ASC NULLS LAST, f.k_pay DESC NULLS LAST, f.published_at DESC, f.id) AS ord
+  FROM found f
+)
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, p.total
+FROM (SELECT id, total, ord FROM page WHERE ord <= $1::int ORDER BY ord LIMIT $3 OFFSET $2) p
+JOIN vacancy_view v ON v.id = p.id
+ORDER BY p.ord
 `
 
 type SearchVacanciesParams struct {
+	MaxResults     int32
+	RowOffset      int32
+	RowLimit       int32
+	Q              string
+	Fuzzy          bool
+	HitCap         int32
+	Sort           string
 	Today          time.Time
 	OrgID          *uuid.UUID
 	UnitID         *uuid.UUID
-	Q              string
-	Fuzzy          bool
 	Fields         []string
 	Region         string
 	Formats        []string
@@ -474,9 +497,7 @@ type SearchVacanciesParams struct {
 	DeadlineTo     *time.Time
 	PublishedAfter *time.Time
 	PublishedUntil *time.Time
-	Sort           string
-	RowOffset      int32
-	RowLimit       int32
+	RowCap         int32
 }
 
 type SearchVacanciesRow struct {
@@ -485,15 +506,32 @@ type SearchVacanciesRow struct {
 }
 
 // Поиск среди опубликованных вакансий (срез 6). Вакансии с прошедшим сроком подачи не показываются (today — сегодня по Москве).
-// Пустой список или пустая строка у фильтра значит «любые». total — сколько всего нашлось (до LIMIT).
+// Пустой список или пустая строка у фильтра значит «любые». Найденных берётся не больше row_cap: сервис передаёт предел
+// выдачи + 1 (max_results + 1), и если total получился больше max_results, значит «больше предела»; листать можно только
+// первые max_results (срез 24, D-161).
 // fuzzy включает поиск с опечатками вместо словоформ: сервис включает его, когда точных совпадений нет.
+//
+// Слова поиска сначала выбирают подходящие вакансии по индексу (hits: по тексту со словоформами или, с fuzzy, по триграммам
+// названия; только открытые, условие s.open нужно индексам, они построены по ним), и только потом к ним применяются остальные
+// условия. Без этого планировщик, не умея оценить частоту слова, обходил все открытые вакансии и сверял каждую с текстом
+// (около секунды). Если подходящих больше hit_cap, берутся самые свежие: порядок «по совпадению» считается среди них (стоимость
+// не растёт с частотой слова). Без слов hits пуст и не стоит ничего. Порог сходства оператора <% задан на базу в миграции 00021.
+// Устройство: found выбирает первые row_cap подходящих вакансий в нужном порядке (только номера и ключи порядка, без
+// склейки с названиями), page считает число найденных и отрезает страницу, и только страница подтягивает карточки.
+// Ключи порядка k_* пусты, когда порядок не выбран: планировщик (план под значения, plan_cache_mode) выбрасывает их
+// и идёт по индексу порядка «новые сверху», останавливаясь на row_cap-й строке.
 func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams) ([]SearchVacanciesRow, error) {
 	rows, err := q.db.Query(ctx, searchVacancies,
+		arg.MaxResults,
+		arg.RowOffset,
+		arg.RowLimit,
+		arg.Q,
+		arg.Fuzzy,
+		arg.HitCap,
+		arg.Sort,
 		arg.Today,
 		arg.OrgID,
 		arg.UnitID,
-		arg.Q,
-		arg.Fuzzy,
 		arg.Fields,
 		arg.Region,
 		arg.Formats,
@@ -511,9 +549,7 @@ func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams
 		arg.DeadlineTo,
 		arg.PublishedAfter,
 		arg.PublishedUntil,
-		arg.Sort,
-		arg.RowOffset,
-		arg.RowLimit,
+		arg.RowCap,
 	)
 	if err != nil {
 		return nil, err

@@ -45,6 +45,16 @@ type Config struct {
 	ProductName string
 	// DOI — сколько раз в час человек может искать публикации по DOI (бережём чужой сервис).
 	DOI Limit
+	// MaxResults — сколько первых результатов каталога доступно для листания; 0 — MaxCatalogResults (в тестах задаётся малое число).
+	MaxResults int
+}
+
+// maxResults — предел выдачи каталога.
+func (c Config) maxResults() int {
+	if c.MaxResults > 0 {
+		return c.MaxResults
+	}
+	return MaxCatalogResults
 }
 
 // DefaultConfig — боевые настройки: 60 поисков по DOI в час с одного аккаунта.

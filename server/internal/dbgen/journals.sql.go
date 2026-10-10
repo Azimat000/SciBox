@@ -74,6 +74,28 @@ func (q *Queries) JournalsEdition(ctx context.Context) (string, error) {
 	return edition, err
 }
 
+const recountProfileQ12 = `-- name: RecountProfileQ12 :exec
+WITH fresh AS (
+    SELECT i.profile_id, count(*)::smallint AS n
+    FROM profile_items i
+    JOIN journal_issns x ON x.issn = i.data ->> 'issn'
+    JOIN journals j ON j.id = x.journal_id
+    WHERE i.kind = 'publication' AND j.quartile <= 2
+    GROUP BY i.profile_id
+)
+UPDATE profiles p SET q12_total = COALESCE(f.n, 0)
+FROM profiles p2
+LEFT JOIN fresh f ON f.profile_id = p2.id
+WHERE p2.id = p.id AND p.q12_total <> COALESCE(f.n, 0)
+`
+
+// Счётчик статей в Q1–Q2 у профилей (profiles.q12_total, срез 24) пересчитывается после смены справочника журналов:
+// квартиль журнала мог измениться у уже внесённых публикаций. Меняются только строки, где число другое.
+func (q *Queries) RecountProfileQ12(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, recountProfileQ12)
+	return err
+}
+
 const saveJournalsSource = `-- name: SaveJournalsSource :exec
 INSERT INTO reference_sources (catalog, title, url, edition, checked_on)
 VALUES ('journals', $1, $2, $3, $4)

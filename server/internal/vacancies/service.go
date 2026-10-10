@@ -41,6 +41,16 @@ type Limit struct {
 // Config — настройки сервиса.
 type Config struct {
 	Create Limit // создание вакансий одним человеком
+	// MaxResults — сколько первых результатов поиска доступно для листания; 0 — MaxResults по умолчанию (в тестах задаётся малое число).
+	MaxResults int
+}
+
+// maxResults — предел выдачи поиска.
+func (c Config) maxResults() int {
+	if c.MaxResults > 0 {
+		return c.MaxResults
+	}
+	return MaxResults
 }
 
 // DefaultConfig — боевые настройки: не больше 100 новых вакансий в сутки с одного аккаунта (защита от мусора, D-003).

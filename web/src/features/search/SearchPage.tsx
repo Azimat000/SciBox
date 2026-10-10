@@ -153,7 +153,9 @@ export function SearchPage() {
                   <span className="num">
                     {result.data.fuzzy
                       ? t.find.similarFound(total, plural(total, t.search.vacancyForms))
-                      : t.search.found(total, plural(total, t.search.foundForms), plural(total, t.search.vacancyForms))}
+                      : result.data.capped
+                        ? t.search.foundMore(total, plural(total, t.search.vacancyForms))
+                        : t.search.found(total, plural(total, t.search.foundForms), plural(total, t.search.vacancyForms))}
                   </span>
                 </p>
                 <SaveSearchButton search={search} reference={reference.data} />
@@ -172,6 +174,11 @@ export function SearchPage() {
               </div>
 
               {result.data.fuzzy && <Alert kind="info" title={t.find.fuzzyTitle}>{t.find.fuzzyText(search.q)}</Alert>}
+              {result.data.capped && (
+                <Alert kind="info" title={t.find.cappedTitle(total)}>
+                  {t.find.cappedText}
+                </Alert>
+              )}
 
               {result.data.items.length > 0 ? (
                 <ul className="vacancy-list" aria-busy={result.isPlaceholderData}>

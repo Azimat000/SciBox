@@ -191,6 +191,14 @@ describe('catalog page', () => {
     expect(screen.getByText('Похожих: 2 соискателя')).toBeInTheDocument()
   })
 
+  it('says that only the first results are shown when there are more than can be paged', async () => {
+    setup({}, { total: 1000, capped: true })
+    renderApp('/scientists?q=геном')
+    expect(await screen.findByText('Найдено более 1000 соискателей')).toBeInTheDocument()
+    const note = screen.getByText('Показаны первые 1000')
+    expect(note.closest('[role="status"]')).toHaveTextContent('Добавьте слова или фильтры')
+  })
+
   it('explains an empty result for filters, for words and for an empty catalog', async () => {
     setup({}, { items: [] })
     const first = renderApp('/scientists?degree=doctor')

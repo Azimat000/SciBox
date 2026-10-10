@@ -4,7 +4,8 @@ import type { VacancyList } from '../vacancies/api'
 import { toApiParams, type Search } from './params'
 
 /** Страница выдачи; fuzzy — точных совпадений со словами нет, показаны похожие (с опечатками). */
-export type SearchResult = VacancyList & { fuzzy: boolean }
+// capped — найдено больше, чем доступно для листания: показаны первые `total` (сервер, D-161).
+export type SearchResult = VacancyList & { fuzzy: boolean; capped?: boolean }
 
 /** Поиск среди опубликованных вакансий. Ключ начинается с «vacancies»: любое изменение вакансии обновляет и выдачу. */
 export function useSearch(search: Search) {

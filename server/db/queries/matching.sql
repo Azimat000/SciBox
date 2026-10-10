@@ -125,15 +125,15 @@ SELECT id, degree, academic_title, region_code FROM profiles WHERE user_id = $1;
 -- name: ListProfileSpecialtyCodes :many
 SELECT specialty_code FROM profile_specialties WHERE profile_id = $1;
 
--- Кандидаты в подборку: опубликованные, срок не прошёл, хотя бы одна специальность из тех же групп ВАК, нет живого
+-- Кандидаты в подборку: опубликованные, срок не прошёл, хотя бы одна специальность из тех же групп ВАК (vacancy_search.codes
+-- хранит коды специальностей вместе с кодами групп и областей), нет живого
 -- отклика человека, не вакансии организаций, где человек сам разбирает отклики. Точные баллы считает код (matching.Score).
 -- name: ListMatchCandidates :many
-SELECT * FROM vacancy_view v
+SELECT v.* FROM vacancy_view v
+JOIN vacancy_search s ON s.vacancy_id = v.id
 WHERE v.status = 'published'
   AND (v.deadline IS NULL OR v.deadline >= @today::date)
-  AND EXISTS (
-        SELECT 1 FROM vacancy_specialties vs
-        WHERE vs.vacancy_id = v.id AND split_part(vs.specialty_code, '.', 1) || '.' || split_part(vs.specialty_code, '.', 2) = ANY(@groups::text[]))
+  AND s.open AND s.codes && @groups::text[]
   AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.vacancy_id = v.id AND a.user_id = @user_id AND a.status <> 'withdrawn')
   AND NOT (v.org_id = ANY(@own_orgs::uuid[]) OR (v.unit_id IS NOT NULL AND v.unit_id = ANY(@own_units::uuid[])))
 ORDER BY v.published_at DESC, v.id

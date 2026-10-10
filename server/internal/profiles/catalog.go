@@ -33,9 +33,11 @@ var CatalogSorts = []string{SortRelevance, SortUpdated, SortHIndex, SortName}
 // Пределы каталога.
 const (
 	MaxCatalogQuery = 200
-	maxFilterValues = 30
-	defaultPage     = 20
-	maxPage         = 50
+	// MaxCatalogResults — сколько первых результатов поиска доступно для листания; дальше человек уточняет запрос (срез 24, D-161).
+	MaxCatalogResults = 1000
+	maxFilterValues   = 30
+	defaultPage       = 20
+	maxPage           = 50
 )
 
 // fieldCode — код области науки: «1» (раздел), «1.4» (группа) или «1.4.4» (специальность).
@@ -77,7 +79,10 @@ type CatalogCard struct {
 // CatalogResult — страница каталога.
 type CatalogResult struct {
 	Items []CatalogCard `json:"items"`
-	Total int           `json:"total"`
+	// Total — сколько профилей найдено, но не больше MaxCatalogResults.
+	Total int `json:"total"`
+	// Capped — найдено больше MaxCatalogResults: доступны только первые.
+	Capped bool `json:"capped"`
 	// Fuzzy — точных совпадений со словами поиска не нашлось, показаны похожие (с опечатками).
 	Fuzzy bool `json:"fuzzy"`
 	// RecentFrom — с какого года считается q12_recent в карточках (последние пять лет по Москве).
@@ -182,7 +187,7 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 		Modes: modes, ExcludeUser: exclude, Q: p.Query, Fields: nonNil(p.Fields), Region: p.Region,
 		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), OpenOnly: p.OpenOnly, HMin: num.Int32(p.HMin),
 		Q12Min: num.Int32(p.Q12Min), RecentFrom: num.Int32(s.recentFrom()),
-		Sort: sort, RowLimit: num.Int32(limit), RowOffset: num.Int32(offset),
+		Sort: sort, RowLimit: num.Int32(limit), RowOffset: num.Int32(offset), RowCap: num.Int32(s.cfg.maxResults() + 1), HitCap: num.Int32(s.cfg.maxResults() + 1), MaxResults: num.Int32(s.cfg.maxResults()),
 	}
 	rows, total, err := s.catalogPage(ctx, arg)
 	if err != nil {
@@ -209,7 +214,7 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	for _, sp := range specs {
 		byProfile[sp.ProfileID] = append(byProfile[sp.ProfileID], Code{Code: sp.Code, Name: sp.Name})
 	}
-	out := CatalogResult{Items: make([]CatalogCard, 0, len(rows)), Total: total, Fuzzy: fuzzy, RecentFrom: int(arg.RecentFrom)}
+	out := CatalogResult{Items: make([]CatalogCard, 0, len(rows)), Total: min(total, s.cfg.maxResults()), Capped: total > s.cfg.maxResults(), Fuzzy: fuzzy, RecentFrom: int(arg.RecentFrom)}
 	for _, r := range rows {
 		c := CatalogCard{
 			ID: r.ID, Name: r.DisplayName, Headline: r.Headline, City: r.City, Degree: r.Degree, AcademicTitle: r.AcademicTitle,

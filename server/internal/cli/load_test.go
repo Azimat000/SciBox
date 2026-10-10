@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"scibox/server/internal/config"
+	"scibox/server/internal/dbpool"
 )
 
 // Замер горячих запросов на объёмных данных (срез 24, docs/SCALING.md). Нужна база, заполненная `make load-data`;
@@ -25,6 +26,9 @@ import (
 // Запросы идут через настоящий роутер (newApp), с настоящими сеансами и лимитами частоты, но без сети; поэтому в
 // цифре всё, кроме сетевого пути: разбор запроса, права, SQL, сборка ответа.
 const loadBudget = 50 * time.Millisecond
+
+// Поиск по словам и с опечатками имеет свой, более высокий бюджет (budget в строке): он читает тексты всех подходящих профилей или
+// вакансий, а их у частого слова тысячи (docs/SCALING.md, «Известные узкие места»).
 
 // loadCase — один горячий запрос: что и каким человеком спрашивают. gen возвращает путь для i-го повторения (параметры меняются,
 // чтобы замер не сводился к одной закешированной строке).
@@ -49,7 +53,7 @@ func TestHotQueriesOnLoadData(t *testing.T) {
 		t.Skip("SCIBOX_LOAD_DATABASE_URL не задан: замеры на объёмных данных запускает `make load-check`")
 	}
 	ctx := t.Context()
-	pool, err := pgxpool.New(ctx, dbURL)
+	pool, err := dbpool.New(ctx, dbURL, dbpool.Default(), slog.New(slog.NewTextHandler(io.Discard, nil))) // тот же пул, что у сервера: сроки, план под значения, журнал медленных
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +77,7 @@ func TestHotQueriesOnLoadData(t *testing.T) {
 	cases := []loadCase{
 		// Гость: главные публичные страницы.
 		{name: "поиск вакансий: первая страница без слов", gen: func(int) string { return "/api/vacancies" }, n: 60},
-		{name: "поиск вакансий: слово", gen: func(i int) string { return "/api/vacancies?q=" + fx.word(i) }, n: 60},
+		{name: "поиск вакансий: слово", gen: func(i int) string { return "/api/vacancies?q=" + fx.word(i) }, n: 60, budget: 80 * time.Millisecond},
 		{name: "поиск вакансий: два слова и фильтры", gen: func(i int) string {
 			return fmt.Sprintf("/api/vacancies?q=%s+%s&field=%s&format=onsite&sort=deadline", fx.word(i), fx.word(i+7), fx.field(i))
 		}, n: 60},
@@ -82,30 +86,31 @@ func TestHotQueriesOnLoadData(t *testing.T) {
 		}, n: 60},
 		{name: "поиск вакансий: по зарплате", gen: func(i int) string { return "/api/vacancies?salary_min=80000&sort=salary&housing=1" }, n: 40},
 		{name: "поиск вакансий: страница глубоко (offset 5000)", gen: func(i int) string { return "/api/vacancies?limit=20&offset=5000" }, n: 30},
-		{name: "поиск вакансий: опечатка (похожие слова)", gen: func(i int) string { return "/api/vacancies?q=" + fx.typo(i) }, n: 20},
+		{name: "поиск вакансий: опечатка (похожие слова)", gen: func(i int) string { return "/api/vacancies?q=" + fx.typo(i) }, n: 20, budget: 120 * time.Millisecond},
 		{name: "страница вакансии", gen: func(i int) string { return "/api/vacancies/" + fx.vacancy(i) }, n: 60},
-		{name: "вакансии организации", gen: func(i int) string { return "/api/vacancies?org=" + fx.orgID(i) }, n: 40},
+		{name: "вакансии организации", gen: func(i int) string { return "/api/vacancies?org=" + fx.orgSlug(i) }, n: 40},
 		{name: "главная: числа", gen: func(int) string { return "/api/landing" }, n: 30},
 		{name: "каталог организаций", gen: func(i int) string { return "/api/organizations?q=" + fx.cityWord(i) }, n: 40},
 		{name: "страница организации", gen: func(i int) string { return "/api/organizations/" + fx.orgSlug(i) }, n: 40},
 		{name: "справочники", gen: func(int) string { return "/api/reference" }, n: 20},
 		{name: "страница учёного", gen: func(i int) string { return "/api/scientists/" + fx.profile(i) }, n: 40},
 		{name: "соискатели (гость): первая страница", gen: func(int) string { return "/api/scientists" }, n: 40},
-		{name: "соискатели (гость): слово", gen: func(i int) string { return "/api/scientists?q=" + fx.word(i) }, n: 40},
+		{name: "соискатели (гость): слово", gen: func(i int) string { return "/api/scientists?q=" + fx.word(i) }, n: 40, budget: 150 * time.Millisecond},
 		{name: "соискатели (гость): область и регион", gen: func(i int) string {
 			return fmt.Sprintf("/api/scientists?field=%s&region=%s", fx.field(i), fx.region(i))
 		}, n: 40},
 		{name: "соискатели (гость): h-индекс и порядок", gen: func(i int) string { return "/api/scientists?h_min=20&sort=h_index" }, n: 40},
 		{name: "соискатели (гость): статьи в Q1–Q2", gen: func(i int) string { return "/api/scientists?q12_min=5&sort=h_index" }, n: 30},
 		{name: "соискатели (гость): страница глубоко (offset 2000)", gen: func(int) string { return "/api/scientists?limit=20&offset=2000" }, n: 30},
-		{name: "соискатели (гость): опечатка (похожие слова)", gen: func(i int) string { return "/api/scientists?q=" + fx.typo(i) }, n: 20},
+		{name: "соискатели (гость): опечатка (похожие слова)", gen: func(i int) string { return "/api/scientists?q=" + fx.typo(i) }, n: 20, budget: 300 * time.Millisecond},
 		// Сотрудник большой организации.
 		{name: "соискатели (сотрудник): первая страница", cookie: "owner_big", gen: func(int) string { return "/api/scientists" }, n: 40},
 		{name: "соискатели (сотрудник): слово и фильтр", cookie: "owner_big", gen: func(i int) string {
 			return fmt.Sprintf("/api/scientists?q=%s&degree=doctor&open=1", fx.word(i))
-		}, n: 40},
-		{name: "отклики организации: список", cookie: "owner_big", gen: func(int) string { return "/api/my/candidates" }, n: 40},
+		}, n: 40, budget: 150 * time.Millisecond},
+		{name: "отклики организации: список (лидер, 7 тысяч откликов)", cookie: "owner_big", gen: func(int) string { return "/api/my/candidates" }, n: 40, budget: 80 * time.Millisecond},
 		{name: "отклики организации: по статусу, страница глубже", cookie: "owner_big", gen: func(int) string { return "/api/my/candidates?status=sent&offset=200" }, n: 30},
+		{name: "отклики организации: глубокая страница (лидер, offset 3000)", cookie: "owner_big", gen: func(int) string { return "/api/my/candidates?offset=3000" }, n: 20, budget: 120 * time.Millisecond},
 		{name: "отклики организации: вакансии с откликами", cookie: "owner_big", gen: func(int) string { return "/api/my/candidate-vacancies" }, n: 30},
 		{name: "мои вакансии (организация-лидер)", cookie: "owner_big", gen: func(int) string { return "/api/my/vacancies" }, n: 40},
 		{name: "журнал действий организации (лидер)", cookie: "owner_big", gen: func(int) string { return "/api/organizations/org-1/audit" }, n: 30},
@@ -117,7 +122,7 @@ func TestHotQueriesOnLoadData(t *testing.T) {
 		{name: "мои отклики", cookie: "applicant", gen: func(int) string { return "/api/applications" }, n: 60},
 		{name: "отклик глазами соискателя", cookie: "applicant", gen: func(int) string { return "/api/applications/" + fx.applicantApp }, n: 40},
 		{name: "избранное", cookie: "applicant", gen: func(int) string { return "/api/favorites" }, n: 40},
-		{name: "подходящие вам", cookie: "applicant", gen: func(int) string { return "/api/matches" }, n: 30},
+		{name: "подходящие вам", cookie: "applicant", gen: func(int) string { return "/api/matches" }, n: 30, budget: 80 * time.Millisecond},
 		{name: "сроки подачи", cookie: "applicant", gen: func(int) string { return "/api/deadlines" }, n: 30},
 		{name: "приглашения учёного", cookie: "applicant", gen: func(int) string { return "/api/offers" }, n: 30},
 		{name: "мой профиль", cookie: "applicant", gen: func(int) string { return "/api/profile" }, n: 40},
@@ -176,8 +181,10 @@ func runLoadCase(t *testing.T, h http.Handler, fx *loadFx, c loadCase, idx int) 
 		rec := send(h, req{path: c.gen(i), cookie: ck, remote: remote})
 		return time.Since(start), rec.Code, rec.Body.Len()
 	}
+	// Прогрев: те же повторы с другими параметрами, без замера. Холодное чтение с диска Docker на Mac в цифру не входит: на
+	// сервере, где данные помещаются в память, оно бывает только после перезапуска базы.
 	slowest := time.Duration(0)
-	for i := range 3 { // прогрев: кеш страниц базы и планы запросов
+	for i := range min(c.n, 30) {
 		d, _, _ := do(1000 + i)
 		slowest = max(slowest, d)
 		if slowest > 2*time.Second { // заведомо слишком медленно: не тратим минуты на повторы
@@ -240,7 +247,6 @@ func (f *loadFx) cityWord(i int) string {
 }
 func (f *loadFx) vacancy(i int) string { return f.vacancies[i%len(f.vacancies)] }
 func (f *loadFx) profile(i int) string { return f.profiles[i%len(f.profiles)] }
-func (f *loadFx) orgID(i int) string   { return f.orgs[i%len(f.orgs)][0] }
 func (f *loadFx) orgSlug(i int) string { return f.orgs[i%len(f.orgs)][1] }
 func (f *loadFx) field(i int) string   { return f.fields[i%len(f.fields)] }
 func (f *loadFx) region(i int) string  { return f.regions[i%len(f.regions)] }

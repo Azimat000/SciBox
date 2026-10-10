@@ -9,7 +9,7 @@ const second = { ...card, id: 'b', title: 'Постдок: геномика', de
 const items = [card, second]
 
 /** Подставной сервер: справочники и поиск, который отвечает по таблице страниц и запоминает запросы. */
-function setup(over: Record<string, Route> = {}, result: { items?: unknown[]; total?: number; fuzzy?: boolean } = {}) {
+function setup(over: Record<string, Route> = {}, result: { items?: unknown[]; total?: number; fuzzy?: boolean; capped?: boolean } = {}) {
   const searches: URLSearchParams[] = []
   const api = stubApi({
     'GET /api/reference': reply(200, reference),
@@ -242,6 +242,16 @@ describe('search page', () => {
     // Счётчик не обещает «найдено»: это похожие.
     expect(screen.getByText('Похожих: 2 вакансии')).toBeInTheDocument()
     expect(screen.queryByText(/^Найдено/)).not.toBeInTheDocument()
+  })
+
+  it('says that only the first results are shown when there are more than can be paged', async () => {
+    setup({}, { total: 1000, capped: true })
+    renderApp('/vacancies?q=геном')
+    expect(await screen.findByText('Найдено более 1000 вакансий')).toBeInTheDocument()
+    const note = screen.getByText('Показаны первые 1000')
+    expect(note.closest('[role="status"]')).toHaveTextContent('Добавьте слова или фильтры')
+    // Листать можно ровно до последней страницы из тысячи (по 20 на странице).
+    expect(screen.getByRole('navigation', { name: 'Страницы результатов' })).toHaveTextContent('50')
   })
 
   it('shows loading, then an error with a retry that works', async () => {

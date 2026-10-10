@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 23 (файлы в S3-совместимом хранилище с проверкой на вирусы; до этого срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 24 (база под объём «вся наука РФ»: пул со сроками, индексируемый поиск, предел выдачи, кеш; до этого срез 23: файлы в S3-совместимом хранилище с проверкой на вирусы, срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -8,13 +8,14 @@
 SciBox/
 ├── .github/             автоматические проверки в GitHub (срез 18): `workflows/ci.yml` — тесты сервера с -race и порогами на PostgreSQL-сервисе, golangci-lint, govulncheck, тесты сайта; `dependabot.yml` — еженедельные обновления Go, npm (web, e2e) и Actions с выдержкой 7 дней
 ├── config/product.json   название продукта; читают и сервер, и сайт (D-029)
-├── docker-compose.yml    PostgreSQL 16.15 (порт 5433, D-028), Mailpit v1.31.3 (8025 / 1025), хранилище файлов SeaweedFS 4.48 (S3, порт 8333, D-157), ClamAV 1.5.4 облегчённый (порт 3310, D-158)
+├── docker-compose.yml    PostgreSQL 16.15 (порт 5433, D-028; настройки памяти и стоимости чтения в `command`, срез 24), Mailpit v1.31.3 (8025 / 1025), хранилище файлов SeaweedFS 4.48 (S3, порт 8333, D-157), ClamAV 1.5.4 облегчённый (порт 3310, D-158)
 ├── docker/clamav-dev/    сигнатура тестового вируса EICAR для облегчённого ClamAV (`eicar.ndb`)
 ├── README.md             запуск, демо-аккаунты, дорожки «я учёный» и «я организация», проверки
-├── Makefile              dev, test (= lint + vulncheck + test-server + test-web), test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc
+├── Makefile              dev, test (= lint + vulncheck + test-server + test-web), test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc, load-data, load-check
 ├── scripts/
 │   ├── dev.sh            собирает сервер, запускает сервер и Vite вместе
 │   ├── coverage-check    go vet + go test -race с покрытием + проверка порогов
+│   ├── load-data         пересоздаёт базу scibox_load и заливает объёмные данные по масштабу (срез 24; генератор `server/loadgen/generate.sql`)
 │   └── e2e-db            пересоздаёт базу scibox_e2e и заливает демо-данные (для `make e2e`)
 ├── e2e/                  сквозные тесты Playwright (свой package.json): playwright.config.ts поднимает сервер на 8090
 │                         и Vite на 5174 с базой scibox_e2e; tests/helpers.ts (письма из Mailpit, вход, режим, слежка за 5xx);
@@ -28,6 +29,7 @@ SciBox/
 │   ├── sqlc.yaml         sqlc запускается через `go tool sqlc` (D-030)
 │   ├── coverage.conf     пороги покрытия и критичные пакеты
 │   ├── .golangci.yml     линтер: корректность и безопасность (gosec, gocritic diagnostic, revive об ошибках и экспорте, nolintlint), `make lint` / `make lint-new` (D-137, срез 18); 0 замечаний, входит в `make test`
+│   ├── loadgen/          генератор объёмных данных для замеров (срез 24): `generate.sql`; запускает `scripts/load-data`, вне покрытия
 │   ├── seed/             демо-данные (у демо-публикаций настоящие ISSN журналов из SCImago, `journalISSN` в `scientists.go`) (вымышленные организации, люди и вакансии; `profiles.go` и `generated.go` собирают 22 организации и ~190 вакансий из научных направлений; `scientists.go` — 14 профилей учёных через сервис профилей; `applications.go` — 14 откликов через сервис откликов; `matching.go` — избранное и сохранённые поиски через сервис подбора); вне покрытия, проверяется тестом в internal/cli
 │   └── internal/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
@@ -46,6 +48,8 @@ SciBox/
 │       ├── journals/     справочник журналов SCImago (срез 14): разбор выгрузки (`parse.go`), загрузка заменой целиком (`load.go`, файл `data/scimagojr.csv.gz` встроен в сервер), поиск по названию и ISSN (`search.go`), HTTP
 │       ├── num/          перевод int в int16/int32/uint32 с прижатием к границе типа вместо переворота (срез 18): все параметры sqlc с меньшим типом идут через него
 │       ├── issn/         проверка и запись ISSN (`1234-567X`, контрольная цифра); общий для журналов и профилей
+│       ├── dbpool/       пул соединений с PostgreSQL (срез 24, T-22): размер, жизнь соединений, `statement_timeout`, `idle_in_transaction_session_timeout`, `plan_cache_mode`, `random_page_cost`, журнал медленных запросов без значений параметров (`SlowQueryTracer`), `IsTimeout`
+│       ├── httpcache/    короткий кеш публичных ответов (срез 24): `Cache` на срок в памяти копии, `Serve` с `ETag` и `Cache-Control`, 304 на `If-None-Match`; используют `landing` и `refdata`
 │       ├── landing/      числа для главной (`GET /api/landing`): открытые вакансии, организации, учёные для гостя, разбивка по областям и видам позиций; HTTP
 │       ├── notifications/ уведомления и очередь писем (критичная зона): колокольчик, письма через `outbox`, отправитель с повторами, переключатели писем (`settings.go`), HTTP
 │       ├── testkit/      помощники для тестов с базой (временная база, сервисы, люди, организация со всеми ролями, «поломка» n-го запроса); вне покрытия
@@ -131,6 +135,10 @@ SciBox/
 | `SCIBOX_S3_PATH_STYLE` | `on` в разработке, `off` в бою (адрес вида endpoint/bucket/key вместо bucket.endpoint/key) |
 | `SCIBOX_S3_CREATE_BUCKET` | `on` в разработке, `off` в бою (бакет создаёт администратор) |
 | `SCIBOX_CLAMAV_ADDR` | `localhost:3310`; `off` отключает проверку (только разработка, в бою запрещено) |
+| `SCIBOX_DB_MAX_CONNS` | `20` (пул одной копии сервера; две копии и процесс фоновых задач = 60 из 100 соединений базы) |
+| `SCIBOX_DB_STATEMENT_TIMEOUT` | `10s` (запрос дольше обрывает сама база; 503 `database_busy`) |
+| `SCIBOX_DB_IDLE_TX_TIMEOUT` | `30s` (транзакция без команд дольше обрывается) |
+| `SCIBOX_DB_SLOW_QUERY` | `200ms` (запросы дольше пишутся в журнал: имя и время) |
 | `TEST_DATABASE_URL` (тесты) | `postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable` |
 
 ## Таблицы БД
@@ -181,11 +189,13 @@ SciBox/
 - Миграция `00017_audit_log.sql` (срез 21, D-147, D-148): `audit_log` (id bigint, at, org_id → `organizations` (пусто у личных действий аккаунта), actor_id и subject_id → `users`, action `вид.действие`, target_kind, target_id, target_label ≤300, details jsonb ≤2000 байт, ip ≤45); индексы `(org_id, id DESC)`, `(actor_id, id DESC)`, `(at)`; триггеры запрещают `UPDATE`, `DELETE` и `TRUNCATE`, кроме обнуления `ip` при прочих равных полях.
 - Миграция `00018_retention.sql` (срез 22, D-151, D-152): триггер `audit_log_guard` разрешает `DELETE` внутри транзакции с отметкой `scibox.audit_purge` для записей старше 90 дней (остальное по-прежнему запрещено); индексы под чистку: `audit_log_purge_ip_idx`, `notifications_purge_read_idx`, `notifications_purge_unread_idx`, `users_purge_unconfirmed_idx`. Таблиц не добавляет.
 - Миграция `00019_file_storage.sql` (срез 23, D-157): `application_files.data` переименован в `legacy_data` (необязателен, обнуляется после переноса, новые строки содержимого не несут: ограничение `application_files_no_content`), новые столбцы `storage_key` (ключ объекта, уникален), `sha256`, `scan_status` (`pending|clean|infected`, по умолчанию `pending`), `scanned_at`, `scan_signature`, `scan_attempts`, `scan_next_at` (пауза до следующей проверки и «аренда» файла на время проверки); ограничения: чистый файл имеет дату проверки, заражённый не хранит ключ, содержимое есть либо в хранилище, либо в старом столбце; индексы под фоновую проверку и перенос; таблица `blob_deletions` (ключи объектов на удаление из хранилища, их кладёт стирание аккаунта). Столбец `legacy_data` удаляется в срезе 28.
+- Миграция `00020_scale.sql` (срез 24, D-162): `profile_search` (profile_id, doc tsvector, fuzzy_text, updated_at, codes text[]; GIN по `doc`, по триграммам `fuzzy_text` и по `codes`) со сборкой триггерами (`refresh_profile_search`: профиль, специальности, имя в аккаунте); `profiles.q12_total` (число статей в Q1–Q2, триггер на `profile_items`), `profiles.h_max` (лучший из четырёх h-index, вычисляемый столбец, `NOT NULL`); индексы `profiles_catalog_idx`, `profiles_h_idx`, `profiles_region_idx`, `users_display_name_idx`.
+- Миграция `00021_vacancy_search_open.sql` (срез 24, D-162, D-163): `vacancy_search` + `open` (опубликована), `published_at`, `fuzzy_text` (название, должность, организация), `codes` (коды специальностей вместе с кодами групп и областей); GIN по тексту, триграммам и кодам только для открытых; триггер `vacancy_search_status`; `vacancies_open_order_idx (published_at DESC, id)` вместо `vacancies_published_idx`; `ALTER DATABASE … SET pg_trgm.word_similarity_threshold = 0.5`.
 - Служебная таблица goose: `goose_db_version`. Очистка устаревшего (сессии, ссылки, счётчики; приглашения старше 30 дней после срока) раз в час в процессе сервера.
 
 ## API
 Формат ошибки для всех адресов (D-032): `{"error": {"code": "...", "message": "..."}}`.
-Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `reauth_required` (403, нужен свежий пароль: сайт показывает окно пароля и повторяет запрос, срез 20), `email_taken` (409), `deletion_blocked` (409), `unsupported_media_type` (415), `file_pending` (409, файл ещё проверяется на вирусы), `storage_unavailable` (503, хранилище файлов не отвечает), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`.
+Коды: `invalid_invitation_state` / `too_many_invitations` (409), `unit_has_vacancies` (409, удаление подразделения с вакансиями), `invalid_status_change` / `vacancy_not_draft` / `vacancy_changed` (409), `not_found` (404), `method_not_allowed` (405), `internal` (500), `database_unavailable` (503), `bad_request` (400), `validation_failed` (422, с `fields` по полям), `unauthorized` (401), `forbidden` (403, чужой источник запроса), `rate_limited` (429, `retry_after` в секундах и заголовок Retry-After), `invalid_credentials` (401), `email_not_confirmed` (403), `invalid_token` (400), `reauth_required` (403, нужен свежий пароль: сайт показывает окно пароля и повторяет запрос, срез 20), `email_taken` (409), `deletion_blocked` (409), `unsupported_media_type` (415), `file_pending` (409, файл ещё проверяется на вирусы), `storage_unavailable` (503, хранилище файлов не отвечает), `database_busy` (503, база не уложилась в срок запроса, `Retry-After: 5`, срез 24), `payload_too_large` (413, тело больше лимита адреса: по умолчанию 1 МиБ, загрузки с файлами 64 МиБ, срез 19). Все ответы `/api/*` с `Cache-Control: no-store`, кроме `GET /api/landing` и `GET /api/reference` (общие для всех, срез 24).
 
 Периметр (срез 19, `httpguard`): у всех ответов заголовки защиты (CSP: у API `default-src 'none'`, у сайта только свои скрипты, стили, шрифты и картинки; `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP и CORP `same-origin`; HSTS только при https). Ограничение частоты (`rate_limited`, 429): поиск, каталоги, главная, страницы вакансий, людей, организаций и подразделений, справочник журналов, поиск по DOI — гость 300, вошедший 120 запросов в минуту (`public_read`); резюме PDF — 20 в минуту (`pdf_build`); ссылки из писем (рекомендатель, приглашение в организацию, подтверждение и откат смены почты) — 30 в минуту (`link_page`). Таблица адресов: `httpapi.PerimeterRoutes`. Запросы, меняющие данные, принимают только JSON и только со своего сайта (D-040).
 
@@ -224,8 +234,8 @@ SciBox/
 | `POST /api/invitations/lookup {token}` | без входа: что за приглашение (и совпадает ли почта с вошедшим) |
 | `POST /api/invitations/accept {token}`, `POST /api/invitations/{id}/accept` | вошедший; по ссылке из письма с чужой почтой 403 `invitation_wrong_email`; по номеру чужое приглашение неотличимо от выдуманного (400 `invalid_invitation`, срез 21); устарело 400 `invalid_invitation`, уже в организации 409 `already_member` |
 | `GET /api/my/organizations` | `{organizations:[…с ролью], invitations:[…на почту человека]}` |
-| `GET /api/reference` | публично: `{science:[область → группы → специальности], regions, positions:[{code,type,name}], sources}` |
-| `GET /api/vacancies?q=&field=&region=&format=&type=&level=&degree=&org_kind=&funding=&rate=&term=&salary_min=&housing=&competition=&deadline=&sort=&org=&unit=&limit=&offset=` | публичный поиск: опубликованные вакансии без прошедшего срока: `{items:[карточка], total, fuzzy}`; все параметры необязательны, повторяющиеся (`field`, `format`, `type`, `level`, `degree`, `org_kind`, `funding`, `rate`, `term`) значат «или»; неизвестное значение 422 с `fields`; `limit` до 100, по умолчанию 50 |
+| `GET /api/reference` | публично, кеш 10 мин на сервере и час у браузера (`ETag`): `{science:[область → группы → специальности], regions, positions:[{code,type,name}], sources}` |
+| `GET /api/vacancies?q=&field=&region=&format=&type=&level=&degree=&org_kind=&funding=&rate=&term=&salary_min=&housing=&competition=&deadline=&sort=&org=&unit=&limit=&offset=` | публичный поиск: опубликованные вакансии без прошедшего срока: `{items:[карточка], total, capped, fuzzy}` (первые 1000 результатов: при `capped: true` найдено больше, `total` равен 1000, дальше листать нельзя, срез 24); все параметры необязательны, повторяющиеся (`field`, `format`, `type`, `level`, `degree`, `org_kind`, `funding`, `rate`, `term`) значат «или»; неизвестное значение 422 с `fields`; `limit` до 100, по умолчанию 50 |
 | `POST /api/vacancies` `{organization: slug, …поля}` | 201 `{vacancy}`: черновик; ведущий вакансии этого подразделения; 422 с полями; 429 после 100 в сутки |
 | `GET /api/vacancies/{id}` | опубликованную и закрытую видят все; черновик и архив только ведущие вакансии (остальным 404); в ответе `viewer:{can_manage, transitions}` |
 | `PATCH /api/vacancies/{id}` | правка (черновик проверяется мягко, остальное строго); перенос в другое подразделение нужно право на оба |
@@ -265,7 +275,7 @@ SciBox/
 | `GET /api/notifications?limit=&offset=&unread=1` | `{items:[{id,kind,title,body,link,created_at,read}], total, unread}` (только свои) |
 | `GET /api/notifications/unread-count` | `{unread}` |
 | `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` | 204; чужое уведомление 404 |
-| `GET /api/scientists?q=&field=&region=&degree=&title=&open=1&h_min=&q12_min=&sort=&limit=&offset=` | публично, с учётом приватности (D-098): `{items:[{id,name,headline,city,region,degree,academic_title,open_to_offers,h_index,publications,q12_total,q12_recent,specialties,updated_at}], total, fuzzy, recent_from}`; `q12_min` — статей в Q1–Q2 от (0–300); повторяющиеся `field`, `degree`, `title` значат «или»; `sort`: `relevance`, `updated`, `h_index`, `name`; `limit` до 50, по умолчанию 20; неизвестное значение и не число 422 с `fields`; контактов в ответе нет |
+| `GET /api/scientists?q=&field=&region=&degree=&title=&open=1&h_min=&q12_min=&sort=&limit=&offset=` | публично, с учётом приватности (D-098): `{items:[{id,name,headline,city,region,degree,academic_title,open_to_offers,h_index,publications,q12_total,q12_recent,specialties,updated_at}], total, capped, fuzzy, recent_from}` (первые 1000 результатов, как у вакансий); `q12_min` — статей в Q1–Q2 от (0–300); повторяющиеся `field`, `degree`, `title` значат «или»; `sort`: `relevance`, `updated`, `h_index`, `name`; `limit` до 50, по умолчанию 20; неизвестное значение и не число 422 с `fields`; контактов в ответе нет |
 | `GET /api/scientists/{id}/offer-targets` | вошедший: `{items:[{id,title,org_name,org_slug,unit_name,deadline,offered,applied}]}` — вакансии, на которые он может пригласить этого учёного (опубликованные, срок не прошёл, в пределах `ManageVacancies`); закрытый приватностью профиль 404; не сотрудник организации получает пустой список |
 | `POST /api/offers` `{vacancy_id, profile_id, message}` | 201 `{offer}`; 404 (нет прав на вакансию или профиль закрыт: неотличимо от «нет такого»); 409 `vacancy_closed`, `deadline_passed`, `already_offered`, `already_applied`, `invitee_is_staff`; 422 `message`; 429 после 20 в сутки |
 | `GET /api/offers?status=&limit=&offset=` | «Приглашения» учёного: `{items:[offer], total, counts:{pending,interested,declined}, pending}`; отозванные не показываются; 422 на неизвестное состояние |
@@ -283,7 +293,7 @@ SciBox/
 | `GET /api/matches?limit=&offset=` | «Подходящие вам»: `{items:[{vacancy, score, reasons:[коды]}], total, ready, basis:{specialties, level, has_region, has_degree}}`; `ready: false` без областей науки в профиле |
 | `GET /api/deadlines` | календарь сроков избранного: `{items:[{vacancy, days_left, application_id}], without_deadline}` (опубликованные, срок сегодня или позже, ближайшие первыми) |
 | `GET /api/notification-settings`, `PUT …` `{email_new_vacancies, email_deadlines}` | какие письма присылать (оба поля обязательны); нет строки — всё включено |
-| `GET /api/landing` | публично: `{open_vacancies, hiring_organizations, scientists, fields:[{code,vacancies}], types:[{type,vacancies}]}`; открытая = опубликована и срок не прошёл (по Москве); `scientists` = то, что гость видит в каталоге; вакансия считается в каждой своей области |
+| `GET /api/landing` | публично, кеш 30 с (`ETag`, `Cache-Control: public, max-age=30`): `{open_vacancies, hiring_organizations, scientists, fields:[{code,vacancies}], types:[{type,vacancies}]}`; открытая = опубликована и срок не прошёл (по Москве); `scientists` = то, что гость видит в каталоге; вакансия считается в каждой своей области |
 | `GET /api/account/export` | ZIP (`application/zip`, скачивание `scibox-data-ГГГГ-ММ-ДД.zip`) со всеми данными человека: `README.txt`, `data.json`, `files/…` (D-153); свежий пароль (иначе 403 `reauth_required`), не больше 3 в сутки (429 `rate_limited` и `Retry-After`); запись `account.data_exported` в личный журнал |
 | `GET /api/health` | 200 `{"status":"ok","product":"ИОН","version":"dev","database":{"schema_version":1,"server_version":"16.15"}}`; 503 `database_unavailable`, если база не ответила за 2 с |
 

@@ -30,3 +30,19 @@ LIMIT @row_limit;
 SELECT x.issn, j.id, j.title, j.quartile, j.data_year
 FROM journal_issns x JOIN journals j ON j.id = x.journal_id
 WHERE x.issn = ANY(@issns::text[]);
+
+-- Счётчик статей в Q1–Q2 у профилей (profiles.q12_total, срез 24) пересчитывается после смены справочника журналов:
+-- квартиль журнала мог измениться у уже внесённых публикаций. Меняются только строки, где число другое.
+-- name: RecountProfileQ12 :exec
+WITH fresh AS (
+    SELECT i.profile_id, count(*)::smallint AS n
+    FROM profile_items i
+    JOIN journal_issns x ON x.issn = i.data ->> 'issn'
+    JOIN journals j ON j.id = x.journal_id
+    WHERE i.kind = 'publication' AND j.quartile <= 2
+    GROUP BY i.profile_id
+)
+UPDATE profiles p SET q12_total = COALESCE(f.n, 0)
+FROM profiles p2
+LEFT JOIN fresh f ON f.profile_id = p2.id
+WHERE p2.id = p.id AND p.q12_total <> COALESCE(f.n, 0);
