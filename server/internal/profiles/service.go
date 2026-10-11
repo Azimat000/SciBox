@@ -32,7 +32,10 @@ var (
 )
 
 // kindDOILookup — вид счётчика частоты (таблица rate_events общая с остальными разделами).
-const kindDOILookup = "doi_lookup"
+const (
+	kindDOILookup   = "doi_lookup"
+	kindProfileView = "profile_view"
+)
 
 // Limit — не больше Max событий за окно Window.
 type Limit struct {
@@ -45,6 +48,9 @@ type Config struct {
 	ProductName string
 	// DOI — сколько раз в час человек может искать публикации по DOI (бережём чужой сервис).
 	DOI Limit
+	// Views — сколько чужих закрытых профилей (с контактами) сотрудник организации может открыть за сутки (срез 29, D-191):
+	// организация создаётся за минуту без проверки, и без предела любой её сотрудник выгрузил бы базу контактов.
+	Views Limit
 	// MaxResults — сколько первых результатов каталога доступно для листания; 0 — MaxCatalogResults (в тестах задаётся малое число).
 	MaxResults int
 }
@@ -57,9 +63,17 @@ func (c Config) maxResults() int {
 	return MaxCatalogResults
 }
 
-// DefaultConfig — боевые настройки: 60 поисков по DOI в час с одного аккаунта.
+// DefaultConfig — боевые настройки: 60 поисков по DOI в час и 150 просмотров чужих профилей в сутки с одного аккаунта.
 func DefaultConfig(productName string) Config {
-	return Config{ProductName: productName, DOI: Limit{Max: 60, Window: time.Hour}}
+	return Config{ProductName: productName, DOI: Limit{Max: 60, Window: time.Hour}, Views: Limit{Max: 150, Window: 24 * time.Hour}}
+}
+
+// views — предел просмотров с нулём в настройках не значит «без предела».
+func (c Config) views() Limit {
+	if c.Views.Max > 0 && c.Views.Window > 0 {
+		return c.Views
+	}
+	return DefaultConfig("").Views
 }
 
 // DOIResolver ищет публикацию по DOI (crossref.Client в бою, подставной в тестах).
@@ -148,6 +162,12 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Pag
 	vis, _ := privacy.Parse(row.Profile.Visibility)
 	if !vis.CanView(who) {
 		return Page{}, ErrNotFound
+	}
+	// Сотрудник организации открывает чужие профили с контактами не больше предела в сутки (D-191).
+	if who.Staff && !who.Owner && viewer != nil {
+		if err := s.spendKind(ctx, kindProfileView, s.cfg.views(), viewer.ID); err != nil {
+			return Page{}, err
+		}
 	}
 	return s.build(ctx, s.q, row.Profile, row.DisplayName, row.RegionName, row.DegreeSpecialtyName, who)
 }
@@ -560,19 +580,36 @@ func (s *Service) DeleteItem(ctx context.Context, user auth.User, id uuid.UUID) 
 
 // ---- DOI ----
 
-// spend учитывает поиск по DOI и отказывает, если лимит исчерпан.
+// spend учитывает поиск по DOI и отказывает, если лимит исчерпан. Проверка и запись идут под замком счётчика:
+// параллельные запросы не проходят проверку с одним и тем же нулём (срез 29, CON-2).
 func (s *Service) spend(ctx context.Context, user uuid.UUID) error {
+	return s.spendKind(ctx, kindDOILookup, s.cfg.DOI, user)
+}
+
+// spendKind — общий счётчик события вида kind на человека под замком.
+func (s *Service) spendKind(ctx context.Context, kind string, lim Limit, user uuid.UUID) error {
 	now := s.now()
-	lim := s.cfg.DOI
-	row, err := s.q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kindDOILookup, Key: user.String(), At: now.Add(-lim.Window)})
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("profiles: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	if err := q.LockRateKey(ctx, kind+":"+user.String()); err != nil {
+		return fmt.Errorf("profiles: lock rate key: %w", err)
+	}
+	row, err := q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kind, Key: user.String(), At: now.Add(-lim.Window)})
 	if err != nil {
 		return fmt.Errorf("profiles: count rate events: %w", err)
 	}
 	if row.Events >= int64(lim.Max) {
 		return &auth.RateLimitedError{RetryAfter: max(row.Oldest.Add(lim.Window).Sub(now), time.Second)}
 	}
-	if err := s.q.RecordRateEvent(ctx, dbgen.RecordRateEventParams{Kind: kindDOILookup, Key: user.String(), At: now}); err != nil {
+	if err := q.RecordRateEvent(ctx, dbgen.RecordRateEventParams{Kind: kind, Key: user.String(), At: now}); err != nil {
 		return fmt.Errorf("profiles: record rate event: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("profiles: commit: %w", err)
 	}
 	return nil
 }

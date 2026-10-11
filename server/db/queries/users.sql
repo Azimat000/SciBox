@@ -56,3 +56,31 @@ WHERE deletion_due_at IS NOT NULL AND deletion_due_at <= sqlc.arg(now)::timestam
 ORDER BY deletion_due_at
 LIMIT sqlc.arg(max_rows)
 FOR UPDATE SKIP LOCKED;
+
+-- Человек пользуется аккаунтом: счёт неактивности начинается заново, прежнее предупреждение снимается (срез 29, D-192).
+-- name: TouchUserActive :exec
+UPDATE users SET last_active_at = sqlc.arg(now)::timestamptz, inactive_warned_at = NULL
+WHERE id = sqlc.arg(id) AND (last_active_at < sqlc.arg(now)::timestamptz - interval '1 hour' OR inactive_warned_at IS NOT NULL);
+
+-- Кого предупредить: подтверждённые, не удаляемые, без входа дольше (срок − предупреждение) и ещё без предупреждения.
+-- SKIP LOCKED: две копии сервера не возьмут один аккаунт.
+-- name: ClaimInactiveToWarn :many
+SELECT id FROM users
+WHERE deleted_at IS NULL AND email_confirmed_at IS NOT NULL AND deletion_due_at IS NULL
+  AND inactive_warned_at IS NULL AND last_active_at < sqlc.arg(before)::timestamptz
+ORDER BY last_active_at
+LIMIT sqlc.arg(max_rows)
+FOR UPDATE SKIP LOCKED;
+
+-- Кого стереть: предупреждены не меньше срока предупреждения назад и за это время так и не вошли.
+-- name: ClaimInactiveToErase :many
+SELECT id FROM users
+WHERE deleted_at IS NULL AND email_confirmed_at IS NOT NULL AND deletion_due_at IS NULL
+  AND inactive_warned_at IS NOT NULL AND inactive_warned_at <= sqlc.arg(warned_before)::timestamptz
+  AND last_active_at < sqlc.arg(inactive_before)::timestamptz
+ORDER BY last_active_at
+LIMIT sqlc.arg(max_rows)
+FOR UPDATE SKIP LOCKED;
+
+-- name: MarkInactiveWarned :exec
+UPDATE users SET inactive_warned_at = sqlc.arg(now)::timestamptz WHERE id = sqlc.arg(id);

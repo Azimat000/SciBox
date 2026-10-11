@@ -5,7 +5,7 @@ export type Health = {
   status: 'ok'
   product: string
   version: string
-  database: { schema_version: number; server_version: string }
+  database: { schema_version: number; server_version?: string }
 }
 
 export const healthQueryKey = ['health'] as const

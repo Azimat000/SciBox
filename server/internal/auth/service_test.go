@@ -3,11 +3,13 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"scibox/server/internal/httpguard"
 	"scibox/server/internal/mail"
 )
 
@@ -86,7 +88,8 @@ func TestRegisterCreatesUnconfirmedAccountAndSendsLink(t *testing.T) {
 	if !strings.Contains(m.Subject, "Подтвердите почту") || !strings.Contains(m.Subject, "SciBox") {
 		t.Fatalf("subject = %q", m.Subject)
 	}
-	if !strings.Contains(m.Body, "http://localhost:5173/confirm-email?token=") || !strings.Contains(m.Body, "Иван Петров") {
+	// Имени из формы в письме нет: его ввёл тот, кто регистрировал адрес (срез 29, CRY-7).
+	if !strings.Contains(m.Body, "http://localhost:5173/confirm-email?token=") || strings.Contains(m.Body, "Иван Петров") {
 		t.Fatalf("body = %q", m.Body)
 	}
 	raw := tokenIn(t, m)
@@ -143,16 +146,20 @@ func TestRegisterExistingUnconfirmedLatestRegistrationWins(t *testing.T) {
 	email := uniqueEmail()
 	first := e.register(email)
 
-	// Сразу же второй раз: пауза между письмами ещё идёт, письмо не уходит, но пароль заменяется.
+	// Сразу же второй раз, не дожидаясь паузы: пароль заменяется, прежняя ссылка гаснет, уходит новая (срез 29):
+	// иначе старая ссылка подтвердила бы аккаунт с чужим паролем.
 	if _, err := e.svc.Register(bg, RegisterInput{Name: "Пётр", Email: email, Password: "second password 22", Consent: true}, e.meta()); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(e.mailsTo(email)); n != 1 {
-		t.Fatalf("mails during cooldown = %d, want 1", n)
+	if n := len(e.mailsTo(email)); n != 2 {
+		t.Fatalf("mails = %d, want 2 (the new link replaces the old one at once)", n)
 	}
-	// Подтверждаем по первой ссылке: она ещё жива, но пароль уже второй.
-	if _, _, err := e.svc.ConfirmEmail(bg, first, e.meta()); err != nil {
-		t.Fatalf("first link must still work during cooldown: %v", err)
+	if _, _, err := e.svc.ConfirmEmail(bg, first, e.meta()); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("the first link must be dead after a new registration: %v", err)
+	}
+	second := tokenIn(t, e.lastMailTo(email))
+	if _, _, err := e.svc.ConfirmEmail(bg, second, e.meta()); err != nil {
+		t.Fatalf("the new link: %v", err)
 	}
 	if _, _, err := e.login(email, goodPassword); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("first password must be replaced: %v", err)
@@ -160,6 +167,76 @@ func TestRegisterExistingUnconfirmedLatestRegistrationWins(t *testing.T) {
 	u, _, err := e.login(email, "second password 22")
 	if err != nil || u.Name != "Пётр" {
 		t.Fatalf("second registration must win: %v %+v", err, u)
+	}
+}
+
+// Подтверждение из другого браузера (срез 29, D-190, AUT-2, AUT-3, CRY-1): почта подтверждается, но входа нет, а пароль
+// регистрации обнуляется. Владелец почты задаёт новый по ссылке из ответа и только тогда входит.
+func TestConfirmInAnotherBrowserDoesNotLogInAndWipesThePassword(t *testing.T) {
+	e := newEnv(t)
+	email := uniqueEmail()
+	token := e.register(email) // регистрация из «браузера регистрации» (testBinding)
+
+	other := e.meta()
+	other.Binding = "some-other-browser"
+	_, sess, err := e.svc.ConfirmEmail(bg, token, other)
+	var elsewhere *ConfirmedElsewhereError
+	if !errors.As(err, &elsewhere) || elsewhere.ResetToken == "" {
+		t.Fatalf("err = %v, want ConfirmedElsewhereError with a reset token", err)
+	}
+	if sess.Token != "" {
+		t.Fatal("a session was created for another browser")
+	}
+	if n := countRows(t, `SELECT count(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = $1`, email); n != 0 {
+		t.Fatalf("%d sessions exist", n)
+	}
+	// Почта подтверждена, но пароль регистрации не работает: он мог быть выбран тем, кто зарегистрировал чужую почту.
+	if _, _, err := e.login(email, goodPassword); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("the registration password must be wiped: %v", err)
+	}
+	if err := e.svc.ResetPassword(bg, elsewhere.ResetToken, "brand new password 55"); err != nil {
+		t.Fatalf("reset by the returned link: %v", err)
+	}
+	if _, _, err := e.login(email, "brand new password 55"); err != nil {
+		t.Fatalf("login with the new password: %v", err)
+	}
+}
+
+// Предзахват: тот, кто зарегистрировал чужую неподтверждённую почту со своим паролем, не получает аккаунт, когда
+// владелец нажмёт ссылку (в обоих порядках регистраций).
+func TestAnImpostorRegistrationNeverGetsTheAccount(t *testing.T) {
+	for _, victimFirst := range []bool{true, false} {
+		t.Run(fmt.Sprintf("victimFirst=%v", victimFirst), func(t *testing.T) {
+			e := newEnv(t)
+			email := uniqueEmail()
+			register := func(password, browser string) {
+				m := e.meta()
+				m.Binding = browser
+				if _, err := e.svc.Register(bg, RegisterInput{Name: "Кто-то", Email: email, Password: password, Consent: true}, m); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if victimFirst {
+				register("victim password 11", "victim-browser")
+				register("attacker password 22", "attacker-browser")
+			} else {
+				register("attacker password 22", "attacker-browser")
+			}
+			// Владелец нажимает письмо, пришедшее ему (последнее), в своём браузере.
+			link := tokenIn(t, e.lastMailTo(email))
+			m := e.meta()
+			m.Binding = "victim-browser"
+			_, _, err := e.svc.ConfirmEmail(bg, link, m)
+			if victimFirst && err == nil {
+				t.Skip("the latest mail was bound to the victim's browser") // не должно случаться: письмо привязано к браузеру последней регистрации
+			}
+			if !errors.As(err, new(*ConfirmedElsewhereError)) {
+				t.Fatalf("err = %v", err)
+			}
+			if _, _, err := e.login(email, "attacker password 22"); !errors.Is(err, ErrInvalidCredentials) {
+				t.Fatalf("the attacker's password must not work: %v", err)
+			}
+		})
 	}
 }
 
@@ -895,10 +972,10 @@ func TestCleanupRemovesOnlyStaleRows(t *testing.T) {
 	if countRows(t, `SELECT count(*) FROM sessions WHERE token_hash = $1`, hashToken(oldSession.Token)) != 0 {
 		t.Fatal("an expired session must be removed")
 	}
-	if countRows(t, `SELECT count(*) FROM rate_events WHERE key = $1`, meta.IP) != 0 {
+	if countRows(t, `SELECT count(*) FROM rate_events WHERE key = $1`, httpguard.NetworkKey(meta.IP)) != 0 {
 		t.Fatal("old rate events must be removed")
 	}
-	if countRows(t, `SELECT count(*) FROM rate_events WHERE key = $1`, freshEvent.IP) == 0 {
+	if countRows(t, `SELECT count(*) FROM rate_events WHERE key = $1`, httpguard.NetworkKey(freshEvent.IP)) == 0 {
 		t.Fatal("fresh rate events must stay")
 	}
 	if countRows(t, `SELECT count(*) FROM auth_tokens WHERE expires_at < $1`, e.clock.Now().Add(-24*time.Hour)) != 0 {

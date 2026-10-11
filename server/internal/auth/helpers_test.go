@@ -79,10 +79,13 @@ func newEnv(t *testing.T) *env {
 	return e
 }
 
+// testBinding — «браузер регистрации» всех обычных тестов: регистрация и подтверждение идут из одного браузера.
+const testBinding = "test-registration-browser"
+
 // meta возвращает данные запроса с новым адресом, чтобы ограничения частоты разных тестов не пересекались.
 func (e *env) meta() Meta {
 	n := seq.Add(1)
-	return Meta{IP: fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255), UserAgent: "test-agent"}
+	return Meta{IP: fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255), UserAgent: "test-agent", Binding: testBinding}
 }
 
 func (e *env) mails() []mail.Message {

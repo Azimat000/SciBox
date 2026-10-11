@@ -320,7 +320,7 @@ func (q *Queries) LockOrganizationsOwnedBy(ctx context.Context, userID uuid.UUID
 }
 
 const lockUserRow = `-- name: LockUserRow :one
-SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at FROM users WHERE id = $1 FOR UPDATE
+SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at FROM users WHERE id = $1 FOR UPDATE
 `
 
 // Строка аккаунта человека под блокировкой: удаление, отмена и вход по ссылкам не идут одновременно.
@@ -339,6 +339,8 @@ func (q *Queries) LockUserRow(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
 }

@@ -51,7 +51,9 @@ func NormalizeEmail(raw string) (string, string) {
 	if email == "" {
 		return "", msgEmailRequired
 	}
-	if len(email) > MaxEmailLen || strings.ContainsAny(email, " \t\r\n<>,;\"") {
+	// «?», «&», «=», «#», «%» формально допустимы в локальной части, но в ссылке mailto: превращают адрес в параметры
+	// (bcc, body, subject): контактную почту в профиле открывают сотрудники организаций (срез 29, WEB-4).
+	if len(email) > MaxEmailLen || strings.ContainsAny(email, " \t\r\n<>,;\"?&=#%") {
 		return "", msgEmailInvalid
 	}
 	addr, err := mail.ParseAddress(email)

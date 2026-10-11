@@ -33,7 +33,7 @@ func (q *Queries) CancelUserDeletion(ctx context.Context, arg CancelUserDeletion
 const changeUserEmail = `-- name: ChangeUserEmail :one
 UPDATE users SET email = $1::citext, updated_at = $2::timestamptz
 WHERE id = $3 AND deleted_at IS NULL
-RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
+RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at
 `
 
 type ChangeUserEmailParams struct {
@@ -58,6 +58,8 @@ func (q *Queries) ChangeUserEmail(ctx context.Context, arg ChangeUserEmailParams
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
 }
@@ -96,6 +98,79 @@ func (q *Queries) ClaimDueDeletions(ctx context.Context, arg ClaimDueDeletionsPa
 	return items, nil
 }
 
+const claimInactiveToErase = `-- name: ClaimInactiveToErase :many
+SELECT id FROM users
+WHERE deleted_at IS NULL AND email_confirmed_at IS NOT NULL AND deletion_due_at IS NULL
+  AND inactive_warned_at IS NOT NULL AND inactive_warned_at <= $1::timestamptz
+  AND last_active_at < $2::timestamptz
+ORDER BY last_active_at
+LIMIT $3
+FOR UPDATE SKIP LOCKED
+`
+
+type ClaimInactiveToEraseParams struct {
+	WarnedBefore   time.Time
+	InactiveBefore time.Time
+	MaxRows        int32
+}
+
+// Кого стереть: предупреждены не меньше срока предупреждения назад и за это время так и не вошли.
+func (q *Queries) ClaimInactiveToErase(ctx context.Context, arg ClaimInactiveToEraseParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, claimInactiveToErase, arg.WarnedBefore, arg.InactiveBefore, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const claimInactiveToWarn = `-- name: ClaimInactiveToWarn :many
+SELECT id FROM users
+WHERE deleted_at IS NULL AND email_confirmed_at IS NOT NULL AND deletion_due_at IS NULL
+  AND inactive_warned_at IS NULL AND last_active_at < $1::timestamptz
+ORDER BY last_active_at
+LIMIT $2
+FOR UPDATE SKIP LOCKED
+`
+
+type ClaimInactiveToWarnParams struct {
+	Before  time.Time
+	MaxRows int32
+}
+
+// Кого предупредить: подтверждённые, не удаляемые, без входа дольше (срок − предупреждение) и ещё без предупреждения.
+// SKIP LOCKED: две копии сервера не возьмут один аккаунт.
+func (q *Queries) ClaimInactiveToWarn(ctx context.Context, arg ClaimInactiveToWarnParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, claimInactiveToWarn, arg.Before, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const confirmUserEmail = `-- name: ConfirmUserEmail :exec
 UPDATE users
 SET email_confirmed_at = COALESCE(email_confirmed_at, $1::timestamptz), updated_at = $1::timestamptz
@@ -116,7 +191,7 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, display_name, password_hash, privacy_consent_at, privacy_policy_version, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $4, $4)
 ON CONFLICT (email) DO NOTHING
-RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
+RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at
 `
 
 type CreateUserParams struct {
@@ -148,6 +223,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
 }
@@ -170,7 +247,7 @@ func (q *Queries) EmailTakenByOther(ctx context.Context, arg EmailTakenByOtherPa
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at FROM users WHERE email = $1
+SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -188,12 +265,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at FROM users WHERE id = $1
+SELECT id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -211,15 +290,31 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
+}
+
+const markInactiveWarned = `-- name: MarkInactiveWarned :exec
+UPDATE users SET inactive_warned_at = $1::timestamptz WHERE id = $2
+`
+
+type MarkInactiveWarnedParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+func (q *Queries) MarkInactiveWarned(ctx context.Context, arg MarkInactiveWarnedParams) error {
+	_, err := q.db.Exec(ctx, markInactiveWarned, arg.Now, arg.ID)
+	return err
 }
 
 const reregisterUnconfirmedUser = `-- name: ReregisterUnconfirmedUser :one
 UPDATE users
 SET display_name = $2, password_hash = $3, privacy_consent_at = $4, privacy_policy_version = $5, updated_at = $4
 WHERE id = $1 AND email_confirmed_at IS NULL AND deleted_at IS NULL
-RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
+RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at
 `
 
 type ReregisterUnconfirmedUserParams struct {
@@ -253,6 +348,8 @@ func (q *Queries) ReregisterUnconfirmedUser(ctx context.Context, arg ReregisterU
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
 }
@@ -277,8 +374,24 @@ func (q *Queries) ScheduleUserDeletion(ctx context.Context, arg ScheduleUserDele
 	return deletion_due_at, err
 }
 
+const touchUserActive = `-- name: TouchUserActive :exec
+UPDATE users SET last_active_at = $1::timestamptz, inactive_warned_at = NULL
+WHERE id = $2 AND (last_active_at < $1::timestamptz - interval '1 hour' OR inactive_warned_at IS NOT NULL)
+`
+
+type TouchUserActiveParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// Человек пользуется аккаунтом: счёт неактивности начинается заново, прежнее предупреждение снимается (срез 29, D-192).
+func (q *Queries) TouchUserActive(ctx context.Context, arg TouchUserActiveParams) error {
+	_, err := q.db.Exec(ctx, touchUserActive, arg.Now, arg.ID)
+	return err
+}
+
 const updateUserName = `-- name: UpdateUserName :one
-UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at
+UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING id, email, display_name, password_hash, email_confirmed_at, privacy_consent_at, privacy_policy_version, created_at, updated_at, deletion_due_at, deleted_at, last_active_at, inactive_warned_at
 `
 
 type UpdateUserNameParams struct {
@@ -302,6 +415,8 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 		&i.UpdatedAt,
 		&i.DeletionDueAt,
 		&i.DeletedAt,
+		&i.LastActiveAt,
+		&i.InactiveWarnedAt,
 	)
 	return i, err
 }

@@ -105,11 +105,14 @@ func TestSlowTransferGetsItsOwnDeadline(t *testing.T) {
 	r := chi.NewRouter()
 	g, err := New(Config{Logger: silent(), Transfer: 5 * time.Second, Routes: []Route{
 		{Method: http.MethodPost, Pattern: "/api/upload", Slow: true},
+		{Method: http.MethodPost, Pattern: "/api/link-upload", Slow: true},
 	}}, r)
 	if err != nil {
 		t.Fatal(err)
 	}
 	r.Use(g.Perimeter)
+	// Срок долгой передачи выдаётся вошедшему человеку (Throttle знает, кто он), не любому посетителю (срез 29, CON-6).
+	r.Use(g.Throttle(func(r *http.Request) (string, bool) { return "u1", r.Header.Get("X-Guest") == "" }))
 	read := func(w http.ResponseWriter, r *http.Request) {
 		n, err := io.Copy(io.Discard, r.Body)
 		if err != nil {
@@ -120,12 +123,19 @@ func TestSlowTransferGetsItsOwnDeadline(t *testing.T) {
 	}
 	r.Post("/api/upload", read)
 	r.Post("/api/form", read)
+	// Страница по ссылке из письма: срок продлевается только после проверки ссылки.
+	r.Post("/api/link-upload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Token") == "good" {
+			ExtendTransfer(w, r)
+		}
+		read(w, r)
+	})
 	addr := serve(t, r, Timeouts{Header: time.Second, Read: 300 * time.Millisecond, Write: 300 * time.Millisecond})
 
 	// Тело приходит по кусочку за 900 мс: втрое дольше обычного срока чтения.
-	send := func(path string) string {
+	send := func(path string, extra ...string) string {
 		c := dial(t, addr)
-		if _, err := fmt.Fprintf(c, "POST %s HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\nConnection: close\r\n\r\n", path); err != nil {
+		if _, err := fmt.Fprintf(c, "POST %s HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\nConnection: close\r\n%s\r\n", path, strings.Join(extra, "")); err != nil {
 			t.Fatal(err)
 		}
 		for range 3 {
@@ -142,5 +152,15 @@ func TestSlowTransferGetsItsOwnDeadline(t *testing.T) {
 	}
 	if got := send("/api/form"); strings.Contains(got, "read 4") {
 		t.Fatalf("ordinary route accepted a body slower than its deadline: %q", got)
+	}
+	// Долгий срок получает вошедший или тот, кто прошёл проверку ссылки; безымянный посетитель держит соединение лишь обычный срок.
+	if got := send("/api/upload", "X-Guest: 1\r\n"); strings.Contains(got, "read 4") {
+		t.Fatalf("an anonymous visitor got the long transfer deadline: %q", got)
+	}
+	if got := send("/api/link-upload", "X-Guest: 1\r\n"); strings.Contains(got, "read 4") {
+		t.Fatalf("an unchecked link got the long transfer deadline: %q", got)
+	}
+	if got := send("/api/link-upload", "X-Guest: 1\r\n", "X-Token: good\r\n"); !strings.Contains(got, "read 4") {
+		t.Fatalf("a checked link did not get the long transfer deadline: %q", got)
 	}
 }

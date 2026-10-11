@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
 	"sync"
 	"testing"
@@ -332,7 +333,7 @@ func TestDigestSurvivesUnusableSavedQueries(t *testing.T) {
 	d := newDigestWorld(t, FreqInstant)
 	d.matching("Новая")
 	d.clock.Advance(5 * time.Minute)
-	for _, q := range []string{"q=%zz", "level=x", "unit=zzz", "field=abc", "format=teleport"} {
+	for _, q := range []string{"q=%zz", "level=x", "unit=zzz", "field=abc", "format=teleport", "q=%00", "q=%ff", "org=%00"} {
 		if _, err := testkit.Pool.Exec(bg, `UPDATE saved_searches SET query = $2, checked_at = $3, next_run_at = $3 WHERE id = $1`, d.search.ID, q, d.t0); err != nil {
 			t.Fatal(err)
 		}
@@ -395,6 +396,30 @@ func TestDigestTreatsRejectedConditionsAsNothingNew(t *testing.T) {
 		if checked, _, _ := d.row(); !checked.After(d.t0) {
 			t.Errorf("%s: граница не сдвинулась", name)
 		}
+	}
+}
+
+// Ошибка данных от самой базы (класс 22: нулевой знак, невалидный UTF-8) не лечится повтором: поиск не должен вставать в
+// начало очереди и блокировать рассылку остальным (срез 29, INJ-1). Сбой другого класса по-прежнему повторяется.
+func TestDigestDoesNotGetStuckOnDataTheDatabaseRefuses(t *testing.T) {
+	d := newDigestWorld(t, FreqInstant)
+	d.svc.vac = stubSearcher{err: &pgconn.PgError{Code: "22021", Message: "invalid byte sequence for encoding UTF8: 0x00"}}
+	d.clock.Advance(5 * time.Minute)
+	if n, err := d.svc.SendDigests(bg); err != nil || n != 0 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if checked, _, _ := d.row(); !checked.After(d.t0) {
+		t.Fatal("граница не сдвинулась: поиск застрял бы в начале очереди")
+	}
+
+	d = newDigestWorld(t, FreqInstant)
+	d.svc.vac = stubSearcher{err: &pgconn.PgError{Code: "57014", Message: "canceling statement due to statement timeout"}}
+	d.clock.Advance(5 * time.Minute)
+	if _, err := d.svc.SendDigests(bg); err == nil {
+		t.Fatal("сбой по сроку запроса должен возвращаться и повторяться")
+	}
+	if checked, _, _ := d.row(); checked.After(d.t0) {
+		t.Fatal("граница не должна сдвигаться при временном сбое")
 	}
 }
 

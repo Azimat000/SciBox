@@ -228,6 +228,9 @@ ssh -L 3100:localhost:3100 -L 9190:localhost:9190 scibox@сервер
 | Пул соединений | в схеме нет PgBouncer, поэтому параметры соединения (`statement_timeout`, `plan_cache_mode`, `random_page_cost`) работают; если добавите пул, задайте их на роли: `ALTER ROLE scibox SET statement_timeout = '10s'` и т. д. | T-46 |
 | `ALTER DATABASE … SET pg_trgm…` (миграция 00021) | в схеме роль приложения владеет своей базой, поэтому команда проходит; на управляемой базе провайдера проверьте и при отказе задайте порог в параметрах роли | T-47 |
 | Нагрузка | `make load-data SCALE=1`, затем `make load-test` на этом сервере (`docs/SCALING.md`, «Нагрузочный тест»); включить `pg_stat_statements` (уже включён) | цель 500 запросов в секунду |
+| Журнал базы без значений | `./compose exec postgres psql -U postgres -c "SHOW log_parameter_max_length"` показывает `0`; медленный запрос в `./compose logs postgres` идёт без `DETAIL: parameters` | T-67 |
+| Проверка сертификата базы | при желании: свой CA, `sslmode=verify-full` в `DATABASE_URL`; по умолчанию `require` в закрытой сети | T-78 |
+| Закрепление образов по хэшам | после выбора реестра: `docker compose config --images`, затем `@sha256:…` в `deploy/.env` (`*_IMAGE`) | T-56 |
 | Настоящий адрес посетителя | в `./compose logs app1` у записи с `request_id` адрес сети посетителя, а не адрес Caddy | T-31 |
 
 ## 12. Если что-то не так

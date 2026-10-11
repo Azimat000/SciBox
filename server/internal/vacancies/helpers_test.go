@@ -80,7 +80,7 @@ func newWorld(t *testing.T) *world {
 
 func (w *world) meta() auth.Meta {
 	n := seq.Add(1)
-	return auth.Meta{IP: fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255), UserAgent: "test-agent"}
+	return auth.Meta{IP: fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255), UserAgent: "test-agent", Binding: "test-registration-browser"}
 }
 
 func tokenIn(t *testing.T, body string) string {

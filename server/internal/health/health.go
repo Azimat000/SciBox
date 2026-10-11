@@ -9,7 +9,7 @@ import (
 // Database — состояние базы для ответа /api/health.
 type Database struct {
 	SchemaVersion int64  `json:"schema_version"`
-	ServerVersion string `json:"server_version"`
+	ServerVersion string `json:"server_version,omitempty"`
 }
 
 // Querier — узкий срез сгенерированных sqlc запросов, нужный проверке.

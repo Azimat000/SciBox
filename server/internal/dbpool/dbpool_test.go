@@ -301,7 +301,7 @@ func TestObserverSeesEveryQueryEvenWithoutALogger(t *testing.T) {
 	if _, err := pool.Exec(t.Context(), "-- name: SleepyQuery :exec\nSELECT pg_sleep(0.1)"); err != nil {
 		t.Fatal(err)
 	}
-	if e := rec.last(); e.name != "SleepyQuery" || !e.slow || e.timedOut || e.took < 100*time.Millisecond {
+	if e := rec.last(); e.name != "SleepyQuery" || !e.slow || e.timedOut || e.took < 90*time.Millisecond { // pg_sleep(0.1) бывает на 0,3 мс короче по часам процесса
 		t.Errorf("slow: %+v", e)
 	}
 	if _, err := pool.Exec(t.Context(), "-- name: StuckQuery :exec\nSELECT pg_sleep(5)"); !dbpool.IsTimeout(err) {

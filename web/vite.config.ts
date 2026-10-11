@@ -17,6 +17,9 @@ function productName(): Plugin {
 
 export default defineConfig({
   plugins: [react(), productName()],
+  // web/node_modules — ссылка на node_modules.nosync (iCloud Drive не выгружает такие папки, см. HANDOFF): без этого Vite
+  // идёт по настоящему пути и не считает зависимости зависимостями.
+  resolve: { preserveSymlinks: true },
   server: {
     port: 5173,
     fs: { allow: ['.', '../config'] },
@@ -28,6 +31,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // node_modules.nosync: папка зависимостей, которую iCloud Drive не выгружает (см. HANDOFF); искать в ней тесты не надо.
+    include: ['src/**/*.test.{ts,tsx}'],
     css: false,
     coverage: {
       provider: 'v8',

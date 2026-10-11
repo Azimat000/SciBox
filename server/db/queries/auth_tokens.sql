@@ -2,6 +2,18 @@
 INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5);
 
+-- Ссылка подтверждения почты, привязанная к браузеру регистрации (хеш случайной cookie; срез 29).
+-- name: CreateBoundAuthToken :exec
+INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at, binding_hash)
+VALUES ($1, $2, $3, $4, $5, $6);
+
+-- Погашение ссылки подтверждения: вместе с привязкой, чтобы решить, входить ли в аккаунт.
+-- name: ConsumeConfirmToken :one
+UPDATE auth_tokens SET used_at = sqlc.arg(now)::timestamptz
+WHERE token_hash = sqlc.arg(token_hash) AND purpose = 'confirm_email'
+  AND used_at IS NULL AND expires_at > sqlc.arg(now)::timestamptz
+RETURNING user_id, binding_hash;
+
 -- Старые неиспользованные ссылки того же назначения перестают работать.
 -- name: SupersedeAuthTokens :exec
 UPDATE auth_tokens SET used_at = sqlc.arg(at)::timestamptz

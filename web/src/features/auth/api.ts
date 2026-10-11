@@ -49,9 +49,13 @@ export function register(input: RegisterInput) {
   return apiSend<{ email: string }>('POST', '/api/auth/register', input)
 }
 
-export async function confirmEmail(token: string): Promise<User> {
-  const res = await apiSend<UserResponse>('POST', '/api/auth/confirm-email', { token })
-  return res.user as User
+/** Подтверждение почты: вход выполнен (`user`) или ссылка открыта не в браузере регистрации и нужен новый пароль. */
+export type ConfirmResult = { user: User; resetToken?: undefined } | { user?: undefined; resetToken: string }
+
+export async function confirmEmail(token: string): Promise<ConfirmResult> {
+  const res = await apiSend<UserResponse & { reset_token?: string }>('POST', '/api/auth/confirm-email', { token })
+  if (res.reset_token) return { resetToken: res.reset_token }
+  return { user: res.user as User }
 }
 
 export function resendConfirmation(email: string) {

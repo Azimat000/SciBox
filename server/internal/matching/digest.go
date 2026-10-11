@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"scibox/server/internal/auth"
 	"scibox/server/internal/dbgen"
@@ -117,6 +119,12 @@ func (s *Service) findNew(ctx context.Context, row dbgen.SavedSearch, until time
 	var verr *auth.ValidationError
 	if errors.As(err, &verr) || errors.Is(err, vacancies.ErrNotFound) {
 		s.log.Warn("saved search conditions are no longer valid", "search", row.ID, "err", err)
+		return vacancies.SearchResult{}, nil
+	}
+	// Ошибка данных самого запроса (SQLSTATE класса 22: нулевой знак, невалидный UTF-8) не лечится повтором: поиск с таким
+	// значением вставал бы в начало очереди каждого прохода и блокировал рассылку всем (срез 29, INJ-1).
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && strings.HasPrefix(pgErr.Code, "22") {
+		s.log.Warn("saved search has data the database refuses", "search", row.ID, "code", pgErr.Code)
 		return vacancies.SearchResult{}, nil
 	}
 	if err != nil {

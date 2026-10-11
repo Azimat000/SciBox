@@ -147,7 +147,7 @@ func NewWorld(t *testing.T) *World {
 // Meta — сведения о запросе для аккаунтов; у каждого вызова свой «адрес».
 func Meta() auth.Meta {
 	n := seq.Add(1)
-	return auth.Meta{IP: fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255), UserAgent: "test-agent"}
+	return auth.Meta{IP: fmt.Sprintf("10.%d.%d.%d", n>>16&255, n>>8&255, n&255), UserAgent: "test-agent", Binding: "test-registration-browser"}
 }
 
 func tokenIn(t *testing.T, body string) string {

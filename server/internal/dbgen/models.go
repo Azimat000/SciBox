@@ -83,14 +83,15 @@ type AuditLog struct {
 }
 
 type AuthToken struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	Purpose   string
-	TokenHash []byte
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	UsedAt    *time.Time
-	NewEmail  pgtype.Text
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Purpose     string
+	TokenHash   []byte
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	UsedAt      *time.Time
+	NewEmail    pgtype.Text
+	BindingHash []byte
 }
 
 type BlobDeletion struct {
@@ -385,6 +386,8 @@ type User struct {
 	UpdatedAt            time.Time
 	DeletionDueAt        *time.Time
 	DeletedAt            *time.Time
+	LastActiveAt         time.Time
+	InactiveWarnedAt     *time.Time
 }
 
 type Vacancy struct {

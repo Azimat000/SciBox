@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router'
+import { Navigate, useSearchParams } from 'react-router'
 import { ApiError } from '../../api/client'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
@@ -27,9 +27,9 @@ export function ConfirmEmailPage() {
     staleTime: Infinity,
     gcTime: 0,
     queryFn: async () => {
-      const user = await confirmEmail(token)
-      await setMe(client, user)
-      return user
+      const result = await confirmEmail(token)
+      if (result.user) await setMe(client, result.user)
+      return result
     },
   })
 
@@ -57,6 +57,10 @@ export function ConfirmEmailPage() {
         />
       </div>
     )
+  }
+  // Ссылку открыли не в том браузере, где шла регистрация: почта подтверждена, входа нет, пароль задаётся заново.
+  if (confirm.data.resetToken) {
+    return <Navigate to={`/reset-password?token=${encodeURIComponent(confirm.data.resetToken)}&from=confirm`} replace />
   }
   return (
     <AuthPage title={t.auth.confirm.doneTitle} lead={t.auth.confirm.doneText}>

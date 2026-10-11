@@ -2,6 +2,7 @@ package httpcache
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -124,13 +125,7 @@ func (k *Keyed) Get(ctx context.Context, key string, maxBody int, load func(cont
 	k.mu.Unlock()
 	k.misses.Add(1)
 
-	loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), k.loadTimeout)
-	v, err := load(loadCtx)
-	cancel()
-	var doc Doc
-	if err == nil {
-		doc, err = Encode(v)
-	}
+	doc, err := k.build(ctx, load)
 
 	k.mu.Lock()
 	it.doc, it.err, it.ready = doc, err, true
@@ -146,16 +141,28 @@ func (k *Keyed) Get(ctx context.Context, key string, maxBody int, load func(cont
 	return doc, err
 }
 
-// refresh обновляет просроченный ответ в фоне. Неудача оставляет прежний ответ (он доживёт свой запас), следующий запрос
-// попробует снова.
-func (k *Keyed) refresh(ctx context.Context, key string, it *keyedItem, maxBody int, load func(context.Context) (any, error)) {
+// build собирает ответ без отмены посетителя и в пределах срока. Паника сборки становится ошибкой: иначе запись
+// осталась бы «собирается» навсегда, и все запросы с этим ключом ждали бы её, а паника в фоновом обновлении роняла бы
+// процесс (срез 29, CON-8).
+func (k *Keyed) build(ctx context.Context, load func(context.Context) (any, error)) (doc Doc, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			doc, err = Doc{}, fmt.Errorf("httpcache: load panicked: %v", r)
+		}
+	}()
 	loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), k.loadTimeout)
 	defer cancel()
 	v, err := load(loadCtx)
-	var doc Doc
-	if err == nil {
-		doc, err = Encode(v)
+	if err != nil {
+		return Doc{}, err
 	}
+	return Encode(v)
+}
+
+// refresh обновляет просроченный ответ в фоне. Неудача оставляет прежний ответ (он доживёт свой запас), следующий запрос
+// попробует снова.
+func (k *Keyed) refresh(ctx context.Context, key string, it *keyedItem, maxBody int, load func(context.Context) (any, error)) {
+	doc, err := k.build(ctx, load)
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	it.refreshing = false

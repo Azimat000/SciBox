@@ -34,6 +34,7 @@ Go не измеряет ветвления отдельно, поэтому д�
 6в. **Удаление аккаунта** (срез 20): что стирается и обезличивается, «единственный владелец», каждая таблица со ссылкой на аккаунт (`TestEveryReferenceToTheAccountIsHandled`). Код: `server/internal/erasure`.
 6б. **Периметр HTTP и настройки** (срез 19): сроки соединения, заголовки защиты, настоящий IP за прокси, лимиты тела и частоты, боевой режим. Код: `server/internal/httpguard`, `server/internal/config`.
 6к. **Выкладка и секреты** (срез 28): `server/internal/config` (секреты файлами, защита от стирания в боевом режиме) уже в зоне 6б; тесты структуры боевого compose (`cli/deploy_test.go`: наружу только Caddy, секреты не значениями, процессы без привилегий) и безопасности миграций (`migrate/safety_test.go`: только добавляют, прежняя версия принимает новую базу) входят в `make test` и проверяют файлы `deploy/` и `server/db/migrations`.
+6л. **Проверка текста** (срез 29): `server/internal/textsafe` (нулевой знак и невалидный UTF-8 не доходят до базы; I-83).
 7. **Подбор и рассылки**: правила «подходящие вам», сохранённые поиски, напоминания о дедлайнах (не слать дважды, не слать чужое). Код: `server/internal/matching`, `web/src/features/matching` (со среза 11). Сюда же уведомления и очередь писем: `server/internal/notifications`, `web/src/features/notifications` (со среза 8).
 
 Новый срез, который добавляет код в одну из этих зон, сразу пишет тесты по повышенному порогу. Новые критичные зоны дописываются в этот список.
@@ -258,3 +259,9 @@ Go не измеряет ветвления отдельно, поэтому д�
 - **`cli.TestMixedLoadStaysHealthy`** (дымовой нагрузочный тест, D-178): 3000 запросов смеси 24 потоками через `newApp`, настоящий пул с теми же сроками, настоящее ограничение частоты, несколько адресов посетителей через доверенный прокси; проверяет: ни одного 5xx и 429, ожидаемые коды, p99 < 3 с (грубо: под `-race`), все соединения вернулись в пул, ответы остаются настоящим JSON. Идёт в `make test`.
 - **Нагрузочный тест на большой базе** (не входит в `make test`): `make load-test`, `make load-smoke`; сценарий k6 сам сверяет бюджеты и пишет «выше бюджета». Результаты и условия — `docs/SCALING.md`.
 
+## Как тестируется итоговый аудит (срез 29)
+
+- **Встроенный фаззинг Go** (D-196, без новых библиотек): `FuzzNormalize` и `FuzzNormalizeAcceptsEveryValidISSN` (`issn`), `FuzzNormalizeDOI` (`crossref`), `FuzzCleanName` и `FuzzReadForm` (`files`), `FuzzMask` (`logmask`), `FuzzParseProxies` и `FuzzClientAddr` (`httpguard`), `FuzzParse` (`journals`), `FuzzSearchQuery` (`vacancies`), `FuzzCatalogParams` (`profiles`), `FuzzDecodeJSON` (`apierr`). Запасные примеры (`f.Add`) входят в обычный `make test`. Настоящий поиск: `go test ./internal/issn -fuzz FuzzNormalize -fuzztime 30s` (по одной цели за запуск). Найденное сохраняется как запасной пример.
+- **Гонки лимитов:** `auth/concurrency_test.go` запускает пачку одновременных запросов и требует, чтобы лимит удержался (проверено: без замка `TestLoginLimitHoldsUnderConcurrency` показывает 9 проверок при пределе 5).
+- **Привязка ссылки подтверждения:** сервис (`TestConfirmInAnotherBrowser…`, `TestAnImpostorRegistration…`), HTTP (`TestHTTPConfirmFromAnotherBrowserGivesNoSession`) и сайт (`recovery.test.tsx`). Помощники тестов (`env.meta()`, `testkit.Meta()`) ставят один и тот же «браузер регистрации» `test-registration-browser`.
+- **Сайт:** сборка зависимостей лежит в `web/node_modules.nosync` (ссылка `web/node_modules`), чтобы iCloud Drive не выгружал файлы; в `vite.config.ts` тесты ищутся только в `src/`.

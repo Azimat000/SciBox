@@ -290,6 +290,24 @@ func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationPara
 	return result.RowsAffected(), nil
 }
 
+const revokeInvitationsBy = `-- name: RevokeInvitationsBy :exec
+UPDATE org_invitations SET revoked_at = $1::timestamptz
+WHERE org_id = $2 AND invited_by = $3 AND accepted_at IS NULL AND revoked_at IS NULL
+`
+
+type RevokeInvitationsByParams struct {
+	At        time.Time
+	OrgID     uuid.UUID
+	InvitedBy *uuid.UUID
+}
+
+// Приглашения, выписанные человеком, который ушёл из организации или перестал быть владельцем, больше не действуют
+// (срез 29, AUT-7): иначе приглашённый стал бы владельцем по ссылке убранного совладельца.
+func (q *Queries) RevokeInvitationsBy(ctx context.Context, arg RevokeInvitationsByParams) error {
+	_, err := q.db.Exec(ctx, revokeInvitationsBy, arg.At, arg.OrgID, arg.InvitedBy)
+	return err
+}
+
 const revokePendingInvitations = `-- name: RevokePendingInvitations :exec
 UPDATE org_invitations SET revoked_at = $1::timestamptz
 WHERE org_id = $2 AND email = $3 AND accepted_at IS NULL AND revoked_at IS NULL

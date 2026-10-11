@@ -84,3 +84,14 @@ func (s *MemoryStore) Hit(_ context.Context, kind, key string, window time.Time)
 	s.counts[k]++
 	return s.counts[k], nil
 }
+
+// NetworkKey — ключ источника для счётчиков, которые держат не периметр, а сервисы (вход, письма). Такой же, как у
+// гостя на периметре: IPv6 считается по сети /64, иначе один человек со своей сетью проходил бы любой лимит «по адресу»,
+// меняя последние 64 бита (срез 29, AUT-4). Не адрес, а строка не из IP попадает в ключ как есть.
+func NetworkKey(ip string) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return "raw:" + ip
+	}
+	return guestKey(plain(a))
+}

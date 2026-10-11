@@ -105,7 +105,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT s.id AS session_id, s.last_seen_at, s.expires_at, s.reauth_at,
+SELECT s.id AS session_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at, s.reauth_at,
        u.id AS user_id, u.email, u.display_name, u.email_confirmed_at, u.created_at AS user_created_at,
        u.deletion_due_at
 FROM sessions s
@@ -115,6 +115,7 @@ WHERE s.token_hash = $1 AND u.deleted_at IS NULL
 
 type GetSessionByTokenHashRow struct {
 	SessionID        uuid.UUID
+	SessionCreatedAt time.Time
 	LastSeenAt       time.Time
 	ExpiresAt        time.Time
 	ReauthAt         *time.Time
@@ -132,6 +133,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (
 	var i GetSessionByTokenHashRow
 	err := row.Scan(
 		&i.SessionID,
+		&i.SessionCreatedAt,
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.ReauthAt,

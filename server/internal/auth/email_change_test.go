@@ -321,3 +321,73 @@ func TestMaskEmail(t *testing.T) {
 		}
 	}
 }
+
+// Просьба сменить почту (срез 29, AUT-8): владелец текущего адреса получает письмо без нового адреса.
+func TestEmailChangeRequestNotifiesTheOldAddress(t *testing.T) {
+	e := newEnv(t)
+	_, s, oldEmail := e.confirmedUser()
+	p := e.freshPrincipal(s)
+	newEmail := uniqueEmail()
+	before := len(e.mailsTo(oldEmail))
+	if err := e.svc.RequestEmailChange(bg, p, newEmail, e.meta()); err != nil {
+		t.Fatal(err)
+	}
+	var note string
+	for _, m := range e.mailsTo(oldEmail)[before:] {
+		if strings.Contains(m.Subject, "просят сменить почту") {
+			note = m.Body
+		}
+	}
+	if note == "" {
+		t.Fatal("the current address got no notice")
+	}
+	if strings.Contains(note, newEmail) || strings.Contains(note, "token=") {
+		t.Fatalf("the notice must not hold the new address or a link with a token:\n%s", note)
+	}
+}
+
+// Ожидающая смена почты гаснет вместе с паролем и с «выйти на других устройствах»: просить её мог вор сеанса.
+func TestPendingEmailChangeDiesWithPasswordAndSessionEvents(t *testing.T) {
+	for name, act := range map[string]func(e *env, p Principal, email string){
+		"change password": func(e *env, p Principal, _ string) {
+			if err := e.svc.ChangePassword(bg, p, goodPassword, "another password 77"); err != nil {
+				e.t.Fatal(err)
+			}
+		},
+		"revoke other sessions": func(e *env, p Principal, _ string) {
+			if err := e.svc.RevokeOtherSessions(bg, p); err != nil {
+				e.t.Fatal(err)
+			}
+		},
+		"reset password": func(e *env, _ Principal, email string) {
+			if err := e.svc.RequestPasswordReset(bg, email, e.meta()); err != nil {
+				e.t.Fatal(err)
+			}
+			var tok string
+			for _, m := range e.mailsTo(email) {
+				if strings.Contains(m.Body, "/reset-password?token=") {
+					tok = tokenIn(e.t, m)
+				}
+			}
+			if err := e.svc.ResetPassword(bg, tok, "another password 77"); err != nil {
+				e.t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newEnv(t)
+			_, s, email := e.confirmedUser()
+			p := e.freshPrincipal(s)
+			newEmail := uniqueEmail()
+			if err := e.svc.RequestEmailChange(bg, p, newEmail, e.meta()); err != nil {
+				t.Fatal(err)
+			}
+			link := tokenIn(t, e.lastMailTo(newEmail))
+			e.clock.Advance(2 * time.Minute)
+			act(e, p, email)
+			if _, err := e.svc.ConfirmEmailChange(bg, link); !errors.Is(err, ErrInvalidToken) {
+				t.Fatalf("the pending change must be dead: %v", err)
+			}
+		})
+	}
+}

@@ -104,6 +104,10 @@ func (s *Service) today() time.Time {
 func (s *Service) spend(ctx context.Context, q *dbgen.Queries, user uuid.UUID) error {
 	now := s.now()
 	lim := s.cfg.Create
+	// Замок на счётчик: параллельные запросы не проходят проверку с одним и тем же нулём (срез 29, CON-2).
+	if err := q.LockRateKey(ctx, kindVacancyCreate+":"+user.String()); err != nil {
+		return fmt.Errorf("vacancies: lock rate key: %w", err)
+	}
 	row, err := q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kindVacancyCreate, Key: user.String(), At: now.Add(-lim.Window)})
 	if err != nil {
 		return fmt.Errorf("vacancies: count rate events: %w", err)

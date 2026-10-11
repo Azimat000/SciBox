@@ -53,3 +53,9 @@ UPDATE org_invitations SET accepted_at = sqlc.arg(now)::timestamptz
 WHERE id = sqlc.arg(id) AND email = sqlc.arg(email)::citext
   AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > sqlc.arg(now)::timestamptz
 RETURNING id, org_id, role, unit_id, email::text AS email;
+
+-- Приглашения, выписанные человеком, который ушёл из организации или перестал быть владельцем, больше не действуют
+-- (срез 29, AUT-7): иначе приглашённый стал бы владельцем по ссылке убранного совладельца.
+-- name: RevokeInvitationsBy :exec
+UPDATE org_invitations SET revoked_at = sqlc.arg(at)::timestamptz
+WHERE org_id = sqlc.arg(org_id) AND invited_by = sqlc.arg(invited_by) AND accepted_at IS NULL AND revoked_at IS NULL;

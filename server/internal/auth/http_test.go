@@ -715,10 +715,16 @@ func TestHTTPRegisterAnswersTheSameForTakenAndFreeAddress(t *testing.T) {
 	a.post("/api/auth/logout", nil)
 	free := uniqueEmail()
 	var answers []string
-	for _, email := range []string{taken, free} {
-		r := a.post("/api/auth/register", a.registerBody(strings.ToUpper(email)))
-		if r.status != http.StatusAccepted || r.header.Get("Set-Cookie") != "" {
-			t.Fatalf("register %s: %d %s", email, r.status, r.body)
+	for i, email := range []string{taken, free} {
+		// Каждый раз «новый» браузер без cookie: ответ зависит от браузера, но не от того, занята ли почта.
+		b := a
+		if i == 1 {
+			b = newAPI(t)
+		}
+		r := b.post("/api/auth/register", b.registerBody(strings.ToUpper(email)))
+		// Cookie «браузер регистрации» ставится всегда, и для занятой почты тоже: по заголовкам не узнать, есть ли аккаунт.
+		if cookies := r.header.Values("Set-Cookie"); r.status != http.StatusAccepted || len(cookies) != 1 || !strings.HasPrefix(cookies[0], BindingCookieName+"=") {
+			t.Fatalf("register %s: %d %s %v", email, r.status, r.body, r.header.Values("Set-Cookie"))
 		}
 		answers = append(answers, strings.Replace(string(r.body), email, "EMAIL", 1))
 	}
@@ -960,5 +966,66 @@ func TestHTTPDeletionBlockedForSoleOwner(t *testing.T) {
 	r := a.post("/api/account/deletion", nil)
 	if r.status != http.StatusConflict || r.apiError(t).Error.Code != CodeDeletionBlocked || a.cookies[CookieName] == nil {
 		t.Fatalf("blocked deletion: %d %s", r.status, r.body)
+	}
+}
+
+// Ссылка из письма, открытая в другом браузере (без cookie регистрации): почта подтверждена, сеанс не выдан, в ответе
+// ссылка на выбор нового пароля (срез 29, D-190).
+func TestHTTPConfirmFromAnotherBrowserGivesNoSession(t *testing.T) {
+	a := newAPI(t)
+	email := uniqueEmail()
+	r := a.post("/api/auth/register", a.registerBody(email))
+	if r.status != http.StatusAccepted {
+		t.Fatalf("register: %d %s", r.status, r.body)
+	}
+	if c := a.cookies[BindingCookieName]; c == nil || !c.HttpOnly || c.SameSite != http.SameSiteLaxMode || c.Value == "" {
+		t.Fatalf("registration cookie: %+v", c)
+	}
+	token := tokenIn(t, a.e.lastMailTo(email))
+
+	phone := newAPI(t) // другой браузер: нет cookie регистрации
+	r = phone.post("/api/auth/confirm-email", map[string]string{"token": token})
+	if r.status != http.StatusOK {
+		t.Fatalf("confirm: %d %s", r.status, r.body)
+	}
+	var out map[string]string
+	r.json(t, &out)
+	if out["reset_token"] == "" || out["user"] != "" {
+		t.Fatalf("answer: %s", r.body)
+	}
+	if phone.cookies[CookieName] != nil && phone.cookies[CookieName].Value != "" {
+		t.Fatal("a session cookie was set for the other browser")
+	}
+	if phone.signedInAs() != "" {
+		t.Fatal("the other browser is signed in")
+	}
+	// По ссылке из ответа человек задаёт пароль и входит.
+	if r = phone.post("/api/auth/reset-password", map[string]string{"token": out["reset_token"], "password": "brand new password 55"}); r.status != http.StatusNoContent && r.status != http.StatusOK {
+		t.Fatalf("reset: %d %s", r.status, r.body)
+	}
+	if r = phone.post("/api/auth/login", map[string]string{"email": email, "password": "brand new password 55"}); r.status != http.StatusOK {
+		t.Fatalf("login with the new password: %d %s", r.status, r.body)
+	}
+}
+
+// Чтение «с другого сайта» (переход по чужой ссылке, куки SameSite=Lax уходят) отвергается: у выгрузки данных и выдачи
+// файла есть побочные действия (срез 29, WEB-5).
+func TestHTTPCrossSiteReadsAreRefused(t *testing.T) {
+	a := newAPI(t)
+	a.signedIn()
+	for name, c := range map[string]struct {
+		opts []reqOpt
+		want int
+	}{
+		"same origin":   {[]reqOpt{header("Sec-Fetch-Site", "same-origin")}, 200},
+		"address bar":   {[]reqOpt{header("Sec-Fetch-Site", "none")}, 200},
+		"not a browser": {nil, 200},
+		"cross site":    {[]reqOpt{header("Sec-Fetch-Site", "cross-site")}, 403},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if r := a.get("/api/account/sessions", c.opts...); r.status != c.want {
+				t.Fatalf("status = %d, want %d: %s", r.status, c.want, r.body)
+			}
+		})
 	}
 }

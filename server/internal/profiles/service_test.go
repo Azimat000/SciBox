@@ -690,3 +690,45 @@ func TestForApplicationNeedsAHeadline(t *testing.T) {
 		t.Errorf("blank headline: %v", err)
 	}
 }
+
+// Сотрудник организации открывает чужие профили не больше предела в сутки (срез 29, D-191, AUT-5, CRY-3): иначе созданная
+// за минуту организация выгрузила бы все контакты. Гость, вошедший без организации и сам владелец под предел не попадают.
+func TestStaffViewsOfOthersProfilesAreCappedPerDay(t *testing.T) {
+	w := newWorld(t)
+	v := w.viewers()
+	if _, err := w.svc.SaveCore(bg, v.owner.User, goodCore()); err != nil {
+		t.Fatal(err)
+	}
+	own, _ := w.svc.Own(bg, v.owner.User)
+	id := own.Profile.ID
+	w.setVisibility(v.owner, "public", true)
+
+	w.svc.cfg.Views = Limit{Max: 3, Window: 24 * time.Hour}
+	for i := 0; i < 3; i++ {
+		if _, err := w.svc.Get(bg, id, &v.staff.User); err != nil {
+			t.Fatalf("view %d: %v", i+1, err)
+		}
+	}
+	_, err := w.svc.Get(bg, id, &v.staff.User)
+	var rl *auth.RateLimitedError
+	if !errors.As(err, &rl) {
+		t.Fatalf("view 4: %v, want the daily cap", err)
+	}
+	// Остальных предел не касается.
+	for name, p := range map[string]*auth.User{"аноним": nil, "без организации": &v.stranger.User, "владелец": &v.owner.User} {
+		for i := 0; i < 5; i++ {
+			if _, err := w.svc.Get(bg, id, p); err != nil {
+				t.Fatalf("%s, view %d: %v", name, i+1, err)
+			}
+		}
+	}
+	// Через сутки счёт новый.
+	w.clock.Advance(25 * time.Hour)
+	if _, err := w.svc.Get(bg, id, &v.staff.User); err != nil {
+		t.Fatalf("after a day: %v", err)
+	}
+	// Ноль в настройках не значит «без предела».
+	if got := (Config{}).views(); got.Max <= 0 || got.Window <= 0 {
+		t.Fatalf("zero config gives %+v", got)
+	}
+}

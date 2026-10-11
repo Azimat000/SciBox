@@ -115,6 +115,21 @@ func CheckSet(set []Stored) error {
 	return nil
 }
 
+// spoofing — знаки, которые меняют вид имени, не будучи видимыми: переключатели направления письма (из «report\u202etxt.exe»
+// получается «reportexe.txt»), разделители строк и абзацев, невидимый пробел и метка порядка байт. Знаки U+200C и U+200D
+// остаются: без них неверно пишутся имена на персидском, хинди и другие.
+func spoofing(r rune) bool {
+	switch {
+	case r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069:
+		return true
+	}
+	switch r {
+	case 0x200B, 0x200E, 0x200F, 0x061C, 0x2028, 0x2029, 0xFEFF:
+		return true
+	}
+	return false
+}
+
 // CleanName делает из имени файла безопасное и читаемое: только последняя часть пути, без служебных знаков,
 // не длиннее предела, с расширением .pdf.
 func CleanName(raw string) string {
@@ -122,7 +137,7 @@ func CleanName(raw string) string {
 	name = path.Base(name)
 	name = strings.Map(func(r rune) rune {
 		switch {
-		case unicode.IsControl(r), strings.ContainsRune(`/\:*?"<>|`, r):
+		case unicode.IsControl(r), strings.ContainsRune(`/\:*?"<>|`, r), spoofing(r):
 			return -1
 		case r == utf8.RuneError:
 			return -1
@@ -134,12 +149,15 @@ func CleanName(raw string) string {
 	if strings.HasSuffix(strings.ToLower(name), ".pdf") {
 		base = name[:len(name)-4]
 	}
-	base = strings.TrimSpace(strings.Trim(base, "."))
+	base = strings.Trim(base, ". \t") // точки и пробелы по краям вперемешку: «. .x» не должно оставлять скрытое имя
 	if base == "" {
 		base = "файл"
 	}
 	if r := []rune(base); len(r) > maxNameRunes-4 {
-		base = strings.TrimSpace(string(r[:maxNameRunes-4]))
+		base = strings.Trim(string(r[:maxNameRunes-4]), ". \t")
+		if base == "" {
+			base = "файл"
+		}
 	}
 	return base + ".pdf"
 }

@@ -57,6 +57,17 @@ func (q *Queries) DeleteOldRateEvents(ctx context.Context, at time.Time) error {
 	return err
 }
 
+const lockRateKey = `-- name: LockRateKey :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))
+`
+
+// Замок на ключ счётчика до конца транзакции: проверка «не больше N» и запись события идут одна за другой, а не вместе
+// с другими такими же запросами (срез 29, CON-1, CON-2). Без замка пачка параллельных запросов проходит проверку с нулём.
+func (q *Queries) LockRateKey(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, lockRateKey, key)
+	return err
+}
+
 const recordRateEvent = `-- name: RecordRateEvent :exec
 INSERT INTO rate_events (kind, key, at) VALUES ($1, $2, $3)
 `
@@ -69,5 +80,22 @@ type RecordRateEventParams struct {
 
 func (q *Queries) RecordRateEvent(ctx context.Context, arg RecordRateEventParams) error {
 	_, err := q.db.Exec(ctx, recordRateEvent, arg.Kind, arg.Key, arg.At)
+	return err
+}
+
+const refundRateEvent = `-- name: RefundRateEvent :exec
+DELETE FROM rate_events WHERE ctid = (
+    SELECT e.ctid FROM rate_events e WHERE e.kind = $1::text AND e.key = $2::text ORDER BY e.at DESC LIMIT 1
+)
+`
+
+type RefundRateEventParams struct {
+	Kind string
+	Key  string
+}
+
+// Возвращает одну попытку (вход удался: не считаем его в лимит по адресу).
+func (q *Queries) RefundRateEvent(ctx context.Context, arg RefundRateEventParams) error {
+	_, err := q.db.Exec(ctx, refundRateEvent, arg.Kind, arg.Key)
 	return err
 }

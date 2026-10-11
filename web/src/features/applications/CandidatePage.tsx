@@ -18,6 +18,7 @@ import { InviteModal } from './InviteModal'
 import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
+import { mailtoHref } from '../../lib/mailto'
 
 /**
  * Карточка отклика для организации: решение и приглашения, письмо, файлы, рекомендательные письма и профиль, как он был
@@ -99,7 +100,7 @@ function Submission({ app, refs }: { app: Detail; refs: StaffReference[] }) {
         <p className="application-text">{app.cover_letter}</p>
         <p className="application-contact">
           <span>{c.contact}: </span>
-          <a href={`mailto:${app.contact_email}`}>{app.contact_email}</a>
+          <a href={mailtoHref(app.contact_email)}>{app.contact_email}</a>
         </p>
       </section>
 

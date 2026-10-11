@@ -721,3 +721,25 @@ func TestLateMarksCannotChangeAFinishedMail(t *testing.T) {
 		t.Errorf("a finished mail was changed by a late sender: sent=%v failed=%v err=%q next=%v", sent, failed, lastErr, next)
 	}
 }
+
+// Срок записи итога свой у каждого письма: пачка из медленных отправок, в сумме дольше срока одной записи, не должна
+// терять итоги последних писем (иначе они уходили бы второй раз после окончания аренды; срез 29, CON-5).
+func TestMarkTimeoutIsPerMailNotPerBatch(t *testing.T) {
+	old := markTimeout
+	markTimeout = 250 * time.Millisecond
+	t.Cleanup(func() { markTimeout = old })
+	addrs := queueMails(t, "slow-batch", 6)
+	slow := &flaky{err: func(mail.Message) error {
+		time.Sleep(80 * time.Millisecond) // шесть писем: ~480 мс, больше общего срока в 250 мс
+		return nil
+	}}
+	w := newWorker(slow, nil)
+	if _, err := w.Drain(context.Background()); err != nil {
+		t.Fatalf("a slow batch lost its marks: %v", err)
+	}
+	for _, a := range addrs {
+		if _, sent, _, _, _ := rowOf(t, a); !sent {
+			t.Errorf("%s: not marked as sent", a)
+		}
+	}
+}

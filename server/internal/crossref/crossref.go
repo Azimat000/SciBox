@@ -108,8 +108,16 @@ func NormalizeDOI(s string) (string, bool) {
 	if len(s) > maxDOILen || !doiPattern.MatchString(s) {
 		return "", false
 	}
+	// Управляющие знаки, любые пробелы (в том числе U+00A0 и U+2028) и форматирующие знаки (переключатели направления
+	// письма U+202E, невидимые склейки) в DOI не бывают; из-за них запись выглядела бы не тем, что в ней лежит.
 	for _, r := range s {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.IsSpace(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+			return "", false
+		}
+	}
+	// Сегменты «.» и «..» клиент HTTP не сворачивает, а Crossref мог бы свернуть: путь ушёл бы на другой адрес (INJ-6).
+	for seg := range strings.SplitSeq(s, "/") {
+		if seg == "." || seg == ".." {
 			return "", false
 		}
 	}

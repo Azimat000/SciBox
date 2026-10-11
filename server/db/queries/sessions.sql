@@ -7,7 +7,7 @@ RETURNING id;
 
 -- Стёртый аккаунт (deleted_at) не входит, даже если сессия почему-то осталась.
 -- name: GetSessionByTokenHash :one
-SELECT s.id AS session_id, s.last_seen_at, s.expires_at, s.reauth_at,
+SELECT s.id AS session_id, s.created_at AS session_created_at, s.last_seen_at, s.expires_at, s.reauth_at,
        u.id AS user_id, u.email, u.display_name, u.email_confirmed_at, u.created_at AS user_created_at,
        u.deletion_due_at
 FROM sessions s

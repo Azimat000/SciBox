@@ -193,3 +193,33 @@ func contains(list []string, want string) bool {
 	}
 	return false
 }
+
+// Журнал базы не хранит значения параметров запросов (срез 29, CRY-2): медленный запрос (дольше секунды) попадает в
+// журнал вместе с параметрами, а там почты, имена и хеши паролей.
+func TestProdComposeDatabaseNeverLogsQueryParameters(t *testing.T) {
+	c := loadProdCompose(t)
+	cmd, ok := c.Services["postgres"].Command.([]any)
+	if !ok {
+		t.Fatalf("postgres command has type %T", c.Services["postgres"].Command)
+	}
+	var settings []string
+	for _, a := range cmd {
+		settings = append(settings, fmt.Sprint(a))
+	}
+	joined := strings.Join(settings, " ")
+	for _, want := range []string{"log_parameter_max_length=0", "log_parameter_max_length_on_error=0"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("postgres must run with %s", want)
+		}
+	}
+}
+
+// ClamAV читает недоверенные файлы и не публикует порты наружу. Отнять у него NET_RAW пробовали (срез 29, CRY-8): образ
+// clamav/clamav-debian после этого не отвечает на проверку (`clamdcheck.sh`: «Unable to contact server»), поэтому ограничение
+// не применяется, а риск записан в T-78.
+func TestProdComposeAntivirusPublishesNoPorts(t *testing.T) {
+	svc := loadProdCompose(t).Services["clamav"]
+	if len(svc.Ports) != 0 {
+		t.Errorf("clamav must not publish ports: %v", svc.Ports)
+	}
+}

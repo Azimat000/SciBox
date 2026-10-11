@@ -38,7 +38,7 @@ func (s *Service) RequestEmailChange(ctx context.Context, p Principal, rawEmail 
 	if err := s.allowMail(ctx, meta.IP); err != nil {
 		return err
 	}
-	var m *mail.Message
+	var m, heads *mail.Message
 	err := s.inTx(ctx, func(q *dbgen.Queries) error {
 		user, err := q.GetUserByID(ctx, p.User.ID)
 		if err != nil {
@@ -59,6 +59,9 @@ func (s *Service) RequestEmailChange(ctx context.Context, p Principal, rawEmail 
 			built = s.emailTakenMail(email)
 		}
 		m = &built
+		// Владелец текущего адреса узнаёт о просьбе сменить почту (без нового адреса): вор сеанса не меняет почту молча.
+		note := s.emailChangeAskedMail(user)
+		heads = &note
 		// Новый адрес в запись не попадает: занят он или нет, запись одинаковая.
 		return audit.Record(ctx, q, audit.Event{Action: audit.AccountEmailChangeAsked, Actor: user.ID})
 	})
@@ -67,6 +70,9 @@ func (s *Service) RequestEmailChange(ctx context.Context, p Principal, rawEmail 
 	}
 	if m != nil {
 		s.sendAsync(*m)
+	}
+	if heads != nil {
+		s.sendAsync(*heads)
 	}
 	return nil
 }

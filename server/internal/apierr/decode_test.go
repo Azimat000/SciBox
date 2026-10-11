@@ -25,6 +25,10 @@ func TestDecodeJSON(t *testing.T) {
 		{"form", "application/x-www-form-urlencoded", `name=x`, false, http.StatusUnsupportedMediaType, CodeUnsupportedMedia},
 		{"broken", "application/json", `{`, false, http.StatusBadRequest, CodeBadRequest},
 		{"unknown field", "application/json", `{"name":"x","extra":1}`, false, http.StatusBadRequest, CodeBadRequest},
+		{"trailing document", "application/json", `{"name":"x"}{"name":"y"}`, false, http.StatusBadRequest, CodeBadRequest},
+		{"trailing garbage", "application/json", `{"name":"x"} garbage`, false, http.StatusBadRequest, CodeBadRequest},
+		{"trailing whitespace is fine", "application/json", "{\"name\":\"x\"}\n  \n", true, 200, ""},
+		{"nul in a string", "application/json", `{"name":"a\u0000b"}`, false, http.StatusBadRequest, CodeBadRequest},
 		{"too big", "application/json", `{"name":"` + strings.Repeat("я", 100) + `"}`, false, http.StatusRequestEntityTooLarge, CodePayloadTooLarge},
 	}
 	for _, c := range cases {

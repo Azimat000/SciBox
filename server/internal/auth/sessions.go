@@ -65,7 +65,7 @@ func (s *Service) Reauth(ctx context.Context, p Principal, password string) erro
 // checkPassword сверяет пароль человека; неверный пароль — ошибка поля field и попытка в счёт лимита.
 func (s *Service) checkPassword(ctx context.Context, userID uuid.UUID, password, field string) error {
 	key := userID.String()
-	if err := s.allow(ctx, kindPasswordUser, key, s.cfg.Limits.PasswordUser); err != nil {
+	if err := s.reserve(ctx, kindPasswordUser, key, s.cfg.Limits.PasswordUser); err != nil {
 		return err
 	}
 	user, err := s.q.GetUserByID(ctx, userID)
@@ -79,12 +79,9 @@ func (s *Service) checkPassword(ctx context.Context, userID uuid.UUID, password,
 		}
 	}
 	if !ok {
-		if err := s.record(ctx, kindPasswordUser, key); err != nil {
-			return err
-		}
 		return newValidation(field, msgPasswordWrong)
 	}
-	return nil
+	return s.refund(ctx, kindPasswordUser, key)
 }
 
 // requireFresh — опасное действие разрешено только вскоре после ввода пароля.

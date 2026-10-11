@@ -113,6 +113,15 @@ describe('ResetPasswordPage', () => {
 })
 
 describe('ConfirmEmailPage', () => {
+  it('sends the person to choose a password when the link was opened in another browser', async () => {
+    stubApi({ 'POST /api/auth/confirm-email': reply(200, { reset_token: 'new_TOKEN-1' }) })
+    const { router } = renderApp('/confirm-email?token=abc')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Новый пароль' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/reset-password')
+    expect(router.state.location.search).toBe('?token=new_TOKEN-1&from=confirm')
+    expect(screen.getByText(/Почта подтверждена\. Ссылка открыта не в том браузере/)).toBeInTheDocument()
+  })
+
   it('confirms the address, signs the person in and shows who they are', async () => {
     const api = stubApi({ 'POST /api/auth/confirm-email': reply(200, { user: ann }) })
     renderApp('/confirm-email?token=abc')

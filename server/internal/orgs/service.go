@@ -143,6 +143,10 @@ func (s *Service) sendAsync(m mail.Message) {
 // spend учитывает событие вида kind по ключу key и отказывает, если лимит уже исчерпан.
 func (s *Service) spend(ctx context.Context, q *dbgen.Queries, kind string, key uuid.UUID, lim Limit) error {
 	now := s.now()
+	// Замок на счётчик: параллельные запросы не проходят проверку с одним и тем же нулём (срез 29, CON-2).
+	if err := q.LockRateKey(ctx, kind+":"+key.String()); err != nil {
+		return fmt.Errorf("orgs: lock rate key: %w", err)
+	}
 	row, err := q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kind, Key: key.String(), At: now.Add(-lim.Window)})
 	if err != nil {
 		return fmt.Errorf("orgs: count rate events: %w", err)

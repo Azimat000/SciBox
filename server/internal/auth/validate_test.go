@@ -28,6 +28,12 @@ func TestNormalizeEmail(t *testing.T) {
 		{"\"ivan\"@example.ru", "", msgEmailInvalid},
 		{long, "", msgEmailInvalid},
 		{"иван@пример.рф", "иван@пример.рф", ""},
+		// В ссылке mailto: это параметры (скрытая копия, готовый текст), срез 29.
+		{"a@b.ru?bcc=x@y.ru", "", msgEmailInvalid},
+		{"a@b.ru&body=hi", "", msgEmailInvalid},
+		{"a=b@c.ru", "", msgEmailInvalid},
+		{"a%40x@c.ru", "", msgEmailInvalid},
+		{"a#b@c.ru", "", msgEmailInvalid},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {

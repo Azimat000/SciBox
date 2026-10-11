@@ -312,3 +312,29 @@ func TestCheckInput(t *testing.T) {
 		t.Errorf("a bad application: %v", err)
 	}
 }
+
+// Отклик, который всё равно будет отвергнут по вакансии (нет такой, уже откликался), не заставляет хранилище и
+// антивирус работать: вакансия и повторный отклик проверяются до приёма файлов (срез 29, CON-3).
+func TestHTTPApplyRefusedByTheVacancyNeverTouchesTheStorage(t *testing.T) {
+	a := newAPI(t)
+	me := a.Applicant("Мария")
+	// Отклик есть: второй с файлами отвергается до приёма файла.
+	if r := a.form(&me, a.input(me)); r.Code != 201 {
+		t.Fatalf("first application: %d %s", r.Code, r.Raw)
+	}
+	objects, scans := a.Store.Count(), a.AV.Scans()
+	r := a.form(&me, a.input(me), testkit.FilePart{Name: "a.pdf", Data: pdfBytes()})
+	if r.Code != 409 {
+		t.Fatalf("second application: %d %s", r.Code, r.Raw)
+	}
+	// Вакансии нет вовсе.
+	input := a.input(me)
+	input.VacancyID = uuid.New()
+	r = a.form(&me, input, testkit.FilePart{Name: "a.pdf", Data: pdfBytes()})
+	if r.Code != 404 {
+		t.Fatalf("unknown vacancy: %d %s", r.Code, r.Raw)
+	}
+	if a.Store.Count() != objects || a.AV.Scans() != scans {
+		t.Errorf("a refused application touched the storage: objects %d→%d, scans %d→%d", objects, a.Store.Count(), scans, a.AV.Scans())
+	}
+}

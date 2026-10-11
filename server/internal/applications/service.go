@@ -113,6 +113,10 @@ func (s *Service) today() time.Time {
 func (s *Service) spend(ctx context.Context, q *dbgen.Queries, user uuid.UUID) error {
 	now := s.now()
 	lim := s.cfg.Apply
+	// Замок на счётчик: параллельные запросы не проходят проверку с одним и тем же нулём (срез 29, CON-2).
+	if err := q.LockRateKey(ctx, kindApply+":"+user.String()); err != nil {
+		return fmt.Errorf("applications: lock rate key: %w", err)
+	}
 	row, err := q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kindApply, Key: user.String(), At: now.Add(-lim.Window)})
 	if err != nil {
 		return fmt.Errorf("applications: count rate events: %w", err)
@@ -205,6 +209,46 @@ func knownRefusal(err error) bool {
 func (s *Service) CheckInput(user auth.User, in Input) error {
 	if _, _, _, errs := validate(user, in, nil); len(errs) > 0 {
 		return &auth.ValidationError{Fields: errs}
+	}
+	return nil
+}
+
+// Precheck — всё, что можно выяснить об отклике до приёма файлов: поля, вакансия (есть ли, открыта ли, не своя ли),
+// не откликался ли человек уже и не исчерпан ли суточный предел. Те же отказы, что даёт Apply, но без записи: файлы по
+// заведомо отвергаемому запросу не доходят ни до хранилища, ни до антивируса (срез 29, CON-3).
+func (s *Service) Precheck(ctx context.Context, user auth.User, in Input) error {
+	if err := s.CheckInput(user, in); err != nil {
+		return err
+	}
+	v, err := s.q.GetVacancyForApply(ctx, in.VacancyID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("applications: precheck vacancy: %w", err)
+	}
+	if err := s.checkVacancy(v); err != nil {
+		return err
+	}
+	actor, err := orgs.ActorOf(ctx, s.q, v.OrgID, user.ID)
+	if err != nil {
+		return err
+	}
+	if actor.Can(access.ViewApplications, unitOf(v.UnitID)) {
+		return ErrOwnVacancy
+	}
+	if _, err := s.q.GetActiveApplicationForVacancy(ctx, dbgen.GetActiveApplicationForVacancyParams{VacancyID: v.ID, UserID: user.ID}); err == nil {
+		return ErrAlreadyApplied
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("applications: precheck existing application: %w", err)
+	}
+	now, lim := s.now(), s.cfg.Apply
+	row, err := s.q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kindApply, Key: user.ID.String(), At: now.Add(-lim.Window)})
+	if err != nil {
+		return fmt.Errorf("applications: precheck rate events: %w", err)
+	}
+	if row.Events >= int64(lim.Max) {
+		return &auth.RateLimitedError{RetryAfter: max(row.Oldest.Add(lim.Window).Sub(now), time.Second)}
 	}
 	return nil
 }

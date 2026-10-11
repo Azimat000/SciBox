@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"scibox/server/internal/apierr"
+	"scibox/server/internal/textsafe"
 )
 
 // DefaultBody — лимит тела запроса для любого адреса, которого нет в таблице: самые большие формы
@@ -191,6 +192,13 @@ func (g *Guard) Perimeter(next http.Handler) http.Handler {
 		rt := g.route(r)
 		r = r.WithContext(context.WithValue(r.Context(), routeCtxKey{}, rt))
 
+		// Нулевой знак и невалидный UTF-8 в пути и параметрах не пускаются дальше: база их отвергает, и без проверки это
+		// 500 на публичных адресах (срез 29, INJ-2).
+		if !textsafe.ValidRequestURL(r.URL) {
+			apierr.WriteError(w, http.StatusBadRequest, apierr.CodeBadRequest, "В адресе запроса есть недопустимые знаки")
+			return
+		}
+
 		limit := rt.Body
 		if limit == 0 {
 			limit = DefaultBody
@@ -203,11 +211,22 @@ func (g *Guard) Perimeter(next http.Handler) http.Handler {
 		if r.Body != nil && r.Body != http.NoBody {
 			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
-		if rt.Slow {
-			extendDeadlines(w, time.Now().Add(g.cfg.Transfer))
-		}
+		// Срок долгой передачи (Route.Slow) здесь не выдаётся: до проверки входа или ссылки любой посетитель получил бы
+		// пять минут на медленную отправку тела (срез 29, CON-6). Его даёт Throttle вошедшему человеку, а страницы без входа
+		// вызывают ExtendTransfer после проверки своей ссылки.
+		r = r.WithContext(context.WithValue(r.Context(), transferCtxKey{}, g.cfg.Transfer))
 		next.ServeHTTP(w, r)
 	})
+}
+
+type transferCtxKey struct{}
+
+// ExtendTransfer продлевает сроки чтения и записи до срока долгой передачи. Вызывается обработчиком адреса с Slow,
+// когда посетитель уже подтвердил право на загрузку (например, ссылка рекомендателя найдена и жива).
+func ExtendTransfer(w http.ResponseWriter, r *http.Request) {
+	if d, ok := r.Context().Value(transferCtxKey{}).(time.Duration); ok && d > 0 {
+		extendDeadlines(w, time.Now().Add(d))
+	}
 }
 
 // extendDeadlines продлевает сроки соединения для долгой передачи. В тестах с httptest.ResponseRecorder
@@ -223,7 +242,15 @@ func extendDeadlines(w http.ResponseWriter, until time.Time) {
 func (g *Guard) Throttle(who Who) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			p := g.route(r).Limit
+			rt := g.route(r)
+			signedIn := false
+			if who != nil {
+				_, signedIn = who(r)
+			}
+			if rt.Slow && signedIn {
+				extendDeadlines(w, time.Now().Add(g.cfg.Transfer))
+			}
+			p := rt.Limit
 			if p == nil {
 				next.ServeHTTP(w, r)
 				return

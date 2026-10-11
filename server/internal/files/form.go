@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"scibox/server/internal/apierr"
+	"scibox/server/internal/textsafe"
 )
 
 // Коды ошибок этого раздела.
@@ -146,6 +147,10 @@ func Decode(ctx context.Context, w http.ResponseWriter, r *http.Request, v *Vaul
 		dec := json.NewDecoder(bytes.NewReader(data))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(dst); err != nil {
+			return ErrBadJSON
+		}
+		// Нулевой знак в тексте база не примет; такой ввод не доходит до обработчика (срез 29, INJ-3).
+		if !textsafe.ValidValue(dst) {
 			return ErrBadJSON
 		}
 		if check != nil {

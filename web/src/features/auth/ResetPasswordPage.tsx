@@ -12,7 +12,9 @@ import { useForm } from './useForm'
 import { checkNewPassword, compact } from './validation'
 
 export function ResetPasswordPage() {
-  const token = useSearchParams()[0].get('token') ?? ''
+  const params = useSearchParams()[0]
+  const token = params.get('token') ?? ''
+  const afterConfirm = params.get('from') === 'confirm'
   const navigate = useNavigate()
   const formRef = useRef<HTMLFormElement>(null)
   const save = useMutation({
@@ -45,7 +47,7 @@ export function ResetPasswordPage() {
   const formError = save.error && Object.keys(fieldErrorsOf(save.error)).length === 0 ? describeError(save.error) : undefined
 
   return (
-    <AuthPage title={t.auth.reset.title} lead={t.auth.reset.lead}>
+    <AuthPage title={t.auth.reset.title} lead={afterConfirm ? t.auth.reset.afterConfirmLead : t.auth.reset.lead}>
       <form className="auth-form" onSubmit={onSubmit} ref={formRef} noValidate>
         {formError && <Alert kind="error">{formError}</Alert>}
         <PasswordField

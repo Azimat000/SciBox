@@ -351,3 +351,75 @@ func TestMailFailureIsLoggedWithoutAddress(t *testing.T) {
 type failingMailer struct{}
 
 func (failingMailer) Send(context.Context, mail.Message) error { return errors.New("smtp is down") }
+
+// Приглашение, выписанное совладельцем, которого потом убрали или понизили, не действует (срез 29, AUT-7).
+func TestInvitationOfARemovedOrDemotedOwnerCannotBeAccepted(t *testing.T) {
+	for _, how := range []string{"removed", "demoted"} {
+		t.Run(how, func(t *testing.T) {
+			w := newWorld(t)
+			boss, partner, guest := w.user("Иван"), w.user("Совладелец"), w.user("Гость")
+			org := w.org(boss)
+			if _, err := w.svc.Invite(bg, fresh(boss.User), org.Slug, InviteInput{Email: partner.Email, Role: "owner"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := w.svc.AcceptInvitation(bg, partner.User, tokenIn(t, w.lastMailTo(partner.Email).Body)); err != nil {
+				t.Fatal(err)
+			}
+			// Совладелец приглашает третьего владельцем, затем основателя лишают права.
+			if _, err := w.svc.Invite(bg, fresh(partner.User), org.Slug, InviteInput{Email: guest.Email, Role: "owner"}); err != nil {
+				t.Fatal(err)
+			}
+			token := tokenIn(t, w.lastMailTo(guest.Email).Body)
+			switch how {
+			case "removed":
+				if err := w.svc.RemoveMember(bg, boss.User, org.Slug, partner.ID); err != nil {
+					t.Fatal(err)
+				}
+			case "demoted":
+				if err := w.svc.ChangeRole(bg, fresh(boss.User), org.Slug, partner.ID, "hr"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := w.svc.AcceptInvitation(bg, guest.User, token); !errors.Is(err, ErrInvalidInvitation) {
+				t.Fatalf("the invitation of a removed owner worked: %v", err)
+			}
+			if countRows(t, `SELECT count(*) FROM org_members WHERE org_id = $1 AND user_id = $2`, org.ID, guest.ID) != 0 {
+				t.Fatal("the guest became a member")
+			}
+		})
+	}
+}
+
+// Заброшенный единственный владелец организации с сотрудниками не стирается по сроку неактивности (срез 29, D-192):
+// организация осталась бы без владельца. Проверка не повторяется каждый проход и не шлёт письма заново.
+func TestInactiveSoleOwnerOfAnOrganizationWithStaffIsNotErased(t *testing.T) {
+	w := newWorld(t)
+	owner, hr := w.user("Иван"), w.user("Кадровик")
+	org := w.org(owner)
+	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: hr.Email, Role: "hr"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.svc.AcceptInvitation(bg, hr.User, tokenIn(t, w.lastMailTo(hr.Email).Body)); err != nil {
+		t.Fatal(err)
+	}
+	long := 4 * 365 * 24 * time.Hour
+	for _, u := range []person{owner} {
+		if _, err := sharedPool.Exec(bg, `UPDATE users SET last_active_at = now() - $2::interval, inactive_warned_at = now() - interval '31 days' WHERE id = $1`, u.ID, long.String()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		if _, _, err := w.auth.ProcessInactive(bg); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.auth.Cleanup(bg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if countRows(t, `SELECT count(*) FROM users WHERE id = $1 AND deleted_at IS NULL AND deletion_due_at IS NULL`, owner.ID) != 1 {
+		t.Fatal("the sole owner was scheduled or erased")
+	}
+	if countRows(t, `SELECT count(*) FROM org_members WHERE org_id = $1 AND role = 'owner'`, org.ID) != 1 {
+		t.Fatal("the organization lost its owner")
+	}
+}

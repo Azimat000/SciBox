@@ -2,6 +2,7 @@ package profiles
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
@@ -287,7 +288,8 @@ func (h *Handler) catalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	who := viewer(r)
-	if h.catalogCache == nil || who != nil {
+	key, keyOK := cacheKey(p)
+	if h.catalogCache == nil || who != nil || !keyOK {
 		res, err := h.svc.Catalog(r.Context(), p, who)
 		if err != nil {
 			h.fail(w, r, err)
@@ -296,7 +298,7 @@ func (h *Handler) catalog(w http.ResponseWriter, r *http.Request) {
 		apierr.WriteJSON(w, http.StatusOK, res)
 		return
 	}
-	doc, err := h.catalogCache.Get(r.Context(), r.URL.Query().Encode(), maxCachedCatalogBody, func(ctx context.Context) (any, error) {
+	doc, err := h.catalogCache.Get(r.Context(), key, maxCachedCatalogBody, func(ctx context.Context) (any, error) {
 		return h.svc.Catalog(ctx, p, nil)
 	})
 	if err != nil {
@@ -306,4 +308,10 @@ func (h *Handler) catalog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(doc.Body) // клиент мог уйти: писать больше некуда
+}
+
+// cacheKey — ключ кеша: условия поиска в одном определённом виде. Не записалось (не бывает) — без кеша.
+func cacheKey(p CatalogParams) (string, bool) {
+	b, err := json.Marshal(p)
+	return string(b), err == nil
 }

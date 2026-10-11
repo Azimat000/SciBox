@@ -13,6 +13,7 @@ import (
 	"scibox/server/internal/apierr"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/files"
+	"scibox/server/internal/httpguard"
 )
 
 // Коды ошибок этого раздела.
@@ -183,7 +184,13 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	}
 	// Ссылка и текст проверяются до приёма файла: по мёртвой ссылке никто не заставит хранилище и антивирус работать.
 	ups, err := files.Decode(r.Context(), w, r, h.svc.vault, &in, maxJSON, 1, func() error {
-		return h.svc.CheckSubmit(r.Context(), in.Token, in.LetterInput)
+		if err := h.svc.CheckSubmit(r.Context(), in.Token, in.LetterInput); err != nil {
+			return err
+		}
+		// Ссылка жива: рекомендателю дают долгий срок на передачу файла. До этого места соединение держало обычный
+		// срок, и безымянный посетитель с выдуманной ссылкой не мог занять его на минуты (срез 29, CON-6).
+		httpguard.ExtendTransfer(w, r)
+		return nil
 	})
 	if err != nil {
 		if files.IsUploadError(err) {

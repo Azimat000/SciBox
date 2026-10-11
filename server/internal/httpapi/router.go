@@ -184,6 +184,8 @@ func healthHandler(d Deps) http.HandlerFunc {
 			WriteError(w, http.StatusServiceUnavailable, CodeDatabaseUnavailable, "База данных недоступна")
 			return
 		}
+		// Версия PostgreSQL на публичный адрес не выходит: она подсказывает, какие известные уязвимости пробовать (срез 29).
+		db.ServerVersion = ""
 		WriteJSON(w, http.StatusOK, HealthResponse{
 			Status:   "ok",
 			Product:  d.ProductName,

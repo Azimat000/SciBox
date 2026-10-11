@@ -43,9 +43,11 @@ const (
 	maxErrorRunes      = 500
 	sentKeepFor        = 7 * 24 * time.Hour
 	failedKeepFor      = 30 * 24 * time.Hour
-	// markTimeout — сколько отводится на записи в базу после отправки письма: они не зависят от остановки сервера.
-	markTimeout = 30 * time.Second
 )
+
+// markTimeout — сколько отводится на запись в базу итога одного письма: она не зависит от остановки сервера. Переменная
+// только ради теста.
+var markTimeout = 30 * time.Second
 
 // Worker забирает письма из очереди и отправляет их настоящим отправителем.
 //
@@ -124,27 +126,40 @@ func (w *Worker) RunOnce(ctx context.Context) (Stats, error) {
 	if err != nil {
 		return Stats{}, fmt.Errorf("notifications: claim outbox: %w", err)
 	}
-	mark, cancel := context.WithTimeout(context.WithoutCancel(ctx), markTimeout)
-	defer cancel()
+	// Срок записи итога свой у каждого письма: общий на пачку кончался бы раньше, чем дойдёт до последних писем при
+	// медленном SMTP, и уже отправленные письма уходили бы второй раз после окончания аренды (срез 29, CON-5).
+	mark := func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.WithoutCancel(ctx), markTimeout)
+	}
 
 	var st Stats
 	for i, r := range rows {
 		// Не начинаем письмо, если сервер останавливают или аренда кончится раньше, чем оно успеет уйти: иначе другая
 		// копия взяла бы его, пока мы ещё отправляем.
 		if jobs.Draining(ctx) || (w.Lease > w.SendTimeout && w.now().Add(w.SendTimeout).After(leaseUntil)) {
-			return w.release(mark, st, rows[i:], leaseUntil)
+			return w.releaseFresh(mark, st, rows[i:], leaseUntil)
 		}
 		sendErr := w.send(ctx, r)
 		done := w.now()
 		if sendErr != nil && (resilience.Rejected(sendErr) || ctx.Err() != nil) {
 			// Предохранитель открылся посреди пачки или отправку оборвала остановка: письмо не виновато.
-			return w.release(mark, st, rows[i:], leaseUntil)
+			return w.releaseFresh(mark, st, rows[i:], leaseUntil)
 		}
-		if err := w.record(mark, r, sendErr, done, &st); err != nil {
+		mctx, cancel := mark()
+		err := w.record(mctx, r, sendErr, done, &st)
+		cancel()
+		if err != nil {
 			return st, err
 		}
 	}
 	return st, nil
+}
+
+// releaseFresh возвращает не начатые письма в очередь в своём контексте с отдельным сроком.
+func (w *Worker) releaseFresh(mark func() (context.Context, context.CancelFunc), st Stats, rest []dbgen.ClaimOutboxRow, leaseUntil time.Time) (Stats, error) {
+	ctx, cancel := mark()
+	defer cancel()
+	return w.release(ctx, st, rest, leaseUntil)
 }
 
 // send отправляет письмо через предохранитель. Отклонённое предохранителем письмо возвращает его ошибку без обращения к службе.

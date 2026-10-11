@@ -11,6 +11,7 @@ import { acceptProposal, answerInvitation, cancelInvitation, refreshApplications
 import { ProposeModal, ReplyModal } from './AnswerModals'
 import { dateText, invStatusLabel, kindLabel, momentText } from './labels'
 import './review.css'
+import { mailtoHref } from '../../lib/mailto'
 
 type Role = 'applicant' | 'staff'
 
@@ -159,7 +160,7 @@ function Details({ inv }: { inv: Invitation }) {
             <>
               <dt>{i.email}</dt>
               <dd>
-                <a href={`mailto:${inv.contact_email}`}>{inv.contact_email}</a>
+                <a href={mailtoHref(inv.contact_email)}>{inv.contact_email}</a>
               </dd>
             </>
           )}

@@ -33,6 +33,13 @@ var (
 		Guest: httpguard.Rate{Requests: 20, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 20, Per: time.Minute},
 	}
+	// applyUploads — отправка отклика с файлами: каждый запрос гонит до 30 МБ через хранилище и антивирус и собирает PDF.
+	// Человеку хватит пары в минуту; предел не даёт одной учётной записи нагружать их циклом (срез 29, CON-3).
+	applyUploads = &httpguard.Policy{
+		Name:  "apply_upload",
+		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 10, Per: time.Minute},
+	}
 	// linkPages — страницы по одноразовым ссылкам из писем (рекомендатель, приглашение в организацию,
 	// смена почты): человеку хватит нескольких запросов, перебор ссылок должен упираться в предел.
 	linkPages = &httpguard.Policy{
@@ -51,6 +58,7 @@ const uploadBody = 64 << 20
 func PerimeterRoutes() []httpguard.Route {
 	get, post := http.MethodGet, http.MethodPost
 	return []httpguard.Route{
+		{Method: get, Pattern: "/api/health", Limit: publicReads},
 		{Method: get, Pattern: "/api/landing", Limit: publicReads},
 		{Method: get, Pattern: "/api/vacancies", Limit: publicReads},
 		{Method: get, Pattern: "/api/vacancies/{id}/", Limit: publicReads},
@@ -66,7 +74,7 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: get, Pattern: "/api/scientists/{id}/cv", Slow: true, Limit: pdfBuilds},
 		{Method: get, Pattern: "/api/applications/{id}/files/{fileId}", Slow: true},
 		{Method: get, Pattern: "/api/account/export", Slow: true},
-		{Method: post, Pattern: "/api/applications", Body: uploadBody, Slow: true},
+		{Method: post, Pattern: "/api/applications", Body: uploadBody, Slow: true, Limit: applyUploads},
 
 		{Method: post, Pattern: "/api/recommendations/lookup", Limit: linkPages},
 		{Method: post, Pattern: "/api/recommendations/submit", Body: uploadBody, Slow: true, Limit: linkPages},

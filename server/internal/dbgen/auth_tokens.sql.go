@@ -33,6 +33,31 @@ func (q *Queries) ConsumeAuthToken(ctx context.Context, arg ConsumeAuthTokenPara
 	return user_id, err
 }
 
+const consumeConfirmToken = `-- name: ConsumeConfirmToken :one
+UPDATE auth_tokens SET used_at = $1::timestamptz
+WHERE token_hash = $2 AND purpose = 'confirm_email'
+  AND used_at IS NULL AND expires_at > $1::timestamptz
+RETURNING user_id, binding_hash
+`
+
+type ConsumeConfirmTokenParams struct {
+	Now       time.Time
+	TokenHash []byte
+}
+
+type ConsumeConfirmTokenRow struct {
+	UserID      uuid.UUID
+	BindingHash []byte
+}
+
+// Погашение ссылки подтверждения: вместе с привязкой, чтобы решить, входить ли в аккаунт.
+func (q *Queries) ConsumeConfirmToken(ctx context.Context, arg ConsumeConfirmTokenParams) (ConsumeConfirmTokenRow, error) {
+	row := q.db.QueryRow(ctx, consumeConfirmToken, arg.Now, arg.TokenHash)
+	var i ConsumeConfirmTokenRow
+	err := row.Scan(&i.UserID, &i.BindingHash)
+	return i, err
+}
+
 const consumeEmailToken = `-- name: ConsumeEmailToken :one
 UPDATE auth_tokens SET used_at = $1::timestamptz
 WHERE token_hash = $2 AND purpose = $3
@@ -79,6 +104,33 @@ func (q *Queries) CreateAuthToken(ctx context.Context, arg CreateAuthTokenParams
 		arg.TokenHash,
 		arg.CreatedAt,
 		arg.ExpiresAt,
+	)
+	return err
+}
+
+const createBoundAuthToken = `-- name: CreateBoundAuthToken :exec
+INSERT INTO auth_tokens (user_id, purpose, token_hash, created_at, expires_at, binding_hash)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateBoundAuthTokenParams struct {
+	UserID      uuid.UUID
+	Purpose     string
+	TokenHash   []byte
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	BindingHash []byte
+}
+
+// Ссылка подтверждения почты, привязанная к браузеру регистрации (хеш случайной cookie; срез 29).
+func (q *Queries) CreateBoundAuthToken(ctx context.Context, arg CreateBoundAuthTokenParams) error {
+	_, err := q.db.Exec(ctx, createBoundAuthToken,
+		arg.UserID,
+		arg.Purpose,
+		arg.TokenHash,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.BindingHash,
 	)
 	return err
 }

@@ -6,6 +6,7 @@ import { plural } from '../../lib/plural'
 import { itemKinds, sectionOf, skillsOf, type Item, type ItemKind, type ProfilePage, type Quartiles } from './api'
 import { degreeLabel, titleLabel } from './labels'
 import { itemTitle, sectionDefs } from './sections'
+import { mailtoHref } from '../../lib/mailto'
 
 /** Уровень заголовков разделов: на своей странице профиля h2, внутри чужой страницы (карточка отклика) ниже. */
 const SectionLevel = createContext<'h2' | 'h3'>('h2')
@@ -97,7 +98,7 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
           )}
           {page.viewer.can_see_contacts && p.contact_email && (
             <p className="profile-contact">
-              <a href={`mailto:${p.contact_email}`}>{p.contact_email}</a>
+              <a href={mailtoHref(p.contact_email)}>{p.contact_email}</a>
             </p>
           )}
           {actions && <div className="profile-toolbar">{actions}</div>}

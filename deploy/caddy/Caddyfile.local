@@ -10,6 +10,7 @@
 
 import /etc/caddy/site.caddy
 
-localhost {
+# Второе имя для сканеров: Java (OWASP ZAP) не передаёт SNI для имени без точки, и Caddy отвечает им internal_error.
+localhost, scibox.test {
 	import scibox_site
 }

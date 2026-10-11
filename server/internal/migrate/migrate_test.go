@@ -114,10 +114,13 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00024_load_indexes.sql", 2, allTables},
+		{"up", "00026_inactive_accounts.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
-		// Индексы для чисел главной (00024) и метрики очереди писем (00023) таблиц не добавляют.
+		// Столбцы привязки ссылки (00025) и неактивности (00026), индексы для чисел главной (00024) и метрики очереди
+		// писем (00023) таблиц не добавляют.
+		{"down", "00026_inactive_accounts.sql", 2, allTables},
+		{"down", "00025_confirm_binding.sql", 2, allTables},
 		{"down", "00024_load_indexes.sql", 2, allTables},
 		{"down", "00023_observability.sql", 2, allTables},
 		{"down", "00022_job_runs.sql", 2, scaleTables},
@@ -144,7 +147,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00024_load_indexes.sql", 2, allTables},
+		{"up", "00026_inactive_accounts.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

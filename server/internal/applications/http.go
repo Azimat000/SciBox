@@ -121,7 +121,7 @@ func (h *Handler) apply(w http.ResponseWriter, r *http.Request) {
 	user := actor(r)
 	// Поля проверяются до приёма файлов: неверный отклик не должен заставлять хранилище и антивирус работать впустую.
 	ups, err := files.Decode(r.Context(), w, r, h.svc.vault, &in, maxFormJSON, files.MaxAttachments+1, func() error {
-		return h.svc.CheckInput(user, in)
+		return h.svc.Precheck(r.Context(), user, in)
 	})
 	if err != nil {
 		h.failUpload(w, r, err)

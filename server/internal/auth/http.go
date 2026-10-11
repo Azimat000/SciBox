@@ -24,6 +24,9 @@ const CookieName = "scibox_session"
 // DeviceCookieName — долгая cookie знакомого браузера (письмо о входе с нового устройства, T-13).
 const DeviceCookieName = "scibox_device"
 
+// BindingCookieName — короткая cookie «браузер регистрации» (срез 29, D-190): ссылка подтверждения почты привязана к ней.
+const BindingCookieName = "scibox_reg"
+
 // maxBody — самый большой допустимый размер тела запроса аккаунтов.
 const maxBody = 16 << 10
 
@@ -102,6 +105,12 @@ func (h *Handler) SameOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			// Чтение с другого сайта тоже не нужно: куки SameSite=Lax уходят при переходе по ссылке, а у выгрузки
+			// данных и выдачи файла есть побочные действия (счётчик, запись в журнал; срез 29, WEB-5).
+			if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+				apierr.WriteError(w, http.StatusForbidden, apierr.CodeForbidden, "Запрос пришёл с другого сайта")
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -182,6 +191,33 @@ func (h *Handler) setDeviceCookie(w http.ResponseWriter, token string) {
 	})
 }
 
+// setBindingCookie ставит cookie «браузер регистрации» на срок жизни ссылки подтверждения.
+func (h *Handler) setBindingCookie(w http.ResponseWriter, token string) {
+	ttl := h.svc.cfg.ConfirmTTL
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
+		Name: BindingCookieName, Value: token, Path: "/", Expires: time.Now().Add(ttl), MaxAge: int(ttl.Seconds()),
+		HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *Handler) clearBindingCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
+		Name: BindingCookieName, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// bindingMeta — данные запроса с cookie «браузер регистрации»; если её нет, заводит новую и ставит в ответ.
+func (h *Handler) bindingMeta(w http.ResponseWriter, r *http.Request) Meta {
+	m := meta(r)
+	if m.Binding == "" {
+		raw, _ := newToken()
+		m.Binding = raw
+		h.setBindingCookie(w, raw)
+	}
+	return m
+}
+
 func (h *Handler) clearCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure ставится при https, gosec не видит значение поля
 		Name: CookieName, Value: "", Path: "/", MaxAge: -1,
@@ -193,6 +229,9 @@ func (h *Handler) clearCookie(w http.ResponseWriter) {
 // без доверенных прокси это адрес соединения, заголовки X-Forwarded-* не принимаются.
 func meta(r *http.Request) Meta {
 	m := Meta{IP: httpguard.ClientIP(r), UserAgent: r.UserAgent()}
+	if c, err := r.Cookie(BindingCookieName); err == nil {
+		m.Binding = c.Value
+	}
 	if c, err := r.Cookie(DeviceCookieName); err == nil {
 		m.Device = c.Value
 	}
@@ -295,7 +334,7 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	email, err := h.svc.Register(r.Context(), RegisterInput{Name: in.Name, Email: in.Email, Password: in.Password, Consent: in.Consent}, meta(r))
+	email, err := h.svc.Register(r.Context(), RegisterInput{Name: in.Name, Email: in.Email, Password: in.Password, Consent: in.Consent}, h.bindingMeta(w, r))
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -311,10 +350,17 @@ func (h *Handler) confirmEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, sess, err := h.svc.ConfirmEmail(r.Context(), in.Token, meta(r))
+	if elsewhere, ok := errors.AsType[*ConfirmedElsewhereError](err); ok {
+		// Почта подтверждена, но входа нет: сайт сразу ведёт человека придумать пароль.
+		h.clearBindingCookie(w)
+		apierr.WriteJSON(w, http.StatusOK, map[string]string{"reset_token": elsewhere.ResetToken})
+		return
+	}
 	if err != nil {
 		h.fail(w, r, err)
 		return
 	}
+	h.clearBindingCookie(w)
 	h.setCookie(w, sess.Token, sess.ExpiresAt)
 	h.setDeviceCookie(w, sess.Device)
 	writeUser(w, http.StatusOK, user)
@@ -322,6 +368,10 @@ func (h *Handler) confirmEmail(w http.ResponseWriter, r *http.Request) {
 
 // emailOnly читает тело {"email": "..."} и вызывает действие; ответ всегда 202.
 func (h *Handler) emailOnly(action func(*Service, context.Context, string, Meta) error) http.HandlerFunc {
+	return h.emailOnlyMeta(action, func(_ http.ResponseWriter, r *http.Request) Meta { return meta(r) })
+}
+
+func (h *Handler) emailOnlyMeta(action func(*Service, context.Context, string, Meta) error, metaOf func(http.ResponseWriter, *http.Request) Meta) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Email string `json:"email"`
@@ -329,7 +379,7 @@ func (h *Handler) emailOnly(action func(*Service, context.Context, string, Meta)
 		if !decode(w, r, &in) {
 			return
 		}
-		if err := action(h.svc, r.Context(), in.Email, meta(r)); err != nil {
+		if err := action(h.svc, r.Context(), in.Email, metaOf(w, r)); err != nil {
 			h.fail(w, r, err)
 			return
 		}
@@ -338,7 +388,8 @@ func (h *Handler) emailOnly(action func(*Service, context.Context, string, Meta)
 }
 
 func (h *Handler) resendConfirmation(w http.ResponseWriter, r *http.Request) {
-	h.emailOnly((*Service).ResendConfirmation)(w, r)
+	// Новое письмо привязывается к этому браузеру (если у него нет своей метки, она ставится сейчас).
+	h.emailOnlyMeta((*Service).ResendConfirmation, h.bindingMeta)(w, r)
 }
 
 func (h *Handler) forgotPassword(w http.ResponseWriter, r *http.Request) {

@@ -50,6 +50,13 @@ func TestHTTPSearchCache(t *testing.T) {
 	if reordered := a.do(nil, "GET", "/api/vacancies?limit=20&sort=relevance&org="+st.slug, nil); reordered.Raw != first.Raw {
 		t.Errorf("parameters in another order are the same query")
 	}
+	// Лишние параметры и «1»/«true» не создают новых записей: кеш нельзя обойти мусорным параметром (срез 29, INJ-5).
+	if junk := a.do(nil, "GET", path+"&junk=1&_="+strings.Repeat("x", 20), nil); junk.Raw != first.Raw {
+		t.Errorf("an unknown parameter must not change the cache key")
+	}
+	if n := cache.Stats().Entries; n != 1 {
+		t.Errorf("entries = %d, want 1", n)
+	}
 	// Другой запрос — свой ответ.
 	other := a.do(nil, "GET", "/api/vacancies?org="+st.slug+"&q=катализатор", nil)
 	if other.Code != http.StatusOK || other.Raw == first.Raw {
@@ -60,7 +67,7 @@ func TestHTTPSearchCache(t *testing.T) {
 	if third := a.do(nil, "GET", path, nil); third.json(t)["total"] != float64(3) {
 		t.Errorf("after the ttl the answer is rebuilt: %s", third.Raw)
 	}
-	if s := cache.Stats(); s.Hits != 2 || s.Misses != 3 {
+	if s := cache.Stats(); s.Hits != 3 || s.Misses != 3 {
 		t.Errorf("stats: %+v", s)
 	}
 

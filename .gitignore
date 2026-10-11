@@ -41,3 +41,5 @@ deploy/.env
 deploy/generated/
 deploy/local/pki/
 deploy/.state/
+node_modules
+node_modules.nosync

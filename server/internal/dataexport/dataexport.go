@@ -219,6 +219,10 @@ func (s *Service) spend(ctx context.Context, user uuid.UUID) (err error) {
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
 	now, lim := s.now(), s.cfg.Export
+	// Замок на счётчик: параллельные запросы не проходят проверку с одним и тем же нулём (срез 29, CON-2).
+	if err := q.LockRateKey(ctx, kindExport+":"+user.String()); err != nil {
+		return fmt.Errorf("dataexport: lock rate key: %w", err)
+	}
 	row, err := q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kindExport, Key: user.String(), At: now.Add(-lim.Window)})
 	if err != nil {
 		return fmt.Errorf("dataexport: count rate events: %w", err)

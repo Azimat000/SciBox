@@ -71,10 +71,13 @@ func TestHealthOK(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	want := HealthResponse{Status: "ok", Product: "SciBox", Version: "test",
-		Database: health.Database{SchemaVersion: 1, ServerVersion: "16.15"}}
+	// Версия PostgreSQL на публичный адрес не выходит (срез 29, CON-9).
+	want := HealthResponse{Status: "ok", Product: "SciBox", Version: "test", Database: health.Database{SchemaVersion: 1}}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	if strings.Contains(rec.Body.String(), "16.15") || strings.Contains(rec.Body.String(), "server_version") {
+		t.Fatalf("the database version leaks: %s", rec.Body.String())
 	}
 	if !strings.Contains(logs.String(), "path=/api/health") || !strings.Contains(logs.String(), "status=200") {
 		t.Fatalf("request not logged: %s", logs.String())

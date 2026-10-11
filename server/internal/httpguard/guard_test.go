@@ -542,3 +542,33 @@ func TestThrottleConcurrent(t *testing.T) {
 		t.Fatalf("passed %d of 20, want %d", ok, testSearch.Guest.Requests)
 	}
 }
+
+// Нулевой знак и невалидный UTF-8 в пути и параметрах отвергаются на периметре до обработчика (срез 29, INJ-2).
+func TestPerimeterRefusesUndecodableText(t *testing.T) {
+	g, err := New(Config{Logger: silent(), Routes: testRoutes()}, chi.NewRouter())
+	if err != nil {
+		t.Fatal(err)
+	}
+	reached := false
+	h := g.Perimeter(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, c := range []struct {
+		url  string
+		want int
+	}{
+		{"/api/vacancies?q=%D1%84%D0%B8%D0%B7", http.StatusOK},
+		{"/api/vacancies?q=%00", http.StatusBadRequest},
+		{"/api/vacancies?org=%ff", http.StatusBadRequest},
+		{"/api/organizations/%00", http.StatusBadRequest},
+		{"/api/scientists?field=1&field=a%00", http.StatusBadRequest},
+	} {
+		reached = false
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, c.url, nil))
+		if rec.Code != c.want || (c.want != http.StatusOK && reached) {
+			t.Errorf("%s: status %d (reached=%v), want %d", c.url, rec.Code, reached, c.want)
+		}
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/num"
 	"scibox/server/internal/orgs"
+	"scibox/server/internal/textsafe"
 )
 
 // Сроки договора для фильтра: бессрочный и три «корзины» срочных договоров.
@@ -120,6 +121,14 @@ func validateSearch(p *SearchParams) error {
 	p.Query = normalizeQuery(p.Query)
 	if utf8.RuneCountInString(p.Query) > MaxQueryLen {
 		errs["q"] = "Слишком длинный запрос: не больше 200 знаков"
+	}
+	// Нулевой знак и невалидный UTF-8 база не принимает: без этой проверки сохранённый поиск с ними вставал бы в начало
+	// очереди рассылки и блокировал её (срез 29, INJ-1).
+	if !textsafe.Valid(p.Query) {
+		errs["q"] = "В запросе есть недопустимые знаки"
+	}
+	if !textsafe.Valid(p.OrgSlug) || !textsafe.Valid(p.Region) || !textsafe.Valid(p.Deadline) || !textsafe.Valid(p.Sort) {
+		errs["q"] = "В запросе есть недопустимые знаки"
 	}
 	check := func(field string, values []string, allowed []string) {
 		if len(values) > maxFilterItems {

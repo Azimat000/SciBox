@@ -126,6 +126,11 @@ func (s *Service) ChangeRole(ctx context.Context, p auth.Principal, slug string,
 		if _, err := q.SetMemberRole(ctx, dbgen.SetMemberRoleParams{OrgID: org.ID, UserID: target, Role: string(role)}); err != nil {
 			return fmt.Errorf("orgs: set role: %w", err)
 		}
+		if access.Role(m.Role) == access.RoleOwner && role != access.RoleOwner {
+			if err := q.RevokeInvitationsBy(ctx, dbgen.RevokeInvitationsByParams{At: s.now(), OrgID: org.ID, InvitedBy: &target}); err != nil {
+				return fmt.Errorf("orgs: revoke invitations of a demoted owner: %w", err)
+			}
+		}
 		if m.Role == string(role) {
 			return nil // роль та же: менять было нечего, в журнале этого нет
 		}
@@ -168,6 +173,9 @@ func (s *Service) RemoveMember(ctx context.Context, user auth.User, slug string,
 		}
 		if err := q.ClearHeadOfUser(ctx, dbgen.ClearHeadOfUserParams{OrgID: org.ID, HeadUserID: &target, UpdatedAt: s.now()}); err != nil {
 			return fmt.Errorf("orgs: clear unit head: %w", err)
+		}
+		if err := q.RevokeInvitationsBy(ctx, dbgen.RevokeInvitationsByParams{At: s.now(), OrgID: org.ID, InvitedBy: &target}); err != nil {
+			return fmt.Errorf("orgs: revoke invitations of a removed member: %w", err)
 		}
 		action := audit.MemberRemoved
 		if leaving {

@@ -2,6 +2,7 @@ package vacancies
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
@@ -272,7 +273,8 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, err)
 		return
 	}
-	if h.searchCache == nil {
+	key, keyOK := cacheKey(p)
+	if h.searchCache == nil || !keyOK {
 		res, err := h.svc.Search(r.Context(), p)
 		if err != nil {
 			h.fail(w, r, err)
@@ -281,8 +283,9 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		apierr.WriteJSON(w, http.StatusOK, res)
 		return
 	}
-	// Ключ — запрос в каноническом виде (параметры по алфавиту): те же условия в другом порядке дают тот же ответ.
-	doc, err := h.searchCache.Get(r.Context(), r.URL.Query().Encode(), maxCachedSearchBody, func(ctx context.Context) (any, error) {
+	// Ключ — разобранные условия, а не строка адреса: лишние параметры и запись «1»/«true» не дают новых записей кеша,
+	// и перебором мусорных параметров кеш не обойти (срез 29, INJ-5).
+	doc, err := h.searchCache.Get(r.Context(), key, maxCachedSearchBody, func(ctx context.Context) (any, error) {
 		return h.svc.Search(ctx, p)
 	})
 	if err != nil {
@@ -310,4 +313,10 @@ func (h *Handler) targets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apierr.WriteJSON(w, http.StatusOK, map[string][]Target{"targets": res})
+}
+
+// cacheKey — ключ кеша: условия поиска в одном определённом виде. Не записалось (не бывает) — без кеша.
+func cacheKey(p SearchParams) (string, bool) {
+	b, err := json.Marshal(p)
+	return string(b), err == nil
 }

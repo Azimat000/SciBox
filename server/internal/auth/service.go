@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 
 	"scibox/server/internal/audit"
 	"scibox/server/internal/dbgen"
+	"scibox/server/internal/httpguard"
 	"scibox/server/internal/mail"
 )
 
@@ -28,6 +30,8 @@ const (
 	kindLoginEmail   = "login_email"
 	kindLoginIP      = "login_ip"
 	kindMailIP       = "mail_ip"
+	kindNotice       = "register_notice"
+	kindConfirm      = "register_confirm"
 	kindPasswordUser = "password_user"
 )
 
@@ -59,6 +63,8 @@ type Limits struct {
 	LoginEmail   Limit // неудачные входы в один аккаунт
 	LoginIP      Limit // неудачные входы с одного адреса
 	MailIP       Limit // запросы писем (регистрация, сброс, повтор) с одного адреса
+	Confirm      Limit // повторные регистрации одной неподтверждённой почты (срез 29, D-190)
+	Notice       Limit // письма «вы уже зарегистрированы» на один адрес получателя (срез 29, AUT-4)
 	PasswordUser Limit // неверные «текущие пароли» при смене пароля
 }
 
@@ -69,6 +75,9 @@ type Config struct {
 	PolicyVersion string // версия текста политики, на которую дано согласие
 
 	SessionTTL     time.Duration // сколько живёт сессия
+	InactiveAfter  time.Duration // без входа дольше этого срока аккаунт считается заброшенным (срез 29, D-192)
+	InactiveWarn   time.Duration // за сколько до удаления неактивного аккаунта уходит письмо
+	SessionMaxAge  time.Duration // предел жизни сессии с момента входа, как бы часто её ни продлевали (срез 29, AUT-11)
 	SessionRefresh time.Duration // как часто продлевать сессию при активности
 	ConfirmTTL     time.Duration // срок ссылки подтверждения почты
 	ResetTTL       time.Duration // срок ссылки сброса пароля
@@ -102,6 +111,7 @@ func DefaultConfig(productName, publicURL string) Config {
 		PublicURL:      strings.TrimRight(publicURL, "/"),
 		PolicyVersion:  PolicyVersion,
 		SessionTTL:     30 * 24 * time.Hour,
+		SessionMaxAge:  90 * 24 * time.Hour,
 		SessionRefresh: time.Hour,
 		ConfirmTTL:     48 * time.Hour,
 		ResetTTL:       time.Hour,
@@ -115,6 +125,8 @@ func DefaultConfig(productName, publicURL string) Config {
 			LoginEmail:   Limit{Max: 5, Window: 15 * time.Minute},
 			LoginIP:      Limit{Max: 30, Window: 15 * time.Minute},
 			MailIP:       Limit{Max: 10, Window: time.Hour},
+			Notice:       Limit{Max: 3, Window: 24 * time.Hour},
+			Confirm:      Limit{Max: 5, Window: 24 * time.Hour},
 			PasswordUser: Limit{Max: 5, Window: 15 * time.Minute},
 		},
 		Hash:         DefaultHashParams,
@@ -157,6 +169,8 @@ type Meta struct {
 	IP        string
 	UserAgent string
 	Device    string // токен из cookie устройства, если браузер его прислал
+	// Binding — значение cookie «браузер регистрации» (срез 29, D-190): ссылка подтверждения почты привязывается к нему.
+	Binding string
 }
 
 // DB — то, что сервису нужно от базы: запросы и транзакции. Этому интерфейсу отвечает *pgxpool.Pool;
@@ -191,6 +205,7 @@ func NewServiceOn(db DB, mailer mail.Sender, cfg Config, logger *slog.Logger) *S
 
 func newService(db DB, mailer mail.Sender, cfg Config, logger *slog.Logger) *Service {
 	cfg.ReauthTTL = positiveOr(cfg.ReauthTTL, DefaultReauthTTL)
+	cfg.SessionMaxAge = positiveOr(cfg.SessionMaxAge, 90*24*time.Hour) // ноль не значит «без предела»
 	cfg.DeletionGrace = positiveOr(cfg.DeletionGrace, DefaultDeletionGrace)
 	cfg.DeviceTTL = positiveOr(cfg.DeviceTTL, DefaultDeviceTTL)
 	return &Service{
@@ -241,33 +256,47 @@ func userFrom(u dbgen.User) User {
 
 // ---- ограничение частоты ----
 
-// allow проверяет, что событие вида kind по ключу key ещё не исчерпало лимит.
-func (s *Service) allow(ctx context.Context, kind, key string, lim Limit) error {
+// reserve проверяет лимит и записывает попытку одним неделимым шагом: параллельные запросы с одним ключом стоят друг
+// за другом на замке базы, поэтому пачка в тысячу запросов не пройдёт проверку с одним и тем же нулём (срез 29, AUT-1).
+// Удачная попытка возвращается через refund, если она не должна считаться.
+func (s *Service) reserve(ctx context.Context, kind, key string, lim Limit) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("auth: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	if err := q.LockRateKey(ctx, kind+":"+key); err != nil {
+		return fmt.Errorf("auth: lock rate key: %w", err)
+	}
 	now := s.now()
-	row, err := s.q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kind, Key: key, At: now.Add(-lim.Window)})
+	row, err := q.CountRateEvents(ctx, dbgen.CountRateEventsParams{Kind: kind, Key: key, At: now.Add(-lim.Window)})
 	if err != nil {
 		return fmt.Errorf("auth: count rate events: %w", err)
 	}
 	if row.Events >= int64(lim.Max) {
-		retry := row.Oldest.Add(lim.Window).Sub(now)
-		return &RateLimitedError{RetryAfter: max(retry, time.Second)}
+		return &RateLimitedError{RetryAfter: max(row.Oldest.Add(lim.Window).Sub(now), time.Second)}
+	}
+	if err := q.RecordRateEvent(ctx, dbgen.RecordRateEventParams{Kind: kind, Key: key, At: now}); err != nil {
+		return fmt.Errorf("auth: record rate event: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("auth: commit: %w", err)
 	}
 	return nil
 }
 
-func (s *Service) record(ctx context.Context, kind, key string) error {
-	if err := s.q.RecordRateEvent(ctx, dbgen.RecordRateEventParams{Kind: kind, Key: key, At: s.now()}); err != nil {
-		return fmt.Errorf("auth: record rate event: %w", err)
+// refund убирает одну попытку (самую свежую) по ключу: удачный вход не считается в лимит по адресу.
+func (s *Service) refund(ctx context.Context, kind, key string) error {
+	if err := s.q.RefundRateEvent(ctx, dbgen.RefundRateEventParams{Kind: kind, Key: key}); err != nil {
+		return fmt.Errorf("auth: refund rate event: %w", err)
 	}
 	return nil
 }
 
 // allowMail учитывает запрос письма с адреса ip и отказывает, если их слишком много.
 func (s *Service) allowMail(ctx context.Context, ip string) error {
-	if err := s.allow(ctx, kindMailIP, ip, s.cfg.Limits.MailIP); err != nil {
-		return err
-	}
-	return s.record(ctx, kindMailIP, ip)
+	return s.reserve(ctx, kindMailIP, httpguard.NetworkKey(ip), s.cfg.Limits.MailIP)
 }
 
 // ---- письма со ссылками ----
@@ -293,6 +322,36 @@ func (s *Service) issueEmailToken(ctx context.Context, q *dbgen.Queries, userID 
 	}
 	raw, err = s.createToken(ctx, q, userID, purpose, ttl, newEmail)
 	return raw, err == nil, err
+}
+
+// issueConfirmToken выдаёт ссылку подтверждения почты, привязанную к браузеру регистрации (binding — значение его
+// cookie; пусто — привязки нет, и такая ссылка только подтверждает почту, не входя в аккаунт). force: выдать, не глядя
+// на паузу между письмами (повторная регистрация обязана погасить прежнюю ссылку, иначе она доживёт до нового пароля).
+func (s *Service) issueConfirmToken(ctx context.Context, q *dbgen.Queries, userID uuid.UUID, binding string, force bool) (raw string, ok bool, err error) {
+	now := s.now()
+	if !force {
+		last, err := q.LatestAuthTokenAt(ctx, dbgen.LatestAuthTokenAtParams{UserID: userID, Purpose: purposeConfirm})
+		if err != nil {
+			return "", false, fmt.Errorf("auth: latest token: %w", err)
+		}
+		if now.Sub(last) < s.cfg.MailCooldown {
+			return "", false, nil
+		}
+	}
+	if err := q.SupersedeAuthTokens(ctx, dbgen.SupersedeAuthTokensParams{At: now, UserID: userID, Purpose: purposeConfirm}); err != nil {
+		return "", false, fmt.Errorf("auth: supersede tokens: %w", err)
+	}
+	raw, hash := newToken()
+	var bind []byte
+	if binding != "" {
+		bind = hashToken(binding)
+	}
+	if err := q.CreateBoundAuthToken(ctx, dbgen.CreateBoundAuthTokenParams{
+		UserID: userID, Purpose: purposeConfirm, TokenHash: hash, CreatedAt: now, ExpiresAt: now.Add(s.cfg.ConfirmTTL), BindingHash: bind,
+	}); err != nil {
+		return "", false, fmt.Errorf("auth: create token: %w", err)
+	}
+	return raw, true, nil
 }
 
 // createToken выдаёт ссылку без паузы и не отменяя прежние (ссылка «это не я» и сброс после отката почты
@@ -377,18 +436,38 @@ func (s *Service) Register(ctx context.Context, in RegisterInput, meta Meta) (st
 		user, err := q.CreateUser(ctx, dbgen.CreateUserParams{
 			Email: email, DisplayName: name, PasswordHash: hash, PrivacyConsentAt: now, PrivacyPolicyVersion: s.cfg.PolicyVersion,
 		})
+		force := false
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Почта занята.
 			existing, err := q.GetUserByEmail(ctx, email)
 			if err != nil {
 				return fmt.Errorf("auth: load existing user: %w", err)
 			}
+			if existing.EmailConfirmedAt == nil && existing.DeletedAt == nil {
+				// Повторная регистрация неподтверждённой почты. Чтобы чужие запросы не заваливали ящик и не перебивали
+				// пароль без конца, их число на одну почту ограничено; сверх лимита ничего не меняем (ответ тот же).
+				switch err := s.reserve(ctx, kindConfirm, email, s.cfg.Limits.Confirm); {
+				case err == nil:
+				case errors.As(err, new(*RateLimitedError)):
+					return nil
+				default:
+					return err
+				}
+				force = true
+			}
 			user, err = q.ReregisterUnconfirmedUser(ctx, dbgen.ReregisterUnconfirmedUserParams{
 				ID: existing.ID, DisplayName: name, PasswordHash: hash, PrivacyConsentAt: now, PrivacyPolicyVersion: s.cfg.PolicyVersion,
 			})
 			if errors.Is(err, pgx.ErrNoRows) {
 				// Аккаунт уже подтверждён: ничего не меняем, владельцу уходит письмо.
-				mails = append(mails, s.alreadyRegisteredMail(existing))
+				// Письмо владельцу уходит не чаще трёх раз в сутки: иначе чужой запрос регистрации забивал бы его ящик
+				// нашими письмами. Ответ человеку, который запросил регистрацию, от этого не меняется.
+				switch err := s.reserve(ctx, kindNotice, email, s.cfg.Limits.Notice); {
+				case err == nil:
+					mails = append(mails, s.alreadyRegisteredMail(existing))
+				case !errors.As(err, new(*RateLimitedError)):
+					return err
+				}
 				return nil
 			}
 			if err != nil {
@@ -397,7 +476,7 @@ func (s *Service) Register(ctx context.Context, in RegisterInput, meta Meta) (st
 		} else if err != nil {
 			return fmt.Errorf("auth: create user: %w", err)
 		}
-		raw, ok, err := s.issueToken(ctx, q, user.ID, purposeConfirm, s.cfg.ConfirmTTL)
+		raw, ok, err := s.issueConfirmToken(ctx, q, user.ID, meta.Binding, force)
 		if err != nil {
 			return err
 		}
@@ -446,7 +525,16 @@ func (s *Service) sendLink(ctx context.Context, rawEmail string, meta Meta, purp
 	}
 	var m *mail.Message
 	err = s.inTx(ctx, func(q *dbgen.Queries) error {
-		raw, ok, err := s.issueToken(ctx, q, user.ID, purpose, ttl)
+		var (
+			raw string
+			ok  bool
+			err error
+		)
+		if purpose == purposeConfirm {
+			raw, ok, err = s.issueConfirmToken(ctx, q, user.ID, meta.Binding, false)
+		} else {
+			raw, ok, err = s.issueToken(ctx, q, user.ID, purpose, ttl)
+		}
 		if err != nil {
 			return err
 		}
@@ -465,23 +553,75 @@ func (s *Service) sendLink(ctx context.Context, rawEmail string, meta Meta, purp
 	return nil
 }
 
-// ConfirmEmail подтверждает почту по ссылке из письма и сразу входит в аккаунт.
+// unusablePasswordHash — настоящий хеш случайного пароля, который никто не знает: вход по нему невозможен, а проверка
+// пароля работает как обычно (без ошибки «испорченный хеш»).
+func (s *Service) unusablePasswordHash(ctx context.Context) (string, error) {
+	raw, _ := newToken()
+	h, err := s.hasher.Hash(ctx, raw)
+	if err != nil {
+		return "", fmt.Errorf("auth: hash unusable password: %w", err)
+	}
+	return h, nil
+}
+
+// ConfirmedElsewhereError — ссылку подтверждения открыли не в том браузере, где шла регистрация. Почта подтверждена,
+// но входа нет, а пароль, выбранный при регистрации, больше не годится (его мог выбрать тот, кто зарегистрировал чужую
+// почту). ResetToken — ссылка «придумайте пароль», которую сайт сразу открывает; владелец почты задаёт пароль сам.
+type ConfirmedElsewhereError struct{ ResetToken string }
+
+func (*ConfirmedElsewhereError) Error() string { return "auth: email confirmed in another browser" }
+
+// ConfirmEmail подтверждает почту по ссылке из письма. В браузере, где шла регистрация, сразу входит в аккаунт;
+// в любом другом подтверждает почту, обнуляет пароль и отдаёт ссылку на выбор нового (*ConfirmedElsewhereError).
 func (s *Service) ConfirmEmail(ctx context.Context, rawToken string, meta Meta) (User, Session, error) {
 	var (
-		user dbgen.User
-		sess Session
-		now  = s.now()
+		user      dbgen.User
+		sess      Session
+		elsewhere *ConfirmedElsewhereError
+		now       = s.now()
 	)
 	err := s.inTx(ctx, func(q *dbgen.Queries) error {
-		userID, err := q.ConsumeAuthToken(ctx, dbgen.ConsumeAuthTokenParams{Now: now, TokenHash: hashToken(rawToken), Purpose: purposeConfirm})
+		row, err := q.ConsumeConfirmToken(ctx, dbgen.ConsumeConfirmTokenParams{Now: now, TokenHash: hashToken(rawToken)})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrInvalidToken
 		}
 		if err != nil {
 			return fmt.Errorf("auth: consume token: %w", err)
 		}
+		userID := row.UserID
+		before, err := q.GetUserByID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("auth: load user: %w", err)
+		}
+		bound := len(row.BindingHash) > 0 && meta.Binding != "" &&
+			subtle.ConstantTimeCompare(row.BindingHash, hashToken(meta.Binding)) == 1
+		if !bound && before.EmailConfirmedAt != nil {
+			// Почта уже подтверждена (например, сбросом пароля), а старую ссылку открыли в чужом браузере: ни входа, ни
+			// обнуления пароля у живого аккаунта.
+			return ErrInvalidToken
+		}
 		if err := q.ConfirmUserEmail(ctx, dbgen.ConfirmUserEmailParams{At: now, ID: userID}); err != nil {
 			return fmt.Errorf("auth: confirm email: %w", err)
+		}
+		if !bound {
+			// Пароль обнуляется: вместо него хеш от случайной строки, которую не знает никто. Новый пароль человек задаёт по
+			// ссылке из ответа.
+			unusable, err := s.unusablePasswordHash(ctx)
+			if err != nil {
+				return err
+			}
+			if err := q.UpdateUserPassword(ctx, dbgen.UpdateUserPasswordParams{ID: userID, PasswordHash: unusable, UpdatedAt: now}); err != nil {
+				return fmt.Errorf("auth: wipe password: %w", err)
+			}
+			if err := q.DeleteUserSessions(ctx, userID); err != nil {
+				return fmt.Errorf("auth: revoke sessions: %w", err)
+			}
+			raw, err := s.createToken(ctx, q, userID, purposeReset, s.cfg.ResetTTL, "")
+			if err != nil {
+				return err
+			}
+			elsewhere = &ConfirmedElsewhereError{ResetToken: raw}
+			return audit.Record(ctx, q, audit.Event{Action: audit.AccountPasswordReset, Actor: userID, IP: meta.IP, Details: map[string]string{"via": "confirm_other_browser"}})
 		}
 		if user, err = q.GetUserByID(ctx, userID); err != nil {
 			return fmt.Errorf("auth: load user: %w", err)
@@ -498,6 +638,9 @@ func (s *Service) ConfirmEmail(ctx context.Context, rawToken string, meta Meta) 
 	if err != nil {
 		return User{}, Session{}, err
 	}
+	if elsewhere != nil {
+		return User{}, Session{}, elsewhere
+	}
 	return userFrom(user), sess, nil
 }
 
@@ -511,6 +654,9 @@ func (s *Service) createSession(ctx context.Context, q *dbgen.Queries, userID uu
 	var reauth *time.Time
 	if withPassword {
 		reauth = &now
+	}
+	if err := q.TouchUserActive(ctx, dbgen.TouchUserActiveParams{ID: userID, Now: now}); err != nil {
+		return Session{}, fmt.Errorf("auth: touch user: %w", err)
 	}
 	if _, err := q.CreateSession(ctx, dbgen.CreateSessionParams{
 		UserID: userID, TokenHash: hash, CreatedAt: now, ExpiresAt: expires,
@@ -532,22 +678,28 @@ func truncate(s string, n int) string {
 // Login проверяет почту и пароль и создаёт сессию.
 func (s *Service) Login(ctx context.Context, rawEmail, password string, meta Meta) (User, Session, error) {
 	key := strings.ToLower(strings.TrimSpace(rawEmail))
-	if err := s.allow(ctx, kindLoginIP, meta.IP, s.cfg.Limits.LoginIP); err != nil {
+	// Попытка записывается до проверки пароля: проверка и запись неделимы (AUT-1). Удачный вход вернёт её ниже.
+	if err := s.reserve(ctx, kindLoginIP, httpguard.NetworkKey(meta.IP), s.cfg.Limits.LoginIP); err != nil {
 		return User{}, Session{}, err
 	}
-	if err := s.allow(ctx, kindLoginEmail, key, s.cfg.Limits.LoginEmail); err != nil {
-		return User{}, Session{}, err
-	}
-	fail := func() (User, Session, error) {
-		if err := s.record(ctx, kindLoginIP, meta.IP); err != nil {
+	emailCounted := len(key) <= MaxEmailLen
+	if emailCounted {
+		if err := s.reserve(ctx, kindLoginEmail, key, s.cfg.Limits.LoginEmail); err != nil {
+			_ = s.refund(ctx, kindLoginIP, httpguard.NetworkKey(meta.IP)) // отказ по почте не должен съедать лимит адреса
 			return User{}, Session{}, err
 		}
-		if len(key) <= MaxEmailLen {
-			if err := s.record(ctx, kindLoginEmail, key); err != nil {
-				return User{}, Session{}, err
-			}
-		}
+	}
+	fail := func() (User, Session, error) {
 		return User{}, Session{}, ErrInvalidCredentials
+	}
+	giveBack := func() error {
+		if err := s.refund(ctx, kindLoginIP, httpguard.NetworkKey(meta.IP)); err != nil {
+			return err
+		}
+		if emailCounted {
+			return s.refund(ctx, kindLoginEmail, key)
+		}
+		return nil
 	}
 	// Слишком длинные поля не хешируем и не пишем в базу: это явно не настоящий вход.
 	if len(key) > MaxEmailLen || len(password) > 4*MaxPasswordLen {
@@ -571,6 +723,9 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string, meta Met
 		return fail()
 	}
 	if user.EmailConfirmedAt == nil {
+		if err := giveBack(); err != nil {
+			return User{}, Session{}, err
+		}
 		return User{}, Session{}, ErrEmailNotConfirmed
 	}
 
@@ -594,6 +749,10 @@ func (s *Service) Login(ctx context.Context, rawEmail, password string, meta Met
 	if err != nil {
 		return User{}, Session{}, err
 	}
+	// Вход удался: адрес не должен терять попытки на чужих неудачах за одним NAT (почту очистила транзакция выше).
+	if err := s.refund(ctx, kindLoginIP, httpguard.NetworkKey(meta.IP)); err != nil {
+		return User{}, Session{}, err
+	}
 	if newDevice {
 		s.sendAsync(s.newDeviceMail(user, meta, s.now()))
 	}
@@ -614,7 +773,8 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (Principal,
 		return Principal{}, fmt.Errorf("auth: load session: %w", err)
 	}
 	now := s.now()
-	if !row.ExpiresAt.After(now) {
+	// Абсолютный предел: украденная cookie не живёт вечно, пока ею пользуются (ASVS 3.3.2).
+	if !row.ExpiresAt.After(now) || (s.cfg.SessionMaxAge > 0 && !row.SessionCreatedAt.Add(s.cfg.SessionMaxAge).After(now)) {
 		if err := s.q.DeleteSessionByTokenHash(ctx, hash); err != nil {
 			return Principal{}, fmt.Errorf("auth: delete expired session: %w", err)
 		}
@@ -632,8 +792,14 @@ func (s *Service) Authenticate(ctx context.Context, rawToken string) (Principal,
 	}
 	if now.Sub(row.LastSeenAt) >= s.cfg.SessionRefresh {
 		p.ExpiresAt = now.Add(s.cfg.SessionTTL)
+		if limit := row.SessionCreatedAt.Add(s.cfg.SessionMaxAge); s.cfg.SessionMaxAge > 0 && p.ExpiresAt.After(limit) {
+			p.ExpiresAt = limit
+		}
 		if err := s.q.TouchSession(ctx, dbgen.TouchSessionParams{ID: row.SessionID, LastSeenAt: now, ExpiresAt: p.ExpiresAt}); err != nil {
 			return Principal{}, fmt.Errorf("auth: refresh session: %w", err)
+		}
+		if err := s.q.TouchUserActive(ctx, dbgen.TouchUserActiveParams{ID: row.UserID, Now: now}); err != nil {
+			return Principal{}, fmt.Errorf("auth: touch user: %w", err)
 		}
 		p.Refreshed = true
 	}
@@ -655,6 +821,10 @@ func (s *Service) Logout(ctx context.Context, rawToken string) error {
 func (s *Service) RevokeOtherSessions(ctx context.Context, p Principal) error {
 	if err := s.q.DeleteOtherUserSessions(ctx, dbgen.DeleteOtherUserSessionsParams{UserID: p.User.ID, ID: p.SessionID}); err != nil {
 		return fmt.Errorf("auth: revoke sessions: %w", err)
+	}
+	// «Выйти на других устройствах» гасит и ожидающую смену почты: её мог попросить тот, кто сидел в другом сеансе.
+	if err := s.q.SupersedeAuthTokens(ctx, dbgen.SupersedeAuthTokensParams{At: s.now(), UserID: p.User.ID, Purpose: purposeChangeEmail}); err != nil {
+		return fmt.Errorf("auth: cancel email change: %w", err)
 	}
 	return nil
 }
@@ -695,6 +865,13 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword strin
 		if err := q.ConfirmUserEmail(ctx, dbgen.ConfirmUserEmailParams{At: now, ID: userID}); err != nil {
 			return fmt.Errorf("auth: confirm email: %w", err)
 		}
+		if err := q.SupersedeAuthTokens(ctx, dbgen.SupersedeAuthTokensParams{At: now, UserID: userID, Purpose: purposeChangeEmail}); err != nil {
+			return fmt.Errorf("auth: cancel email change: %w", err)
+		}
+		// Почта подтверждена этим сбросом: невостребованная ссылка подтверждения больше не нужна.
+		if err := q.SupersedeAuthTokens(ctx, dbgen.SupersedeAuthTokensParams{At: now, UserID: userID, Purpose: purposeConfirm}); err != nil {
+			return fmt.Errorf("auth: cancel confirmation link: %w", err)
+		}
 		if err := q.DeleteUserSessions(ctx, userID); err != nil {
 			return fmt.Errorf("auth: revoke sessions: %w", err)
 		}
@@ -715,7 +892,7 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword strin
 
 // ChangePassword меняет пароль в настройках. Нужен текущий пароль; другие сессии завершаются.
 func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next string) error {
-	if err := s.allow(ctx, kindPasswordUser, p.User.ID.String(), s.cfg.Limits.PasswordUser); err != nil {
+	if err := s.reserve(ctx, kindPasswordUser, p.User.ID.String(), s.cfg.Limits.PasswordUser); err != nil {
 		return err
 	}
 	user, err := s.q.GetUserByID(ctx, p.User.ID)
@@ -742,10 +919,9 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 		}
 	}
 	if !ok {
-		if err := s.record(ctx, kindPasswordUser, p.User.ID.String()); err != nil {
-			return err
-		}
 		fields["current_password"] = "Текущий пароль указан неверно"
+	} else if err := s.refund(ctx, kindPasswordUser, p.User.ID.String()); err != nil {
+		return err
 	}
 	if len(fields) > 0 {
 		return &ValidationError{Fields: fields}
@@ -753,6 +929,10 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 	err = s.inTx(ctx, func(q *dbgen.Queries) error {
 		if err := q.UpdateUserPassword(ctx, dbgen.UpdateUserPasswordParams{ID: user.ID, PasswordHash: newHash, UpdatedAt: s.now()}); err != nil {
 			return fmt.Errorf("auth: update password: %w", err)
+		}
+		// Ожидающая смена почты гаснет вместе с паролем: тот, кто её просил, мог держать чужой сеанс (срез 29, AUT-8).
+		if err := q.SupersedeAuthTokens(ctx, dbgen.SupersedeAuthTokensParams{At: s.now(), UserID: user.ID, Purpose: purposeChangeEmail}); err != nil {
+			return fmt.Errorf("auth: cancel email change: %w", err)
 		}
 		if err := q.DeleteOtherUserSessions(ctx, dbgen.DeleteOtherUserSessionsParams{UserID: user.ID, ID: p.SessionID}); err != nil {
 			return fmt.Errorf("auth: revoke sessions: %w", err)
@@ -795,6 +975,9 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	}
 	if err := s.q.DeleteOldKnownDevices(ctx, now.Add(-s.cfg.DeviceTTL)); err != nil {
 		return fmt.Errorf("auth: cleanup known devices: %w", err)
+	}
+	if _, _, err := s.ProcessInactive(ctx); err != nil {
+		return err
 	}
 	if _, err := s.ProcessDueDeletions(ctx); err != nil {
 		return err
