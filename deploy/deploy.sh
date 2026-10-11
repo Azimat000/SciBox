@@ -79,8 +79,13 @@ fi
 docker image inspect "$image" >/dev/null 2>&1 || die "образа $image нет на этом сервере"
 
 say "образ базы и копий"
-# shellcheck disable=SC2086
-docker build ${SCIBOX_DOCKER_BUILD_ARGS:-} -t "${DB_IMAGE:-scibox-postgres:16.15}" "$here/postgres"
+db_image=${DB_IMAGE:-$("$here/db-image-tag")}
+if docker image inspect "$db_image" >/dev/null 2>&1; then
+    echo "образ $db_image уже собран: база не перезапускается"
+else
+    # shellcheck disable=SC2086
+    docker build ${SCIBOX_DOCKER_BUILD_ARGS:-} -t "$db_image" "$here/postgres"
+fi
 
 # --- 3. секреты ---
 say "секреты"

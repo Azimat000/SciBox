@@ -41,7 +41,7 @@ case "${1:-}" in
     scibox-*|pgbackrest|rclone|psql|pg_*)
         # Служебные команды копий и проверки восстановления работают от postgres: pgBackRest читает файлы базы.
         # Тома состояния, метрик и временной копии создаются Docker от root: отдаём их postgres.
-        for dir in /state /textfile /restore; do
+        for dir in /state /textfile /restore "${PGBACKREST_PG1_PATH:-/var/lib/postgresql/data}"; do
             [ -d "$dir" ] && { chown postgres:postgres "$dir" 2>/dev/null || true; }
         done
         exec gosu postgres "$@"

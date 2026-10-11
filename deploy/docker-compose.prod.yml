@@ -241,6 +241,25 @@ services:
     networks: [backend]
     profiles: ["tools"]
 
+  # Восстановление базы в пустой том (авария на новом сервере, docs/DEPLOY.md, раздел 9):
+  #   ./compose --profile tools run --rm restore            последнее состояние
+  #   RESTORE_TARGET_TIME="2026-10-11 12:30:00+03" ./compose --profile tools run --rm restore   на момент времени
+  restore:
+    image: ${DB_IMAGE:-scibox-postgres:16.15}
+    pull_policy: never
+    command: ["scibox-restore"]
+    environment:
+      <<: *pgbackrest-env
+      RESTORE_TARGET_TIME: ${RESTORE_TARGET_TIME:-}
+    secrets:
+      - backup_s3_access_key
+      - backup_s3_secret_key
+      - backup_cipher_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    profiles: ["tools"]
+
   # Шаг выкладки: миграции и справочник журналов. Запускается до замены копий (deploy.sh) и перед стартом
   # зависимых сервисов. Повторяем: второй запуск ничего не делает.
   release:

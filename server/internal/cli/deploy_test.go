@@ -156,7 +156,8 @@ func TestProdComposeSecretsAreDeclaredAndMounted(t *testing.T) {
 		// Секрет, на который указывает *_FILE, должен быть смонтирован: через `secrets:` сервиса или томом с секретами.
 		for key, val := range svc.Environment {
 			v := fmt.Sprint(val)
-			if !(strings.HasSuffix(key, "_FILE") || strings.HasSuffix(key, "_FROM_FILE")) || !strings.HasPrefix(v, "/run/secrets/") {
+			isFile := strings.HasSuffix(key, "_FILE") || strings.HasSuffix(key, "_FROM_FILE")
+			if !isFile || !strings.HasPrefix(v, "/run/secrets/") {
 				continue
 			}
 			file := strings.TrimPrefix(v, "/run/secrets/")

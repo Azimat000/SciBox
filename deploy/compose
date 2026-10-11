@@ -12,6 +12,9 @@ if [ -z "${SCIBOX_IMAGE:-}" ] && [ -s "$here/.state/current-image" ]; then
     SCIBOX_IMAGE=$(cat "$here/.state/current-image")
     export SCIBOX_IMAGE
 fi
+# Образ базы с отпечатком содержимого deploy/postgres: пересоздаётся только при настоящем изменении.
+DB_IMAGE=${DB_IMAGE:-$("$here/db-image-tag")}
+export DB_IMAGE
 if [ "${SCIBOX_DEPLOY_LOCAL:-}" = 1 ]; then
     exec docker compose -f "$here/docker-compose.prod.yml" -f "$here/docker-compose.local.yml" \
         --env-file "$here/local/local.env" "$@"

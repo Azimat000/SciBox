@@ -123,6 +123,16 @@ func countRows(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) int {
 	return n
 }
 
+// quietDemoPeople убирает у демо-людей то, что само поставило бы письма в очередь: сохранённые поиски «сразу» и
+// избранное со сроками. Демо-данные заложены от настоящего времени, а часы теста стоят на сегодня 12:00 по Москве:
+// до полудня эти поиски оказывались «просроченными» относительно часов теста, и демо-людям уходили лишние письма
+// (тест падал, если его запускали ночью или утром). Для теста важны только его собственные люди.
+func quietDemoPeople(t *testing.T, root *pgxpool.Pool) {
+	t.Helper()
+	exec(t, root, `DELETE FROM saved_searches WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@demo.example.ru')`)
+	exec(t, root, `DELETE FROM favorites WHERE user_id IN (SELECT id FROM users WHERE email LIKE '%@demo.example.ru')`)
+}
+
 // TestSeveralCopiesNeverSendTwice — тест среза 25 (T-23): две копии сервера и две копии воркера на одной базе, тысяча
 // событий (прямые письма, рассылки по поискам, напоминания о сроках, запросы к обеим копиям сервера); одну копию
 // воркера по дороге останавливают. Ни одного двойного письма и уведомления, ни одного потерянного.
@@ -135,6 +145,7 @@ func TestSeveralCopiesNeverSendTwice(t *testing.T) {
 	)
 	w := newPerimeterWorld(t)
 	root := w.pool
+	quietDemoPeople(t, root)
 
 	// Часы сервисов: сегодня 12:00 по Москве. Напоминания не уходят раньше девяти утра, и тест не должен зависеть от того,
 	// когда его запустили.
@@ -262,6 +273,7 @@ func TestDirectCallsFromSeveralCopiesNeverDuplicate(t *testing.T) {
 	const people = 120
 	w := newPerimeterWorld(t)
 	root := w.pool
+	quietDemoPeople(t, root)
 	msk := time.FixedZone("MSK", 3*3600)
 	real := time.Now().In(msk)
 	clock := time.Date(real.Year(), real.Month(), real.Day(), 12, 0, 0, 0, msk).UTC()

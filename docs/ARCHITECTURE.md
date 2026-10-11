@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 26 (наблюдаемость: номер запроса в каждой строке журнала, JSON-журнал в бою, метрики Prometheus и внутренний порт `/livez` `/readyz` `/metrics` `pprof`, отправка ошибок в GlitchTip без личных данных, панель Grafana и правила тревог; до этого срез 25: несколько копий сервера и отдельный процесс фоновых задач `worker`: общее расписание в базе, предохранитель и ограничитель у Crossref и почты, мягкая остановка; до этого срез 24: база под объём «вся наука РФ»: пул со сроками, индексируемый поиск, предел выдачи, кеш; срез 23: файлы в S3-совместимом хранилище с проверкой на вирусы, срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 28 (сборка и выкладка: образ сервера, боевой compose с Caddy, двумя копиями, воркером, базой с непрерывным архивом и копиями, мониторингом; до этого срез 26: наблюдаемость: номер запроса в каждой строке журнала, JSON-журнал в бою, метрики Prometheus и внутренний порт `/livez` `/readyz` `/metrics` `pprof`, отправка ошибок в GlitchTip без личных данных, панель Grafana и правила тревог; до этого срез 25: несколько копий сервера и отдельный процесс фоновых задач `worker`: общее расписание в базе, предохранитель и ограничитель у Crossref и почты, мягкая остановка; до этого срез 24: база под объём «вся наука РФ»: пул со сроками, индексируемый поиск, предел выдачи, кеш; срез 23: файлы в S3-совместимом хранилище с проверкой на вирусы, срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -12,8 +12,10 @@ SciBox/
 ├── docker-compose.monitoring.yml  наблюдение (срез 26, D-176): Prometheus, Grafana, node-exporter, GlitchTip (профиль `errors`)
 ├── monitoring/           `prometheus/` (prometheus.yml, rules/scibox.yml — 31 правило тревог, tests/scibox_test.yml — их тесты promtool), `grafana/` (provisioning, build-dashboard.py собирает dashboards/scibox.json — панель «ИОН: сервер»)
 ├── docker/clamav-dev/    сигнатура тестового вируса EICAR для облегчённого ClamAV (`eicar.ndb`)
+├── Dockerfile            образ сервера (срез 28, D-187): Node → сайт, Go → бинарник, итог distroless static debian13 nonroot, 39 МБ; `.dockerignore`
+├── deploy/               выкладка (срез 28, D-188, D-189): `docker-compose.prod.yml` (боевой стенд), `docker-compose.local.yml` (репетиция на компьютере), `caddy/` (Caddyfile, Caddyfile.local, Caddyfile.s3, site.caddy), `postgres/` (образ базы с pgBackRest и rclone, `initdb/10-scibox.sh`, `bin/scibox-*`: entrypoint, backup, archive-now, restore-check, restore), `monitoring/prometheus.yml`, `deploy.sh` (выкладка и откат), `compose` (обёртка), `init-secrets.sh`, `init-secrets-volumes.sh`, `render-alertmanager.sh`, `restore-check.sh`, `db-image-tag`, `env.example`, `local/` (`up.sh`, `prepare.sh`, `make-pki.sh`, `local.env`); `secrets/`, `.env`, `generated/`, `.state/`, `local/pki/` в git не попадают
 ├── README.md             запуск, демо-аккаунты, дорожки «я учёный» и «я организация», проверки
-├── Makefile              dev (сервер + воркер + сайт), worker, monitoring-up, monitoring-down, monitoring-check, errors-up, glitchtip-setup, share, test (= lint + vulncheck + test-server + test-web), test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc, load-data, load-check
+├── Makefile              dev (сервер + воркер + сайт), worker, monitoring-up, monitoring-down, monitoring-check, errors-up, glitchtip-setup, share, test (= lint + vulncheck + test-server + test-web), test-server, test-web, lint, lint-new, vulncheck, e2e, db-up, db-down, migrate, seed, db-reset, sqlc, load-data, load-check, prod-up, prod-down, prod-e2e, prod-restore-check, prod-config
 ├── scripts/
 │   ├── dev.sh            собирает сервер, запускает сервер (без фоновых задач), воркер и Vite вместе
 │   ├── glitchtip-setup   создаёт в локальном GlitchTip администратора, организацию и проект, печатает SCIBOX_ERROR_DSN (срез 26)
@@ -27,7 +29,7 @@ SciBox/
 │                         сценарии scientist-and-organization и new-organization, каждый на компьютере и телефоне (Pixel 7)
 ├── PRODUCT.md            описание продукта для impeccable (ведёт impeccable)
 ├── server/               Go 1.26 (строка `toolchain go1.26.6` в go.mod закрепляет версию), модуль scibox/server
-│   ├── cmd/api/          точка входа: команды serve | worker | migrate up|down|reset|status | journals load [--force] [файл] | seed | version
+│   ├── cmd/api/          точка входа: команды serve | worker | release | healthcheck [serve|worker] | migrate up|down|reset|status | journals load [--force] [файл] | seed | error-test | version
 │   ├── cmd/covercheck/   проверка порогов покрытия (логика в internal/covercheck)
 │   ├── cmd/smtpsink/     приёмник писем с настраиваемой паузой на ответ для замеров очереди писем (срез 27, вне покрытия)
 │   ├── db/migrations/    goose, встроены в бинарник (db/embed.go)
@@ -166,6 +168,25 @@ SciBox/
 
 Правило метрик: у метки конечное число значений (шаблон адреса, имя задачи, имя запроса), никогда не путь, номер объекта, почта.
 
+## Боевой стенд (срез 28)
+
+Подробно: `docs/DEPLOY.md`. Службы `deploy/docker-compose.prod.yml` (проект `scibox-prod`):
+
+| Служба | Образ | Наружу | Что делает |
+|---|---|---|---|
+| `caddy` | `caddy:2.11.7` | 80, 443 | HTTPS (Let's Encrypt, при отказе ZeroSSL), распределение между копиями по `/readyz` внутреннего порта, журнал без cookie и с обрезанными адресами |
+| `app1`, `app2` | образ сервера | нет | `serve` с `SCIBOX_BACKGROUND=off`, `read_only`, uid 65532 |
+| `worker` | образ сервера | нет | `worker` |
+| `release` | образ сервера | нет | одноразовый шаг: миграции и справочник журналов |
+| `postgres` | `scibox-postgres:16.15-<отпечаток>` | нет | PostgreSQL 16 с `archive_command` pgBackRest, роль приложения без суперпользователя, вход из сети только по TLS |
+| `backup` | тот же образ базы | нет | планировщик копий базы и файлов, метрики копий |
+| `clamav` | `clamav/clamav-debian:1.5.4` | нет | антивирус с обновлением баз |
+| `secrets-init` | образ базы | нет | раскладывает секреты по томам с владельцем нужного процесса |
+| `restore-check`, `restore` | образ базы | нет | профиль `tools`: проверка восстановления и восстановление в пустой том |
+| `prometheus`, `alertmanager`, `grafana`, `node-exporter` | официальные | 127.0.0.1 | профиль `monitoring` |
+
+Сети: `edge` (Caddy с фиксированным адресом и копии сервера) и `backend`. Внешние: хранилище файлов (S3), хранилище копий (S3), почтовый сервис. Тома: `pgdata`, `pgsocket`, `clamav_db`, `caddy_data`, `backup_state`, `backup_textfile`, `secrets_*`, данные мониторинга.
+
 ## Переменные окружения сервера
 | Переменная | По умолчанию |
 |---|---|
@@ -204,6 +225,8 @@ SciBox/
 | `SCIBOX_OPS_TOKEN` | пусто; от 24 знаков: `/metrics` и pprof требуют `Authorization: Bearer …` |
 | `SCIBOX_PPROF` | `on` в разработке, `off` в бою; без секрета в бою не включается |
 | `SCIBOX_ERROR_DSN` | пусто (отчёты никуда не уходят); `https://ключ@хост/номер-проекта` GlitchTip; по http только в закрытой сети |
+| `<ИМЯ>_FILE` | путь к файлу с секретом вместо значения: `DATABASE_URL`, `SCIBOX_S3_ACCESS_KEY`, `SCIBOX_S3_SECRET_KEY`, `SCIBOX_SMTP_PASSWORD`, `SCIBOX_OPS_TOKEN`, `SCIBOX_ERROR_DSN` (срез 28, D-187); в боевом режиме права не шире 600, `X` и `X_FILE` вместе нельзя |
+| `SCIBOX_ALLOW_DESTRUCTIVE` | `off`; `on` разрешает в боевом режиме `migrate down`, `migrate reset` и `seed` (срез 28, D-187) |
 | `TEST_DATABASE_URL` (тесты) | `postgres://scibox:scibox@localhost:5433/postgres?sslmode=disable` |
 
 ## Таблицы БД

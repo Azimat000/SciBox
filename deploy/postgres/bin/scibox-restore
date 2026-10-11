@@ -1,0 +1,21 @@
+#!/bin/bash
+# Восстановление базы в ПУСТОЙ каталог данных (срез 28, T-26): авария на новом сервере или возврат на момент до
+# ошибки. Без RESTORE_TARGET_TIME восстанавливается последнее состояние (последняя копия и журнал до конца архива);
+# с ним — состояние на этот момент, например RESTORE_TARGET_TIME="2026-10-11 12:30:00+03".
+# Не запускается в непустой каталог: рабочую базу этим не затереть.
+set -euo pipefail
+DATA=${PGBACKREST_PG1_PATH:-/var/lib/postgresql/data}
+STANZA=${PGBACKREST_STANZA:-main}
+if [ -n "$(ls -A "$DATA" 2>/dev/null)" ]; then
+    echo "каталог $DATA не пуст: восстановление только в пустой том (docker volume rm … или новый сервер)" >&2
+    exit 1
+fi
+args=(--stanza="$STANZA" restore)
+if [ -n "${RESTORE_TARGET_TIME:-}" ]; then
+    args+=(--type=time "--target=$RESTORE_TARGET_TIME" --target-action=promote)
+    echo "восстановление на момент $RESTORE_TARGET_TIME"
+else
+    echo "восстановление последнего состояния (копия и журнал до конца архива)"
+fi
+pgbackrest "${args[@]}"
+echo "готово: поднимите базу (docker compose up -d postgres) и выложите версию (deploy/deploy.sh)"

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Печатает имя образа базы, в котором есть отпечаток содержимого deploy/postgres (срез 28). Docker при каждой сборке
+# даёт образу новый номер (в нём время сборки), поэтому compose пересоздавал бы базу при каждой выкладке, даже если
+# ничего не изменилось. С отпечатком в имени база перезапускается только тогда, когда её образ действительно другой.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+base=${DB_IMAGE_BASE:-scibox-postgres:16.15}
+cd "$here/postgres"
+if command -v sha256sum >/dev/null 2>&1; then sum=sha256sum; else sum="shasum -a 256"; fi
+hash=$( { find . -type f | LC_ALL=C sort; find . -type f | LC_ALL=C sort | xargs cat; } | $sum | cut -c1-12)
+printf '%s-%s\n' "$base" "$hash"

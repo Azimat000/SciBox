@@ -146,6 +146,10 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           scanners: vuln
+          # gosu из официального образа PostgreSQL собран старым Go: он только отдаёт права процессу базы и сети не
+          # слушает, уязвимости стандартной библиотеки в нём недостижимы (T-54, docs/SECURITY.md); чинится обновлением
+          # базового образа.
+          skip-files: usr/local/bin/gosu
           exit-code: "1"
       - name: production compose is valid (rehearsal values)
         run: |

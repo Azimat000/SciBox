@@ -72,7 +72,7 @@ func runHealthcheck(ctx context.Context, args []string, env Env) int {
 	}
 	// Без прокси из окружения: порт свой, локальный.
 	client := &http.Client{Transport: &http.Transport{Proxy: nil}}
-	resp, err := client.Do(req) //nolint:gosec // G704: адрес — собственный внутренний порт процесса из настройки администратора
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Fprintln(env.Stderr, "healthcheck:", err)
 		return 1

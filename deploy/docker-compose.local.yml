@@ -113,10 +113,19 @@ services:
   postgres:
     volumes:
       - ./local/pki/ca:/pki-ca:ro
+  # Тревоги репетиции идут через Mailpit со STARTTLS и сертификатом собственного центра репетиции.
+  alertmanager:
+    environment:
+      SSL_CERT_DIR: /pki-ca
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
   backup:
     volumes:
       - ./local/pki/ca:/pki-ca:ro
   restore-check:
+    volumes:
+      - ./local/pki/ca:/pki-ca:ro
+  restore:
     volumes:
       - ./local/pki/ca:/pki-ca:ro
 
