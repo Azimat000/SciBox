@@ -9,6 +9,7 @@ import { InviteButton } from '../offers/InviteButton'
 import { isNotFound } from '../orgs/api'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { cvPath, useScientist } from './api'
+import { MaskedProfile } from './MaskedProfile'
 import { ProfileView } from './ProfileView'
 import './profile.css'
 
@@ -17,7 +18,7 @@ export function ScientistPage() {
   const { id = '' } = useParams()
   const query = useScientist(id)
   const { user } = useMe()
-  usePageTitle(query.data?.profile.name)
+  usePageTitle(query.data?.viewer.masked ? t.profile.masked.badge : query.data?.profile.name)
 
   if (query.isPending) return <PageSkeleton />
   if (query.isError) {
@@ -39,6 +40,16 @@ export function ScientistPage() {
     )
   }
   const page = query.data
+  if (page.viewer.masked) {
+    return (
+      <div className="page profile-page">
+        <MaskedProfile
+          page={page}
+          actions={<InviteButton profileId={page.profile.id} name={page.profile.label ?? t.profile.masked.badge} masked variant="primary" />}
+        />
+      </div>
+    )
+  }
   return (
     <div className="page profile-page">
       {page.viewer.is_owner && (

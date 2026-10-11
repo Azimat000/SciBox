@@ -1,6 +1,8 @@
 package profiles
 
 import (
+	"time"
+
 	"scibox/server/internal/career"
 	"scibox/server/internal/privacy"
 )
@@ -41,7 +43,8 @@ func mask(full View) View {
 		Quartiles:     QuartileStats{Q12Total: full.Quartiles.Q12Total, Q12Recent: full.Quartiles.Q12Recent, RecentFrom: full.Quartiles.RecentFrom, Year: full.Quartiles.Year},
 		CareerLevel:   full.CareerLevel,
 		Counts:        full.Counts,
-		UpdatedAt:     full.UpdatedAt,
+		// Точное время правки позволило бы сопоставить аноним с событиями, видимыми публично: оставляем только день.
+		UpdatedAt: full.UpdatedAt.UTC().Truncate(24 * time.Hour),
 	}
 	codes := make([]string, 0, len(full.Specialties))
 	for _, sp := range full.Specialties {

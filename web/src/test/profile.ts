@@ -59,3 +59,28 @@ export const otherPage = (p: Profile = profile, contacts = false): ProfilePage =
   void _v
   return { profile: contacts ? rest : { ...rest, contact_email: undefined }, viewer: { is_owner: false, can_see_contacts: contacts } }
 }
+
+/** Анонимная карточка глазами сотрудника организации: только научный облик, имени и места работы в ответе нет. */
+export const maskedProfile: Profile = {
+  id: PROFILE_ID,
+  name: '',
+  open_to_offers: true,
+  headline: '',
+  city: '',
+  region: null,
+  about: '',
+  degree: { level: 'candidate', specialty: { code: '1.4.4', name: 'Физическая химия' }, year: null, institution: '', dissertation: '' },
+  academic_title: 'docent',
+  academic_title_year: null,
+  identifiers: { orcid: '', spin: '', scopus_id: '', wos_id: '' },
+  h_index: { rsci: 12, scopus: 9, wos: null, scholar: null },
+  specialties: [{ code: '1.4.4', name: 'Физическая химия' }],
+  skills: { research: [], general: [] },
+  sections: { education: [], experience: [], publications: [], grants: [], patents: [], teaching: [] },
+  quartiles: { q12_total: 3, q12_recent: 2, recent_from: 2022, year: 2024 },
+  career_level: 2,
+  counts: { publications: 14, grants: 2, patents: 0 },
+  label: 'Кандидат наук, 1.4.4, R2, h-index 12',
+  updated_at: '2026-10-03T12:00:00Z',
+}
+export const maskedPage = (p: Profile = maskedProfile): ProfilePage => ({ profile: p, viewer: { is_owner: false, can_see_contacts: false, masked: true } })

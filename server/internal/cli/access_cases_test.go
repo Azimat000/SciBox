@@ -337,11 +337,17 @@ func profileCases() []kase {
 		{route: "GET /api/scientists/{id}", name: "public", kind: object, pub: true, allow: everyone, deny: missing, make: byProfile("public")},
 		{route: "GET /api/scientists/{id}", name: "visible to organizations", kind: object, pub: true, allow: orgMembers, deny: missing, twin: []string{"id"}, make: byProfile("orgs")},
 		{route: "GET /api/scientists/{id}", name: "hidden", kind: object, pub: true, allow: of(subject), deny: missing, twin: []string{"id"}, make: byProfile("hidden")},
+		// Анонимный профиль организациям виден как анонимная карточка (200, без имени), остальным его нет (срез 15).
+		{route: "GET /api/scientists/{id}", name: "anonymous", kind: object, pub: true, allow: orgMembers, deny: missing, twin: []string{"id"}, make: byProfile("anonymous")},
 		{route: "GET /api/scientists/{id}/cv", name: "public", kind: object, allow: signedIn, deny: missing, make: byProfile("public")},
 		{route: "GET /api/scientists/{id}/cv", name: "visible to organizations", kind: object, allow: orgMembers, deny: missing, twin: []string{"id"}, make: byProfile("orgs")},
 		{route: "GET /api/scientists/{id}/cv", name: "hidden", kind: object, allow: of(subject), deny: missing, twin: []string{"id"}, make: byProfile("hidden")},
+		// Резюме анонима организации не отдаётся: в нём всё, что карточка прячет.
+		{route: "GET /api/scientists/{id}/cv", name: "anonymous", kind: object, allow: of(subject), deny: missing, twin: []string{"id"}, make: byProfile("anonymous")},
 		{route: "GET /api/scientists/{id}/offer-targets", name: "public", kind: object, allow: signedIn, deny: missing, make: byProfile("public")},
 		{route: "GET /api/scientists/{id}/offer-targets", name: "hidden", kind: object, deny: missing, twin: []string{"id"}, make: byProfile("hidden")},
+		// Анонима приглашать можно: сотрудникам организаций он виден (хозяин профиля не сотрудник, поэтому «нет такого»).
+		{route: "GET /api/scientists/{id}/offer-targets", name: "anonymous", kind: object, allow: of(owner, hr, headA, headB, foreign), deny: missing, twin: []string{"id"}, make: byProfile("anonymous")},
 
 		{route: "GET /api/profile/", kind: self},
 		{route: "PUT /api/profile/", kind: self, make: func(*fx, actor) call {
@@ -350,6 +356,9 @@ func profileCases() []kase {
 		{route: "PUT /api/profile/privacy", kind: self, make: func(*fx, actor) call {
 			return call{body: map[string]any{"visibility": "public", "open_to_offers": true}}
 		}},
+		{route: "GET /api/profile/hidden-orgs", kind: self},
+		{route: "PUT /api/profile/hidden-orgs/{slug}", kind: self, make: func(f *fx, _ actor) call { return call{params: P{"slug": f.tm().Slug}} }},
+		{route: "DELETE /api/profile/hidden-orgs/{slug}", kind: self, make: func(f *fx, _ actor) call { return call{params: P{"slug": f.tm().Slug}} }},
 		{route: "POST /api/profile/items", kind: self, make: func(*fx, actor) call {
 			return call{body: map[string]any{"kind": "publication", "title": "Статья", "authors": "Орлова Е.", "pub_type": "article", "year": 2023}}
 		}},

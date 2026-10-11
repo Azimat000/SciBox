@@ -19,7 +19,7 @@ import './offers.css'
 const MAX_MESSAGE = 1000
 
 /** Организация зовёт учёного на вакансию: выбор вакансии из тех, что она ведёт, и необязательное сообщение. */
-export function InviteModal({ profileId, name, onClose }: { profileId: string; name: string; onClose: () => void }) {
+export function InviteModal({ profileId, name, masked = false, onClose }: { profileId: string; name: string; masked?: boolean; onClose: () => void }) {
   const i = t.offers.invite
   const targets = useOfferTargets(profileId, true)
   return (
@@ -44,7 +44,7 @@ export function InviteModal({ profileId, name, onClose }: { profileId: string; n
           }
         />
       ) : (
-        <Form profileId={profileId} name={name} targets={targets.data} onClose={onClose} />
+        <Form profileId={profileId} name={name} masked={masked} targets={targets.data} onClose={onClose} />
       )}
     </Modal>
   )
@@ -64,7 +64,7 @@ function optionsOf(targets: Target[]): (Option | OptionGroup)[] {
   return orgs.map((org) => ({ group: org, options: targets.filter((x) => x.org_name === org).map(optionOf) }))
 }
 
-function Form({ profileId, name, targets, onClose }: { profileId: string; name: string; targets: Target[]; onClose: () => void }) {
+function Form({ profileId, name, masked, targets, onClose }: { profileId: string; name: string; masked: boolean; targets: Target[]; onClose: () => void }) {
   const i = t.offers.invite
   const client = useQueryClient()
   const toast = useToast()
@@ -96,6 +96,7 @@ function Form({ profileId, name, targets, onClose }: { profileId: string; name: 
   return (
     <form className="profile-form" onSubmit={submit} ref={formRef} noValidate>
       <p className="application-muted">{i.lead}</p>
+      {masked && <Alert kind="info">{i.maskedHint}</Alert>}
       {free.length === 0 && <Alert kind="info">{i.allBusy}</Alert>}
       {formError && <Alert kind="error">{formError}</Alert>}
       <Select

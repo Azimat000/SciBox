@@ -124,6 +124,34 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			w.listed("Елена", m, "public", nil)
 			return func(s *Service) error { _, err := s.Catalog(bg, CatalogParams{Query: m, Offset: 40}, nil); return err }
 		},
+		"hidden orgs list": func(t *testing.T, w *world) func(*Service) error {
+			p := w.user("Елена")
+			return func(s *Service) error { _, err := s.HiddenOrgs(bg, p.User); return err }
+		},
+		"hide from an organization": func(t *testing.T, w *world) func(*Service) error {
+			p, staff := w.user("Елена"), w.staff("Сотрудник")
+			_, slug := orgOf(t, staff)
+			return func(s *Service) error { _, err := s.HideFrom(bg, p.User, slug); return err }
+		},
+		"unhide from an organization": func(t *testing.T, w *world) func(*Service) error {
+			p, staff := w.user("Елена"), w.staff("Сотрудник")
+			_, slug := orgOf(t, staff)
+			if _, err := w.svc.HideFrom(bg, p.User, slug); err != nil {
+				t.Fatal(err)
+			}
+			return func(s *Service) error { _, err := s.UnhideFrom(bg, p.User, slug); return err }
+		},
+		"get anonymous as staff": func(t *testing.T, w *world) func(*Service) error {
+			p, staff := w.user("Елена"), w.staff("Сотрудник")
+			w.setVisibility(p, "anonymous", false)
+			own, _ := w.svc.Own(bg, p.User)
+			return func(s *Service) error { _, err := s.Get(bg, own.Profile.ID, &staff.User); return err }
+		},
+		"catalog anonymous as staff": func(t *testing.T, w *world) func(*Service) error {
+			m, staff := marker(), w.staff("Сотрудник")
+			w.listed("Елена", m, "anonymous", func(c *CoreInput) { c.HRsci = ptr(298) })
+			return func(s *Service) error { _, err := s.Catalog(bg, CatalogParams{HMin: 298}, &staff.User); return err }
+		},
 		"cv of another": func(t *testing.T, w *world) func(*Service) error {
 			p, q := w.user("Елена"), w.user("Другой")
 			w.setVisibility(p, "public", false)

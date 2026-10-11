@@ -21,6 +21,11 @@ export type CatalogCard = {
   q12_total: number
   q12_recent: number
   specialties: Code[]
+  /** Уровень R1–R4 по степени и званию. */
+  career_level?: number
+  /** Анонимная карточка: имени, должности, города и региона нет, вместо имени подпись label. */
+  masked?: boolean
+  label?: string
   updated_at: string
 }
 

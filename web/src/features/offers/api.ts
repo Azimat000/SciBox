@@ -28,7 +28,8 @@ export type Offer = {
   answered_at: string | null
   created_at: string
   vacancy: VacancyRef
-  scientist?: { profile_id: string; name: string }
+  /** masked: профиль анонимный, имя организации не открыто; вместо имени подпись label. */
+  scientist?: { profile_id: string; name: string; masked?: boolean; label?: string }
   /** Только учёному: его живой отклик на эту вакансию. */
   application_id: string | null
   can_answer: boolean

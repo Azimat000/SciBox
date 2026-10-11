@@ -81,7 +81,7 @@ func TestWhoCanBeInvited(t *testing.T) {
 	for _, tc := range []struct {
 		visibility string
 		ok         bool
-	}{{"hidden", false}, {"orgs", true}, {"public", true}} {
+	}{{"hidden", false}, {"anonymous", true}, {"orgs", true}, {"public", true}} {
 		t.Run(tc.visibility, func(t *testing.T) {
 			sci, profile := w.scientist("Учёный", tc.visibility)
 			before := w.snap(w.vacancy.ID, sci, w.tm.HR)

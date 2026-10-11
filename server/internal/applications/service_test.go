@@ -121,6 +121,66 @@ func TestHiddenProfileCanStillApplyAndStaysHidden(t *testing.T) {
 	}
 }
 
+// D-201: отклик открывает имя анонимного профиля той организации, на вакансию которой он подан, и только ей.
+// Отозванный отклик раскрытие не снимает: организация уже видела имя.
+func TestApplyingOpensTheNameOfAnAnonymousProfileToThatOrganizationOnly(t *testing.T) {
+	w := newWorld(t)
+	other := w.Team()
+	me := w.Applicant("Мария Смирнова")
+	if _, err := w.Prof.SetPrivacy(bg, me.User, "anonymous", false); err != nil {
+		t.Fatal(err)
+	}
+	own, _ := w.Prof.Own(bg, me.User)
+	if page, err := w.Prof.Get(bg, own.Profile.ID, &w.tm.Owner.User); err != nil || !page.Viewer.Masked || page.Profile.Name != "" {
+		t.Fatalf("до отклика: %+v %v", page.Profile, err)
+	}
+	d := w.mustApply(me, nil)
+	if d.Profile.Name != "Мария Смирнова" || d.Profile.Headline == "" {
+		t.Fatalf("отклик должен нести имя: %+v", d.Profile)
+	}
+	page, err := w.Prof.Get(bg, own.Profile.ID, &w.tm.Owner.User)
+	if err != nil || page.Viewer.Masked || page.Profile.Name != "Мария Смирнова" {
+		t.Errorf("после отклика организация должна видеть имя: %+v %v", page.Profile, err)
+	}
+	if page, err = w.Prof.Get(bg, own.Profile.ID, &other.Owner.User); err != nil || !page.Viewer.Masked || page.Profile.Name != "" {
+		t.Errorf("чужая организация по-прежнему видит аноним: %+v %v", page.Profile, err)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM profile_reveals WHERE org_id = $1 AND reason = 'application'`, w.tm.OrgID); n != 1 {
+		t.Errorf("строк раскрытия: %d", n)
+	}
+	// Отзыв отклика имя не прячет; новый отклик строку не дублирует.
+	if err := w.svc.Withdraw(bg, me.User, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	if page, _ = w.Prof.Get(bg, own.Profile.ID, &w.tm.Owner.User); page.Viewer.Masked {
+		t.Errorf("отзыв отклика снял раскрытие")
+	}
+	w.mustApply(me, nil)
+	if n := testkit.Count(t, `SELECT count(*) FROM profile_reveals WHERE org_id = $1`, w.tm.OrgID); n != 1 {
+		t.Errorf("строк раскрытия после повторного отклика: %d", n)
+	}
+}
+
+// Профиль, скрытый от организации, откликаться на её вакансии может (человек пишет сам), но страница профиля ей по-прежнему закрыта.
+func TestApplyingToAnOrganizationTheProfileIsHiddenFromDoesNotOpenThePage(t *testing.T) {
+	w := newWorld(t)
+	me := w.Applicant("Мария Смирнова")
+	if _, err := w.Prof.SetPrivacy(bg, me.User, "public", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Prof.HideFrom(bg, me.User, w.tm.Slug); err != nil {
+		t.Fatal(err)
+	}
+	d := w.mustApply(me, nil)
+	if d.Profile.Name != "Мария Смирнова" {
+		t.Fatalf("отклик без имени: %+v", d.Profile)
+	}
+	own, _ := w.Prof.Own(bg, me.User)
+	if _, err := w.Prof.Get(bg, own.Profile.ID, &w.tm.Owner.User); !errors.Is(err, profiles.ErrNotFound) {
+		t.Errorf("страница профиля, скрытого от организации: %v", err)
+	}
+}
+
 func TestSnapshotDoesNotChangeWithTheProfile(t *testing.T) {
 	w := newWorld(t)
 	me := w.Applicant("Мария Смирнова")

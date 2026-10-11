@@ -5,7 +5,7 @@ import { useMe } from '../auth/api'
 export const itemKinds = ['education', 'experience', 'publication', 'grant', 'patent', 'teaching'] as const
 export type ItemKind = (typeof itemKinds)[number]
 
-export const visibilities = ['hidden', 'orgs', 'public'] as const
+export const visibilities = ['hidden', 'anonymous', 'orgs', 'public'] as const
 export type Visibility = (typeof visibilities)[number]
 
 export const degreeLevels = ['none', 'candidate', 'doctor'] as const
@@ -88,10 +88,17 @@ export type Profile = {
   }
   /** Нет в снимках профиля, отправленных с откликом до среза 14. */
   quartiles?: Quartiles
+  /** Уровень R1–R4 по степени и званию. Нет в снимках профиля, отправленных с откликом до среза 15. */
+  career_level?: number
+  /** Сколько записей в разделах. Нет в старых снимках. */
+  counts?: { publications: number; grants: number; patents: number }
+  /** Подпись анонимной карточки («Кандидат наук, 1.4.4, R2, h-index 9»); только когда viewer.masked. */
+  label?: string
   updated_at: string
 }
 
-export type ProfilePage = { profile: Profile; viewer: { is_owner: boolean; can_see_contacts: boolean } }
+/** masked: профиль показан анонимно (режим «Анонимно», имя организации не открыто): имени, места работы и записей нет. */
+export type ProfilePage = { profile: Profile; viewer: { is_owner: boolean; can_see_contacts: boolean; masked?: boolean } }
 
 /** Основные поля, как их принимает сервер. */
 export type CoreFields = {
@@ -213,6 +220,38 @@ export async function lookupDoi(doi: string): Promise<Work> {
 export function refreshProfile(client: QueryClient) {
   return client.invalidateQueries({ queryKey: ['profile'] })
 }
+
+/** Организация, от сотрудников которой скрыт профиль. */
+export type HiddenOrg = { slug: string; name: string; city: string; hidden_at: string }
+
+/** Организация в выдаче поиска «кого скрыть». */
+export type FoundOrg = { slug: string; name: string; city: string }
+
+export const hiddenOrgsKey = ['profile', 'hidden-orgs'] as const
+
+export function useHiddenOrgs() {
+  const { user } = useMe()
+  return useQuery({
+    queryKey: [...hiddenOrgsKey, user?.id ?? 'anonymous'],
+    queryFn: async ({ signal }) => (await apiGet<{ items: HiddenOrg[] }>('/api/profile/hidden-orgs', { signal })).items,
+    enabled: user !== undefined && user !== null,
+    retry: false,
+  })
+}
+
+/** Поиск организации по названию; короче двух знаков сервер не ищет, и мы тоже. */
+export const MIN_ORG_QUERY = 2
+export function useFindOrganizations(q: string) {
+  return useQuery({
+    queryKey: ['profile', 'find-organizations', q],
+    queryFn: async ({ signal }) => (await apiGet<{ items: FoundOrg[] }>(`/api/organizations?limit=8&q=${encodeURIComponent(q)}`, { signal })).items,
+    enabled: q.length >= MIN_ORG_QUERY,
+    retry: false,
+  })
+}
+
+export const hideFromOrg = (slug: string) => apiSend<{ items: HiddenOrg[] }>('PUT', `/api/profile/hidden-orgs/${encodeURIComponent(slug)}`, {})
+export const unhideFromOrg = (slug: string) => apiSend<{ items: HiddenOrg[] }>('DELETE', `/api/profile/hidden-orgs/${encodeURIComponent(slug)}`)
 
 export const ownCvPath = '/api/profile/cv'
 export const cvPath = (id: string) => `/api/scientists/${encodeURIComponent(id)}/cv`

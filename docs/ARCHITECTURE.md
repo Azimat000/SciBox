@@ -43,7 +43,8 @@ SciBox/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
 │       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`; разбор и запись условий в адресе: `query.go`), «мои вакансии», HTTP
-│       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / организациям / публичный, кто видит профиль и контакты; без базы и HTTP
+│       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / анонимно / организациям / публичный, уровень раскрытия (закрыт / анонимная карточка / полностью), подпись анонима; без базы и HTTP
+│       ├── career/       карьерный уровень R1–R4 по степени и званию (срез 15, D-206): общее правило подбора и анонимных карточек
 │       ├── profiles/     профиль (критичная зона): основные поля и навыки, записи разделов, приватность, поиск по DOI, сборка резюме, раздел «Соискатели» (`catalog.go`), HTTP
 │       ├── applications/ отклики (критичная зона): отправка (снимок профиля, резюме, PDF-файлы, рекомендатели), «Мои отклики», карточка глазами соискателя и организации, выдача файлов, отзыв, «можно ли откликнуться»; разбор организацией (`review.go`: «просмотрен» при открытии, решение, приглашения и ответы на них, список откликов), таблицы переходов (`transitions.go`), проверка приглашений (`invitation_input.go`), тексты уведомлений (`notices.go`), HTTP
 │       ├── references/   рекомендательные письма (критичная зона): просьбы, одноразовые ссылки, письмо текстом/PDF, отказ, повтор и отмена, HTTP (в том числе страница рекомендателя без входа)
@@ -121,6 +122,13 @@ SciBox/
 Страницы организации и подразделения показывают список опубликованных вакансий (`VacancyList`).
 
 Файлы откликов и писем рекомендателей лежат в S3-совместимом хранилище, в базе только строка с ключом `files/<uuid>`, контрольной суммой и итогом проверки на вирусы (D-157, D-158); папки `storage/uploads/` нет. Журнал сервера пишется в stderr текстом и проходит через `logmask` (D-152).
+
+## Изменения среза 15
+
+- Миграция `00027_anonymous_profiles` (D-199…D-201, D-205): режим `anonymous` в `profiles.visibility` и `visibility_before_deletion`; `profile_hidden_orgs (profile_id, org_id, created_at)` — организации, от сотрудников которых скрыт профиль; `profile_reveals (profile_id, org_id, reason: application | offer_interested, created_at)` — организации, которым открыто имя. Обе таблицы уходят каскадом вместе с профилем или организацией.
+- API: `GET /api/profile/hidden-orgs` → `{items:[{slug,name,city,hidden_at}]}`; `PUT /api/profile/hidden-orgs/{slug}` скрыть (200 с новым списком; 404 `not_found` нет такой организации; 409 `too_many_hidden_orgs` больше 50); `DELETE /api/profile/hidden-orgs/{slug}` вернуть. `PUT /api/profile/privacy` принимает `anonymous`. `GET /api/scientists/{id}` у анонимного профиля отдаёт `viewer.masked: true` и урезанный `profile` (`label`, `career_level`, `counts`); `GET /api/scientists/{id}/cv` анонима — 404. В карточке каталога `masked`, `label`, `career_level`; у `Offer.scientist` `masked`, `label`, имя пусто.
+- Страницы: «Мой профиль» (четвёртый режим, блок «Скрыть от организаций» с поиском по названию), `/scientists/:id` (анонимная карточка вместо профиля), каталог `/scientists` и «Отправленные приглашения» (подпись вместо имени и метка «Имя скрыто»), окно приглашения (подсказка для анонима).
+- Запросы sqlc: `ViewerFlags`, `ListHiddenOrgs`, `CountHiddenOrgs`, `OrganizationIDBySlug`, `HideFromOrg`, `UnhideFromOrg`, `RevealProfile`; `SearchScientists` считает `masked` по строке; `GetOffer` и `ListSentOffers` не отдают имя анонима; `ListOrgAudit` считает `subject_masked`; выгрузка своих данных: `ExportHiddenOrgs`, `ExportReveals`.
 
 ## Изменения среза 29
 
@@ -344,7 +352,8 @@ SciBox/
 | `GET /api/my/vacancy-targets` | где человек может создать вакансию: `[{organization, whole_org, units}]` |
 | `GET /api/profile` | вошедший: свой профиль (создаётся пустым и скрытым): `{profile, viewer:{is_owner, can_see_contacts}}`; в `profile` есть `visibility`, `contact_email`, разделы `sections` (всегда списки; у публикации `issn` и подставленный `journal {title,issn,quartile,year}`), `quartiles {q12_total, q12_recent, recent_from, year}`, `skills {research, general}` (то же у `/api/scientists/{id}` и в снимке отклика; в старых снимках `skills` нет) |
 | `PUT /api/profile` | основные поля целиком (`headline, city, region_code, about, degree, degree_specialty_code, degree_year, degree_institution, dissertation_title, academic_title, academic_title_year, orcid, spin, scopus_id, wos_id, h_rsci, h_scopus, h_wos, h_scholar, contact_email, specialties, research_skills, general_skills`); 422 с полями; приватность и записи не трогает |
-| `PUT /api/profile/privacy` `{visibility, open_to_offers}` | 200 `{profile, viewer}`; 422 при неизвестном режиме |
+| `PUT /api/profile/privacy` `{visibility, open_to_offers}` | 200 `{profile, viewer}`; режимы `hidden, anonymous, orgs, public`; 422 при неизвестном режиме |
+| `GET /api/profile/hidden-orgs`, `PUT/DELETE /api/profile/hidden-orgs/{slug}` | «Скрыть от организаций» (срез 15): список `{items}`; 404 нет организации; 409 `too_many_hidden_orgs` |
 | `POST /api/profile/items` `{kind, …поля вида}` | 201 `{item}`; виды `education, experience, publication, grant, patent, teaching`; 422 с полями; 409 `too_many_items` |
 | `PUT /api/profile/items/{id}` `{kind?, …поля}` | 200 `{item}`; чужая или несуществующая запись 404; сменить вид нельзя (422) |
 | `DELETE /api/profile/items/{id}` | 204; чужая запись 404 |

@@ -100,6 +100,7 @@ func TestHTTPNeedsSignIn(t *testing.T) {
 		{"GET", "/api/profile"}, {"PUT", "/api/profile"}, {"PUT", "/api/profile/privacy"}, {"POST", "/api/profile/items"},
 		{"PUT", "/api/profile/items/" + id}, {"DELETE", "/api/profile/items/" + id}, {"GET", "/api/profile/doi?doi=10.1234/x"},
 		{"GET", "/api/profile/cv"}, {"GET", "/api/scientists/" + id + "/cv"},
+		{"GET", "/api/profile/hidden-orgs"}, {"PUT", "/api/profile/hidden-orgs/some-org"}, {"DELETE", "/api/profile/hidden-orgs/some-org"},
 	} {
 		if r := a.do(nil, c.method, c.path, map[string]any{}); r.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s без входа: %d %s", c.method, c.path, r.Code, r.Raw)
@@ -378,5 +379,97 @@ func TestHTTPInternalErrorIsHidden(t *testing.T) {
 	r := a.do(&p, "GET", "/api/profile", nil)
 	if r.Code != http.StatusInternalServerError || r.errCode(t) != "internal" || strings.Contains(r.Raw, "json") {
 		t.Errorf("%d %s", r.Code, r.Raw)
+	}
+}
+
+func TestHTTPHiddenOrgs(t *testing.T) {
+	a := newAPI(t)
+	owner := a.user("Учёный")
+	staff := a.staff("Сотрудник")
+	_, slug := orgOf(t, staff)
+
+	items := func(r reply) []any {
+		t.Helper()
+		l, ok := r.json(t)["items"].([]any)
+		if !ok {
+			t.Fatalf("нет списка: %d %s", r.Code, r.Raw)
+		}
+		return l
+	}
+	if r := a.do(&owner, "GET", "/api/profile/hidden-orgs", nil); r.Code != 200 || len(items(r)) != 0 {
+		t.Fatalf("пустой список: %d %s", r.Code, r.Raw)
+	}
+	r := a.do(&owner, "PUT", "/api/profile/hidden-orgs/"+slug, map[string]any{})
+	if r.Code != 200 || len(items(r)) != 1 || !strings.Contains(r.Raw, `"slug":"`+slug+`"`) {
+		t.Fatalf("скрыли: %d %s", r.Code, r.Raw)
+	}
+	if r := a.do(&owner, "PUT", "/api/profile/hidden-orgs/no-such-org", map[string]any{}); r.Code != http.StatusNotFound || r.errCode(t) != "not_found" {
+		t.Errorf("неизвестная организация: %d %s", r.Code, r.Raw)
+	}
+	if r := a.do(&owner, "DELETE", "/api/profile/hidden-orgs/no-such-org", nil); r.Code != http.StatusNotFound {
+		t.Errorf("снять с неизвестной: %d %s", r.Code, r.Raw)
+	}
+	if r := a.do(&owner, "DELETE", "/api/profile/hidden-orgs/"+slug, nil); r.Code != 200 || len(items(r)) != 0 {
+		t.Fatalf("сняли: %d %s", r.Code, r.Raw)
+	}
+}
+
+func TestHTTPTooManyHiddenOrgs(t *testing.T) {
+	a := newAPI(t)
+	owner := a.user("Учёный")
+	if _, err := a.svc.Own(bg, owner.User); err != nil {
+		t.Fatal(err)
+	}
+	prefix := strings.ToLower(marker())
+	if _, err := sharedPool.Exec(bg, `INSERT INTO organizations (slug, name, kind, city, created_at, updated_at)
+		SELECT $1 || '-' || g, 'Организация ' || g, 'institute', 'Казань', now(), now() FROM generate_series(1, $2::int) g`, prefix, MaxHiddenOrgs+1); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= MaxHiddenOrgs; i++ {
+		if r := a.do(&owner, "PUT", fmt.Sprintf("/api/profile/hidden-orgs/%s-%d", prefix, i), map[string]any{}); r.Code != 200 {
+			t.Fatalf("%d: %d %s", i, r.Code, r.Raw)
+		}
+	}
+	if r := a.do(&owner, "PUT", fmt.Sprintf("/api/profile/hidden-orgs/%s-%d", prefix, MaxHiddenOrgs+1), map[string]any{}); r.Code != http.StatusConflict || r.errCode(t) != CodeTooManyHidden {
+		t.Errorf("лишняя: %d %s", r.Code, r.Raw)
+	}
+}
+
+// Анонимный ответ API: сотрудник видит облик без имени, а резюме и контакты закрыты; сотруднику скрытой организации 404.
+func TestHTTPAnonymousProfile(t *testing.T) {
+	a := newAPI(t)
+	v := a.viewers()
+	blocked := a.staff("Сотрудник скрытой организации")
+	if _, err := a.svc.SaveCore(bg, v.owner.User, secretCore()); err != nil {
+		t.Fatal(err)
+	}
+	a.addItem(v.owner, goodPublication())
+	_, blockedSlug := orgOf(t, blocked)
+	if _, err := a.svc.HideFrom(bg, v.owner.User, blockedSlug); err != nil {
+		t.Fatal(err)
+	}
+	a.setVisibility(v.owner, "anonymous", true)
+	own, _ := a.svc.Own(bg, v.owner.User)
+	path := "/api/scientists/" + own.Profile.ID.String()
+
+	r := a.do(&v.staff, "GET", path, nil)
+	if r.Code != 200 || !strings.Contains(r.Raw, `"masked":true`) || !strings.Contains(r.Raw, `"label":"Кандидат наук`) {
+		t.Fatalf("сотрудник: %d %s", r.Code, r.Raw)
+	}
+	for _, secret := range append(secrets, v.owner.Email, "Активные центры катализаторов") {
+		if strings.Contains(r.Raw, secret) {
+			t.Errorf("в анонимном ответе есть %q", secret)
+		}
+	}
+	if r := a.do(&v.staff, "GET", path+"/cv", nil); r.Code != http.StatusNotFound || strings.HasPrefix(r.Raw, "%PDF") {
+		t.Errorf("резюме анонима: %d", r.Code)
+	}
+	for _, who := range []*person{nil, &v.stranger, &blocked} {
+		if r := a.do(who, "GET", path, nil); r.Code != http.StatusNotFound || r.errCode(t) != "not_found" {
+			t.Errorf("закрытым профиль должен отвечать 404, получили %d %s", r.Code, r.Raw)
+		}
+	}
+	if r := a.do(&v.owner, "GET", path, nil); r.Code != 200 || strings.Contains(r.Raw, `"masked":true`) {
+		t.Errorf("владелец: %d %s", r.Code, r.Raw)
 	}
 }

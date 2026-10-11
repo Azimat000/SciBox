@@ -131,6 +131,8 @@ type scientist struct {
 	key          string
 	visibility   string
 	openToOffers bool
+	// hideFrom — адреса организаций, от сотрудников которых профиль скрыт (срез 15).
+	hideFrom []string
 	core         prof.CoreInput
 	items        []prof.ItemInput
 }
@@ -216,7 +218,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "fedorov", visibility: "orgs", openToOffers: true,
+		key: "fedorov", visibility: "anonymous", openToOffers: true,
 		core: prof.CoreInput{
 			Headline: "Руководитель отдела климатического моделирования", City: "Архангельск", RegionCode: "29",
 			About:  "Региональные модели климата, прогноз ледовой обстановки. Рассматриваю предложения от институтов, где есть вычислительные мощности и полевые данные.",
@@ -268,7 +270,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "lebedeva", visibility: "orgs", openToOffers: false,
+		key: "lebedeva", visibility: "anonymous", openToOffers: false,
 		core: prof.CoreInput{
 			Headline: "Старший научный сотрудник, геохимия", City: "Томск", RegionCode: "70",
 			About:  "Геохимия редких элементов в мерзлотных почвах.",
@@ -297,7 +299,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "zhukova", visibility: "public", openToOffers: false,
+		key: "zhukova", visibility: "public", openToOffers: false, hideFrom: []string{"yuzhnyy-institut-morskoy-biologii"},
 		core: prof.CoreInput{
 			Headline: "Доцент кафедры математического анализа", City: "Екатеринбург", RegionCode: "66",
 			About:  "Дифференциальные уравнения и математическая физика. Преподаю анализ и уравнения математической физики, веду кружок для школьников.",
@@ -408,6 +410,11 @@ func seedScientists(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid
 		}
 		if _, err := svc.SetPrivacy(ctx, user, s.visibility, s.openToOffers); err != nil {
 			return 0, fmt.Errorf("seed profile %s: %w", s.key, err)
+		}
+		for _, slug := range s.hideFrom {
+			if _, err := svc.HideFrom(ctx, user, slug); err != nil {
+				return 0, fmt.Errorf("seed profile %s: hide from %s: %w", s.key, slug, err)
+			}
 		}
 		for _, it := range s.items {
 			if _, err := svc.AddItem(ctx, user, it); err != nil {

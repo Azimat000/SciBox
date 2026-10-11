@@ -10,6 +10,7 @@ import { reference } from '../../test/vacancies'
 const own = (page = ownPage(), extra: Record<string, Route> = {}): Record<string, Route> => ({
   ...signedInAs(ann),
   'GET /api/profile': reply(200, page),
+  'GET /api/profile/hidden-orgs': reply(200, { items: [] }),
   ...extra,
 })
 const click = async (name: string | RegExp) => userEvent.click(await screen.findByRole('button', { name }))
@@ -103,7 +104,7 @@ describe('privacy panel', () => {
     const api = stubApi(own(ownPage(), { 'PUT /api/profile/privacy': reply(200, ownPage({ ...profile, visibility: 'orgs' })) }))
     renderApp('/profile')
     expect(await screen.findByRole('radio', { name: /Все/ })).toBeChecked()
-    await userEvent.click(screen.getByRole('radio', { name: /Организации/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Организации/ }))
     expect(await screen.findByText('Приватность сохранена')).toBeInTheDocument()
     expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'orgs', open_to_offers: true })
   })

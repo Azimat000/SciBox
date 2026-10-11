@@ -161,7 +161,7 @@ func TestSaveCoreKeepsItemsAndPrivacy(t *testing.T) {
 func TestSetPrivacy(t *testing.T) {
 	w := newWorld(t)
 	p := w.user("Елена Орлова")
-	for _, vis := range []string{"orgs", "public", "hidden"} {
+	for _, vis := range []string{"orgs", "anonymous", "public", "hidden"} {
 		page, err := w.svc.SetPrivacy(bg, p.User, vis, vis == "orgs")
 		if err != nil {
 			t.Fatal(err)

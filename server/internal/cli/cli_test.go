@@ -225,10 +225,14 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM profiles"); n != 14 {
 		t.Errorf("%d profiles, want 14", n)
 	}
-	for _, mode := range []string{"hidden", "orgs", "public"} {
+	for _, mode := range []string{"hidden", "anonymous", "orgs", "public"} {
 		if n := count("SELECT count(*) FROM profiles WHERE visibility = '" + mode + "'"); n == 0 {
 			t.Errorf("no %s profiles", mode)
 		}
+	}
+	// Срез 15: профиль, скрытый от организации, и анонимный профиль, которому уже пришло приглашение с неоткрытым именем.
+	if n := count("SELECT count(*) FROM profile_hidden_orgs"); n == 0 {
+		t.Error("no profile is hidden from an organization")
 	}
 	if n := count("SELECT count(*) FROM profiles WHERE open_to_offers"); n == 0 {
 		t.Error("nobody is open to offers")

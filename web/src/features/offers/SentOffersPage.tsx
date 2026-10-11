@@ -139,10 +139,19 @@ function Row({ offer }: { offer: Offer }) {
     },
   })
   const who = offer.scientist
+  const shown = who?.masked ? (who.label ?? t.profile.masked.badge) : (who?.name ?? '')
   return (
     <li className="cand-row">
-      <h2 className="cand-name" data-long={who ? longName(who.name) : undefined}>
-        {who ? <Link to={`/scientists/${who.profile_id}`}>{who.name}</Link> : null}
+      <h2 className="cand-name" data-long={who ? longName(shown) : undefined}>
+        {who ? <Link to={`/scientists/${who.profile_id}`}>{shown}</Link> : null}
+        {who?.masked && (
+          <>
+            {' '}
+            <span title={t.catalog.masked.tagTitle}>
+              <Tag>{t.catalog.masked.tag}</Tag>
+            </span>
+          </>
+        )}
       </h2>
       <p className="cand-vacancy">
         <Link to={`/vacancies/${offer.vacancy.id}`}>{offer.vacancy.title}</Link>

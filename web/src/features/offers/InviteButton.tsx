@@ -9,7 +9,7 @@ import { InviteModal } from './InviteModal'
  * «Пригласить на вакансию»: только в режиме «Нанимаю» и только вошедшему. Решает ли он вправе приглашать, скажет сервер:
  * окно покажет вакансии, которые человек ведёт, или объяснит, что их нет.
  */
-export function InviteButton({ profileId, name, size = 'md', variant = 'secondary' }: { profileId: string; name: string; size?: ButtonSize; variant?: ButtonVariant }) {
+export function InviteButton({ profileId, name, masked = false, size = 'md', variant = 'secondary' }: { profileId: string; name: string; masked?: boolean; size?: ButtonSize; variant?: ButtonVariant }) {
   const { role } = useRole()
   const { user } = useMe()
   const [open, setOpen] = useState(false)
@@ -19,7 +19,7 @@ export function InviteButton({ profileId, name, size = 'md', variant = 'secondar
       <Button size={size} variant={variant} onClick={() => setOpen(true)} aria-label={`${t.offers.invite.button}: ${name}`}>
         {t.offers.invite.button}
       </Button>
-      {open && <InviteModal profileId={profileId} name={name} onClose={() => setOpen(false)} />}
+      {open && <InviteModal profileId={profileId} name={name} masked={masked} onClose={() => setOpen(false)} />}
     </>
   )
 }

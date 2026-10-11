@@ -252,7 +252,7 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
   )
 }
 
-function Section({ title, action, id, children }: { title: string; action?: ReactNode; id: string; children: ReactNode }) {
+export function Section({ title, action, id, children }: { title: string; action?: ReactNode; id: string; children: ReactNode }) {
   const level = useContext(SectionLevel)
   return (
     <section className="profile-section" aria-labelledby={`profile-${id}`}>

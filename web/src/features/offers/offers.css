@@ -31,3 +31,11 @@
     flex: 1 1 100%;
   }
 }
+
+/* Метка «Имя скрыто» рядом с подписью анонима: набрана шрифтом интерфейса, а не заголовка */
+.cand-name .tag {
+  font-family: var(--font-text);
+  font-weight: 500;
+  font-size: var(--text-xs);
+  vertical-align: middle;
+}

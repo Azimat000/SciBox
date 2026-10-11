@@ -18,10 +18,12 @@ type Props = {
 export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
   const c = t.catalog
   const Heading = `h${headingLevel}` as const
+  const masked = card.masked === true
   const place = c.place(card.city, card.region)
   const facts: string[] = []
   if (card.degree !== 'none') facts.push(degreeLabel(card.degree))
   if (card.academic_title !== 'none') facts.push(titleLabel(card.academic_title))
+  if (masked && card.career_level) facts.push(c.masked.level(card.career_level))
   if (place) facts.push(place)
   if (card.h_index !== null) facts.push(c.hIndex(card.h_index))
   if (card.publications > 0) facts.push(c.publications(card.publications, plural(card.publications, c.publicationForms)))
@@ -32,9 +34,15 @@ export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
   return (
     <article className="entry sci-entry">
       <Heading className="entry-title">
-        <Link to={`/scientists/${card.id}`}>{card.name}</Link>
+        <Link to={`/scientists/${card.id}`}>{masked ? (card.label ?? t.profile.masked.badge) : card.name}</Link>
       </Heading>
-      <p className="entry-org">{card.headline}</p>
+      {masked ? (
+        <p className="entry-org" title={c.masked.tagTitle}>
+          {c.masked.tag}
+        </p>
+      ) : (
+        <p className="entry-org">{card.headline}</p>
+      )}
       {card.open_to_offers && (
         <div className="entry-side sci-side">
           <Tag tone="accent">{c.openToOffers}</Tag>
@@ -59,7 +67,7 @@ export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
             ))}
           </ul>
         )}
-        <InviteButton profileId={card.id} name={card.name} size="sm" />
+        <InviteButton profileId={card.id} name={masked ? (card.label ?? t.profile.masked.badge) : card.name} masked={masked} size="sm" />
       </div>
     </article>
   )

@@ -485,3 +485,51 @@
   padding-block: var(--s-3);
   border-bottom: 1px solid var(--line);
 }
+
+/* ---- скрыть от организаций ---- */
+
+.hidden-orgs-lead {
+  max-width: var(--measure);
+  color: var(--ink-body);
+}
+
+.hidden-orgs-subtitle {
+  font-size: var(--text-md);
+  margin-top: var(--s-2);
+}
+
+.hidden-orgs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ink);
+}
+
+.hidden-orgs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.hidden-orgs-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hidden-orgs-city {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.hidden-orgs-done {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  flex: none;
+}
