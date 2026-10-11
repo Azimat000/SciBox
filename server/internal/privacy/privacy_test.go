@@ -16,50 +16,64 @@ func TestParse(t *testing.T) {
 	}
 }
 
-// Каждая пара «кто смотрит × режим» записана явно: и профиль, и контакты.
+// Каждая тройка «кто смотрит × режим × скрыт ли от него и раскрыто ли ему имя» записана явно: уровень раскрытия,
+// страница и контакты. Таблица не вычисляется тем же кодом, что проверяет.
 func TestWhoSeesWhat(t *testing.T) {
-	anon := Viewer{}
-	signedIn := Viewer{} // вошедший без организации выглядит для приватности так же, как аноним
-	staff := Viewer{Staff: true}
-	owner := Viewer{Owner: true}
-	ownerAndStaff := Viewer{Owner: true, Staff: true}
-
-	tests := []struct {
-		name          string
-		mode          Visibility
-		who           Viewer
-		view, contact bool
+	viewers := []struct {
+		name string
+		who  Viewer
 	}{
-		{"аноним, скрыт", Hidden, anon, false, false},
-		{"аноним, организациям", Orgs, anon, false, false},
-		{"аноним, публичный", Public, anon, true, false},
-
-		{"вошедший без организации, скрыт", Hidden, signedIn, false, false},
-		{"вошедший без организации, организациям", Orgs, signedIn, false, false},
-		{"вошедший без организации, публичный", Public, signedIn, true, false},
-
-		{"сотрудник организации, скрыт", Hidden, staff, false, false},
-		{"сотрудник организации, организациям", Orgs, staff, true, true},
-		{"сотрудник организации, публичный", Public, staff, true, true},
-
-		{"владелец, скрыт", Hidden, owner, true, true},
-		{"владелец, организациям", Orgs, owner, true, true},
-		{"владелец, публичный", Public, owner, true, true},
-		{"владелец и сотрудник, скрыт", Hidden, ownerAndStaff, true, true},
-
-		{"неизвестный режим закрыт для аноним", Visibility(""), anon, false, false},
-		{"неизвестный режим закрыт для сотрудника", Visibility("friends"), staff, false, false},
-		{"неизвестный режим открыт владельцу", Visibility("friends"), owner, true, true},
+		{"аноним", Viewer{}},
+		{"сотрудник", Viewer{Staff: true}},
+		{"сотрудник организации, от которой скрыто", Viewer{Staff: true, Blocked: true}},
+		{"сотрудник организации, которой открыто имя", Viewer{Staff: true, Revealed: true}},
+		{"сотрудник двух организаций: от одной скрыто, другой открыто имя", Viewer{Staff: true, Blocked: true, Revealed: true}},
+		{"владелец", Viewer{Owner: true}},
+		{"владелец и сотрудник организации, от которой скрыто", Viewer{Owner: true, Staff: true, Blocked: true}},
+		{"вошедший без организации с чужими отметками", Viewer{Blocked: true, Revealed: true}},
+		{"вошедший без организации, имя открыто", Viewer{Revealed: true}},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.mode.CanView(tc.who); got != tc.view {
-				t.Errorf("CanView = %v, ожидали %v", got, tc.view)
-			}
-			if got := tc.mode.CanSeeContacts(tc.who); got != tc.contact {
-				t.Errorf("CanSeeContacts = %v, ожидали %v", got, tc.contact)
-			}
-		})
+	C, M, O := Closed, Masked, Open
+	// Порядок столбцов совпадает с порядком viewers.
+	modes := []struct {
+		mode Visibility
+		want []Disclosure
+	}{
+		{Hidden, []Disclosure{C, C, C, C, C, O, O, C, C}},
+		{Anonymous, []Disclosure{C, M, C, O, C, O, O, C, C}},
+		{Orgs, []Disclosure{C, O, C, O, C, O, O, C, C}},
+		{Public, []Disclosure{O, O, C, O, C, O, O, O, O}},
+		{Visibility(""), []Disclosure{C, C, C, C, C, O, O, C, C}},
+		{Visibility("friends"), []Disclosure{C, C, C, C, C, O, O, C, C}},
+	}
+	for _, m := range modes {
+		for i, v := range viewers {
+			t.Run(string(m.mode)+"/"+v.name, func(t *testing.T) {
+				got := m.mode.Disclose(v.who)
+				if got != m.want[i] {
+					t.Fatalf("Disclose = %v, ожидали %v", got, m.want[i])
+				}
+				if view := m.want[i] != C; m.mode.CanView(v.who) != view {
+					t.Errorf("CanView = %v, ожидали %v", !view, view)
+				}
+				// Контакты: только при полном раскрытии и только владельцу или сотруднику организации.
+				contacts := m.want[i] == O && (v.who.Owner || v.who.Staff)
+				if got := m.mode.CanSeeContacts(v.who); got != contacts {
+					t.Errorf("CanSeeContacts = %v, ожидали %v", got, contacts)
+				}
+			})
+		}
+	}
+}
+
+// Анонимная карточка не открывает ни профиль целиком, ни контакты: «видит карточку» не равно «видит человека».
+func TestMaskedIsNeverOpen(t *testing.T) {
+	who := Viewer{Staff: true}
+	if Anonymous.Disclose(who) != Masked {
+		t.Fatal("сотрудник должен видеть анонимную карточку")
+	}
+	if Anonymous.CanSeeContacts(who) {
+		t.Error("контакты анонимного профиля закрыты, пока имя не открыто")
 	}
 }
 
@@ -73,9 +87,11 @@ func TestCatalogModes(t *testing.T) {
 	}{
 		{"аноним", Viewer{}, []Visibility{Public}},
 		{"вошедший без организации", Viewer{}, []Visibility{Public}},
-		{"сотрудник организации", Viewer{Staff: true}, []Visibility{Orgs, Public}},
+		{"сотрудник организации", Viewer{Staff: true}, []Visibility{Anonymous, Orgs, Public}},
+		// Скрытие и раскрытие зависят от самого профиля, их проверяет запрос по каждой строке (profiles.Catalog).
+		{"сотрудник, от которого скрыто", Viewer{Staff: true, Blocked: true, Revealed: true}, []Visibility{Anonymous, Orgs, Public}},
 		{"владелец", Viewer{Owner: true}, []Visibility{Public}},
-		{"владелец и сотрудник", Viewer{Owner: true, Staff: true}, []Visibility{Orgs, Public}},
+		{"владелец и сотрудник", Viewer{Owner: true, Staff: true}, []Visibility{Anonymous, Orgs, Public}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,6 +108,26 @@ func TestCatalogModes(t *testing.T) {
 				if m == Hidden {
 					t.Errorf("скрытые профили не должны попадать в каталог")
 				}
+			}
+		})
+	}
+}
+
+func TestMaskedLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		in   MaskedFacts
+		want string
+	}{
+		{"пример из дорожной карты", MaskedFacts{Degree: "candidate", Level: 2, HIndex: 9, Specialties: []string{"1.4.4"}}, "Кандидат наук, 1.4.4, R2, h-index 9"},
+		{"доктор, три специальности: берутся две", MaskedFacts{Degree: "doctor", Level: 3, HIndex: 21, Specialties: []string{"1.4.4", "1.4.7", "1.5.2"}}, "Доктор наук, 1.4.4, 1.4.7, R3, h-index 21"},
+		{"без степени, без h-index и специальностей", MaskedFacts{Degree: "none", Level: 1}, "Без учёной степени, R1"},
+		{"неизвестная степень и уровень", MaskedFacts{Degree: "x", Level: 9}, "Без учёной степени"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MaskedLabel(tc.in); got != tc.want {
+				t.Errorf("MaskedLabel = %q, ожидали %q", got, tc.want)
 			}
 		})
 	}

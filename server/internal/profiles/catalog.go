@@ -73,7 +73,11 @@ type CatalogCard struct {
 	Q12Total      int       `json:"q12_total"`  // статей в журналах Q1–Q2
 	Q12Recent     int       `json:"q12_recent"` // из них с года RecentFrom ответа
 	Specialties   []Code    `json:"specialties"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	CareerLevel   int       `json:"career_level"`
+	// Masked — анонимная карточка (D-199): имени, должности, города и региона нет, есть подпись Label.
+	Masked    bool      `json:"masked"`
+	Label     string    `json:"label,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // CatalogResult — страница каталога.
@@ -219,21 +223,34 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 		c := CatalogCard{
 			ID: r.ID, Name: r.DisplayName, Headline: r.Headline, City: r.City, Degree: r.Degree, AcademicTitle: r.AcademicTitle,
 			OpenToOffers: r.OpenToOffers, Publications: int(r.Publications), Q12Total: int(r.Q12Total), Q12Recent: int(r.Q12Recent),
-			Specialties: byProfile[r.ID], UpdatedAt: r.UpdatedAt,
+			Specialties: byProfile[r.ID], Region: r.RegionName, CareerLevel: careerLevel(r.Degree, r.AcademicTitle), Masked: r.Masked, UpdatedAt: r.UpdatedAt,
 		}
 		if c.Specialties == nil {
 			c.Specialties = []Code{}
-		}
-		if r.RegionName != nil {
-			c.Region = *r.RegionName
 		}
 		if r.HMax > 0 {
 			h := int(r.HMax)
 			c.HIndex = &h
 		}
+		if c.Masked {
+			c.Label = maskedCardLabel(c)
+		}
 		out.Items = append(out.Items, c)
 	}
 	return out, nil
+}
+
+// maskedCardLabel — подпись анонимной карточки каталога.
+func maskedCardLabel(c CatalogCard) string {
+	codes := make([]string, 0, len(c.Specialties))
+	for _, sp := range c.Specialties {
+		codes = append(codes, sp.Code)
+	}
+	h := 0
+	if c.HIndex != nil {
+		h = *c.HIndex
+	}
+	return privacy.MaskedLabel(privacy.MaskedFacts{Degree: c.Degree, Level: c.CareerLevel, HIndex: h, Specialties: codes})
 }
 
 // catalogPage читает страницу выдачи и общее число найденного. Если страница пуста, а смещение не нулевое (страница

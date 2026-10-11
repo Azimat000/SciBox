@@ -119,17 +119,29 @@ WITH hits AS MATERIALIZED (
   SELECT p.id, p.updated_at,
          CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN h.rank END AS k_rank,
          CASE WHEN @sort::text = 'h_index' THEN p.h_max END AS k_h,
-         CASE WHEN @sort::text = 'name' THEN u.display_name END AS k_name
+         CASE WHEN @sort::text = 'name' AND NOT mk.masked THEN u.display_name END AS k_name,
+         mk.masked
   FROM profiles p
   JOIN users u ON u.id = p.user_id
   LEFT JOIN hits h ON h.profile_id = p.id
   LEFT JOIN profile_search d ON d.profile_id = p.id
+  -- Анонимный профиль остаётся анонимным для смотрящего, пока учёный не открыл имя организации смотрящего (D-201).
+  CROSS JOIN LATERAL (
+    SELECT COALESCE(p.visibility = 'anonymous' AND (sqlc.narg(exclude_user)::uuid IS NULL OR NOT EXISTS (
+      SELECT 1 FROM profile_reveals rv JOIN org_members m ON m.org_id = rv.org_id
+      WHERE rv.profile_id = p.id AND m.user_id = sqlc.narg(exclude_user)::uuid)), false)::bool AS masked
+  ) mk
   WHERE p.visibility = ANY(@modes::text[])
     AND p.headline <> ''
     AND (sqlc.narg(exclude_user)::uuid IS NULL OR p.user_id <> sqlc.narg(exclude_user)::uuid)
-    AND (@q::text = '' OR h.profile_id IS NOT NULL)
+    -- Учёный скрыл профиль от организации смотрящего: в любом режиме его нет (D-200).
+    AND (sqlc.narg(exclude_user)::uuid IS NULL OR NOT EXISTS (
+      SELECT 1 FROM profile_hidden_orgs ho JOIN org_members m ON m.org_id = ho.org_id
+      WHERE ho.profile_id = p.id AND m.user_id = sqlc.narg(exclude_user)::uuid))
+    -- Слова и регион нашли бы анонима по имени, месту работы и городу: под условия они его не берут (D-203).
+    AND (@q::text = '' OR (h.profile_id IS NOT NULL AND NOT mk.masked))
     AND (cardinality(@fields::text[]) = 0 OR d.codes && @fields::text[])
-    AND (@region::text = '' OR p.region_code = @region::text)
+    AND (@region::text = '' OR (p.region_code = @region::text AND NOT mk.masked))
     AND (cardinality(@degrees::text[]) = 0 OR p.degree = ANY(@degrees::text[]))
     AND (cardinality(@titles::text[]) = 0 OR p.academic_title = ANY(@titles::text[]))
     AND (NOT @open_only::bool OR p.open_to_offers)
@@ -138,11 +150,16 @@ WITH hits AS MATERIALIZED (
   ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
   LIMIT @row_cap
 ), page AS (
-  SELECT f.id, count(*) OVER () AS total,
+  SELECT f.id, f.masked, count(*) OVER () AS total,
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+SELECT p.id, pg.masked,
+       (CASE WHEN pg.masked THEN '' ELSE u.display_name END)::text AS display_name,
+       (CASE WHEN pg.masked THEN '' ELSE p.headline END)::text AS headline,
+       (CASE WHEN pg.masked THEN '' ELSE p.city END)::text AS city,
+       (CASE WHEN pg.masked THEN '' ELSE COALESCE(r.name, '') END)::text AS region_name,
+       p.degree, p.academic_title, p.open_to_offers, p.updated_at,
        p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
        p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
@@ -167,3 +184,38 @@ SELECT ps.profile_id, s.code, s.name
 FROM profile_specialties ps JOIN specialties s ON s.code = ps.specialty_code
 WHERE ps.profile_id = ANY(@ids::uuid[])
 ORDER BY ps.profile_id, string_to_array(s.code, '.')::int[];
+
+-- Что смотрящий-человек значит для приватности профиля: состоит ли в организации, скрыт ли от неё профиль, открыто ли ей имя.
+-- name: ViewerFlags :one
+SELECT
+  EXISTS (SELECT 1 FROM org_members m WHERE m.user_id = @user_id) AS staff,
+  EXISTS (SELECT 1 FROM profile_hidden_orgs ho JOIN org_members m ON m.org_id = ho.org_id
+          WHERE ho.profile_id = @profile_id AND m.user_id = @user_id) AS blocked,
+  EXISTS (SELECT 1 FROM profile_reveals rv JOIN org_members m ON m.org_id = rv.org_id
+          WHERE rv.profile_id = @profile_id AND m.user_id = @user_id) AS revealed;
+
+-- Организации, от сотрудников которых скрыт профиль (срез 15, D-200).
+-- name: ListHiddenOrgs :many
+SELECT o.id, o.slug, o.name, o.city, ho.created_at
+FROM profile_hidden_orgs ho JOIN organizations o ON o.id = ho.org_id
+WHERE ho.profile_id = $1
+ORDER BY lower(o.name), o.id;
+
+-- name: CountHiddenOrgs :one
+SELECT count(*) FROM profile_hidden_orgs WHERE profile_id = $1;
+
+-- name: OrganizationIDBySlug :one
+SELECT id FROM organizations WHERE slug = $1;
+
+-- name: HideFromOrg :execrows
+INSERT INTO profile_hidden_orgs (profile_id, org_id, created_at) VALUES (@profile_id, @org_id, @now)
+ON CONFLICT (profile_id, org_id) DO NOTHING;
+
+-- name: UnhideFromOrg :execrows
+DELETE FROM profile_hidden_orgs WHERE profile_id = $1 AND org_id = $2;
+
+-- Имя анонимного профиля открыто организации: человек откликнулся или ответил «Интересно» (D-201). Повтор ничего не меняет.
+-- name: RevealProfile :exec
+INSERT INTO profile_reveals (profile_id, org_id, reason, created_at)
+SELECT p.id, @org_id, @reason, @now FROM profiles p WHERE p.user_id = @user_id
+ON CONFLICT (profile_id, org_id) DO NOTHING;

@@ -26,6 +26,17 @@ func (q *Queries) AddProfileSpecialties(ctx context.Context, arg AddProfileSpeci
 	return err
 }
 
+const countHiddenOrgs = `-- name: CountHiddenOrgs :one
+SELECT count(*) FROM profile_hidden_orgs WHERE profile_id = $1
+`
+
+func (q *Queries) CountHiddenOrgs(ctx context.Context, profileID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countHiddenOrgs, profileID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countProfileItems = `-- name: CountProfileItems :one
 SELECT count(*) FROM profile_items WHERE profile_id = $1 AND kind = $2
 `
@@ -220,6 +231,25 @@ func (q *Queries) GetProfileItem(ctx context.Context, id uuid.UUID) (GetProfileI
 	return i, err
 }
 
+const hideFromOrg = `-- name: HideFromOrg :execrows
+INSERT INTO profile_hidden_orgs (profile_id, org_id, created_at) VALUES ($1, $2, $3)
+ON CONFLICT (profile_id, org_id) DO NOTHING
+`
+
+type HideFromOrgParams struct {
+	ProfileID uuid.UUID
+	OrgID     uuid.UUID
+	Now       time.Time
+}
+
+func (q *Queries) HideFromOrg(ctx context.Context, arg HideFromOrgParams) (int64, error) {
+	result, err := q.db.Exec(ctx, hideFromOrg, arg.ProfileID, arg.OrgID, arg.Now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertProfileItem = `-- name: InsertProfileItem :one
 INSERT INTO profile_items (profile_id, kind, sort_year, data, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $5) RETURNING id
@@ -256,6 +286,48 @@ func (q *Queries) IsOrgStaff(ctx context.Context, userID uuid.UUID) (bool, error
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const listHiddenOrgs = `-- name: ListHiddenOrgs :many
+SELECT o.id, o.slug, o.name, o.city, ho.created_at
+FROM profile_hidden_orgs ho JOIN organizations o ON o.id = ho.org_id
+WHERE ho.profile_id = $1
+ORDER BY lower(o.name), o.id
+`
+
+type ListHiddenOrgsRow struct {
+	ID        uuid.UUID
+	Slug      string
+	Name      string
+	City      string
+	CreatedAt time.Time
+}
+
+// Организации, от сотрудников которых скрыт профиль (срез 15, D-200).
+func (q *Queries) ListHiddenOrgs(ctx context.Context, profileID uuid.UUID) ([]ListHiddenOrgsRow, error) {
+	rows, err := q.db.Query(ctx, listHiddenOrgs, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHiddenOrgsRow
+	for rows.Next() {
+		var i ListHiddenOrgsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.City,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listProfileItems = `-- name: ListProfileItems :many
@@ -377,6 +449,17 @@ func (q *Queries) LockProfileByUser(ctx context.Context, userID uuid.UUID) (uuid
 	return id, err
 }
 
+const organizationIDBySlug = `-- name: OrganizationIDBySlug :one
+SELECT id FROM organizations WHERE slug = $1
+`
+
+func (q *Queries) OrganizationIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, organizationIDBySlug, slug)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const profileHasDOI = `-- name: ProfileHasDOI :one
 SELECT EXISTS (
     SELECT 1 FROM profile_items
@@ -397,6 +480,30 @@ func (q *Queries) ProfileHasDOI(ctx context.Context, arg ProfileHasDOIParams) (b
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const revealProfile = `-- name: RevealProfile :exec
+INSERT INTO profile_reveals (profile_id, org_id, reason, created_at)
+SELECT p.id, $1, $2, $3 FROM profiles p WHERE p.user_id = $4
+ON CONFLICT (profile_id, org_id) DO NOTHING
+`
+
+type RevealProfileParams struct {
+	OrgID  uuid.UUID
+	Reason string
+	Now    time.Time
+	UserID uuid.UUID
+}
+
+// Имя анонимного профиля открыто организации: человек откликнулся или ответил «Интересно» (D-201). Повтор ничего не меняет.
+func (q *Queries) RevealProfile(ctx context.Context, arg RevealProfileParams) error {
+	_, err := q.db.Exec(ctx, revealProfile,
+		arg.OrgID,
+		arg.Reason,
+		arg.Now,
+		arg.UserID,
+	)
+	return err
 }
 
 const searchScientists = `-- name: SearchScientists :many
@@ -420,17 +527,29 @@ WITH hits AS MATERIALIZED (
   SELECT p.id, p.updated_at,
          CASE WHEN $8::text = 'relevance' AND $5::text <> '' THEN h.rank END AS k_rank,
          CASE WHEN $8::text = 'h_index' THEN p.h_max END AS k_h,
-         CASE WHEN $8::text = 'name' THEN u.display_name END AS k_name
+         CASE WHEN $8::text = 'name' AND NOT mk.masked THEN u.display_name END AS k_name,
+         mk.masked
   FROM profiles p
   JOIN users u ON u.id = p.user_id
   LEFT JOIN hits h ON h.profile_id = p.id
   LEFT JOIN profile_search d ON d.profile_id = p.id
-  WHERE p.visibility = ANY($9::text[])
+  -- Анонимный профиль остаётся анонимным для смотрящего, пока учёный не открыл имя организации смотрящего (D-201).
+  CROSS JOIN LATERAL (
+    SELECT COALESCE(p.visibility = 'anonymous' AND ($9::uuid IS NULL OR NOT EXISTS (
+      SELECT 1 FROM profile_reveals rv JOIN org_members m ON m.org_id = rv.org_id
+      WHERE rv.profile_id = p.id AND m.user_id = $9::uuid)), false)::bool AS masked
+  ) mk
+  WHERE p.visibility = ANY($10::text[])
     AND p.headline <> ''
-    AND ($10::uuid IS NULL OR p.user_id <> $10::uuid)
-    AND ($5::text = '' OR h.profile_id IS NOT NULL)
+    AND ($9::uuid IS NULL OR p.user_id <> $9::uuid)
+    -- Учёный скрыл профиль от организации смотрящего: в любом режиме его нет (D-200).
+    AND ($9::uuid IS NULL OR NOT EXISTS (
+      SELECT 1 FROM profile_hidden_orgs ho JOIN org_members m ON m.org_id = ho.org_id
+      WHERE ho.profile_id = p.id AND m.user_id = $9::uuid))
+    -- Слова и регион нашли бы анонима по имени, месту работы и городу: под условия они его не берут (D-203).
+    AND ($5::text = '' OR (h.profile_id IS NOT NULL AND NOT mk.masked))
     AND (cardinality($11::text[]) = 0 OR d.codes && $11::text[])
-    AND ($12::text = '' OR p.region_code = $12::text)
+    AND ($12::text = '' OR (p.region_code = $12::text AND NOT mk.masked))
     AND (cardinality($13::text[]) = 0 OR p.degree = ANY($13::text[]))
     AND (cardinality($14::text[]) = 0 OR p.academic_title = ANY($14::text[]))
     AND (NOT $15::bool OR p.open_to_offers)
@@ -439,16 +558,21 @@ WITH hits AS MATERIALIZED (
   ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
   LIMIT $18
 ), page AS (
-  SELECT f.id, count(*) OVER () AS total,
+  SELECT f.id, f.masked, count(*) OVER () AS total,
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+SELECT p.id, pg.masked,
+       (CASE WHEN pg.masked THEN '' ELSE u.display_name END)::text AS display_name,
+       (CASE WHEN pg.masked THEN '' ELSE p.headline END)::text AS headline,
+       (CASE WHEN pg.masked THEN '' ELSE p.city END)::text AS city,
+       (CASE WHEN pg.masked THEN '' ELSE COALESCE(r.name, '') END)::text AS region_name,
+       p.degree, p.academic_title, p.open_to_offers, p.updated_at,
        p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
        p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
        pg.total
-FROM (SELECT id, total, ord FROM page WHERE ord <= $1::int ORDER BY ord LIMIT $3 OFFSET $2) pg
+FROM (SELECT id, masked, total, ord FROM page WHERE ord <= $1::int ORDER BY ord LIMIT $3 OFFSET $2) pg
 JOIN profiles p ON p.id = pg.id
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -471,8 +595,8 @@ type SearchScientistsParams struct {
 	Fuzzy       bool
 	HitCap      int32
 	Sort        string
-	Modes       []string
 	ExcludeUser *uuid.UUID
+	Modes       []string
 	Fields      []string
 	Region      string
 	Degrees     []string
@@ -485,10 +609,11 @@ type SearchScientistsParams struct {
 
 type SearchScientistsRow struct {
 	ID            uuid.UUID
+	Masked        bool
 	DisplayName   string
 	Headline      string
 	City          string
-	RegionName    *string
+	RegionName    string
 	Degree        string
 	AcademicTitle string
 	OpenToOffers  bool
@@ -520,8 +645,8 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 		arg.Fuzzy,
 		arg.HitCap,
 		arg.Sort,
-		arg.Modes,
 		arg.ExcludeUser,
+		arg.Modes,
 		arg.Fields,
 		arg.Region,
 		arg.Degrees,
@@ -540,6 +665,7 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 		var i SearchScientistsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Masked,
 			&i.DisplayName,
 			&i.Headline,
 			&i.City,
@@ -576,6 +702,23 @@ type TouchProfileParams struct {
 func (q *Queries) TouchProfile(ctx context.Context, arg TouchProfileParams) error {
 	_, err := q.db.Exec(ctx, touchProfile, arg.Now, arg.ID)
 	return err
+}
+
+const unhideFromOrg = `-- name: UnhideFromOrg :execrows
+DELETE FROM profile_hidden_orgs WHERE profile_id = $1 AND org_id = $2
+`
+
+type UnhideFromOrgParams struct {
+	ProfileID uuid.UUID
+	OrgID     uuid.UUID
+}
+
+func (q *Queries) UnhideFromOrg(ctx context.Context, arg UnhideFromOrgParams) (int64, error) {
+	result, err := q.db.Exec(ctx, unhideFromOrg, arg.ProfileID, arg.OrgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateProfileCore = `-- name: UpdateProfileCore :execrows
@@ -697,4 +840,32 @@ func (q *Queries) UpdateProfilePrivacy(ctx context.Context, arg UpdateProfilePri
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const viewerFlags = `-- name: ViewerFlags :one
+SELECT
+  EXISTS (SELECT 1 FROM org_members m WHERE m.user_id = $1) AS staff,
+  EXISTS (SELECT 1 FROM profile_hidden_orgs ho JOIN org_members m ON m.org_id = ho.org_id
+          WHERE ho.profile_id = $2 AND m.user_id = $1) AS blocked,
+  EXISTS (SELECT 1 FROM profile_reveals rv JOIN org_members m ON m.org_id = rv.org_id
+          WHERE rv.profile_id = $2 AND m.user_id = $1) AS revealed
+`
+
+type ViewerFlagsParams struct {
+	UserID    uuid.UUID
+	ProfileID uuid.UUID
+}
+
+type ViewerFlagsRow struct {
+	Staff    bool
+	Blocked  bool
+	Revealed bool
+}
+
+// Что смотрящий-человек значит для приватности профиля: состоит ли в организации, скрыт ли от неё профиль, открыто ли ей имя.
+func (q *Queries) ViewerFlags(ctx context.Context, arg ViewerFlagsParams) (ViewerFlagsRow, error) {
+	row := q.db.QueryRow(ctx, viewerFlags, arg.UserID, arg.ProfileID)
+	var i ViewerFlagsRow
+	err := row.Scan(&i.Staff, &i.Blocked, &i.Revealed)
+	return i, err
 }

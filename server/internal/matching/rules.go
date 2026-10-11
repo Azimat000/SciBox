@@ -8,6 +8,8 @@ package matching
 import (
 	"sort"
 	"strings"
+
+	"scibox/server/internal/career"
 )
 
 // Степень и звание: порядок «выше — больше».
@@ -69,17 +71,7 @@ func (p Profile) Ready() bool { return len(p.Specialties) > 0 }
 
 // Level — карьерный уровень по профилю (R1–R4, как в EURAXESS): без степени R1, кандидат наук R2, доктор наук R3,
 // доктор наук с учёным званием профессора R4. Это оценка для подсказок, а не утверждение о человеке.
-func (p Profile) Level() int {
-	switch {
-	case degreeRank[p.Degree] >= 2 && titleRank[p.Title] >= 2:
-		return 4
-	case degreeRank[p.Degree] >= 2:
-		return 3
-	case degreeRank[p.Degree] == 1:
-		return 2
-	}
-	return 1
-}
+func (p Profile) Level() int { return career.Level(p.Degree, p.Title) }
 
 // Groups — группы специальностей (первые два числа кода, 1.4), в которых у человека есть специальности.
 func (p Profile) Groups() []string {

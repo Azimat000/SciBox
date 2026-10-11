@@ -155,12 +155,12 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Pag
 	if err != nil {
 		return Page{}, fmt.Errorf("profiles: load profile: %w", err)
 	}
-	who, err := s.viewerOf(ctx, row.Profile.UserID, viewer)
+	who, err := s.viewerOf(ctx, row.Profile.ID, row.Profile.UserID, viewer)
 	if err != nil {
 		return Page{}, err
 	}
 	vis, _ := privacy.Parse(row.Profile.Visibility)
-	if !vis.CanView(who) {
+	if vis.Disclose(who) == privacy.Closed {
 		return Page{}, ErrNotFound
 	}
 	// Сотрудник организации открывает чужие профили с контактами не больше предела в сутки (D-191).
@@ -172,19 +172,20 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Pag
 	return s.build(ctx, s.q, row.Profile, row.DisplayName, row.RegionName, row.DegreeSpecialtyName, who)
 }
 
-// viewerOf собирает сведения о смотрящем для приватности: владелец ли он и состоит ли в организации.
-func (s *Service) viewerOf(ctx context.Context, owner uuid.UUID, viewer *auth.User) (privacy.Viewer, error) {
+// viewerOf собирает сведения о смотрящем для приватности: владелец ли он, состоит ли в организации, скрыт ли от неё
+// профиль и открыто ли ей имя (D-200, D-201).
+func (s *Service) viewerOf(ctx context.Context, profileID, owner uuid.UUID, viewer *auth.User) (privacy.Viewer, error) {
 	if viewer == nil {
 		return privacy.Viewer{}, nil
 	}
 	if viewer.ID == owner {
 		return privacy.Viewer{Owner: true}, nil
 	}
-	staff, err := s.q.IsOrgStaff(ctx, viewer.ID)
+	f, err := s.q.ViewerFlags(ctx, dbgen.ViewerFlagsParams{UserID: viewer.ID, ProfileID: profileID})
 	if err != nil {
-		return privacy.Viewer{}, fmt.Errorf("profiles: check organization staff: %w", err)
+		return privacy.Viewer{}, fmt.Errorf("profiles: check viewer: %w", err)
 	}
-	return privacy.Viewer{Staff: staff}, nil
+	return privacy.Viewer{Staff: f.Staff, Blocked: f.Blocked, Revealed: f.Revealed}, nil
 }
 
 // build собирает профиль для смотрящего: контакты и приватность попадают в ответ, только если им это положено.
@@ -198,6 +199,7 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 		return Page{}, fmt.Errorf("profiles: load items: %w", err)
 	}
 	vis, _ := privacy.Parse(p.Visibility)
+	disclosure := vis.Disclose(who)
 	v := View{
 		ID: p.ID, Name: name, OpenToOffers: p.OpenToOffers, Headline: p.Headline, City: p.City, About: p.About,
 		AcademicTitle: p.AcademicTitle, AcademicTitleYear: intp(p.AcademicTitleYear),
@@ -227,6 +229,11 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 	}
 	if err := s.attachJournals(ctx, q, &v); err != nil {
 		return Page{}, err
+	}
+	v.CareerLevel = careerLevel(p.Degree, p.AcademicTitle)
+	v.Counts = Counts{Publications: len(v.Sections.Publications), Grants: len(v.Sections.Grants), Patents: len(v.Sections.Patents)}
+	if disclosure == privacy.Masked {
+		return Page{Profile: mask(v), Viewer: ViewerInfo{Masked: true}}, nil
 	}
 	if who.Owner {
 		v.Visibility = p.Visibility
@@ -701,6 +708,10 @@ func (s *Service) CV(ctx context.Context, user auth.User, id *uuid.UUID) ([]byte
 	}
 	if err != nil {
 		return nil, "", err
+	}
+	// В резюме есть всё, что анонимная карточка прячет: его нет, пока имя не открыто (D-205).
+	if page.Viewer.Masked {
+		return nil, "", ErrNotFound
 	}
 	pdf, err := renderCV(page, s.cfg.ProductName, s.now())
 	if err != nil {

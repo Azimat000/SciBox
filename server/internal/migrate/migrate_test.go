@@ -105,7 +105,10 @@ func TestUpDownUp(t *testing.T) {
 	scaleTables := append(slices.Clone(fileTables), "profile_search")
 	slices.Sort(scaleTables)
 	// Общее расписание фоновых задач (00022).
-	allTables := append(slices.Clone(scaleTables), "job_runs")
+	jobTables := append(slices.Clone(scaleTables), "job_runs")
+	slices.Sort(jobTables)
+	// Скрытие от организаций и раскрытие имени анонимного профиля (00027).
+	allTables := append(slices.Clone(jobTables), "profile_hidden_orgs", "profile_reveals")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -114,15 +117,16 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00026_inactive_accounts.sql", 2, allTables},
+		{"up", "00027_anonymous_profiles.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
 		// Столбцы привязки ссылки (00025) и неактивности (00026), индексы для чисел главной (00024) и метрики очереди
 		// писем (00023) таблиц не добавляют.
-		{"down", "00026_inactive_accounts.sql", 2, allTables},
-		{"down", "00025_confirm_binding.sql", 2, allTables},
-		{"down", "00024_load_indexes.sql", 2, allTables},
-		{"down", "00023_observability.sql", 2, allTables},
+		{"down", "00027_anonymous_profiles.sql", 2, jobTables},
+		{"down", "00026_inactive_accounts.sql", 2, jobTables},
+		{"down", "00025_confirm_binding.sql", 2, jobTables},
+		{"down", "00024_load_indexes.sql", 2, jobTables},
+		{"down", "00023_observability.sql", 2, jobTables},
 		{"down", "00022_job_runs.sql", 2, scaleTables},
 		{"down", "00021_vacancy_search_open.sql", 2, scaleTables},
 		{"down", "00020_scale.sql", 2, fileTables},
@@ -147,7 +151,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00026_inactive_accounts.sql", 2, allTables},
+		{"up", "00027_anonymous_profiles.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

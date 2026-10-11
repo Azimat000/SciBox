@@ -239,13 +239,35 @@ type View struct {
 	ContactEmail      string        `json:"contact_email,omitempty"` // только владельцу и сотрудникам организаций
 	Sections          Sections      `json:"sections"`
 	Quartiles         QuartileStats `json:"quartiles"`
-	UpdatedAt         time.Time     `json:"updated_at"`
+	// CareerLevel — уровень R1–R4 по степени и званию (оценка для подсказок, как в подборе).
+	CareerLevel int    `json:"career_level"`
+	Counts      Counts `json:"counts"`
+	// Label — подпись анонимной карточки; только у анонимного вида (ViewerInfo.Masked).
+	Label     string    `json:"label,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Counts — сколько записей в разделах: единственное, что анонимная карточка говорит о публикациях, грантах и патентах.
+type Counts struct {
+	Publications int `json:"publications"`
+	Grants       int `json:"grants"`
+	Patents      int `json:"patents"`
 }
 
 // ViewerInfo — что смотрящему можно: страница сама решает, какие кнопки показать.
 type ViewerInfo struct {
 	IsOwner        bool `json:"is_owner"`
 	CanSeeContacts bool `json:"can_see_contacts"`
+	// Masked — профиль показан анонимно (D-199): без имени, места работы, идентификаторов, записей разделов и контактов.
+	Masked bool `json:"masked"`
+}
+
+// HiddenOrg — организация, от сотрудников которой скрыт профиль (D-200).
+type HiddenOrg struct {
+	Slug   string    `json:"slug"`
+	Name   string    `json:"name"`
+	City   string    `json:"city"`
+	Hidden time.Time `json:"hidden_at"`
 }
 
 // Page — ответ «профиль» целиком.

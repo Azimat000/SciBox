@@ -254,6 +254,12 @@ type Profile struct {
 	HMax                     int16
 }
 
+type ProfileHiddenOrg struct {
+	ProfileID uuid.UUID
+	OrgID     uuid.UUID
+	CreatedAt time.Time
+}
+
 type ProfileItem struct {
 	ID        uuid.UUID
 	ProfileID uuid.UUID
@@ -262,6 +268,13 @@ type ProfileItem struct {
 	Data      []byte
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type ProfileReveal struct {
+	ProfileID uuid.UUID
+	OrgID     uuid.UUID
+	Reason    string
+	CreatedAt time.Time
 }
 
 type ProfileSearch struct {

@@ -14,7 +14,13 @@ RETURNING id;
 -- Приглашение с вакансией, организацией и учёным; application_id — живой отклик этого человека на эту вакансию.
 -- name: GetOffer :one
 SELECT o.id, o.vacancy_id, o.user_id, o.status, o.message, o.answer_note, o.answered_at, o.created_at, o.updated_at,
-       u.display_name AS scientist_name, p.id AS profile_id,
+       p.id AS profile_id,
+       (CASE WHEN p.visibility = 'anonymous' AND NOT EXISTS (SELECT 1 FROM profile_reveals rv WHERE rv.profile_id = p.id AND rv.org_id = v.org_id)
+            THEN '' ELSE u.display_name END)::text AS scientist_name,
+       COALESCE(p.visibility = 'anonymous' AND NOT EXISTS (SELECT 1 FROM profile_reveals rv WHERE rv.profile_id = p.id AND rv.org_id = v.org_id), false)::bool AS scientist_masked,
+       p.degree AS scientist_degree, p.academic_title AS scientist_title, p.h_max::int AS scientist_h,
+       ARRAY(SELECT ps.specialty_code FROM profile_specialties ps WHERE ps.profile_id = p.id
+             ORDER BY string_to_array(ps.specialty_code, '.')::int[] LIMIT 2)::text[] AS scientist_specialties,
        v.title AS vacancy_title, v.status AS vacancy_status, v.org_id, v.unit_id, v.org_name, v.org_slug, v.deadline,
        v.city AS vacancy_city, v.unit_name,
        a.id AS application_id
@@ -54,7 +60,13 @@ SELECT status, count(*) AS total FROM vacancy_offers WHERE user_id = $1 AND stat
 -- «Отправленные приглашения» организации: по вакансиям организаций целиком (whole_orgs) и подразделений (units).
 -- name: ListSentOffers :many
 SELECT o.id, o.status, o.message, o.answer_note, o.answered_at, o.created_at,
-       u.display_name AS scientist_name, p.id AS profile_id,
+       p.id AS profile_id,
+       (CASE WHEN p.visibility = 'anonymous' AND NOT EXISTS (SELECT 1 FROM profile_reveals rv WHERE rv.profile_id = p.id AND rv.org_id = v.org_id)
+            THEN '' ELSE u.display_name END)::text AS scientist_name,
+       COALESCE(p.visibility = 'anonymous' AND NOT EXISTS (SELECT 1 FROM profile_reveals rv WHERE rv.profile_id = p.id AND rv.org_id = v.org_id), false)::bool AS scientist_masked,
+       p.degree AS scientist_degree, p.academic_title AS scientist_title, p.h_max::int AS scientist_h,
+       ARRAY(SELECT ps.specialty_code FROM profile_specialties ps WHERE ps.profile_id = p.id
+             ORDER BY string_to_array(ps.specialty_code, '.')::int[] LIMIT 2)::text[] AS scientist_specialties,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.unit_name,
        count(*) OVER () AS total
 FROM vacancy_offers o

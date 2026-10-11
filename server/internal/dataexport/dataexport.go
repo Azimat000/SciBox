@@ -142,6 +142,12 @@ func sections() []section {
 		{"profile_specialties", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
 			return q.ExportProfileSpecialties(ctx, u.ID)
 		}},
+		{"profile_hidden_orgs", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
+			return q.ExportHiddenOrgs(ctx, u.ID)
+		}},
+		{"profile_reveals", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
+			return q.ExportReveals(ctx, u.ID)
+		}},
 		{"applications", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
 			return q.ExportApplications(ctx, u.ID)
 		}},

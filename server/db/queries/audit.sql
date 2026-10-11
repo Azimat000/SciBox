@@ -11,11 +11,20 @@ VALUES (
 
 -- Журнал организации, от новых к старым. before — номер записи, с которой продолжать (пусто — с самых новых).
 -- name: ListOrgAudit :many
+-- subject_masked: приглашённый человек с анонимным профилем, имя которого не открыто этой организации (срез 15, D-204):
+-- пакет audit заменяет его имя и номер аккаунта.
 SELECT a.id, a.at, a.action, a.target_kind, a.target_id, a.target_label, a.details,
-       a.actor_id, actor.display_name AS actor_name, a.subject_id, subject.display_name AS subject_name
+       a.actor_id, actor.display_name AS actor_name,
+       a.subject_id, subject.display_name AS subject_name, m.masked AS subject_masked
 FROM audit_log a
 LEFT JOIN users actor ON actor.id = a.actor_id
 LEFT JOIN users subject ON subject.id = a.subject_id
+CROSS JOIN LATERAL (
+    SELECT COALESCE(a.action IN ('offer.sent', 'offer.canceled') AND EXISTS (
+        SELECT 1 FROM profiles sp
+        WHERE sp.user_id = a.subject_id AND sp.visibility = 'anonymous'
+          AND NOT EXISTS (SELECT 1 FROM profile_reveals rv WHERE rv.profile_id = sp.id AND rv.org_id = a.org_id)), false)::bool AS masked
+) m
 WHERE a.org_id = sqlc.arg(org_id) AND (sqlc.narg(before)::bigint IS NULL OR a.id < sqlc.narg(before))
 ORDER BY a.id DESC
 LIMIT sqlc.arg(max_rows);

@@ -25,6 +25,9 @@ type Person struct {
 	Name string    `json:"name"`
 }
 
+// MaskedSubject — как журнал называет приглашённого человека с анонимным профилем, пока имя не открыто организации.
+const MaskedSubject = "Анонимный кандидат"
+
 // Target — над чем сделано действие.
 type Target struct {
 	Kind  string     `json:"kind"`
@@ -75,6 +78,9 @@ func List(ctx context.Context, q *dbgen.Queries, orgID uuid.UUID, before int64, 
 			ID: r.ID, At: r.At, Action: Action(r.Action), Details: map[string]string{},
 			Actor: person(r.ActorID, r.ActorName), Subject: person(r.SubjectID, r.SubjectName),
 			Target: Target{Kind: r.TargetKind, ID: r.TargetID, Label: r.TargetLabel},
+		}
+		if r.SubjectMasked {
+			e.Subject = &Person{Name: MaskedSubject}
 		}
 		if err := json.Unmarshal(r.Details, &e.Details); err != nil {
 			return Page{}, fmt.Errorf("audit: decode details of %d: %w", r.ID, err)

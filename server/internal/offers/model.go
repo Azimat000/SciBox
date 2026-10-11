@@ -80,10 +80,13 @@ type VacancyRef struct {
 	Deadline *string   `json:"deadline"`
 }
 
-// ScientistRef — приглашённый учёный (в списках организации).
+// ScientistRef — приглашённый учёный (в списках организации). Если профиль анонимный и имя организации не открыто
+// (D-201), имени нет: Masked == true, а Label называет человека научным обликом («Кандидат наук, 1.4.4, R2, h-index 9»).
 type ScientistRef struct {
 	ProfileID uuid.UUID `json:"profile_id"`
 	Name      string    `json:"name"`
+	Masked    bool      `json:"masked"`
+	Label     string    `json:"label,omitempty"`
 }
 
 // Offer — приглашение. Учёный видит организацию и вакансию (без имени сотрудника, D-096), организация видит учёного.

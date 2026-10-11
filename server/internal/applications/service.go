@@ -323,6 +323,10 @@ func (s *Service) apply(ctx context.Context, user auth.User, in Input, ups []fil
 		if err != nil {
 			return fmt.Errorf("applications: insert: %w", err)
 		}
+		// Имя анонимного профиля открывается организации, на вакансию которой человек откликнулся (D-201).
+		if err := q.RevealProfile(ctx, dbgen.RevealProfileParams{UserID: user.ID, OrgID: v.OrgID, Reason: "application", Now: now}); err != nil {
+			return fmt.Errorf("applications: reveal profile: %w", err)
+		}
 		if err := s.saveFile(ctx, q, id, files.KindCV, 0, cv, now); err != nil {
 			return err
 		}

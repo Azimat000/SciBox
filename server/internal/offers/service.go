@@ -17,6 +17,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/career"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/num"
@@ -170,8 +171,11 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 		if err != nil {
 			return fmt.Errorf("offers: load profile: %w", err)
 		}
-		// Приглашающий состоит в организации, поэтому смотрит на профиль как сотрудник.
-		if vis, _ := privacy.Parse(p.Visibility); !vis.CanView(privacy.Viewer{Staff: true}) {
+		// Приглашающий состоит в организации, поэтому смотрит на профиль как сотрудник; анонима можно приглашать,
+		// а профиль, скрытый от его организации, для него не существует (D-200).
+		if ok, err := s.canSee(ctx, q, user.ID, p.ID, p.Visibility); err != nil {
+			return err
+		} else if !ok {
 			return ErrNotFound
 		}
 		message, msgErr := checkText(in.Message, maxMessage, "Сообщение длиннее 1000 знаков. Сократите его")
@@ -225,6 +229,34 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 		})
 	})
 	return out, err
+}
+
+// canSee — виден ли профиль этому человеку (хотя бы как анонимная карточка), с учётом его организаций.
+func (s *Service) canSee(ctx context.Context, q *dbgen.Queries, user, profile uuid.UUID, visibility string) (bool, error) {
+	f, err := q.ViewerFlags(ctx, dbgen.ViewerFlagsParams{UserID: user, ProfileID: profile})
+	if err != nil {
+		return false, fmt.Errorf("offers: check viewer: %w", err)
+	}
+	vis, _ := privacy.Parse(visibility)
+	return vis.CanView(privacy.Viewer{Staff: f.Staff, Blocked: f.Blocked, Revealed: f.Revealed}), nil
+}
+
+// refOf собирает ссылку на учёного для организации. Масочная подпись строится из научного облика; имени в ней нет.
+func refOf(profileID uuid.UUID, name string, masked bool, degree, title string, h int32, specialties []string) *ScientistRef {
+	if !masked {
+		return &ScientistRef{ProfileID: profileID, Name: name}
+	}
+	return &ScientistRef{ProfileID: profileID, Masked: true, Label: privacy.MaskedLabel(privacy.MaskedFacts{
+		Degree: degree, Level: career.Level(degree, title), HIndex: int(h), Specialties: specialties,
+	})}
+}
+
+// shown — как назвать учёного в тексте уведомления: именем или научным обликом.
+func (r *ScientistRef) shown() string {
+	if r.Masked {
+		return r.Label
+	}
+	return r.Name
 }
 
 // loadForStaff находит приглашение, которым вправе распоряжаться организация: ведущему вакансию оно есть, остальным нет.
@@ -296,11 +328,20 @@ func (s *Service) Answer(ctx context.Context, user auth.User, id uuid.UUID, in A
 		if n == 0 {
 			return ErrBadState
 		}
+		// «Интересно» открывает имя анонимного профиля организации, которая пригласила (D-201); «Не сейчас» нет.
+		if in.Action == ActionInterested {
+			if err := q.RevealProfile(ctx, dbgen.RevealProfileParams{UserID: user.ID, OrgID: o.OrgID, Reason: "offer_interested", Now: s.now()}); err != nil {
+				return fmt.Errorf("offers: reveal profile: %w", err)
+			}
+			if o, err = q.GetOffer(ctx, id); err != nil {
+				return fmt.Errorf("offers: reload offer: %w", err)
+			}
+		}
 		staff, err := orgs.UsersWhoCan(ctx, q, o.OrgID, access.ManageVacancies, unitOf(o.UnitID))
 		if err != nil {
 			return err
 		}
-		title, body := answeredNotice(o.ScientistName, o.VacancyTitle, o.OrgName, in.Action, note)
+		title, body := answeredNotice(scientistOf(o).shown(), o.VacancyTitle, o.OrgName, in.Action, note)
 		for _, uid := range staff {
 			if uid == user.ID {
 				continue
@@ -335,13 +376,17 @@ func offerFromRow(o dbgen.GetOfferRow, forStaff bool) Offer {
 	}
 	pending := o.Status == StatusPending
 	if forStaff {
-		out.Scientist = &ScientistRef{ProfileID: o.ProfileID, Name: o.ScientistName}
+		out.Scientist = scientistOf(o)
 		out.CanCancel = pending
 	} else {
 		out.ApplicationID = o.ApplicationID
 		out.CanAnswer = pending
 	}
 	return out
+}
+
+func scientistOf(o dbgen.GetOfferRow) *ScientistRef {
+	return refOf(o.ProfileID, o.ScientistName, o.ScientistMasked, o.ScientistDegree, o.ScientistTitle, o.ScientistH, o.ScientistSpecialties)
 }
 
 func deref(s *string) string {
@@ -432,7 +477,7 @@ func (s *Service) Sent(ctx context.Context, user auth.User, f SentFilter) (SentL
 		out.Items = append(out.Items, Offer{
 			ID: r.ID, Status: r.Status, Message: r.Message, AnswerNote: r.AnswerNote, AnsweredAt: r.AnsweredAt, CreatedAt: r.CreatedAt,
 			Vacancy:   VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug, UnitName: deref(r.UnitName)},
-			Scientist: &ScientistRef{ProfileID: r.ProfileID, Name: r.ScientistName}, CanCancel: r.Status == StatusPending,
+			Scientist: refOf(r.ProfileID, r.ScientistName, r.ScientistMasked, r.ScientistDegree, r.ScientistTitle, r.ScientistH, r.ScientistSpecialties), CanCancel: r.Status == StatusPending,
 		})
 	}
 	return out, nil
@@ -457,11 +502,9 @@ func (s *Service) Targets(ctx context.Context, user auth.User, profileID uuid.UU
 	if err != nil {
 		return nil, fmt.Errorf("offers: load profile: %w", err)
 	}
-	staff, err := s.q.IsOrgStaff(ctx, user.ID)
-	if err != nil {
-		return nil, fmt.Errorf("offers: check organization staff: %w", err)
-	}
-	if vis, _ := privacy.Parse(p.Visibility); !vis.CanView(privacy.Viewer{Staff: staff}) {
+	if ok, err := s.canSee(ctx, s.q, user.ID, p.ID, p.Visibility); err != nil {
+		return nil, err
+	} else if !ok {
 		return nil, ErrNotFound
 	}
 	if p.UserID == user.ID {

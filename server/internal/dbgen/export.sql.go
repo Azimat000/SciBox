@@ -176,6 +176,22 @@ func (q *Queries) ExportFiles(ctx context.Context, userID uuid.UUID) ([]ExportFi
 	return items, nil
 }
 
+const exportHiddenOrgs = `-- name: ExportHiddenOrgs :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('organization', o.name, 'slug', o.slug, 'hidden_at', ho.created_at) ORDER BY ho.created_at, o.id), '[]'::jsonb)::jsonb AS doc
+FROM profile_hidden_orgs ho
+JOIN profiles p ON p.id = ho.profile_id
+JOIN organizations o ON o.id = ho.org_id
+WHERE p.user_id = $1
+`
+
+// Организации, от сотрудников которых человек скрыл профиль, и организации, которым открыто имя анонимного профиля (срез 15).
+func (q *Queries) ExportHiddenOrgs(ctx context.Context, userID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportHiddenOrgs, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
 const exportKnownDevices = `-- name: ExportKnownDevices :one
 SELECT COALESCE(jsonb_agg(jsonb_build_object('first_seen_at', d.first_seen_at, 'last_seen_at', d.last_seen_at)
     ORDER BY d.first_seen_at), '[]'::jsonb)::jsonb AS doc
@@ -293,6 +309,21 @@ WHERE p.user_id = $1
 
 func (q *Queries) ExportProfileSpecialties(ctx context.Context, userID uuid.UUID) ([]byte, error) {
 	row := q.db.QueryRow(ctx, exportProfileSpecialties, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
+const exportReveals = `-- name: ExportReveals :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('organization', o.name, 'slug', o.slug, 'reason', rv.reason, 'revealed_at', rv.created_at) ORDER BY rv.created_at, o.id), '[]'::jsonb)::jsonb AS doc
+FROM profile_reveals rv
+JOIN profiles p ON p.id = rv.profile_id
+JOIN organizations o ON o.id = rv.org_id
+WHERE p.user_id = $1
+`
+
+func (q *Queries) ExportReveals(ctx context.Context, userID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportReveals, userID)
 	var doc []byte
 	err := row.Scan(&doc)
 	return doc, err

@@ -24,6 +24,7 @@ const maxBody = 32 << 10
 // Коды ошибок этого раздела.
 const (
 	CodeTooMany        = "too_many_items"
+	CodeTooManyHidden  = "too_many_hidden_orgs"
 	CodeDOINotFound    = "doi_not_found"
 	CodeDOIUnavailable = "doi_unavailable"
 )
@@ -60,6 +61,9 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Get("/", h.own)
 		r.Put("/", h.saveCore)
 		r.Put("/privacy", h.setPrivacy)
+		r.Get("/hidden-orgs", h.hiddenOrgs)
+		r.Put("/hidden-orgs/{slug}", h.hideFrom)
+		r.Delete("/hidden-orgs/{slug}", h.unhideFrom)
 		r.Post("/items", h.addItem)
 		r.Put("/items/{id}", h.updateItem)
 		r.Delete("/items/{id}", h.deleteItem)
@@ -111,6 +115,10 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		}})
 	case errors.Is(err, ErrNotFound):
 		notFound(w)
+	case errors.Is(err, ErrOrgNotFound):
+		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, "Такой организации нет")
+	case errors.Is(err, ErrTooManyHidden):
+		apierr.WriteError(w, http.StatusConflict, CodeTooManyHidden, "Список полон: можно скрыть профиль не больше чем от 50 организаций. Уберите ненужные, чтобы добавить новые")
 	case errors.Is(err, ErrTooMany):
 		apierr.WriteError(w, http.StatusConflict, CodeTooMany, "В этом разделе уже слишком много записей. Удалите ненужные, чтобы добавить новые")
 	case errors.Is(err, ErrDOINotFound):
@@ -159,6 +167,33 @@ func (h *Handler) setPrivacy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apierr.WriteJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) hiddenOrgs(w http.ResponseWriter, r *http.Request) {
+	list, err := h.svc.HiddenOrgs(r.Context(), actor(r))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, map[string][]HiddenOrg{"items": list})
+}
+
+func (h *Handler) hideFrom(w http.ResponseWriter, r *http.Request) {
+	list, err := h.svc.HideFrom(r.Context(), actor(r), chi.URLParam(r, "slug"))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, map[string][]HiddenOrg{"items": list})
+}
+
+func (h *Handler) unhideFrom(w http.ResponseWriter, r *http.Request) {
+	list, err := h.svc.UnhideFrom(r.Context(), actor(r), chi.URLParam(r, "slug"))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, map[string][]HiddenOrg{"items": list})
 }
 
 func (h *Handler) addItem(w http.ResponseWriter, r *http.Request) {

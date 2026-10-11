@@ -56,10 +56,17 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 
 const listOrgAudit = `-- name: ListOrgAudit :many
 SELECT a.id, a.at, a.action, a.target_kind, a.target_id, a.target_label, a.details,
-       a.actor_id, actor.display_name AS actor_name, a.subject_id, subject.display_name AS subject_name
+       a.actor_id, actor.display_name AS actor_name,
+       a.subject_id, subject.display_name AS subject_name, m.masked AS subject_masked
 FROM audit_log a
 LEFT JOIN users actor ON actor.id = a.actor_id
 LEFT JOIN users subject ON subject.id = a.subject_id
+CROSS JOIN LATERAL (
+    SELECT COALESCE(a.action IN ('offer.sent', 'offer.canceled') AND EXISTS (
+        SELECT 1 FROM profiles sp
+        WHERE sp.user_id = a.subject_id AND sp.visibility = 'anonymous'
+          AND NOT EXISTS (SELECT 1 FROM profile_reveals rv WHERE rv.profile_id = sp.id AND rv.org_id = a.org_id)), false)::bool AS masked
+) m
 WHERE a.org_id = $1 AND ($2::bigint IS NULL OR a.id < $2)
 ORDER BY a.id DESC
 LIMIT $3
@@ -72,20 +79,23 @@ type ListOrgAuditParams struct {
 }
 
 type ListOrgAuditRow struct {
-	ID          int64
-	At          time.Time
-	Action      string
-	TargetKind  string
-	TargetID    *uuid.UUID
-	TargetLabel string
-	Details     []byte
-	ActorID     *uuid.UUID
-	ActorName   *string
-	SubjectID   *uuid.UUID
-	SubjectName *string
+	ID            int64
+	At            time.Time
+	Action        string
+	TargetKind    string
+	TargetID      *uuid.UUID
+	TargetLabel   string
+	Details       []byte
+	ActorID       *uuid.UUID
+	ActorName     *string
+	SubjectID     *uuid.UUID
+	SubjectName   *string
+	SubjectMasked bool
 }
 
 // Журнал организации, от новых к старым. before — номер записи, с которой продолжать (пусто — с самых новых).
+// subject_masked: приглашённый человек с анонимным профилем, имя которого не открыто этой организации (срез 15, D-204):
+// пакет audit заменяет его имя и номер аккаунта.
 func (q *Queries) ListOrgAudit(ctx context.Context, arg ListOrgAuditParams) ([]ListOrgAuditRow, error) {
 	rows, err := q.db.Query(ctx, listOrgAudit, arg.OrgID, arg.Before, arg.MaxRows)
 	if err != nil {
@@ -107,6 +117,7 @@ func (q *Queries) ListOrgAudit(ctx context.Context, arg ListOrgAuditParams) ([]L
 			&i.ActorName,
 			&i.SubjectID,
 			&i.SubjectName,
+			&i.SubjectMasked,
 		); err != nil {
 			return nil, err
 		}
