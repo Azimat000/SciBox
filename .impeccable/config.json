@@ -21,6 +21,15 @@
         "value": "pt mono",
         "createdAt": "2026-10-02T20:29:07.338Z",
         "reason": "Claude: шрифты отвергнутых образцов направлений в черновом файле .impeccable/mocks/decision/directions.html, на сайт не попадают"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/chat/layouts.html"
+        ],
+        "createdAt": "2026-10-14T17:50:55.262Z",
+        "reason": "Claude: архивный макет выбора раскладки (D-217); метки повторяют отступы Tag из дизайн-системы, макет не идёт в сборку"
       }
     ]
   }
