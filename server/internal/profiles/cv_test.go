@@ -41,15 +41,12 @@ func TestCVDocumentFull(t *testing.T) {
 	for _, f := range doc.IDs {
 		ids[f.Label] = f.Value
 	}
-	if len(doc.IDs) != 4 || ids["ORCID"] != "0000-0002-1825-0097" || ids["SPIN"] != "1234-5678" || ids["Scopus ID"] != "57190123456" || ids["WoS ResearcherID"] != "A-1234-2008" {
+	if len(doc.IDs) != 5 || ids["ORCID"] != "0000-0002-1825-0097" || ids["SPIN"] != "1234-5678" || ids["Scopus ID"] != "57190123456" || ids["WoS ResearcherID"] != "A-1234-2008" {
 		t.Errorf("идентификаторы: %+v", doc.IDs)
 	}
-	var stats []string
-	for _, f := range doc.Stats {
-		stats = append(stats, f.Value+" "+strings.ReplaceAll(f.Label, "\n", " "))
-	}
-	if got := strings.Join(stats, "|"); got != "12 h-index РИНЦ|9 h-index Scopus|7 h-index Web of Science|15 h-index Google Scholar" {
-		t.Errorf("числа: %q", got)
+	// h-index: обычная строка среди идентификаторов, последняя; отдельной полосы с числами нет (D-208).
+	if last := doc.IDs[len(doc.IDs)-1]; last.Label != "h-index" || last.Value != "РИНЦ 12, Scopus 9, Web of Science 7, Google Scholar 15" {
+		t.Errorf("h-index: %+v", last)
 	}
 	var heads []string
 	for _, s := range doc.Sections {
@@ -121,7 +118,7 @@ func TestCVDocumentHidesContactsFromThoseWhoMayNotSeeThem(t *testing.T) {
 
 func TestCVDocumentEmptyProfile(t *testing.T) {
 	doc := cvDocument(Page{Profile: View{Name: "Пустой"}}, "SciBox", testNow)
-	if doc.Title != "Пустой" || len(doc.Where)+len(doc.Stats)+len(doc.IDs)+len(doc.Notes) != 0 || len(doc.Sections) != 0 {
+	if doc.Title != "Пустой" || len(doc.Where)+len(doc.IDs)+len(doc.Notes) != 0 || len(doc.Sections) != 0 {
 		t.Errorf("%+v", doc)
 	}
 	pdf, err := renderCV(Page{Profile: View{Name: "Пустой"}}, "SciBox", testNow)
@@ -159,7 +156,7 @@ func TestCVHelpers(t *testing.T) {
 	if got := location("Томск", nil); got != "Томск" {
 		t.Errorf("без региона: %q", got)
 	}
-	if yearOf(nil) != "" || yearOf(ptr(2020)) != "2020" || len(hFacts(HIndex{})) != 0 || len(idFacts(Identifiers{})) != 0 {
+	if yearOf(nil) != "" || yearOf(ptr(2020)) != "2020" || hIndexLine(HIndex{}) != "" || len(idFacts(Identifiers{})) != 0 {
 		t.Error("пустые значения")
 	}
 	if spinText("12345678") != "1234-5678" || spinText("1234") != "1234" || spinText("1234567a") != "1234567a" {
@@ -187,5 +184,63 @@ func TestCVHelpers(t *testing.T) {
 	}
 	if got := degreeEntries(View{Degree: DegreeInfo{Level: DegreeNone}, AcademicTitle: TitleNone}); len(got) != 0 {
 		t.Errorf("ничего: %+v", got)
+	}
+}
+
+// TestCVDocumentHIndexLine: строка h-index есть, только если указана хотя бы одна база, и содержит только указанные.
+func TestCVDocumentHIndexLine(t *testing.T) {
+	tests := []struct {
+		name string
+		h    HIndex
+		want string
+	}{
+		{"нигде не указан", HIndex{}, ""},
+		{"одна база", HIndex{Scopus: ptr(12)}, "Scopus 12"},
+		{"две базы вразнобой", HIndex{WoS: ptr(3), RSCI: ptr(9)}, "РИНЦ 9, Web of Science 3"},
+		{"нулевое значение указано", HIndex{Scholar: ptr(0)}, "Google Scholar 0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page := fullPage()
+			page.Profile.HIndex = tt.h
+			doc := cvDocument(page, "SciBox", testNow)
+			var got string
+			for _, f := range doc.IDs {
+				if f.Label == "h-index" {
+					got = f.Value
+				}
+			}
+			if got != tt.want {
+				t.Errorf("h-index = %q, ожидали %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCVRenderVariants: резюме собирается для профиля с h-index, без него, анонимного и с очень длинными текстами.
+func TestCVRenderVariants(t *testing.T) {
+	long := fullPage()
+	long.Profile.Name = strings.Repeat("Длиннофамильный-Иванов ", 12)
+	long.Profile.Headline = strings.Repeat("Ведущий научный сотрудник лаборатории ", 10)
+	long.Profile.About = strings.Repeat("Подробно о себе. ", 200)
+	long.Profile.Skills.Research = []string{strings.Repeat("Метод", 60), "XRD"}
+
+	noH := fullPage()
+	noH.Profile.HIndex = HIndex{}
+
+	anon := fullPage()
+	anon.Profile.Anonymous = true
+	anon.Profile.Name = "Елена Орлова"
+
+	for name, page := range map[string]Page{"с h-index": fullPage(), "без h-index": noH, "анонимный": anon, "очень длинный": long} {
+		t.Run(name, func(t *testing.T) {
+			pdf, err := renderCV(page, "SciBox", testNow)
+			if err != nil || string(pdf[:5]) != "%PDF-" {
+				t.Fatalf("PDF: %v", err)
+			}
+		})
+	}
+	if doc := cvDocument(anon, "SciBox", testNow); doc.Title != "Анонимный соискатель" {
+		t.Errorf("анонимный заголовок: %q", doc.Title)
 	}
 }

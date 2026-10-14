@@ -130,7 +130,10 @@ func cvDocument(page Page, product string, now time.Time) cv.Document {
 		doc.Subtitle = anonymousSubtitle(v)
 	}
 	doc.IDs = idFacts(v.Identifiers)
-	doc.Stats = hFacts(v.HIndex)
+	if line := hIndexLine(v.HIndex); line != "" {
+		// Показатель есть не у всех, поэтому не отдельная полоса, а такая же строка, как идентификаторы (D-208).
+		doc.IDs = append(doc.IDs, cv.Fact{Label: "h-index", Value: line})
+	}
 	if line := quartileLine(v.Quartiles); line != "" {
 		doc.Notes = append(doc.Notes, line)
 	}
@@ -201,18 +204,18 @@ func spinText(spin string) string {
 	return spin[:4] + "-" + spin[4:]
 }
 
-// hFacts: h-index по базам, только заполненные; в плашке они идут крупными числами в этом порядке.
-func hFacts(h HIndex) []cv.Fact {
-	var out []cv.Fact
+// hIndexLine: «РИНЦ 12, Scopus 9»; только заполненные базы, без единой строка пустая.
+func hIndexLine(h HIndex) string {
+	var parts []string
 	for _, it := range []struct {
 		base string
 		v    *int
 	}{{"РИНЦ", h.RSCI}, {"Scopus", h.Scopus}, {"Web of Science", h.WoS}, {"Google Scholar", h.Scholar}} {
 		if it.v != nil {
-			out = append(out, cv.Fact{Label: "h-index\n" + it.base, Value: fmt.Sprint(*it.v)})
+			parts = append(parts, fmt.Sprintf("%s %d", it.base, *it.v))
 		}
 	}
-	return out
+	return strings.Join(parts, ", ")
 }
 
 // idFacts: ORCID, SPIN, Scopus ID, WoS ResearcherID, только заполненные.

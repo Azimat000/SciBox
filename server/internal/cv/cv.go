@@ -25,21 +25,20 @@ var literataRegular []byte
 //go:embed fonts/Literata-SemiBold.ttf
 var literataSemiBold []byte
 
-// Document — что нарисовать. Первая страница открывается синей плашкой с именем, под ней полоса с числами (до четырёх),
-// затем строка идентификаторов и пояснения; дальше разделы.
+// Document — что нарисовать. Первая страница открывается синей плашкой с именем, под ней строка идентификаторов
+// и пояснения; дальше разделы.
 type Document struct {
 	Title    string    // имя человека
 	Subtitle string    // должность, место работы
 	Where    []string  // в плашке под должностью: город, почта
-	Stats    []Fact    // крупные числа под плашкой, до четырёх; в подписи «\n» делит строку, например «h-index\nРИНЦ»
-	IDs      []Fact    // идентификаторы одной строкой: «ORCID 0000-…»
+	IDs      []Fact    // идентификаторы и h-index одной строкой: «ORCID 0000-…», «h-index РИНЦ 9, Scopus 12»
 	Notes    []string  // мелкие пояснения под идентификаторами
 	Sections []Section // разделы по порядку
 	Footer   string    // подпись внизу каждой страницы, например «ИОН · 3 октября 2026»
 	Created  time.Time // дата в свойствах файла
 }
 
-// Fact — пара «название, значение»: число с подписью или идентификатор.
+// Fact — пара «название, значение», например идентификатор.
 type Fact struct {
 	Label string
 	Value string
@@ -84,34 +83,22 @@ const (
 	subtitleW    = 160.0
 	whereSize    = 9.2
 	whereLine    = 4.4
-	markWidth    = 26.0 // жёлтая черта на нижнем краю плашки
-	markHeight   = 1.6
 
-	statCells   = 4
-	statValue   = 22.0
-	statLabel   = 7.0
-	statPadTop  = 6.0
-	statPadBot  = 5.5
-	statValueH  = 9.0
-	statLabelH  = 3.0
-	statLabels  = 2
-	idsGapTop   = 3.8
+	idsGapTop   = 6.0
 	idsSize     = 8.6
 	idsLine     = 4.4
 	noteSize    = 8.6
 	whereGapTop = 5.0
 )
 
-// Цвета из дизайн-системы «Журнал» (DESIGN.md): тёплый чёрный, чернильно-синий, серый для второстепенного, один жёлтый маркер.
+// Цвета из дизайн-системы «Журнал» (DESIGN.md): тёплый чёрный, чернильно-синий, серый для второстепенного. Жёлтый маркер
+// в дизайне только у сроков, в резюме его нет (D-208).
 var (
-	ink      = [3]int{0x1F, 0x1D, 0x1A}
-	blue     = [3]int{0x1C, 0x2C, 0x66}
-	mute     = [3]int{0x5D, 0x5A, 0x55}
-	white    = [3]int{0xFF, 0xFF, 0xFF}
-	onBlue   = [3]int{0xD3, 0xD6, 0xEA}
-	wash     = [3]int{0xF6, 0xF4, 0xF1}
-	hairline = [3]int{0xD9, 0xD6, 0xD1}
-	marker   = [3]int{0xF7, 0xD5, 0x59}
+	ink    = [3]int{0x1F, 0x1D, 0x1A}
+	blue   = [3]int{0x1C, 0x2C, 0x66}
+	mute   = [3]int{0x5D, 0x5A, 0x55}
+	white  = [3]int{0xFF, 0xFF, 0xFF}
+	onBlue = [3]int{0xD3, 0xD6, 0xEA}
 )
 
 func color(p *fpdf.Fpdf, c [3]int) { p.SetTextColor(c[0], c[1], c[2]) }
@@ -135,7 +122,7 @@ func safe(s string) string {
 func (d Document) clean() Document {
 	d.Title, d.Subtitle, d.Footer = safe(d.Title), safe(d.Subtitle), safe(d.Footer)
 	d.Where, d.Notes = mapAll(d.Where, safe), mapAll(d.Notes, safe)
-	d.Stats, d.IDs = cleanFacts(d.Stats), cleanFacts(d.IDs)
+	d.IDs = cleanFacts(d.IDs)
 	secs := make([]Section, len(d.Sections))
 	for i, s := range d.Sections {
 		entries := make([]Entry, len(s.Entries))
@@ -205,7 +192,7 @@ func Render(doc Document) ([]byte, error) {
 
 func fill(p *fpdf.Fpdf, c [3]int) { p.SetFillColor(c[0], c[1], c[2]) }
 
-// header рисует первую страницу сверху вниз: плашка с именем, полоса с числами, идентификаторы, пояснения.
+// header рисует первую страницу сверху вниз: плашка с именем, идентификаторы, пояснения.
 // Плашка занимает всю ширину листа, её высота зависит от того, сколько строк заняли имя и должность.
 func header(p *fpdf.Fpdf, doc Document) {
 	p.SetFont("Literata", "B", titleSize)
@@ -224,8 +211,6 @@ func header(p *fpdf.Fpdf, doc Document) {
 	}
 	fill(p, blue)
 	p.Rect(0, 0, pageWidth, h, "F")
-	fill(p, marker)
-	p.Rect(marginX, h-markHeight, markWidth, markHeight, "F")
 
 	p.SetXY(marginX, bandTop)
 	p.SetFont("Literata", "B", titleSize)
@@ -250,11 +235,7 @@ func header(p *fpdf.Fpdf, doc Document) {
 		}
 	}
 
-	y := h
-	if len(doc.Stats) > 0 {
-		y = stats(p, doc.Stats, y)
-	}
-	p.SetXY(marginX, y+idsGapTop)
+	p.SetXY(marginX, h+idsGapTop)
 	if len(doc.IDs) > 0 {
 		ids(p, doc.IDs)
 	}
@@ -264,32 +245,6 @@ func header(p *fpdf.Fpdf, doc Document) {
 		p.SetX(marginX)
 		p.MultiCell(contentW, idsLine, n, "", "L", false)
 	}
-}
-
-// stats рисует полосу с числами на светлом фоне от y и возвращает её нижний край. Столбцы равной ширины по четыре,
-// поэтому первое число всегда стоит у левого поля.
-func stats(p *fpdf.Fpdf, facts []Fact, y float64) float64 {
-	h := statPadTop + statValueH + 1.6 + statLabels*statLabelH + statPadBot
-	fill(p, wash)
-	p.Rect(0, y, pageWidth, h, "F")
-	p.SetDrawColor(hairline[0], hairline[1], hairline[2])
-	p.SetLineWidth(0.3)
-	p.Line(0, y+h, pageWidth, y+h)
-	cell := contentW / statCells
-	for i, f := range facts[:min(len(facts), statCells)] {
-		x := marginX + float64(i)*cell
-		p.SetXY(x, y+statPadTop)
-		p.SetFont("Literata", "B", statValue)
-		color(p, blue)
-		p.CellFormat(cell, statValueH, f.Value, "", 0, "L", false, 0, "")
-		p.SetFont("Golos", "B", statLabel)
-		color(p, mute)
-		for j, line := range strings.SplitN(strings.ToUpper(f.Label), "\n", statLabels) {
-			p.SetXY(x, y+statPadTop+statValueH+1.6+float64(j)*statLabelH)
-			p.CellFormat(cell, statLabelH, line, "", 0, "L", false, 0, "")
-		}
-	}
-	return y + h
 }
 
 // ids пишет идентификаторы одной строкой с переносом: название жирным, значение обычным.
