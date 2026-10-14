@@ -1,0 +1,33 @@
+{
+  "endpoint": "GET /api/notification-settings, PUT /api/notification-settings",
+  "about": "Настройки писем: новое поле email_messages (письма о непрочитанных сообщениях, по умолчанию включены). PUT принимает все поля и отвечает тем же видом.",
+  "errors": [
+    "unauthorized",
+    "validation_failed"
+  ],
+  "examples": {
+    "get": {
+      "status": 200,
+      "response": {
+        "email_new_vacancies": true,
+        "email_deadlines": true,
+        "email_messages": true
+      }
+    },
+    "put": {
+      "request": {
+        "body": {
+          "email_new_vacancies": true,
+          "email_deadlines": false,
+          "email_messages": false
+        }
+      },
+      "status": 200,
+      "response": {
+        "email_new_vacancies": true,
+        "email_deadlines": false,
+        "email_messages": false
+      }
+    }
+  }
+}

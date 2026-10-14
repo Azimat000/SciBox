@@ -1,0 +1,28 @@
+{
+  "endpoint": "GET /api/chat-blocks",
+  "about": "Заблокированные учёным организации, новые сверху.",
+  "errors": [
+    "unauthorized"
+  ],
+  "examples": {
+    "some": {
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "org_id": "70000000-0000-4000-8000-000000000002",
+            "org_name": "Нейрофотоника",
+            "org_slug": "neurofotonika",
+            "created_at": "2026-10-14T11:00:00Z"
+          }
+        ]
+      }
+    },
+    "none": {
+      "status": 200,
+      "response": {
+        "items": []
+      }
+    }
+  }
+}

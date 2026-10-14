@@ -1,0 +1,23 @@
+{
+  "endpoint": "POST /api/chats/{id}/block",
+  "about": "Учёный блокирует организацию этой переписки: все его переписки с ней закрываются (closed_reason=blocked, системная строка chat.blocked), её сотрудники не могут писать ему и звать на вакансии.",
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "forbidden",
+    "already_blocked"
+  ],
+  "examples": {
+    "blocked": {
+      "status": 201,
+      "response": {
+        "block": {
+          "org_id": "70000000-0000-4000-8000-000000000002",
+          "org_name": "Нейрофотоника",
+          "org_slug": "neurofotonika",
+          "created_at": "2026-10-14T11:00:00Z"
+        }
+      }
+    }
+  }
+}

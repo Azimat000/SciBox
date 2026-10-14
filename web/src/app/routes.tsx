@@ -30,6 +30,7 @@ import { CandidatePage } from '../features/applications/CandidatePage'
 import { CandidatesPage } from '../features/applications/CandidatesPage'
 import { MyApplicationsPage } from '../features/applications/MyApplicationsPage'
 import { RecommendPage } from '../features/applications/RecommendPage'
+import { ChatsPage } from '../features/chat/ChatsPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
 import { DeadlinesPage } from '../features/matching/DeadlinesPage'
 import { FavoritesPage } from '../features/matching/FavoritesPage'
@@ -96,6 +97,8 @@ export const routes: RouteObject[] = [
       { path: 'candidates', handle: { title: t.pageTitles.candidates }, element: <CandidatesPage /> },
       { path: 'candidates/:id', element: <CandidatePage /> },
       { path: 'recommend', handle: { title: t.pageTitles.recommend }, element: <RecommendPage /> },
+      // Один маршрут на список и открытую переписку: при выборе строки страница не собирается заново
+      { path: 'chats/:id?', handle: { title: t.pageTitles.chats }, element: <ChatsPage /> },
       { path: 'notifications', handle: { title: t.pageTitles.notifications }, element: <NotificationsPage /> },
       { path: 'profile', handle: { title: t.pageTitles.profile }, element: <ProfilePage /> },
       { path: 'profile/edit', handle: { title: t.pageTitles.profileEdit }, element: <ProfileEditPage /> },

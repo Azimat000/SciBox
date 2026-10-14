@@ -1,0 +1,25 @@
+{
+  "endpoint": "GET /api/chats/unread-count",
+  "about": "Сколько переписок с непрочитанным (вне архива) у каждой стороны и всего. Число в шапке — total.",
+  "errors": [
+    "unauthorized"
+  ],
+  "examples": {
+    "some": {
+      "status": 200,
+      "response": {
+        "total": 4,
+        "scientist": 3,
+        "org": 1
+      }
+    },
+    "none": {
+      "status": 200,
+      "response": {
+        "total": 0,
+        "scientist": 0,
+        "org": 0
+      }
+    }
+  }
+}

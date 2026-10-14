@@ -11,6 +11,7 @@ import { OffersTabs } from '../offers/OffersTabs'
 import { PAGE_SIZE, useMyApplications, type Summary } from './api'
 import { dateText, statusLabel, statusTone } from './labels'
 import './applications.css'
+import { ChatButton } from '../chat/ChatButton'
 
 /** «Мои отклики»: новые сверху, у каждого статус и сколько рекомендательных писем пришло. */
 export function MyApplicationsPage() {
@@ -93,6 +94,7 @@ function Entry({ app }: { app: Summary }) {
         <span>{m.sentAt(dateText(app.created_at))}</span>
         {app.pending_invitations > 0 && <Tag tone="accent">{m.waitsYou}</Tag>}
         {refs.total > 0 && <span>{m.refs(refs.received, refs.total)}</span>}
+        <ChatButton chat={app.chat} compact />
       </p>
     </li>
   )

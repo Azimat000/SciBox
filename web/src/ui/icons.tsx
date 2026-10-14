@@ -75,6 +75,13 @@ export const BellIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const ChatIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.25 4.25h13.5v9H8.5l-3.75 3v-3h-1.5z" />
+    <path d="M6.5 7.75h7M6.5 10.25h4.5" />
+  </Icon>
+)
+
 export const FileIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M5 2.75h6.25L15 6.5v10.75H5z" />

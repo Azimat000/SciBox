@@ -1,0 +1,45 @@
+{
+  "endpoint": "GET /api/applications, GET /api/applications/{id}, GET /api/my/candidates, GET /api/offers, GET /api/offers/{id}, GET /api/my/sent-offers",
+  "about": "Новое поле chat у отклика и приглашения на вакансию (в списках у каждой записи, в карточке у самой записи): переписка этой пары «учёный × вакансия» глазами смотрящего. started — в ней уже есть сообщения людей (тогда кнопка «Перейти к переписке», иначе «Написать», если можно писать). null — переписки нет (до среза 38 у прежних записей). Остальные поля ответов не меняются.",
+  "examples": {
+    "open_with_unread": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "unread": 1,
+          "can_write": true,
+          "started": true
+        }
+      }
+    },
+    "not_started": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000005",
+          "unread": 0,
+          "can_write": true,
+          "started": false
+        }
+      }
+    },
+    "closed": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000004",
+          "unread": 0,
+          "can_write": false,
+          "started": true
+        }
+      }
+    },
+    "missing": {
+      "status": 200,
+      "response": {
+        "chat": null
+      }
+    }
+  }
+}

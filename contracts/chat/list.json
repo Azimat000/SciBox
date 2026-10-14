@@ -1,0 +1,586 @@
+{
+  "endpoint": "GET /api/chats",
+  "about": "Список переписок одной стороны, новые сверху (по updated_at), листание по ключу. Архив личный; новое сообщение возвращает переписку из архива. counts считаются по стороне без учёта поиска и отбора: unread — переписки с непрочитанным вне архива, archive — переписки в архиве.",
+  "query": {
+    "side": "scientist | org, обязательно",
+    "box": "all (по умолчанию, без архива) | unread | archive",
+    "q": "поиск по названию вакансии и имени собеседника (имя анонимного не ищется), до 100 знаков",
+    "vacancy": "номер вакансии, только для side=org",
+    "cursor": "next_cursor прошлой страницы",
+    "limit": "1–50, по умолчанию 30"
+  },
+  "enums": {
+    "items[].side": "side",
+    "items[].counterpart.kind": "counterpart_kind",
+    "items[].status.source": "status_source",
+    "items[].status.value": "status_value",
+    "items[].last_message.kind": "message_kind",
+    "items[].last_message.author.side": "author_side",
+    "items[].last_message.event_type": "event_type",
+    "items[].closed_reason": "closed_reason"
+  },
+  "errors": [
+    "unauthorized",
+    "bad_request",
+    "rate_limited"
+  ],
+  "examples": {
+    "scientist_all": {
+      "request": {
+        "query": "side=scientist&box=all&limit=4"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "c0000000-0000-4000-8000-000000000001",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "title": "Младший научный сотрудник лаборатории спинтроники",
+              "org_name": "Сибирский институт квантовых материалов",
+              "org_slug": "sibirskiy-institut-kvantovykh-materialov",
+              "unit_name": "Лаборатория спинтроники"
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Сибирский институт квантовых материалов",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "application",
+              "value": "invited"
+            },
+            "needs_answer": true,
+            "last_message": {
+              "seq": 6,
+              "kind": "system",
+              "author": null,
+              "text": "",
+              "event_type": "invitation.created",
+              "deleted": false,
+              "created_at": "2026-10-14T09:40:00Z"
+            },
+            "unread": 1,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T09:40:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000002",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000002",
+              "title": "Научный сотрудник группы палеоклимата",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": ""
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Центр изучения Арктики",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "application",
+              "value": "viewed"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 4,
+              "kind": "text",
+              "author": {
+                "side": "org",
+                "name": "Елена Орлова",
+                "is_me": false,
+                "anonymous": false,
+                "former": false
+              },
+              "text": "Добрый день! Спасибо за отклик. Подскажите, когда вам удобно созвониться на этой неделе?",
+              "event_type": null,
+              "deleted": false,
+              "created_at": "2026-10-14T08:15:00Z"
+            },
+            "unread": 2,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T08:15:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000003",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000003",
+              "title": "Инженер-исследователь по оптическим нейроинтерфейсам",
+              "org_name": "Нейрофотоника",
+              "org_slug": "neurofotonika",
+              "unit_name": "Отдел прототипирования"
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Нейрофотоника",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "offer",
+              "value": "pending"
+            },
+            "needs_answer": true,
+            "last_message": {
+              "seq": 1,
+              "kind": "system",
+              "author": null,
+              "text": "",
+              "event_type": "offer.created",
+              "deleted": false,
+              "created_at": "2026-10-13T16:05:00Z"
+            },
+            "unread": 1,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-13T16:05:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000004",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000004",
+              "title": "Старший преподаватель кафедры органической химии",
+              "org_name": "Приволжский университет технологий",
+              "org_slug": "privolzhskiy-universitet-tekhnologiy",
+              "unit_name": "Кафедра органической химии"
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Приволжский университет технологий",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "application",
+              "value": "rejected"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 5,
+              "kind": "system",
+              "author": null,
+              "text": "",
+              "event_type": "application.decided",
+              "deleted": false,
+              "created_at": "2026-10-12T11:30:00Z"
+            },
+            "unread": 0,
+            "archived": false,
+            "can_write": false,
+            "closed_reason": "rejected",
+            "updated_at": "2026-10-12T11:30:00Z"
+          }
+        ],
+        "next_cursor": "eyJ0IjoiMjAyNi0xMC0xMlQxMTozMDowMFoiLCJpZCI6ImMwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwNCJ9",
+        "counts": {
+          "unread": 3,
+          "archive": 0
+        }
+      }
+    },
+    "scientist_unread": {
+      "request": {
+        "query": "side=scientist&box=unread"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "c0000000-0000-4000-8000-000000000001",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000001",
+              "title": "Младший научный сотрудник лаборатории спинтроники",
+              "org_name": "Сибирский институт квантовых материалов",
+              "org_slug": "sibirskiy-institut-kvantovykh-materialov",
+              "unit_name": "Лаборатория спинтроники"
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Сибирский институт квантовых материалов",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "application",
+              "value": "invited"
+            },
+            "needs_answer": true,
+            "last_message": {
+              "seq": 6,
+              "kind": "system",
+              "author": null,
+              "text": "",
+              "event_type": "invitation.created",
+              "deleted": false,
+              "created_at": "2026-10-14T09:40:00Z"
+            },
+            "unread": 1,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T09:40:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000002",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000002",
+              "title": "Научный сотрудник группы палеоклимата",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": ""
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Центр изучения Арктики",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "application",
+              "value": "viewed"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 4,
+              "kind": "text",
+              "author": {
+                "side": "org",
+                "name": "Елена Орлова",
+                "is_me": false,
+                "anonymous": false,
+                "former": false
+              },
+              "text": "Добрый день! Спасибо за отклик. Подскажите, когда вам удобно созвониться на этой неделе?",
+              "event_type": null,
+              "deleted": false,
+              "created_at": "2026-10-14T08:15:00Z"
+            },
+            "unread": 2,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T08:15:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000003",
+            "side": "scientist",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000003",
+              "title": "Инженер-исследователь по оптическим нейроинтерфейсам",
+              "org_name": "Нейрофотоника",
+              "org_slug": "neurofotonika",
+              "unit_name": "Отдел прототипирования"
+            },
+            "counterpart": {
+              "kind": "org",
+              "name": "Нейрофотоника",
+              "anonymous": false,
+              "profile_id": null
+            },
+            "status": {
+              "source": "offer",
+              "value": "pending"
+            },
+            "needs_answer": true,
+            "last_message": {
+              "seq": 1,
+              "kind": "system",
+              "author": null,
+              "text": "",
+              "event_type": "offer.created",
+              "deleted": false,
+              "created_at": "2026-10-13T16:05:00Z"
+            },
+            "unread": 1,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-13T16:05:00Z"
+          }
+        ],
+        "next_cursor": null,
+        "counts": {
+          "unread": 3,
+          "archive": 0
+        }
+      }
+    },
+    "org_all": {
+      "request": {
+        "query": "side=org&box=all"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "c0000000-0000-4000-8000-000000000005",
+            "side": "org",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000005",
+              "title": "Научный сотрудник группы спектроскопии льда",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": "Группа спектроскопии"
+            },
+            "counterpart": {
+              "kind": "scientist",
+              "name": "Дмитрий Королёв",
+              "anonymous": false,
+              "profile_id": "e0000000-0000-4000-8000-000000000001"
+            },
+            "status": {
+              "source": "application",
+              "value": "sent"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 3,
+              "kind": "text",
+              "author": {
+                "side": "scientist",
+                "name": "Дмитрий Королёв",
+                "is_me": false,
+                "anonymous": false,
+                "former": false
+              },
+              "text": "Могу приехать на собеседование в любой день после 20 октября.",
+              "event_type": null,
+              "deleted": false,
+              "created_at": "2026-10-14T10:02:00Z"
+            },
+            "unread": 3,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T10:02:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000006",
+            "side": "org",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000005",
+              "title": "Научный сотрудник группы спектроскопии льда",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": "Группа спектроскопии"
+            },
+            "counterpart": {
+              "kind": "scientist",
+              "name": "",
+              "anonymous": true,
+              "profile_id": null
+            },
+            "status": {
+              "source": "offer",
+              "value": "pending"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 2,
+              "kind": "text",
+              "author": {
+                "side": "scientist",
+                "name": "",
+                "is_me": false,
+                "anonymous": true,
+                "former": false
+              },
+              "text": "Добрый день! Расскажите, пожалуйста, о составе группы и об оборудовании.",
+              "event_type": null,
+              "deleted": false,
+              "created_at": "2026-10-14T07:48:00Z"
+            },
+            "unread": 1,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T07:48:00Z"
+          },
+          {
+            "id": "c0000000-0000-4000-8000-000000000007",
+            "side": "org",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000006",
+              "title": "Аспирант: машинное обучение для климатических моделей",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": ""
+            },
+            "counterpart": {
+              "kind": "scientist",
+              "name": "Алина Гусева",
+              "anonymous": false,
+              "profile_id": "e0000000-0000-4000-8000-000000000002"
+            },
+            "status": {
+              "source": "application",
+              "value": "invited"
+            },
+            "needs_answer": true,
+            "last_message": {
+              "seq": 7,
+              "kind": "system",
+              "author": null,
+              "text": "",
+              "event_type": "invitation.answered",
+              "deleted": false,
+              "created_at": "2026-10-13T18:20:00Z"
+            },
+            "unread": 1,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-13T18:20:00Z"
+          }
+        ],
+        "next_cursor": null,
+        "counts": {
+          "unread": 3,
+          "archive": 1
+        }
+      }
+    },
+    "org_archive": {
+      "request": {
+        "query": "side=org&box=archive"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "c0000000-0000-4000-8000-000000000008",
+            "side": "org",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000005",
+              "title": "Научный сотрудник группы спектроскопии льда",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": "Группа спектроскопии"
+            },
+            "counterpart": {
+              "kind": "scientist",
+              "name": "Максим Тарасов",
+              "anonymous": false,
+              "profile_id": "e0000000-0000-4000-8000-000000000003"
+            },
+            "status": {
+              "source": "application",
+              "value": "accepted"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 9,
+              "kind": "text",
+              "author": {
+                "side": "org",
+                "name": "Иван Петров",
+                "is_me": false,
+                "anonymous": false,
+                "former": false
+              },
+              "text": "Документы для оформления пришлём на почту до пятницы.",
+              "event_type": null,
+              "deleted": false,
+              "created_at": "2026-10-09T12:00:00Z"
+            },
+            "unread": 0,
+            "archived": true,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-09T12:00:00Z"
+          }
+        ],
+        "next_cursor": null,
+        "counts": {
+          "unread": 3,
+          "archive": 1
+        }
+      }
+    },
+    "org_by_vacancy_and_search": {
+      "request": {
+        "query": "side=org&box=all&vacancy=a0000000-0000-4000-8000-000000000005&q=королёв"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "c0000000-0000-4000-8000-000000000005",
+            "side": "org",
+            "vacancy": {
+              "id": "a0000000-0000-4000-8000-000000000005",
+              "title": "Научный сотрудник группы спектроскопии льда",
+              "org_name": "Центр изучения Арктики",
+              "org_slug": "tsentr-izucheniya-arktiki",
+              "unit_name": "Группа спектроскопии"
+            },
+            "counterpart": {
+              "kind": "scientist",
+              "name": "Дмитрий Королёв",
+              "anonymous": false,
+              "profile_id": "e0000000-0000-4000-8000-000000000001"
+            },
+            "status": {
+              "source": "application",
+              "value": "sent"
+            },
+            "needs_answer": false,
+            "last_message": {
+              "seq": 3,
+              "kind": "text",
+              "author": {
+                "side": "scientist",
+                "name": "Дмитрий Королёв",
+                "is_me": false,
+                "anonymous": false,
+                "former": false
+              },
+              "text": "Могу приехать на собеседование в любой день после 20 октября.",
+              "event_type": null,
+              "deleted": false,
+              "created_at": "2026-10-14T10:02:00Z"
+            },
+            "unread": 3,
+            "archived": false,
+            "can_write": true,
+            "closed_reason": null,
+            "updated_at": "2026-10-14T10:02:00Z"
+          }
+        ],
+        "next_cursor": null,
+        "counts": {
+          "unread": 3,
+          "archive": 1
+        }
+      }
+    },
+    "empty": {
+      "request": {
+        "query": "side=scientist&box=all"
+      },
+      "status": 200,
+      "response": {
+        "items": [],
+        "next_cursor": null,
+        "counts": {
+          "unread": 0,
+          "archive": 0
+        }
+      }
+    }
+  }
+}

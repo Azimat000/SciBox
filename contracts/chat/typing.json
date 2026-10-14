@@ -1,0 +1,14 @@
+{
+  "endpoint": "POST /api/chats/{id}/typing",
+  "about": "Человек печатает: собеседник получает chat.typing. Сайт шлёт не чаще раза в 3 секунды; чаще сервер молча пропускает (тоже 204). В закрытой переписке 409.",
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "chat_closed"
+  ],
+  "examples": {
+    "typing": {
+      "status": 204
+    }
+  }
+}

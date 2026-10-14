@@ -1,0 +1,48 @@
+{
+  "endpoint": "PATCH /api/chats/{id}/messages/{seq}",
+  "about": "Исправить своё сообщение в течение 24 часов после отправки. Правила текста как у отправки.",
+  "enums": {
+    "message.kind": "message_kind",
+    "message.author.side": "author_side"
+  },
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "validation_failed",
+    "chat_closed",
+    "edit_window_closed",
+    "system_message",
+    "not_author"
+  ],
+  "examples": {
+    "edited": {
+      "request": {
+        "body": {
+          "text": "Спасибо, 22-го в 11:00 (МСК) мне удобно."
+        }
+      },
+      "status": 200,
+      "response": {
+        "message": {
+          "id": "00000007-0000-4000-8000-000000000000",
+          "seq": 7,
+          "kind": "text",
+          "author": {
+            "side": "scientist",
+            "name": "Дмитрий Королёв",
+            "is_me": true,
+            "anonymous": false,
+            "former": false
+          },
+          "text": "Спасибо, 22-го в 11:00 (МСК) мне удобно.",
+          "event": null,
+          "created_at": "2026-10-14T10:30:00Z",
+          "edited_at": "2026-10-14T10:34:00Z",
+          "deleted": false,
+          "editable_until": "2026-10-15T10:30:00Z",
+          "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+        }
+      }
+    }
+  }
+}

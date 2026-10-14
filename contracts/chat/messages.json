@@ -1,0 +1,643 @@
+{
+  "endpoint": "GET /api/chats/{id}/messages",
+  "about": "Лента переписки от старых к новым. Без параметров — последние limit сообщений; before=seq — более старые, after=seq — более новые (после переподключения). has_more — есть ли ещё в сторону листания. Текст системной строки пуст: сайт собирает его из event. У удалённого сообщения текст пуст и deleted=true. editable_until — до какого момента своё сообщение можно исправить или удалить (у чужих и системных null). client_id видит только автор.",
+  "query": {
+    "before": "seq, листать к старым",
+    "after": "seq, листать к новым",
+    "limit": "1–100, по умолчанию 50"
+  },
+  "enums": {
+    "items[].kind": "message_kind",
+    "items[].author.side": "author_side",
+    "items[].event.type": "event_type",
+    "items[].event.data.invitation.kind": "invitation_kind",
+    "items[].event.data.invitation.status": "invitation_status",
+    "items[].event.data.invitation.place_kind": "place_kind",
+    "items[].event.data.kind": "invitation_kind",
+    "items[].event.data.answer": "invitation_answer|offer_answer",
+    "items[].event.data.decision": "decision",
+    "items[].event.data.status": "status_value"
+  },
+  "variants": {
+    "items[].event": "type"
+  },
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "bad_request"
+  ],
+  "examples": {
+    "scientist_history": {
+      "request": {
+        "query": "limit=50"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "00000001-0000-4000-8000-000000000000",
+            "seq": 1,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "application.sent",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000001",
+                "cover_letter": "Здравствуйте! Меня заинтересовала вакансия младшего научного сотрудника. Пять лет занимаюсь магнитной микроскопией тонких плёнок, в профиле есть публикации по теме."
+              }
+            },
+            "created_at": "2026-10-10T07:12:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000002-0000-4000-8000-000000000000",
+            "seq": 2,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "application.viewed",
+              "data": {}
+            },
+            "created_at": "2026-10-11T06:30:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000003-0000-4000-8000-000000000000",
+            "seq": 3,
+            "kind": "text",
+            "author": {
+              "side": "org",
+              "name": "Елена Орлова",
+              "is_me": false,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Дмитрий, добрый день! Ваш опыт с плёнками нам очень подходит. Пришлите, пожалуйста, ссылку на последнюю статью.",
+            "event": null,
+            "created_at": "2026-10-11T06:42:00Z",
+            "edited_at": "2026-10-11T06:45:00Z",
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000004-0000-4000-8000-000000000000",
+            "seq": 4,
+            "kind": "text",
+            "author": {
+              "side": "scientist",
+              "name": "Дмитрий Королёв",
+              "is_me": true,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "",
+            "event": null,
+            "created_at": "2026-10-11T08:01:00Z",
+            "edited_at": null,
+            "deleted": true,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000005-0000-4000-8000-000000000000",
+            "seq": 5,
+            "kind": "text",
+            "author": {
+              "side": "scientist",
+              "name": "Дмитрий Королёв",
+              "is_me": true,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Добрый день! Вот она: https://doi.org/10.5555/12345678\nБуду рад рассказать подробнее.",
+            "event": null,
+            "created_at": "2026-10-14T08:02:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": "2026-10-15T08:02:00Z",
+            "client_id": "1f7c3d2e-8a41-4b0e-9c55-0d3e6f2a7b10"
+          },
+          {
+            "id": "00000006-0000-4000-8000-000000000000",
+            "seq": 6,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.created",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000001",
+                "invitation": {
+                  "id": "f0000000-0000-4000-8000-000000000001",
+                  "kind": "interview",
+                  "status": "pending",
+                  "message": "Приглашаем на собеседование с заведующим лабораторией.",
+                  "starts_at": "2026-10-22T08:00:00Z",
+                  "place_kind": "online",
+                  "place": "https://telemost.yandex.ru/j/12345678901234",
+                  "contact_name": "",
+                  "contact_email": "",
+                  "contact_phone": "",
+                  "answer": null,
+                  "created_at": "2026-10-14T09:40:00Z",
+                  "can_answer": true,
+                  "can_cancel": false,
+                  "can_accept_proposal": false
+                }
+              }
+            },
+            "created_at": "2026-10-14T09:40:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          }
+        ],
+        "has_more": false
+      }
+    },
+    "org_all_system_lines": {
+      "about": "Каталог всех видов системных строк и подписей автора (не одна настоящая переписка).",
+      "request": {
+        "query": "before=21&limit=20"
+      },
+      "status": 200,
+      "response": {
+        "items": [
+          {
+            "id": "00000001-0000-4000-8000-000000000000",
+            "seq": 1,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "offer.created",
+              "data": {
+                "offer_id": "d0000000-0000-4000-8000-000000000001",
+                "message": "Здравствуйте! Мы ищем человека в группу спектроскопии льда и думаем, что вам будет интересно.",
+                "status": "interested",
+                "can_answer": false
+              }
+            },
+            "created_at": "2026-10-01T09:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000002-0000-4000-8000-000000000000",
+            "seq": 2,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "offer.answered",
+              "data": {
+                "offer_id": "d0000000-0000-4000-8000-000000000001",
+                "answer": "interested",
+                "note": "Интересно, отправлю отклик на этой неделе."
+              }
+            },
+            "created_at": "2026-10-01T12:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000003-0000-4000-8000-000000000000",
+            "seq": 3,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "application.sent",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "cover_letter": "Добрый день! Откликаюсь по вашему приглашению."
+              }
+            },
+            "created_at": "2026-10-02T09:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000004-0000-4000-8000-000000000000",
+            "seq": 4,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.created",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation": {
+                  "id": "f0000000-0000-4000-8000-000000000002",
+                  "kind": "contacts",
+                  "status": "shared",
+                  "message": "",
+                  "starts_at": null,
+                  "place_kind": "",
+                  "place": "",
+                  "contact_name": "Елена Орлова",
+                  "contact_email": "hr@arctic.example.ru",
+                  "contact_phone": "+7 812 555-01-02",
+                  "answer": null,
+                  "created_at": "2026-10-14T09:40:00Z",
+                  "can_answer": false,
+                  "can_cancel": false,
+                  "can_accept_proposal": false
+                }
+              }
+            },
+            "created_at": "2026-10-03T09:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000005-0000-4000-8000-000000000000",
+            "seq": 5,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.created",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation": {
+                  "id": "f0000000-0000-4000-8000-000000000003",
+                  "kind": "interview",
+                  "status": "proposed",
+                  "message": "",
+                  "starts_at": "2026-10-20T08:00:00Z",
+                  "place_kind": "onsite",
+                  "place": "Санкт-Петербург, ул. Беринга, 38, корпус 2, комната 214",
+                  "contact_name": "",
+                  "contact_email": "",
+                  "contact_phone": "",
+                  "answer": {
+                    "proposed_at": "2026-10-21T12:30:00Z",
+                    "note": "20-го у меня конференция, удобно 21-го после обеда.",
+                    "contact": "",
+                    "time": "",
+                    "answered_at": "2026-10-04T10:00:00Z"
+                  },
+                  "created_at": "2026-10-14T09:40:00Z",
+                  "can_answer": false,
+                  "can_cancel": true,
+                  "can_accept_proposal": true
+                }
+              }
+            },
+            "created_at": "2026-10-03T10:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000006-0000-4000-8000-000000000000",
+            "seq": 6,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.answered",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation_id": "f0000000-0000-4000-8000-000000000003",
+                "kind": "interview",
+                "answer": "proposed",
+                "proposed_at": "2026-10-21T12:30:00Z",
+                "note": "20-го у меня конференция, удобно 21-го после обеда.",
+                "contact": "",
+                "time": ""
+              }
+            },
+            "created_at": "2026-10-04T10:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.proposal_accepted",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation_id": "f0000000-0000-4000-8000-000000000003",
+                "starts_at": "2026-10-21T12:30:00Z"
+              }
+            },
+            "created_at": "2026-10-04T12:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000008-0000-4000-8000-000000000000",
+            "seq": 8,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.created",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation": {
+                  "id": "f0000000-0000-4000-8000-000000000004",
+                  "kind": "request_contacts",
+                  "status": "answered",
+                  "message": "Оставьте, пожалуйста, телефон для связи.",
+                  "starts_at": null,
+                  "place_kind": "",
+                  "place": "",
+                  "contact_name": "",
+                  "contact_email": "",
+                  "contact_phone": "",
+                  "answer": {
+                    "proposed_at": null,
+                    "note": "",
+                    "contact": "+7 921 555-77-88",
+                    "time": "по будням после 16:00",
+                    "answered_at": "2026-10-05T09:00:00Z"
+                  },
+                  "created_at": "2026-10-14T09:40:00Z",
+                  "can_answer": false,
+                  "can_cancel": false,
+                  "can_accept_proposal": false
+                }
+              }
+            },
+            "created_at": "2026-10-04T13:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000009-0000-4000-8000-000000000000",
+            "seq": 9,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.answered",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation_id": "f0000000-0000-4000-8000-000000000004",
+                "kind": "request_contacts",
+                "answer": "answered",
+                "proposed_at": null,
+                "note": "",
+                "contact": "+7 921 555-77-88",
+                "time": "по будням после 16:00"
+              }
+            },
+            "created_at": "2026-10-05T09:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000010-0000-4000-8000-000000000000",
+            "seq": 10,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.cancelled",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "invitation_id": "f0000000-0000-4000-8000-000000000002",
+                "kind": "contacts"
+              }
+            },
+            "created_at": "2026-10-05T10:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000011-0000-4000-8000-000000000000",
+            "seq": 11,
+            "kind": "text",
+            "author": {
+              "side": "org",
+              "name": "",
+              "is_me": false,
+              "anonymous": false,
+              "former": true
+            },
+            "text": "Сообщение сотрудника, который больше не работает в организации.",
+            "event": null,
+            "created_at": "2026-10-05T11:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000012-0000-4000-8000-000000000000",
+            "seq": 12,
+            "kind": "text",
+            "author": {
+              "side": "org",
+              "name": "Иван Петров",
+              "is_me": true,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Спасибо за встречу! Решение сообщим до конца недели.",
+            "event": null,
+            "created_at": "2026-10-13T15:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": "2026-10-14T15:00:00Z",
+            "client_id": "5b0e1a4c-2d7f-4c8e-a913-6f2b0c7d1e44"
+          },
+          {
+            "id": "00000013-0000-4000-8000-000000000000",
+            "seq": 13,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "application.decided",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "decision": "rejected",
+                "note": "Спасибо за интерес к группе. Сейчас мы выбрали кандидата с опытом работы на синхротроне."
+              }
+            },
+            "created_at": "2026-10-14T09:00:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000014-0000-4000-8000-000000000000",
+            "seq": 14,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "application.decided",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007",
+                "decision": "accepted",
+                "note": ""
+              }
+            },
+            "created_at": "2026-10-14T09:01:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000015-0000-4000-8000-000000000000",
+            "seq": 15,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "application.withdrawn",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000007"
+              }
+            },
+            "created_at": "2026-10-14T09:02:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000016-0000-4000-8000-000000000000",
+            "seq": 16,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "offer.answered",
+              "data": {
+                "offer_id": "d0000000-0000-4000-8000-000000000001",
+                "answer": "declined",
+                "note": ""
+              }
+            },
+            "created_at": "2026-10-14T09:03:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000017-0000-4000-8000-000000000000",
+            "seq": 17,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "offer.cancelled",
+              "data": {
+                "offer_id": "d0000000-0000-4000-8000-000000000001"
+              }
+            },
+            "created_at": "2026-10-14T09:04:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000018-0000-4000-8000-000000000000",
+            "seq": 18,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "chat.blocked",
+              "data": {}
+            },
+            "created_at": "2026-10-14T09:05:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000019-0000-4000-8000-000000000000",
+            "seq": 19,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "chat.unblocked",
+              "data": {}
+            },
+            "created_at": "2026-10-14T09:06:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          },
+          {
+            "id": "00000020-0000-4000-8000-000000000000",
+            "seq": 20,
+            "kind": "text",
+            "author": {
+              "side": "scientist",
+              "name": "",
+              "is_me": false,
+              "anonymous": true,
+              "former": false
+            },
+            "text": "Сообщение анонимного соискателя: имя скрыто, пока он не откликнулся или не ответил «Интересно».",
+            "event": null,
+            "created_at": "2026-10-14T09:07:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          }
+        ],
+        "has_more": true
+      }
+    },
+    "nothing_newer": {
+      "request": {
+        "query": "after=6"
+      },
+      "status": 200,
+      "response": {
+        "items": [],
+        "has_more": false
+      }
+    }
+  }
+}

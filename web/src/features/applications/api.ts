@@ -3,6 +3,7 @@ import { apiDownload, apiGet, apiSend, apiSendForm } from '../../api/client'
 import { useMe } from '../auth/api'
 import { refreshAfterApplying } from '../matching/api'
 import type { Profile } from '../profile/api'
+import type { ChatRef } from '../chat/api'
 
 export const statuses = ['sent', 'viewed', 'invited', 'rejected', 'accepted', 'withdrawn'] as const
 export type AppStatus = (typeof statuses)[number]
@@ -35,6 +36,8 @@ export type Summary = {
   references: { total: number; received: number }
   /** Приглашения, которые ждут ответа соискателя. */
   pending_invitations: number
+  /** Переписка по этому отклику (срез 34; до сервера чата поле дописывает подставной сервер, без него его нет). */
+  chat?: ChatRef | null
 }
 
 export type AppList = { items: Summary[]; total: number }
@@ -104,6 +107,7 @@ export type Detail = {
   invitations: Invitation[]
   viewer: { role: 'applicant' | 'staff'; can_withdraw: boolean; decisions: ('accepted' | 'rejected')[]; can_invite: boolean }
   references: Reference[] | StaffReference[]
+  chat?: ChatRef | null
 }
 
 /** Отклик в списке организации. */
@@ -120,6 +124,7 @@ export type Candidate = {
   references: { total: number; received: number }
   pending_invitations: number
   proposed_invitations: number
+  chat?: ChatRef | null
 }
 
 export type CandidateList = { items: Candidate[]; total: number; counts: Record<AppStatus, number> }

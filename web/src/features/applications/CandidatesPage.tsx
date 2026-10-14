@@ -18,6 +18,7 @@ import { EXPORT_LIMIT, PAGE_SIZE, exportCandidates, statuses, useCandidateVacanc
 import { dateText, statusLabel, statusTone } from './labels'
 import './applications.css'
 import './review.css'
+import { ChatButton } from '../chat/ChatButton'
 
 /** Порядок вкладок: сначала то, до чего ещё не дошли руки. */
 const tabs: readonly AppStatus[] = ['sent', 'viewed', 'invited', 'accepted', 'rejected', 'withdrawn']
@@ -201,6 +202,7 @@ function Row({ cand, showVacancy }: { cand: Candidate; showVacancy: boolean }) {
         {cand.pending_invitations > 0 && <span>{c.waitsAnswer}</span>}
         <span>{c.sentAt(dateText(cand.created_at))}</span>
         {refs.total > 0 && <span>{c.refs(refs.received, refs.total)}</span>}
+        <ChatButton chat={cand.chat} compact />
       </p>
     </li>
   )

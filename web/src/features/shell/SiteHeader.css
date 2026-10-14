@@ -14,7 +14,7 @@
   min-height: 4.25rem;
   display: flex;
   align-items: center;
-  gap: var(--s-5);
+  gap: var(--s-4);
 }
 
 .wordmark {
@@ -38,7 +38,7 @@
 
 .nav-desktop {
   display: flex;
-  gap: var(--s-4);
+  gap: var(--s-3);
   flex: 1;
   min-width: 0;
 }
@@ -69,8 +69,14 @@
 .header-tools {
   display: flex;
   align-items: center;
-  gap: var(--s-4);
+  gap: var(--s-3);
   margin-left: auto;
+}
+
+.header-icons {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
 }
 
 .header-icon {
@@ -190,5 +196,17 @@
     flex: 1;
     min-height: var(--control-h);
     font-size: var(--text-md);
+  }
+}
+
+/* Самые узкие телефоны (320): четыре значка (закладка, сообщения, колокольчик, меню) встают плотнее, иначе шапка шире экрана */
+@media (max-width: 26rem) {
+  .site-header-bar {
+    gap: var(--s-3);
+  }
+
+  .header-tools,
+  .header-icons {
+    gap: var(--s-1);
   }
 }

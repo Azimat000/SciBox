@@ -1,0 +1,399 @@
+/* «Сообщения» (срез 34, D-217): список «как в почте» слева, окно переписки справа; на узком экране по очереди. */
+
+.chats-head .lead {
+  margin-top: var(--s-2);
+}
+
+.chats-other {
+  margin-top: var(--s-3);
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+}
+
+/* Кнопка читается как продолжение фразы: без отступов, но с запасом по высоте для пальца */
+.chats-other .btn {
+  position: relative;
+  min-height: 0;
+  padding: 0;
+  vertical-align: baseline;
+}
+
+/* Невидимый запас по высоте для пальца, строка текста при этом не раздвигается */
+.chats-other .btn::after {
+  content: '';
+  position: absolute;
+  inset: -0.75rem -0.25rem;
+}
+
+.chats-other .btn:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.chats {
+  margin-top: var(--s-5);
+  display: grid;
+  grid-template-columns: minmax(21rem, 5fr) minmax(0, 7fr);
+  align-items: start;
+  border-top: 1px solid var(--ink);
+}
+
+.chats-side {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+
+.chats-controls {
+  display: grid;
+  gap: var(--s-3);
+  padding: 0 var(--s-4) var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.chats-boxes {
+  margin-top: 0;
+}
+
+.chats-boxes .tab-count {
+  margin-left: var(--s-2);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.chats-filters {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.chats-search {
+  position: relative;
+}
+
+.chats-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  translate: 0 -50%;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.chats-search-input {
+  padding-left: 2.375rem;
+}
+
+.chats-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* Подпись над списком вакансий видна только читалке: рядом поле поиска без подписи, строка остаётся ровной */
+.chats-vacancy .field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- список ---- */
+
+.chat-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.chat-list[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.chat-row {
+  display: grid;
+  gap: 0.1875rem;
+  padding: var(--s-3) var(--s-4) var(--s-3) var(--s-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.chat-row:hover {
+  background: var(--wash);
+  text-decoration: none;
+}
+
+.chat-row[aria-current='page'] {
+  background: var(--wash-deep);
+}
+
+.chat-row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* Три строки «как в почте»: у каждой текст слева сжимается с многоточием, справа время, состояние или число */
+.chat-row-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+/* Состояние уходит под вакансию, если рядом ей остаётся меньше 12rem */
+.chat-row-line-wrap {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+.chat-row-who,
+.chat-row-vacancy,
+.chat-row-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-row-vacancy {
+  flex-basis: 12rem;
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+}
+
+.chat-row-who {
+  font-weight: 600;
+}
+
+.chat-row-who[data-anonymous] {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.chat-row-time {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.chat-row-state {
+  flex: none;
+}
+
+.chat-row-preview {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.chat-row[data-unread] .chat-row-preview {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.chat-row[data-unread] .chat-row-time {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.chat-row-unread {
+  flex: none;
+  align-self: center;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 0.375rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--blue);
+  color: var(--on-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.chat-row-skeleton {
+  gap: var(--s-2);
+}
+
+.chats-more {
+  padding: var(--s-4) var(--s-4) 0 0;
+}
+
+.chats-more .btn {
+  width: 100%;
+}
+
+.chats-more-error {
+  margin: var(--s-3) var(--s-4) 0 0;
+  font-size: var(--text-sm);
+  color: var(--fail);
+}
+
+.chats-side .empty {
+  padding-right: var(--s-4);
+}
+
+/* ---- окно переписки ---- */
+
+.chats-pane {
+  position: sticky;
+  top: calc(4.25rem + var(--s-5));
+  min-width: 0;
+  min-height: 24rem;
+  height: calc(100dvh - 4.25rem - var(--s-5) * 2);
+  max-height: 48rem;
+  padding: 0 0 0 var(--s-6);
+  display: grid;
+}
+
+.chat-choose {
+  align-self: center;
+  justify-self: center;
+  max-width: 24rem;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.chat-choose-art {
+  color: var(--edge);
+}
+
+.chat-choose p {
+  margin-top: var(--s-3);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.chat-window {
+  align-self: start;
+  display: grid;
+  gap: var(--s-4);
+  padding-top: var(--s-4);
+}
+
+.chat-back {
+  display: none;
+  font-size: var(--text-sm);
+}
+
+.chat-window-head {
+  display: grid;
+  gap: var(--s-2);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-window-title {
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.chat-window-title[data-anonymous] {
+  color: var(--ink-soft);
+}
+
+.chat-window-vacancy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s-2);
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+  overflow-wrap: anywhere;
+}
+
+.chat-window-unit {
+  flex-basis: 100%;
+  color: var(--ink-soft);
+}
+
+.chat-window-meta {
+  margin-top: var(--s-1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.chat-window-closed {
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+}
+
+.chat-window-soon {
+  max-width: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+/* ---- узкий экран: список и переписка по очереди ---- */
+
+@media (max-width: 62rem) {
+  .chats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chats-side {
+    border-right: 0;
+  }
+
+  .chats-controls,
+  .chats-more {
+    padding-right: 0;
+  }
+
+  .chat-row {
+    padding-right: var(--s-3);
+  }
+
+  .chats-pane {
+    display: none;
+  }
+
+  .chats-page[data-open] .chats-head,
+  .chats-page[data-open] .chats-side {
+    display: none;
+  }
+
+  .chats-page[data-open] .chats {
+    margin-top: 0;
+    border-top: 0;
+  }
+
+  .chats-page[data-open] .chats-pane {
+    display: grid;
+    position: static;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    padding: 0;
+  }
+
+  .chats-page[data-open] .chat-window {
+    padding-top: 0;
+  }
+
+  .chat-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-h);
+    justify-self: start;
+  }
+}
+
+@media (min-width: 40rem) and (max-width: 62rem) {
+  .chats-filters:has(.chats-vacancy) {
+    grid-template-columns: 1fr 1fr;
+  }
+}

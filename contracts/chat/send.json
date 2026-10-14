@@ -1,0 +1,77 @@
+{
+  "endpoint": "POST /api/chats/{id}/messages",
+  "about": "Отправить текст. client_id (UUID, создаёт сайт) защищает от двойной отправки: повтор с тем же client_id возвращает уже созданное сообщение с 200 вместо 201. Текст 1–4000 знаков после обрезки пробелов по краям, без нулевого знака, переносы строк сохраняются. Отправка возвращает переписку из архива у всех участников.",
+  "enums": {
+    "message.kind": "message_kind",
+    "message.author.side": "author_side"
+  },
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "validation_failed",
+    "chat_closed",
+    "rate_limited"
+  ],
+  "examples": {
+    "created": {
+      "request": {
+        "body": {
+          "text": "Спасибо, 22-го в 11:00 мне удобно.",
+          "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+        }
+      },
+      "status": 201,
+      "response": {
+        "message": {
+          "id": "00000007-0000-4000-8000-000000000000",
+          "seq": 7,
+          "kind": "text",
+          "author": {
+            "side": "scientist",
+            "name": "Дмитрий Королёв",
+            "is_me": true,
+            "anonymous": false,
+            "former": false
+          },
+          "text": "Спасибо, 22-го в 11:00 мне удобно.",
+          "event": null,
+          "created_at": "2026-10-14T10:30:00Z",
+          "edited_at": null,
+          "deleted": false,
+          "editable_until": "2026-10-15T10:30:00Z",
+          "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+        }
+      }
+    },
+    "repeat": {
+      "request": {
+        "body": {
+          "text": "Спасибо, 22-го в 11:00 мне удобно.",
+          "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+        }
+      },
+      "status": 200,
+      "response": {
+        "message": {
+          "id": "00000007-0000-4000-8000-000000000000",
+          "seq": 7,
+          "kind": "text",
+          "author": {
+            "side": "scientist",
+            "name": "Дмитрий Королёв",
+            "is_me": true,
+            "anonymous": false,
+            "former": false
+          },
+          "text": "Спасибо, 22-го в 11:00 мне удобно.",
+          "event": null,
+          "created_at": "2026-10-14T10:30:00Z",
+          "edited_at": null,
+          "deleted": false,
+          "editable_until": "2026-10-15T10:30:00Z",
+          "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+        }
+      }
+    }
+  }
+}

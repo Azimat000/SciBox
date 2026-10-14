@@ -7,7 +7,7 @@
   align-items: center;
   gap: var(--s-2);
   min-height: var(--control-h);
-  max-width: 11rem;
+  max-width: 10rem;
   padding: 0 var(--s-3);
   border: 1px solid transparent;
   border-radius: var(--r-md);

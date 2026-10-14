@@ -1,6 +1,7 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { apiGet, apiSend } from '../../api/client'
 import { useMe } from '../auth/api'
+import type { ChatRef } from '../chat/api'
 
 export const statuses = ['pending', 'interested', 'declined', 'cancelled'] as const
 export type OfferStatus = (typeof statuses)[number]
@@ -34,6 +35,8 @@ export type Offer = {
   application_id: string | null
   can_answer: boolean
   can_cancel: boolean
+  /** Переписка по этому приглашению (срез 34). */
+  chat?: ChatRef | null
 }
 
 export type MineList = { items: Offer[]; total: number; counts: Record<Exclude<OfferStatus, 'cancelled'>, number>; pending: number }

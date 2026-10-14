@@ -13,6 +13,7 @@ import { statusLabel } from './labels'
 import { OffersTabs } from './OffersTabs'
 import '../applications/applications.css'
 import './offers.css'
+import { ChatButton } from '../chat/ChatButton'
 
 /** «Приглашения» учёного: кто и на какую вакансию его позвал, новые сверху. */
 export function MyOffersPage() {
@@ -93,6 +94,7 @@ function Entry({ offer }: { offer: Offer }) {
         {offer.status === 'pending' ? <Tag tone="accent">{m.waitsYou}</Tag> : <Tag>{m.youAnswered(statusLabel(offer.status))}</Tag>}
         <span>{m.receivedAt(dateText(offer.created_at))}</span>
         {offer.application_id && <span>{m.applied}</span>}
+        <ChatButton chat={offer.chat} compact />
       </p>
     </li>
   )

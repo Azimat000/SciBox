@@ -1,0 +1,36 @@
+/* Кнопка и ссылка «Написать» / «Перейти к переписке» на страницах откликов и приглашений (срез 34). */
+
+.chat-entry-button .btn-label,
+.chat-entry-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.chat-entry-link {
+  position: relative;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Невидимый запас по высоте для пальца: строка списка при этом не растёт */
+.chat-entry-link::after {
+  content: '';
+  position: absolute;
+  inset: -0.625rem -0.25rem;
+}
+
+.chat-entry-count {
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--blue);
+  color: var(--on-ink);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}

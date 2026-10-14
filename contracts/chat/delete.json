@@ -1,0 +1,17 @@
+{
+  "endpoint": "DELETE /api/chats/{id}/messages/{seq}",
+  "about": "Удалить своё сообщение в течение 24 часов. Сообщение остаётся в ленте с deleted=true и пустым текстом: собеседник видит «Сообщение удалено».",
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "chat_closed",
+    "edit_window_closed",
+    "system_message",
+    "not_author"
+  ],
+  "examples": {
+    "deleted": {
+      "status": 204
+    }
+  }
+}

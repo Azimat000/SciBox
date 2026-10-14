@@ -1,0 +1,31 @@
+{
+  "endpoint": "POST /api/chats/{id}/complaints",
+  "about": "Жалоба учёного на организацию в этой переписке. Хранится для модерации (срез 30). Пояснение до 2000 знаков, у причины other обязательно.",
+  "request_enums": {
+    "reason": "complaint_reason"
+  },
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "forbidden",
+    "validation_failed",
+    "rate_limited"
+  ],
+  "examples": {
+    "created": {
+      "request": {
+        "body": {
+          "reason": "spam",
+          "note": "Пишут про платные курсы, к вакансии это отношения не имеет."
+        }
+      },
+      "status": 201,
+      "response": {
+        "complaint": {
+          "id": "80000000-0000-4000-8000-000000000001",
+          "created_at": "2026-10-14T11:05:00Z"
+        }
+      }
+    }
+  }
+}

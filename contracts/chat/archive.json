@@ -1,0 +1,13 @@
+{
+  "endpoint": "POST /api/chats/{id}/archive",
+  "about": "Убрать переписку в личный архив смотрящего (у собеседника и коллег она остаётся). Повтор ничего не меняет.",
+  "errors": [
+    "unauthorized",
+    "not_found"
+  ],
+  "examples": {
+    "archived": {
+      "status": 204
+    }
+  }
+}

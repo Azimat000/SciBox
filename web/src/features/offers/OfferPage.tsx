@@ -23,6 +23,7 @@ import { answerOffer, refreshOffers, useOffer, type Offer } from './api'
 import { statusLabel, statusTone, vacancyOpen } from './labels'
 import '../applications/applications.css'
 import './offers.css'
+import { ChatButton } from '../chat/ChatButton'
 
 const MAX_NOTE = 1000
 
@@ -98,6 +99,7 @@ function Page({ offer }: { offer: Offer }) {
           ) : (
             open === 'open' && <ButtonLink to={`/vacancies/${v.id}/apply`}>{o.apply}</ButtonLink>
           )}
+          <ChatButton chat={offer.chat} />
         </div>
         {offer.application_id && <p className="application-muted">{o.alreadyApplied}</p>}
         {!offer.application_id && open === 'closed' && <p className="application-muted">{o.vacancyClosed}</p>}

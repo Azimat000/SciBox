@@ -1,0 +1,19 @@
+{
+  "endpoint": "POST /api/chats/{id}/read",
+  "about": "Отметить прочитанным всё до seq включительно. Отметка только растёт: меньший up_to ничего не меняет. Сторона организации прочитала, если прочитал хоть один сотрудник.",
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "bad_request"
+  ],
+  "examples": {
+    "read": {
+      "request": {
+        "body": {
+          "up_to": 6
+        }
+      },
+      "status": 204
+    }
+  }
+}

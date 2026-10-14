@@ -21,6 +21,7 @@ import '../applications/applications.css'
 import '../applications/review.css'
 import '../orgs/orgs.css'
 import './offers.css'
+import { ChatButton } from '../chat/ChatButton'
 
 /** Порядок вкладок: сначала то, что ждёт ответа. */
 const tabs: readonly OfferStatus[] = ['pending', 'interested', 'declined', 'cancelled']
@@ -153,6 +154,7 @@ function Row({ offer }: { offer: Offer }) {
         <Tag tone={statusTone(offer.status)}>{statusLabel(offer.status)}</Tag>
         <span>{s.sentAt(dateText(offer.created_at))}</span>
         {offer.answered_at && <span>{s.answeredAt(dateText(offer.answered_at))}</span>}
+        <ChatButton chat={offer.chat} compact />
       </p>
       {offer.message && (
         <p className="review-note">

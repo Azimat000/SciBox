@@ -1,0 +1,14 @@
+{
+  "endpoint": "DELETE /api/orgs/{orgId}/chat-templates/{id}",
+  "about": "Удалить шаблон (владелец и кадровик).",
+  "errors": [
+    "unauthorized",
+    "not_found",
+    "forbidden"
+  ],
+  "examples": {
+    "deleted": {
+      "status": 204
+    }
+  }
+}

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чат: раскладки списка</title>
+<style>
+@font-face { font-family: 'Golos Text'; src: url('../decision/fonts/golos-text-cyrillic-wght-normal.woff2') format('woff2'); font-weight: 400 900; unicode-range: U+0400-04FF; }
+@font-face { font-family: 'Golos Text'; src: url('../decision/fonts/golos-text-latin-wght-normal.woff2') format('woff2'); font-weight: 400 900; }
+@font-face { font-family: 'Literata'; src: url('../decision/fonts/literata-cyrillic-wght-normal.woff2') format('woff2'); font-weight: 200 900; unicode-range: U+0400-04FF; }
+@font-face { font-family: 'Literata'; src: url('../decision/fonts/literata-latin-wght-normal.woff2') format('woff2'); font-weight: 200 900; }
+:root {
+  --paper:#fff; --wash:#f6f4f1; --wash-deep:#ece9e4; --ink:#1f1d1a; --ink-soft:#5d5a55; --ink-body:#38352f;
+  --line:#e4e1dc; --edge:#85807a; --blue:#1c2c66; --blue-wash:#eceefa; --mark:#f7d559; --ok:#1e6b45; --fail:#a3261b;
+  --sans:'Golos Text',system-ui,sans-serif; --serif:'Literata',Georgia,serif;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:400 1rem/1.55 var(--sans); }
+.num { font-variant-numeric: tabular-nums lining-nums; }
+.mast { display:flex; align-items:center; gap:2rem; padding:0 clamp(1rem,4vw,3.5rem); height:4.25rem; border-bottom:3px double var(--ink); }
+.word { font:700 1.75rem/1 var(--serif); color:var(--blue); letter-spacing:.04em; }
+.mast nav { display:flex; gap:1.5rem; font-size:.9375rem; color:var(--ink-soft); }
+.mast nav .cur { color:var(--ink); font-weight:600; box-shadow: inset 0 -3px var(--mark); }
+.mast .tools { margin-left:auto; display:flex; gap:1rem; align-items:center; font-size:.875rem; }
+.msgs { position:relative; font-weight:600; color:var(--ink); box-shadow: inset 0 -3px var(--mark); padding:.25rem 0; }
+.badge { display:inline-block; min-width:1.25rem; padding:0 .35rem; margin-left:.35rem; border-radius:999px; background:var(--blue); color:#fff; font-size:.75rem; text-align:center; line-height:1.25rem; }
+.page { max-width:84rem; margin:0 auto; padding:2rem clamp(1rem,4vw,3.5rem); }
+h1 { font:600 clamp(1.875rem,1.45rem + 1.9vw,2.625rem)/1.15 var(--serif); letter-spacing:-.02em; margin:0 0 1.25rem; }
+.cols { display:grid; grid-template-columns: minmax(22rem, 27rem) 1fr; border-top:1px solid var(--ink); min-height:40rem; }
+.side { border-right:1px solid var(--line); }
+.tools-row { padding:.75rem 1rem .75rem 0; display:grid; gap:.625rem; border-bottom:1px solid var(--line); }
+.tabs { display:flex; gap:1.25rem; font-size:.875rem; color:var(--ink-soft); }
+.tabs span { padding:.25rem 0; }
+.tabs .on { color:var(--ink); font-weight:600; box-shadow: inset 0 -3px var(--mark); }
+.tabs .c { color:var(--ink-soft); font-weight:400; margin-left:.25rem; }
+.field { height:2.5rem; border:1px solid var(--edge); border-radius:4px; display:flex; align-items:center; padding:0 .75rem; color:var(--ink-soft); font-size:.9375rem; }
+.row2 { display:grid; grid-template-columns: 1fr 1fr; gap:.5rem; }
+.empty-pane { display:grid; place-items:center; color:var(--ink-soft); text-align:center; padding:2rem; }
+.empty-pane p { font:400 1.125rem/1.6 var(--serif); max-width:24rem; margin:.75rem 0 0; }
+.empty-pane svg { color:var(--edge); }
+ul { list-style:none; margin:0; padding:0; }
+/* A: почтовый список */
+.a li { display:grid; grid-template-columns: 1fr auto; gap:.125rem .75rem; padding:.875rem 1rem .875rem 0; border-bottom:1px solid var(--line); }
+.a li.sel { background:var(--wash); box-shadow: inset 3px 0 0 var(--ink); padding-left:.75rem; }
+.a .who { font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.a .who.anon { font-weight:500; color:var(--ink-soft); font-style:normal; }
+.a .time { font-size:.8125rem; color:var(--ink-soft); justify-self:end; }
+.a .vac { grid-column:1; font-size:.875rem; color:var(--ink-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.a .state { grid-column:2; justify-self:end; font-size:.75rem; }
+.a .snip { grid-column:1; font-size:.875rem; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.a .snip b { color:var(--ink); font-weight:500; }
+.a .unread .snip { color:var(--ink); }
+.a .cnt { grid-column:2; justify-self:end; }
+.tag { display:inline-block; border:1px solid var(--line); background:var(--wash); border-radius:2px; padding:0 .4rem; font-size:.75rem; line-height:1.35rem; white-space:nowrap; }
+.tag.wait { border-color:var(--blue); background:#fff; color:var(--blue); font-weight:600; }
+.tag.closed { color:var(--ink-soft); }
+.tag.ok { color:var(--ok); border-color:var(--ok); background:#fff; font-weight:600; }
+/* B: по вакансиям */
+.b .rub { padding:1rem 1rem .25rem 0; border-top:3px solid var(--ink); margin-top:1rem; }
+.b .rub:first-child { margin-top:0; border-top-width:0; }
+.b .rub h3 { font:600 1.0625rem/1.3 var(--serif); margin:0; }
+.b .rub small { font-size:.8125rem; color:var(--ink-soft); }
+.b li { display:grid; grid-template-columns: 1fr auto; gap:0 .75rem; padding:.625rem 1rem .625rem 0; border-bottom:1px solid var(--line); }
+.b li.sel { background:var(--wash); box-shadow: inset 3px 0 0 var(--ink); padding-left:.75rem; }
+.b .who { font-weight:600; }
+.b .who.anon { font-weight:500; color:var(--ink-soft); }
+.b .time { font-size:.8125rem; color:var(--ink-soft); justify-self:end; }
+.b .snip { font-size:.875rem; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.b .unread .snip { color:var(--ink); }
+.b .meta { justify-self:end; display:flex; gap:.375rem; align-items:center; }
+/* C: состояние на полях */
+.c li { display:grid; grid-template-columns: 7.5rem 1fr auto; gap:.125rem 1rem; padding:.875rem 1rem .875rem 0; border-bottom:1px solid var(--line); }
+.c li.sel { background:var(--wash); box-shadow: inset 3px 0 0 var(--ink); padding-left:.75rem; }
+.c .margin { grid-row: 1 / span 3; font-size:.75rem; line-height:1.3; color:var(--ink-soft); border-right:1px solid var(--line); padding-right:.75rem; }
+.c .margin strong { display:block; color:var(--ink); font-size:.8125rem; font-weight:600; }
+.c .margin.wait strong { color:var(--blue); }
+.c .margin.closed strong { color:var(--ink-soft); font-weight:500; }
+.c .who { font:600 1.0625rem/1.3 var(--serif); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c .who.anon { color:var(--ink-soft); font-weight:500; }
+.c .time { font-size:.8125rem; color:var(--ink-soft); justify-self:end; }
+.c .vac { grid-column:2; font-size:.875rem; color:var(--ink-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.c .snip { grid-column:2; font-size:.875rem; color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.c .unread .snip { color:var(--ink); }
+.c .cnt { grid-column:3; grid-row:3; justify-self:end; }
+.label { position:fixed; right:1rem; bottom:1rem; background:var(--ink); color:#fff; padding:.5rem .875rem; border-radius:4px; font:600 .875rem var(--sans); }
+@media (max-width: 40rem) {
+  .mast nav, .mast .tools .role { display:none; }
+  .cols { grid-template-columns: 1fr; }
+  .empty-pane { display:none; }
+  .side { border-right:0; }
+  .tools-row { padding-right:0; }
+  .c li { grid-template-columns: 1fr auto; }
+  .c .margin { grid-row:auto; grid-column:1 / -1; border-right:0; padding:0; display:flex; gap:.5rem; align-items:baseline; }
+  .c .margin strong { display:inline; }
+  .c .vac, .c .snip { grid-column:1; }
+  .c .cnt { grid-row:auto; grid-column:2; }
+}
+</style>
+</head>
+<body>
+<header class="mast">
+  <span class="word">ИОН</span>
+  <nav><span>Мои вакансии</span><span>Отклики</span><span>Соискатели</span><span>Моя организация</span></nav>
+  <div class="tools"><span class="role">Ищу работу | <b>Нанимаю</b></span><span class="msgs">Сообщения<span class="badge num">7</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span>Е. Орлова</span></div>
+</header>
+<main class="page">
+  <h1>Сообщения</h1>
+  <div class="cols">
+    <section class="side">
+      <div class="tools-row">
+        <div class="tabs"><span class="on">Все</span><span>Непрочитанные<span class="c num">4</span></span><span>Архив<span class="c num">2</span></span></div>
+        <div class="row2"><div class="field">Поиск по вакансии и имени</div><div class="field">Все вакансии ▾</div></div>
+      </div>
+      <div id="list"></div>
+    </section>
+    <section class="empty-pane"><div>
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4 5h16v11H9l-5 4z"/></svg>
+      <p>Выберите переписку слева. Здесь появятся сообщения, приглашения и решения по отклику.</p>
+    </div></section>
+  </div>
+</main>
+<div class="label" id="label"></div>
+<script>
+const v = new URLSearchParams(location.search).get('v') || 'a'
+const chats = [
+  { who:'Дмитрий Королёв', vac:'Младший научный сотрудник лаборатории геномики растений', state:['wait','Приглашение ждёт ответа'], snip:'Вы: Предлагаем собеседование 22 октября в 11:00 (МСК)', you:true, time:'12:40', n:0, sel:true },
+  { who:'Учёный (имя скрыто)', anon:true, vac:'Научный сотрудник группы спектроскопии', state:['','Приглашение на вакансию'], snip:'Добрый день! Расскажите, пожалуйста, о составе группы и оборудовании', time:'11:02', n:2 },
+  { who:'Алина Гусева', vac:'Аспирант: машинное обучение для климатических моделей', state:['','Просмотрен'], snip:'Спасибо, жду новостей. Могу прислать код модели, если нужно', time:'вчера', n:1 },
+  { who:'Артём Морозов', vac:'Инженер-исследователь по криогенной технике', state:['wait','Предложил другое время'], snip:'Система: кандидат предложил 24 октября, 15:30 (МСК)', time:'вчера', n:1 },
+  { who:'Ольга Лебедева', vac:'Старший преподаватель кафедры органической химии', state:['closed','Отказ'], snip:'Система: отказ. Переписка закрыта', time:'12 окт', n:0 },
+  { who:'Максим Тарасов', vac:'Научный сотрудник группы спектроскопии', state:['ok','Принят'], snip:'Вы: Документы для оформления пришлём на почту до пятницы', you:true, time:'9 окт', n:0 },
+]
+const tag = (s) => `<span class="tag ${s[0]}">${s[1]}</span>`
+const cnt = (n) => n ? `<span class="badge num">${n}</span>` : ''
+const L = document.getElementById('list')
+if (v === 'a') {
+  L.className = 'a'
+  L.innerHTML = '<ul>' + chats.map(c => `<li class="${c.sel?'sel':''} ${c.n?'unread':''}">
+    <span class="who ${c.anon?'anon':''}">${c.who}</span><span class="time num">${c.time}</span>
+    <span class="vac">${c.vac}</span><span class="state">${tag(c.state)}</span>
+    <span class="snip">${c.snip}</span><span class="cnt">${cnt(c.n)}</span></li>`).join('') + '</ul>'
+  document.getElementById('label').textContent = 'Вариант А. Список, как в почте'
+} else if (v === 'b') {
+  L.className = 'b'
+  const groups = {}
+  for (const c of chats) (groups[c.vac] ||= []).push(c)
+  L.innerHTML = Object.entries(groups).map(([vac, cs]) => `<div class="rub"><h3>${vac}</h3><small>${cs.length} ${cs.length===1?'переписка':'переписки'}</small></div><ul>` +
+    cs.map(c => `<li class="${c.sel?'sel':''} ${c.n?'unread':''}"><span class="who ${c.anon?'anon':''}">${c.who}</span><span class="time num">${c.time}</span>
+    <span class="snip">${c.snip}</span><span class="meta">${tag(c.state)}${cnt(c.n)}</span></li>`).join('') + '</ul>').join('')
+  document.getElementById('label').textContent = 'Вариант Б. По вакансиям'
+} else {
+  L.className = 'c'
+  L.innerHTML = '<ul>' + chats.map(c => `<li class="${c.sel?'sel':''} ${c.n?'unread':''}">
+    <span class="margin ${c.state[0]}"><strong>${c.state[1]}</strong>${c.time}</span>
+    <span class="who ${c.anon?'anon':''}">${c.who}</span><span class="time num"></span>
+    <span class="vac">${c.vac}</span>
+    <span class="snip">${c.snip}</span><span class="cnt">${cnt(c.n)}</span></li>`).join('') + '</ul>'
+  document.getElementById('label').textContent = 'Вариант В. Состояние на полях'
+}
+</script>
+</body>
+</html>

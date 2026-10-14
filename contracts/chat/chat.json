@@ -1,0 +1,202 @@
+{
+  "endpoint": "GET /api/chats/{id}",
+  "about": "Шапка переписки: вакансия, собеседник с учётом анонимности, ссылка на отклик или приглашение, состояние, можно ли писать и почему нет, что положено смотрящему, докуда прочитано (seq). Открытие шапки ничего не отмечает прочитанным: для этого POST /read.",
+  "enums": {
+    "side": "side",
+    "counterpart.kind": "counterpart_kind",
+    "status.source": "status_source",
+    "status.value": "status_value",
+    "closed_reason": "closed_reason",
+    "viewer.side": "side"
+  },
+  "errors": [
+    "unauthorized",
+    "not_found"
+  ],
+  "examples": {
+    "scientist_invited": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "vacancy": {
+            "id": "a0000000-0000-4000-8000-000000000001",
+            "title": "Младший научный сотрудник лаборатории спинтроники",
+            "org_name": "Сибирский институт квантовых материалов",
+            "org_slug": "sibirskiy-institut-kvantovykh-materialov",
+            "unit_name": "Лаборатория спинтроники",
+            "status": "published",
+            "deadline": "2026-11-01"
+          },
+          "counterpart": {
+            "kind": "org",
+            "name": "Сибирский институт квантовых материалов",
+            "anonymous": false,
+            "profile_id": null
+          },
+          "application_id": "b0000000-0000-4000-8000-000000000001",
+          "offer_id": null,
+          "status": {
+            "source": "application",
+            "value": "invited"
+          },
+          "needs_answer": true,
+          "can_write": true,
+          "closed_reason": null,
+          "archived": false,
+          "viewer": {
+            "side": "scientist",
+            "can_use_templates": false,
+            "can_edit_templates": false,
+            "org_id": null,
+            "can_block": true,
+            "can_complain": true
+          },
+          "read": {
+            "mine": 5,
+            "theirs": 4
+          }
+        }
+      }
+    },
+    "scientist_closed": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000004",
+          "side": "scientist",
+          "vacancy": {
+            "id": "a0000000-0000-4000-8000-000000000004",
+            "title": "Старший преподаватель кафедры органической химии",
+            "org_name": "Приволжский университет технологий",
+            "org_slug": "privolzhskiy-universitet-tekhnologiy",
+            "unit_name": "Кафедра органической химии",
+            "status": "closed",
+            "deadline": null
+          },
+          "counterpart": {
+            "kind": "org",
+            "name": "Приволжский университет технологий",
+            "anonymous": false,
+            "profile_id": null
+          },
+          "application_id": "b0000000-0000-4000-8000-000000000004",
+          "offer_id": null,
+          "status": {
+            "source": "application",
+            "value": "rejected"
+          },
+          "needs_answer": false,
+          "can_write": false,
+          "closed_reason": "rejected",
+          "archived": false,
+          "viewer": {
+            "side": "scientist",
+            "can_use_templates": false,
+            "can_edit_templates": false,
+            "org_id": null,
+            "can_block": true,
+            "can_complain": true
+          },
+          "read": {
+            "mine": 5,
+            "theirs": 4
+          }
+        }
+      }
+    },
+    "org_anonymous_offer": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000006",
+          "side": "org",
+          "vacancy": {
+            "id": "a0000000-0000-4000-8000-000000000005",
+            "title": "Научный сотрудник группы спектроскопии льда",
+            "org_name": "Центр изучения Арктики",
+            "org_slug": "tsentr-izucheniya-arktiki",
+            "unit_name": "Группа спектроскопии",
+            "status": "published",
+            "deadline": "2026-10-30"
+          },
+          "counterpart": {
+            "kind": "scientist",
+            "name": "",
+            "anonymous": true,
+            "profile_id": null
+          },
+          "application_id": null,
+          "offer_id": "d0000000-0000-4000-8000-000000000001",
+          "status": {
+            "source": "offer",
+            "value": "pending"
+          },
+          "needs_answer": false,
+          "can_write": true,
+          "closed_reason": null,
+          "archived": false,
+          "viewer": {
+            "side": "org",
+            "can_use_templates": true,
+            "can_edit_templates": true,
+            "org_id": "70000000-0000-4000-8000-000000000001",
+            "can_block": false,
+            "can_complain": false
+          },
+          "read": {
+            "mine": 1,
+            "theirs": 1
+          }
+        }
+      }
+    },
+    "org_offer_then_application": {
+      "status": 200,
+      "response": {
+        "chat": {
+          "id": "c0000000-0000-4000-8000-000000000005",
+          "side": "org",
+          "vacancy": {
+            "id": "a0000000-0000-4000-8000-000000000005",
+            "title": "Научный сотрудник группы спектроскопии льда",
+            "org_name": "Центр изучения Арктики",
+            "org_slug": "tsentr-izucheniya-arktiki",
+            "unit_name": "Группа спектроскопии",
+            "status": "published",
+            "deadline": "2026-10-30"
+          },
+          "counterpart": {
+            "kind": "scientist",
+            "name": "Дмитрий Королёв",
+            "anonymous": false,
+            "profile_id": "e0000000-0000-4000-8000-000000000001"
+          },
+          "application_id": "b0000000-0000-4000-8000-000000000005",
+          "offer_id": "d0000000-0000-4000-8000-000000000002",
+          "status": {
+            "source": "application",
+            "value": "sent"
+          },
+          "needs_answer": false,
+          "can_write": true,
+          "closed_reason": null,
+          "archived": false,
+          "viewer": {
+            "side": "org",
+            "can_use_templates": true,
+            "can_edit_templates": false,
+            "org_id": "70000000-0000-4000-8000-000000000001",
+            "can_block": false,
+            "can_complain": false
+          },
+          "read": {
+            "mine": 3,
+            "theirs": 2
+          }
+        }
+      }
+    }
+  }
+}

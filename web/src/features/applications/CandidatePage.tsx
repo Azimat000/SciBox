@@ -19,6 +19,7 @@ import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
 import { mailtoHref } from '../../lib/mailto'
+import { ChatButton } from '../chat/ChatButton'
 
 /**
  * Карточка отклика для организации: решение и приглашения, письмо, файлы, рекомендательные письма и профиль, как он был
@@ -62,6 +63,7 @@ function Loader({ id }: { id: string }) {
         {/* Решение справа, рядом с письмом и профилем: кнопки видны всё время, пока организация читает отклик */}
         <aside className="split-aside review-aside" aria-labelledby="cand-decision">
           <ReviewPanel app={app} />
+          <ChatButton chat={app.chat} />
         </aside>
 
         <div className="split-main application-main">

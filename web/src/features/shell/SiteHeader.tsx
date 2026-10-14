@@ -7,6 +7,7 @@ import { BookmarkIcon, CloseIcon, MenuIcon } from '../../ui/icons'
 import { useMe } from '../auth/api'
 import { AccountBlock, UserMenu } from '../auth/UserMenu'
 import { useSignOut } from '../auth/useSignOut'
+import { MessagesLink } from '../chat/MessagesLink'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { favoritesNav, isCurrent, navFor, publicNav } from './nav'
 import { RoleSwitch } from './RoleSwitch'
@@ -65,18 +66,22 @@ export function SiteHeader() {
             <span className="header-auth-placeholder" aria-hidden="true" />
           ) : user ? (
             <>
-              {role === 'seeker' && (
-                <Link
-                  to={favorites.to}
-                  className="header-icon"
-                  aria-label={favorites.label}
-                  title={favorites.label}
-                  aria-current={favoritesCurrent ? 'page' : undefined}
-                >
-                  <BookmarkIcon size={22} filled={favoritesCurrent} />
-                </Link>
-              )}
-              <NotificationBell />
+              {/* Значки стоят плотной группой: с «Сообщениями» шапка соискателя иначе не помещается (D-218) */}
+              <div className="header-icons">
+                {role === 'seeker' && (
+                  <Link
+                    to={favorites.to}
+                    className="header-icon"
+                    aria-label={favorites.label}
+                    title={favorites.label}
+                    aria-current={favoritesCurrent ? 'page' : undefined}
+                  >
+                    <BookmarkIcon size={22} filled={favoritesCurrent} />
+                  </Link>
+                )}
+                <MessagesLink />
+                <NotificationBell />
+              </div>
               <div className="header-signin">
                 <UserMenu user={user} />
               </div>

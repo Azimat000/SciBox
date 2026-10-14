@@ -1,0 +1,13 @@
+{
+  "endpoint": "DELETE /api/chat-blocks/{orgId}",
+  "about": "Снять блокировку: переписки, закрытые только блокировкой, снова открыты (системная строка chat.unblocked). Повтор и чужая организация дают 404.",
+  "errors": [
+    "unauthorized",
+    "not_found"
+  ],
+  "examples": {
+    "unblocked": {
+      "status": 204
+    }
+  }
+}

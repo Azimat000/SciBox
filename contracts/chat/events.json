@@ -1,0 +1,249 @@
+{
+  "endpoint": "GET /api/chats/events",
+  "about": "Живой поток событий своих переписок (Server-Sent Events, Content-Type: text/event-stream; способ закрепляет срез 39). Каждое событие: строки «id: <номер>», «event: <вид>», «data: <JSON одной строкой>», пустая строка. После обрыва сайт переподключается с заголовком Last-Event-ID и получает пропущенное; если пропущено слишком много, приходит unread.count и сайт перечитывает списки. Раз в 25 секунд строка-комментарий «: ping» держит соединение. Своё сообщение тоже приходит событием (для других вкладок того же человека; сайт узнаёт его по client_id). Примеры ниже — объекты data; event — вид события.",
+  "enums": {
+    "event": "stream_event",
+    "data.side": "side",
+    "data.message.kind": "message_kind",
+    "data.message.author.side": "author_side",
+    "data.reader_side": "side",
+    "data.author.side": "author_side",
+    "data.status.source": "status_source",
+    "data.status.value": "status_value",
+    "data.closed_reason": "closed_reason"
+  },
+  "variants": {
+    "": "event"
+  },
+  "examples": {
+    "message_created_mine": {
+      "response": {
+        "id": "100",
+        "event": "message.created",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "text",
+            "author": {
+              "side": "scientist",
+              "name": "Дмитрий Королёв",
+              "is_me": true,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Спасибо, 22-го в 11:00 мне удобно.",
+            "event": null,
+            "created_at": "2026-10-14T10:30:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": "2026-10-15T10:30:00Z",
+            "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+          }
+        }
+      }
+    },
+    "message_created": {
+      "response": {
+        "id": "101",
+        "event": "message.created",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "text",
+            "author": {
+              "side": "org",
+              "name": "Елена Орлова",
+              "is_me": false,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Отлично, ждём вас 22-го. Ссылка на встречу в приглашении.",
+            "event": null,
+            "created_at": "2026-10-14T10:40:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          }
+        }
+      }
+    },
+    "message_edited": {
+      "response": {
+        "id": "102",
+        "event": "message.edited",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "text",
+            "author": {
+              "side": "org",
+              "name": "Елена Орлова",
+              "is_me": false,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Отлично, ждём вас 22-го в 11:00. Ссылка на встречу в приглашении.",
+            "event": null,
+            "created_at": "2026-10-14T10:40:00Z",
+            "edited_at": "2026-10-14T10:41:00Z",
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          }
+        }
+      }
+    },
+    "message_deleted": {
+      "response": {
+        "id": "103",
+        "event": "message.deleted",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "text",
+            "author": {
+              "side": "org",
+              "name": "Елена Орлова",
+              "is_me": false,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "",
+            "event": null,
+            "created_at": "2026-10-14T10:40:00Z",
+            "edited_at": null,
+            "deleted": true,
+            "editable_until": null,
+            "client_id": null
+          }
+        }
+      }
+    },
+    "chat_read": {
+      "response": {
+        "id": "104",
+        "event": "chat.read",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "reader_side": "org",
+          "up_to": 7
+        }
+      }
+    },
+    "chat_typing": {
+      "response": {
+        "id": "105",
+        "event": "chat.typing",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "author": {
+            "side": "org",
+            "name": "Елена Орлова",
+            "anonymous": false
+          }
+        }
+      }
+    },
+    "chat_state": {
+      "response": {
+        "id": "106",
+        "event": "chat.state",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000004",
+          "side": "scientist",
+          "status": {
+            "source": "application",
+            "value": "rejected"
+          },
+          "needs_answer": false,
+          "can_write": false,
+          "closed_reason": "rejected"
+        }
+      }
+    },
+    "unread_count": {
+      "response": {
+        "id": "107",
+        "event": "unread.count",
+        "data": {
+          "total": 4,
+          "scientist": 3,
+          "org": 1
+        }
+      }
+    },
+    "message_edited_mine": {
+      "response": {
+        "id": "108",
+        "event": "message.edited",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "text",
+            "author": {
+              "side": "scientist",
+              "name": "Дмитрий Королёв",
+              "is_me": true,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "Спасибо, 22-го в 11:00 (МСК) мне удобно.",
+            "event": null,
+            "created_at": "2026-10-14T10:30:00Z",
+            "edited_at": "2026-10-14T10:34:00Z",
+            "deleted": false,
+            "editable_until": "2026-10-15T10:30:00Z",
+            "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+          }
+        }
+      }
+    },
+    "message_deleted_mine": {
+      "response": {
+        "id": "109",
+        "event": "message.deleted",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000007-0000-4000-8000-000000000000",
+            "seq": 7,
+            "kind": "text",
+            "author": {
+              "side": "scientist",
+              "name": "Дмитрий Королёв",
+              "is_me": true,
+              "anonymous": false,
+              "former": false
+            },
+            "text": "",
+            "event": null,
+            "created_at": "2026-10-14T10:30:00Z",
+            "edited_at": "2026-10-14T10:34:00Z",
+            "deleted": true,
+            "editable_until": null,
+            "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"
+          }
+        }
+      }
+    }
+  }
+}

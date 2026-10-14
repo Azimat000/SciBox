@@ -38,6 +38,7 @@ import {
 import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
+import { ChatButton } from '../chat/ChatButton'
 
 /** Отклик глазами соискателя: что отправлено, как идут рекомендации, можно ли отозвать. Для сотрудников организации — другая страница. */
 export function ApplicationPage() {
@@ -114,6 +115,11 @@ function Page({ app }: { app: Detail }) {
           <Tag tone={statusTone(app.status)}>{statusLabel(app.status)}</Tag>
           <span>{d.sentAt(dateText(app.created_at))}</span>
         </p>
+        {app.chat && (
+          <div className="page-actions">
+            <ChatButton chat={app.chat} />
+          </div>
+        )}
       </header>
 
       {(app.status === 'accepted' || app.status === 'rejected') && (

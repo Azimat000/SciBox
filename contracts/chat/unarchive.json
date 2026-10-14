@@ -1,0 +1,13 @@
+{
+  "endpoint": "POST /api/chats/{id}/unarchive",
+  "about": "Вернуть переписку из личного архива. Повтор ничего не меняет.",
+  "errors": [
+    "unauthorized",
+    "not_found"
+  ],
+  "examples": {
+    "unarchived": {
+      "status": 204
+    }
+  }
+}
