@@ -259,4 +259,7 @@ type Target struct {
 	Organization OrgRef    `json:"organization"`
 	WholeOrg     bool      `json:"whole_org"`
 	Units        []UnitRef `json:"units"`
+	// Facilities — все подразделения-ЦКП организации (не только те, которыми человек руководит): на них можно сослаться
+	// в условиях вакансии (D-203).
+	Facilities []UnitRef `json:"facilities"`
 }

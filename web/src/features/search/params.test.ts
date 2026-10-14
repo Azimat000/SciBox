@@ -12,6 +12,7 @@ import {
   toApiParams,
   toParams,
   toggleMulti,
+  togglePerk,
   withoutFilters,
   type FilterRef,
 } from './params'
@@ -21,7 +22,7 @@ const parse = (qs: string) => parseSearch(new URLSearchParams(qs))
 describe('reading the address', () => {
   it('reads every kind of parameter', () => {
     const s = parse(
-      'q=%20органическая%20%20химия%20&field=1.4&field=1.3.8&region=54&type=research&type=teaching&level=3&format=remote&degree=doctor&org_kind=institute&funding=grant&rate=50&term=short&salary_min=80000&housing=1&competition=true&deadline=week&sort=deadline&page=3',
+      'q=%20органическая%20%20химия%20&field=1.4&field=1.3.8&region=54&type=research&type=teaching&level=3&format=remote&degree=doctor&org_kind=institute&funding=grant&rate=50&term=short&salary_min=80000&housing=1&competition=true&conferences=1&equipment=true&deadline=week&sort=deadline&page=3',
     )
     expect(s).toEqual({
       q: 'органическая химия',
@@ -30,6 +31,7 @@ describe('reading the address', () => {
       salaryMin: 80000,
       housing: true,
       competition: true,
+      perks: ['equipment', 'conferences'], // порядок один, как бы ни стояли в адресе
       deadline: 'week',
       sort: 'deadline',
       page: 3,
@@ -42,7 +44,7 @@ describe('reading the address', () => {
 
   it('drops everything it does not know instead of failing', () => {
     const s = parse(
-      'type=zzz&type=research&type=research&field=1.x&field=abc&field=2&level=9&format=moon&region=5&region=ab&salary_min=-5&housing=no&competition=0&deadline=tomorrow&sort=random&page=-4',
+      'type=zzz&type=research&type=research&field=1.x&field=abc&field=2&level=9&format=moon&region=5&region=ab&salary_min=-5&housing=no&competition=0&equipment=yes&publications=0&deadline=tomorrow&sort=random&page=-4',
     )
     expect(s.multi.type).toEqual(['research']) // повтор убран
     expect(s.multi.field).toEqual(['2'])
@@ -52,6 +54,7 @@ describe('reading the address', () => {
     expect(s.salaryMin).toBe(0)
     expect(s.housing).toBe(false)
     expect(s.competition).toBe(false)
+    expect(s.perks).toEqual([])
     expect(s.deadline).toBe('')
     expect(s.sort).toBe('')
     expect(s.page).toBe(1)
@@ -77,7 +80,7 @@ describe('writing the address', () => {
   })
 
   it('round-trips a complex search', () => {
-    const s = parse('q=химия&field=1.4&field=1.3&region=54&type=research&format=hybrid&salary_min=80000&housing=1&competition=1&deadline=month&sort=salary&page=2')
+    const s = parse('q=химия&field=1.4&field=1.3&region=54&type=research&format=hybrid&salary_min=80000&housing=1&competition=1&equipment=1&publications=1&deadline=month&sort=salary&page=2')
     expect(parseSearch(toParams(s))).toEqual(s)
   })
 
@@ -88,6 +91,18 @@ describe('writing the address', () => {
     expect(p.get('offset')).toBe(String(2 * PAGE_SIZE))
     expect(p.get('sort')).toBe('deadline')
     expect(p.get('housing')).toBe('1')
+    const perks = toApiParams({ ...emptySearch(), perks: ['publications', 'conferences'] })
+    expect(perks.get('publications')).toBe('1')
+    expect(perks.get('conferences')).toBe('1')
+    expect(perks.has('equipment')).toBe(false)
+  })
+
+  it('writes the scientific conditions in one order whatever the clicks were', () => {
+    const a = togglePerk(togglePerk(emptySearch(), 'conferences'), 'equipment')
+    const b = togglePerk(togglePerk(emptySearch(), 'equipment'), 'conferences')
+    expect(a.perks).toEqual(['equipment', 'conferences'])
+    expect(toParams(a).toString()).toBe(toParams(b).toString())
+    expect(toParams(a).toString()).toBe('equipment=1&conferences=1')
   })
 })
 
@@ -117,21 +132,23 @@ describe('changing the search', () => {
 
   it('counts and lists the active filters, without the words and the order', () => {
     expect(filterCount(emptySearch())).toBe(0)
-    const s = parse('q=химия&sort=deadline&field=1.4&type=research&type=teaching&region=54&salary_min=1000&housing=1&competition=1&deadline=none')
-    expect(filterCount(s)).toBe(8)
+    const s = parse('q=химия&sort=deadline&field=1.4&type=research&type=teaching&region=54&salary_min=1000&housing=1&competition=1&equipment=1&publications=1&deadline=none')
+    expect(filterCount(s)).toBe(10)
     const refs = activeFilters(s)
-    expect(refs).toHaveLength(8)
-    expect(refs.map((r) => r.kind)).toEqual(['multi', 'multi', 'multi', 'region', 'salary', 'housing', 'competition', 'deadline'])
+    expect(refs).toHaveLength(10)
+    expect(refs.map((r) => r.kind)).toEqual(['multi', 'multi', 'multi', 'region', 'salary', 'housing', 'competition', 'perk', 'perk', 'deadline'])
   })
 
   it('removes each kind of filter', () => {
-    const s = parse('field=1.4&type=research&region=54&salary_min=1000&housing=1&competition=1&deadline=none&page=3')
+    const s = parse('field=1.4&type=research&region=54&salary_min=1000&housing=1&competition=1&equipment=1&conferences=1&deadline=none&page=3')
     const refs: FilterRef[] = [
       { kind: 'multi', key: 'type', value: 'research' },
       { kind: 'region' },
       { kind: 'salary' },
       { kind: 'housing' },
       { kind: 'competition' },
+      { kind: 'perk', key: 'equipment' },
+      { kind: 'perk', key: 'conferences' },
       { kind: 'deadline' },
     ]
     let now = s

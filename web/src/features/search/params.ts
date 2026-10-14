@@ -14,6 +14,10 @@ export type Sort = (typeof sorts)[number]
 export const deadlines = ['week', 'month', 'none'] as const
 export type DeadlineFilter = (typeof deadlines)[number]
 
+/** Научные условия вакансии (срез 16): имя параметра в адресе и на сервере. */
+export const perkKeys = ['equipment', 'publications', 'conferences'] as const
+export type PerkKey = (typeof perkKeys)[number]
+
 export const terms = ['permanent', 'short', 'medium', 'long'] as const
 
 /** Допустимые значения фильтров с фиксированным набором. Область науки проверяется по форме кода. */
@@ -42,6 +46,8 @@ export type Search = {
   salaryMin: number
   housing: boolean
   competition: boolean
+  /** Включённые научные условия, в порядке perkKeys. */
+  perks: PerkKey[]
   deadline: DeadlineFilter | ''
   /** Явно выбранный порядок; пусто — порядок по умолчанию (см. effectiveSort). */
   sort: Sort | ''
@@ -56,6 +62,7 @@ export function emptySearch(): Search {
     salaryMin: 0,
     housing: false,
     competition: false,
+    perks: [],
     deadline: '',
     sort: '',
     page: 1,
@@ -84,6 +91,7 @@ export function parseSearch(params: URLSearchParams): Search {
   s.salaryMin = Number.isFinite(salary) && salary > 0 && salary <= MAX_SALARY ? salary : 0
   s.housing = isFlag(params.get('housing'))
   s.competition = isFlag(params.get('competition'))
+  s.perks = perkKeys.filter((key) => isFlag(params.get(key)))
   const deadline = params.get('deadline') ?? ''
   s.deadline = (deadlines as readonly string[]).includes(deadline) ? (deadline as DeadlineFilter) : ''
   const sort = params.get('sort') ?? ''
@@ -110,6 +118,7 @@ function filterParams(s: Search): URLSearchParams {
   if (s.salaryMin > 0) out.set('salary_min', String(s.salaryMin))
   if (s.housing) out.set('housing', '1')
   if (s.competition) out.set('competition', '1')
+  for (const key of s.perks) out.set(key, '1')
   if (s.deadline) out.set('deadline', s.deadline)
   return out
 }
@@ -138,6 +147,7 @@ export function filterCount(s: Search): number {
   if (s.salaryMin > 0) n += 1
   if (s.housing) n += 1
   if (s.competition) n += 1
+  n += s.perks.length
   if (s.deadline) n += 1
   return n
 }
@@ -157,6 +167,12 @@ export function toggleMulti(s: Search, key: MultiKey, value: string): Search {
   return change(s, { multi: { ...s.multi, [key]: next } })
 }
 
+/** Включает или выключает одно научное условие; порядок в списке всегда по perkKeys (адрес не зависит от порядка кликов). */
+export function togglePerk(s: Search, key: PerkKey): Search {
+  const on = s.perks.includes(key)
+  return change(s, { perks: perkKeys.filter((k) => (k === key ? !on : s.perks.includes(k))) })
+}
+
 /** Убирает значение из фильтра; для фильтров не из списка очищает их. */
 export type FilterRef =
   | { kind: 'multi'; key: MultiKey; value: string }
@@ -164,6 +180,7 @@ export type FilterRef =
   | { kind: 'salary' }
   | { kind: 'housing' }
   | { kind: 'competition' }
+  | { kind: 'perk'; key: PerkKey }
   | { kind: 'deadline' }
 
 export function removeFilter(s: Search, ref: FilterRef): Search {
@@ -178,6 +195,8 @@ export function removeFilter(s: Search, ref: FilterRef): Search {
       return change(s, { housing: false })
     case 'competition':
       return change(s, { competition: false })
+    case 'perk':
+      return togglePerk(s, ref.key)
     case 'deadline':
       return change(s, { deadline: '' })
   }
@@ -191,6 +210,7 @@ export function activeFilters(s: Search): FilterRef[] {
   if (s.salaryMin > 0) out.push({ kind: 'salary' })
   if (s.housing) out.push({ kind: 'housing' })
   if (s.competition) out.push({ kind: 'competition' })
+  for (const key of s.perks) out.push({ kind: 'perk', key })
   if (s.deadline) out.push({ kind: 'deadline' })
   return out
 }

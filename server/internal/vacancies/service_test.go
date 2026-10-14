@@ -544,6 +544,17 @@ func TestTargets(t *testing.T) {
 	if got := get(tm.out); got == nil || len(got) != 0 {
 		t.Errorf("stranger: %#v", got)
 	}
+	// ЦКП организации видны каждому, кто может создавать вакансии в ней, даже если он руководит другим подразделением.
+	ckp, err := w.orgs.CreateUnit(bg, tm.owner.User, tm.slug, orgs.UnitInput{Name: "ЦКП «Приборы»", Kind: orgs.UnitSharedFacility})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range map[string]person{"owner": tm.owner, "hr": tm.hr, "head": tm.headA} {
+		got := get(p)
+		if len(got) != 1 || len(got[0].Facilities) != 1 || got[0].Facilities[0].ID != ckp.ID || got[0].Facilities[0].Name != "ЦКП «Приборы»" {
+			t.Errorf("%s: facilities %+v", name, got)
+		}
+	}
 	// Руководитель без подразделения вакансий не ведёт.
 	if _, err := w.orgs.SetUnitHead(bg, tm.owner.User, tm.slug, tm.unitA.ID, nil); err != nil {
 		t.Fatal(err)

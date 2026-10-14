@@ -214,7 +214,7 @@ func (s *Service) Targets(ctx context.Context, user auth.User) ([]Target, error)
 		if err != nil {
 			return nil, err
 		}
-		t := Target{Organization: OrgRef{Slug: o.Slug, Name: o.Name, Kind: o.Kind, City: o.City}, Units: []UnitRef{}}
+		t := Target{Organization: OrgRef{Slug: o.Slug, Name: o.Name, Kind: o.Kind, City: o.City}, Units: []UnitRef{}, Facilities: []UnitRef{}}
 		t.WholeOrg = actor.Can(access.ManageVacancies, access.NoUnit)
 		units, err := s.q.ListUnitNames(ctx, o.ID)
 		if err != nil {
@@ -223,6 +223,9 @@ func (s *Service) Targets(ctx context.Context, user auth.User) ([]Target, error)
 		for _, u := range units {
 			if actor.Can(access.ManageVacancies, u.ID) {
 				t.Units = append(t.Units, UnitRef{ID: u.ID, Name: u.Name})
+			}
+			if u.Kind == orgs.UnitSharedFacility {
+				t.Facilities = append(t.Facilities, UnitRef{ID: u.ID, Name: u.Name})
 			}
 		}
 		if t.WholeOrg || len(t.Units) > 0 {

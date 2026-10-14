@@ -138,3 +138,12 @@
 | Метрика | Число, которое процесс отдаёт Prometheus: сколько запросов, как быстро, сколько писем ждёт | `scibox_*`, `internal/metrics`, `internal/opsmetrics` |
 | Тревога | Правило над метриками, которое «горит», когда что-то не в порядке (`for:` — как долго) | `monitoring/prometheus/rules/scibox.yml` |
 | Отчёт об ошибке | Запись уровня Error, отправленная в GlitchTip без личных данных | `errreport`, `SCIBOX_ERROR_DSN` |
+
+## Научные условия и выгрузка (срез 16)
+
+| Термин | Что это | В коде |
+|---|---|---|
+| Научные условия | Три отметки вакансии: доступ к оборудованию и ЦКП (с описанием и ссылкой на ЦКП), оплата публикаций, поездки на конференции | `vacancies.Input.EquipmentAccess…`, столбцы `equipment_access`, `equipment_note`, `equipment_unit_id`, `publications_paid`, `conference_travel` |
+| ЦКП вакансии | Подразделение вида «ЦКП» той же организации, на которое ссылаются условия | `vacancies.equipment_unit_id` |
+| Метки условий | Короткие коды условий в списках: `equipment`, `publication`, `conference` | `Card.Perks` |
+| Выгрузка откликов | CSV для Excel (UTF-8 с BOM, разделитель «;») по вакансии или по всему списку с текущими отборами | `applications.ExportCandidates`, `WriteCSV`, `GET /api/my/candidates/export` |

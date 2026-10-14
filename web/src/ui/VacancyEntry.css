@@ -7,8 +7,9 @@
     'abstract side'
     'facts side'
     'topics side'
+    'perks side'
     'footer side';
-  grid-template-rows: auto auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto auto auto 1fr;
   column-gap: var(--s-6);
   padding-block: var(--s-5);
   border-bottom: 1px solid var(--line);
@@ -100,6 +101,30 @@
   overflow-wrap: anywhere;
 }
 
+/* Научные условия: оборудование, публикации, конференции. Тише фактов, как строка специальностей */
+.entry-perks {
+  grid-area: perks;
+  margin: var(--s-1) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.entry-perks li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.entry-perks li:not(:last-child)::after {
+  content: '·';
+  margin-inline: 0.5em;
+  color: var(--edge);
+}
+
 .entry-footer {
   grid-area: footer;
   margin-top: var(--s-3);
@@ -137,6 +162,7 @@
       'abstract'
       'facts'
       'topics'
+      'perks'
       'footer'
       'action';
     grid-template-rows: none;

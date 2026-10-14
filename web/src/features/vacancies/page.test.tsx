@@ -45,6 +45,51 @@ describe('vacancy page for a visitor', () => {
     expect(screen.queryByRole('region', { name: 'Управление вакансией' })).not.toBeInTheDocument()
   })
 
+  it('has no block of scientific conditions when none is declared', async () => {
+    stubApi(vacancyRoute(detail))
+    renderApp(path)
+    await screen.findByRole('heading', { level: 1, name: detail.title })
+    expect(screen.queryByRole('heading', { level: 2, name: 'Научные условия' })).not.toBeInTheDocument()
+  })
+
+  it('shows the scientific conditions: equipment with a note and a link to the facility, publications, conferences', async () => {
+    stubApi(
+      vacancyRoute({
+        ...detail,
+        equipment_access: true,
+        equipment_note: 'Секвенаторы, доступ по заявке',
+        equipment_unit: { id: 'ckp-1', name: 'ЦКП «Геномика»' },
+        publications_paid: true,
+        conference_travel: true,
+      }),
+    )
+    renderApp(path)
+    const block = within((await screen.findByRole('heading', { level: 2, name: 'Научные условия' })).closest('section')!)
+    const fact = (name: string) => block.getByText(name).closest('div')!
+    expect(within(fact('Оборудование')).getByText(/Секвенаторы, доступ по заявке/)).toBeInTheDocument()
+    expect(within(fact('Оборудование')).getByRole('link', { name: 'ЦКП «Геномика»' })).toHaveAttribute('href', `/organizations/${SLUG}/units/ckp-1`)
+    expect(within(fact('Публикации')).getByText('Организация оплачивает публикации')).toBeInTheDocument()
+    expect(within(fact('Конференции')).getByText('Организация поддерживает поездки на конференции')).toBeInTheDocument()
+  })
+
+  it('says «access to equipment» when there is no note, and shows only the marks that are set', async () => {
+    stubApi(vacancyRoute({ ...detail, equipment_access: true, equipment_note: '', equipment_unit: null, conference_travel: true }))
+    renderApp(path)
+    const block = within((await screen.findByRole('heading', { level: 2, name: 'Научные условия' })).closest('section')!)
+    expect(block.getByText('Есть доступ к оборудованию')).toBeInTheDocument()
+    expect(block.queryByRole('link')).not.toBeInTheDocument()
+    expect(block.queryByText('Публикации')).not.toBeInTheDocument()
+    expect(block.getByText('Конференции')).toBeInTheDocument()
+  })
+
+  it('names the facility even without a note', async () => {
+    stubApi(vacancyRoute({ ...detail, equipment_access: true, equipment_note: '', equipment_unit: { id: 'ckp-1', name: 'ЦКП «Геномика»' } }))
+    renderApp(path)
+    const block = within((await screen.findByRole('heading', { level: 2, name: 'Научные условия' })).closest('section')!)
+    expect(block.getByText(/Есть доступ к оборудованию/)).toBeInTheDocument()
+    expect(block.getByRole('link', { name: 'ЦКП «Геномика»' })).toBeInTheDocument()
+  })
+
   it('skips what is not set: no unit, no place, no pay, no requirements, no deadline', async () => {
     stubApi(
       vacancyRoute({

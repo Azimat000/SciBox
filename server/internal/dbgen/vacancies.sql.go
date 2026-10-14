@@ -402,12 +402,13 @@ func (q *Queries) ListPublishedVacancyViewsByIDs(ctx context.Context, ids []uuid
 }
 
 const listUnitNames = `-- name: ListUnitNames :many
-SELECT id, name FROM units WHERE org_id = $1 ORDER BY lower(name), id
+SELECT id, name, kind FROM units WHERE org_id = $1 ORDER BY lower(name), id
 `
 
 type ListUnitNamesRow struct {
 	ID   uuid.UUID
 	Name string
+	Kind string
 }
 
 // Подразделения организации с названиями: куда человек может поставить вакансию.
@@ -420,7 +421,7 @@ func (q *Queries) ListUnitNames(ctx context.Context, orgID uuid.UUID) ([]ListUni
 	var items []ListUnitNamesRow
 	for rows.Next() {
 		var i ListUnitNamesRow
-		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.Kind); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

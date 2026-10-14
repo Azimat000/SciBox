@@ -19,6 +19,8 @@ export type VacancyEntryProps = {
   facts?: readonly string[]
   /** Научные специальности одной строкой: «Физическая химия и ещё 1». */
   topics?: string
+  /** Научные условия словами: «Оборудование и ЦКП», «Оплата публикаций». Пусто — строки нет. */
+  perks?: readonly string[]
   competition?: boolean
   /** Срок подачи, `2026-11-14`; null — срока нет, приём до закрытия; не задан — срок не показываем. */
   deadline?: string | null
@@ -40,6 +42,7 @@ export function VacancyEntry({
   level,
   facts = [],
   topics,
+  perks = [],
   competition = false,
   deadline,
   now,
@@ -89,6 +92,13 @@ export function VacancyEntry({
         ))}
       </ul>
       {topics && <p className="entry-topics">{topics}</p>}
+      {perks.length > 0 && (
+        <ul className="entry-perks" aria-label={t.vacancy.perks}>
+          {perks.map((perk) => (
+            <li key={perk}>{perk}</li>
+          ))}
+        </ul>
+      )}
       {footer && <div className="entry-footer">{footer}</div>}
     </article>
   )

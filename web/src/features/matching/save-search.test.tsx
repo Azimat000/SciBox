@@ -155,12 +155,14 @@ describe('labels of the section', () => {
   })
 
   it('writes conditions: words first, then filters; codes while the reference is not loaded', () => {
-    expect(conditionsOfQuery('q=химия&format=remote&field=1.4&region=54&housing=1', reference)).toEqual([
+    expect(conditionsOfQuery('q=химия&format=remote&field=1.4&region=54&housing=1&conferences=1&equipment=1', reference)).toEqual([
       'Слова: химия',
       '1.4 Химические науки',
       'Удалённо',
       'Новосибирская область',
       'Предоставляется жильё',
+      'Доступ к оборудованию и ЦКП',
+      'Поездки на конференции',
     ])
     expect(conditionsOfQuery('field=1.4&region=54', noReference)).toEqual(['1.4', '54'])
     expect(conditionsOfQuery('page=2&sort=new', reference)).toEqual([])

@@ -90,6 +90,8 @@ export type Card = {
   /** Последний день приёма, `2026-11-14`; пусто, если срока нет. */
   deadline: string
   specialties: Specialty[]
+  /** Заявленные научные условия: equipment, publication, conference (D-203); пусто, если ни одного. */
+  perks: string[]
   published_at: string | null
   updated_at: string
 }
@@ -105,11 +107,18 @@ export type Detail = Card & {
   title_required: string
   created_at: string
   viewer: { can_manage: boolean; transitions: Status[] }
+  /** Научные условия (D-203): доступ к оборудованию и ЦКП (описание и ссылка на ЦКП), оплата публикаций, поездки. */
+  equipment_access: boolean
+  equipment_note: string
+  equipment_unit: UnitRef | null
+  publications_paid: boolean
+  conference_travel: boolean
 }
 
 export type VacancyList = { items: Card[]; total: number }
 export type MineList = VacancyList & { counts: Record<Status, number> }
-export type Target = { organization: OrgRef; whole_org: boolean; units: UnitRef[] }
+/** facilities — все ЦКП организации: на них можно сослаться в научных условиях, даже если ими руководит не этот человек. */
+export type Target = { organization: OrgRef; whole_org: boolean; units: UnitRef[]; facilities: UnitRef[] }
 
 export const PAGE_SIZE = 50
 
@@ -139,6 +148,11 @@ export type VacancyFields = {
   is_competition: boolean
   deadline: string
   specialties: string[]
+  equipment_access: boolean
+  equipment_note: string
+  equipment_unit_id: string | null
+  publications_paid: boolean
+  conference_travel: boolean
 }
 
 // Что видно человеку, зависит от того, кто смотрит (черновик видят только сотрудники): кеш лежит под ключом с номером человека.

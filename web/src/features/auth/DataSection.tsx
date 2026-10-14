@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { ApiError } from '../../api/client'
 import { t } from '../../i18n'
+import { saveFile } from '../../lib/saveFile'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { useToast } from '../../ui/useToast'
@@ -8,19 +9,6 @@ import { downloadMyData } from './api'
 import { describeError } from './errors'
 import { waitLabel } from './labels'
 import { useReauth } from './reauth-context'
-
-/** Отдаёт браузеру готовый файл как скачивание. */
-function saveFile(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.append(link)
-  link.click()
-  link.remove()
-  // Браузеру нужна секунда, чтобы начать чтение: ссылку отзываем после.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-}
 
 /** «Ваши данные»: архив со всем, что сервис хранит о человеке (срез 22, 152-ФЗ). Нужен свежий пароль, три архива в сутки. */
 export function DataSection() {

@@ -133,7 +133,84 @@ describe('new vacancy form', () => {
       is_competition: true,
       deadline: '2099-12-31',
       specialties: ['1.4.4'],
+      equipment_access: false,
+      equipment_note: '',
+      equipment_unit_id: null,
+      publications_paid: false,
+      conference_travel: false,
     })
+  })
+
+  it('sends the scientific conditions: a mark, a note and a shared facility of the organization', async () => {
+    const facility = { id: 'ckp-1', name: 'ЦКП «Спектроскопия»' }
+    const api = stubApi(base({ 'POST /api/vacancies': saved(), [`GET /api/vacancies/new-1`]: saved() }, [{ ...target, facilities: [facility] }]))
+    renderApp('/my-vacancies/new')
+    await pickType('Научный работник')
+    await choose(/Должность/, 'Старший научный сотрудник')
+    await fill(/Название вакансии/, 'Старший научный сотрудник')
+    // Пока отметки нет, описания и выбора ЦКП нет.
+    expect(screen.queryByLabelText(/Что за оборудование/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/ЦКП организации/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Доступ к оборудованию и ЦКП' }))
+    await fill(/Что за оборудование/, 'Спектрометры ЯМР по записи')
+    expect(within(field(/ЦКП организации/)).getAllByRole('option').map((o) => o.textContent)).toEqual(['Не указывать', facility.name])
+    await choose(/ЦКП организации/, facility.name)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Оплата публикаций' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Поездки на конференции' }))
+    await click('Сохранить черновик')
+    await waitFor(() => expect(api.called('POST', '/api/vacancies')).toHaveLength(1))
+    expect(api.called('POST', '/api/vacancies')[0].body).toMatchObject({
+      equipment_access: true, equipment_note: 'Спектрометры ЯМР по записи', equipment_unit_id: 'ckp-1', publications_paid: true, conference_travel: true,
+    })
+  })
+
+  it('drops the note and the facility when the equipment mark is taken off', async () => {
+    const facility = { id: 'ckp-1', name: 'ЦКП «Спектроскопия»' }
+    const api = stubApi(base({ 'POST /api/vacancies': saved(), [`GET /api/vacancies/new-1`]: saved() }, [{ ...target, facilities: [facility] }]))
+    renderApp('/my-vacancies/new')
+    await pickType('Научный работник')
+    await choose(/Должность/, 'Старший научный сотрудник')
+    await fill(/Название вакансии/, 'Старший научный сотрудник')
+    const mark = screen.getByRole('checkbox', { name: 'Доступ к оборудованию и ЦКП' })
+    await userEvent.click(mark)
+    await fill(/Что за оборудование/, 'Приборы')
+    await choose(/ЦКП организации/, facility.name)
+    await userEvent.click(mark)
+    await click('Сохранить черновик')
+    await waitFor(() => expect(api.called('POST', '/api/vacancies')).toHaveLength(1))
+    expect(api.called('POST', '/api/vacancies')[0].body).toMatchObject({ equipment_access: false, equipment_note: '', equipment_unit_id: null })
+  })
+
+  it('does not offer a facility when the organization has none, and shows the server complaint next to the note', async () => {
+    stubApi(base({ 'POST /api/vacancies': apiError(422, 'validation_failed', 'Проверьте поля формы', { fields: { equipment_note: 'Слишком длинно: не больше 300 знаков' } }) }))
+    renderApp('/my-vacancies/new')
+    await pickType('Научный работник')
+    await choose(/Должность/, 'Старший научный сотрудник')
+    await fill(/Название вакансии/, 'Старший научный сотрудник')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Доступ к оборудованию и ЦКП' }))
+    expect(screen.queryByLabelText(/ЦКП организации/)).not.toBeInTheDocument()
+    await click('Сохранить черновик')
+    expect(await screen.findByText('Слишком длинно: не больше 300 знаков')).toBeInTheDocument()
+    expect(field(/Что за оборудование/)).toHaveFocus()
+  })
+
+  it('forgets the chosen facility when another organization is chosen', async () => {
+    const ckp = { id: 'ckp-1', name: 'ЦКП «Спектроскопия»' }
+    const other = { organization: { slug: 'other', name: 'Другой институт', kind: 'institute', city: 'Томск' }, whole_org: true, units: [], facilities: [{ id: 'ckp-2', name: 'ЦКП «Другой»' }] }
+    const api = stubApi(base({ 'POST /api/vacancies': saved(), [`GET /api/vacancies/new-1`]: saved() }, [{ ...target, facilities: [ckp] }, other]))
+    renderApp('/my-vacancies/new')
+    await screen.findByLabelText(/Организация/)
+    await choose(/Организация/, 'Сибирский институт')
+    await pickType('Научный работник')
+    await choose(/Должность/, 'Старший научный сотрудник')
+    await fill(/Название вакансии/, 'Старший научный сотрудник')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Доступ к оборудованию и ЦКП' }))
+    await choose(/ЦКП организации/, ckp.name)
+    await choose(/Организация/, 'Другой институт')
+    expect(field(/ЦКП организации/)).toHaveValue('')
+    await click('Сохранить черновик')
+    await waitFor(() => expect(api.called('POST', '/api/vacancies')).toHaveLength(1))
+    expect(api.called('POST', '/api/vacancies')[0].body).toMatchObject({ organization: 'other', equipment_access: true, equipment_unit_id: null })
   })
 
   it('shows only the fields that make sense for the type of position', async () => {
@@ -218,7 +295,7 @@ describe('new vacancy form', () => {
   })
 
   it('offers the organization when the person works in several, and preselects unit rules', async () => {
-    const other = { organization: { slug: 'other', name: 'Другой институт', kind: 'institute', city: 'Томск' }, whole_org: false, units: [{ id: 'u-2', name: 'Кафедра физики' }] }
+    const other = { organization: { slug: 'other', name: 'Другой институт', kind: 'institute', city: 'Томск' }, whole_org: false, units: [{ id: 'u-2', name: 'Кафедра физики' }], facilities: [] }
     const api = stubApi(base({ 'POST /api/vacancies': saved(), [`GET /api/vacancies/new-1`]: saved() }, [target, other]))
     renderApp('/my-vacancies/new')
     expect(await screen.findByLabelText(/Организация/)).toHaveValue('')
@@ -238,7 +315,7 @@ describe('new vacancy form', () => {
   })
 
   it('needs an organization when the person works in several and has not chosen', async () => {
-    const other = { organization: { slug: 'other', name: 'Другой институт', kind: 'institute', city: 'Томск' }, whole_org: true, units: [] }
+    const other = { organization: { slug: 'other', name: 'Другой институт', kind: 'institute', city: 'Томск' }, whole_org: true, units: [], facilities: [] }
     stubApi(base({}, [target, other]))
     renderApp('/my-vacancies/new')
     await click('Сохранить черновик')
@@ -358,6 +435,7 @@ describe('editing a vacancy', () => {
     expect(screen.getByRole('combobox', { name: /Регион/ })).toHaveValue('Новосибирская область')
     expect(screen.getByRole('checkbox', { name: 'Конкурс на должность' })).toBeChecked()
     expect(screen.getByText('Физическая химия')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Доступ к оборудованию и ЦКП' })).not.toBeChecked()
     // Организацию у созданной вакансии не меняют.
     expect(screen.queryByLabelText(/Организация/)).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Назад к вакансии' })).toHaveAttribute('href', `/vacancies/${VACANCY_ID}`)

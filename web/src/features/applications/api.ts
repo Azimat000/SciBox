@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
-import { apiGet, apiSend, apiSendForm } from '../../api/client'
+import { apiDownload, apiGet, apiSend, apiSendForm } from '../../api/client'
 import { useMe } from '../auth/api'
 import { refreshAfterApplying } from '../matching/api'
 import type { Profile } from '../profile/api'
@@ -185,6 +185,18 @@ export function useCandidates(q: CandidateQuery) {
     placeholderData: (previous) => previous,
     retry: false,
   })
+}
+
+/** Сколько откликов сервер кладёт в один файл выгрузки (MaxExportRows в internal/applications/export.go). */
+export const EXPORT_LIMIT = 5000
+
+/** Выгрузка откликов в файл для Excel: те же отборы, что у списка, без страниц. */
+export function exportCandidates(q: Pick<CandidateQuery, 'vacancy' | 'status'>) {
+  const qs = new URLSearchParams()
+  if (q.vacancy) qs.set('vacancy', q.vacancy)
+  if (q.status) qs.set('status', q.status)
+  const tail = qs.toString()
+  return apiDownload(`/api/my/candidates/export${tail ? `?${tail}` : ''}`)
 }
 
 /** Вакансии с откликами: для отбора на странице откликов и для чисел в «Моих вакансиях». */

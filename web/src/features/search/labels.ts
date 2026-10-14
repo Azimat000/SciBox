@@ -87,6 +87,8 @@ export function filterLabel(ref: FilterRef, search: Search, names: Map<string, s
       return t.find.housing
     case 'competition':
       return t.find.competition
+    case 'perk':
+      return t.find.perks[ref.key]
     case 'deadline':
       return t.find.deadlines[search.deadline as keyof typeof t.find.deadlines] ?? search.deadline
   }

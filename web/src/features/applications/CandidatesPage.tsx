@@ -1,15 +1,20 @@
+import { useMutation } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
+import { ApiError } from '../../api/client'
 import { t } from '../../i18n'
 import { plural } from '../../lib/plural'
+import { saveFile } from '../../lib/saveFile'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { Select } from '../../ui/Select'
 import { Tag } from '../../ui/Tag'
+import { useToast } from '../../ui/useToast'
+import { describeError } from '../auth/errors'
 import { OffersTabs } from '../offers/OffersTabs'
 import { RequireUser } from '../orgs/RequireUser'
 import { longName } from '../orgs/labels'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
-import { PAGE_SIZE, statuses, useCandidateVacancies, useCandidates, type AppStatus, type Candidate } from './api'
+import { EXPORT_LIMIT, PAGE_SIZE, exportCandidates, statuses, useCandidateVacancies, useCandidates, type AppStatus, type Candidate } from './api'
 import { dateText, statusLabel, statusTone } from './labels'
 import './applications.css'
 import './review.css'
@@ -31,6 +36,27 @@ function List() {
   const page = Math.max(1, Number(params.get('page')) || 1)
   const list = useCandidates({ vacancy, status, page })
   const vacancies = useCandidateVacancies()
+  const toast = useToast()
+  // Выгружается то, что выбрано сейчас (вакансия и вкладка), целиком, а не страница списка.
+  const download = useMutation({
+    mutationFn: () => exportCandidates({ vacancy, status }),
+    onSuccess: ({ blob, filename }) => {
+      saveFile(blob, filename ?? 'otkliki.csv')
+      const n = list.data?.total ?? 0
+      const capped = n > EXPORT_LIMIT
+      toast.show({
+        kind: 'success',
+        title: c.exported,
+        text: capped ? c.exportedCapped(EXPORT_LIMIT) : c.exportedText(n, plural(n, c.countForms)),
+      })
+    },
+    onError: (err) =>
+      toast.show({
+        kind: 'error',
+        title: c.exportFailed,
+        text: err instanceof ApiError && err.code === 'rate_limited' ? c.exportLimited : describeError(err),
+      }),
+  })
 
   if (list.isPending) return <PageSkeleton />
   if (list.isError) return <LoadFailed title={c.loadError} error={list.error} onRetry={() => void list.refetch()} />
@@ -121,7 +147,15 @@ function List() {
           <EmptyState headingLevel={2} title={c.emptyTabTitle} text={c.emptyTabText} />
         ) : (
           <>
-            <p className="app-count num">{c.count(total, plural(total, c.countForms))}</p>
+            <div className="cand-toolbar">
+              <p className="app-count num">{c.count(total, plural(total, c.countForms))}</p>
+              <Button variant="secondary" size="sm" loading={download.isPending} onClick={() => download.mutate()} aria-describedby="cand-export-hint">
+                {c.export}
+              </Button>
+            </div>
+            <p id="cand-export-hint" className="cand-export-hint">
+              {c.exportHint(EXPORT_LIMIT)}
+            </p>
             <ol className="cand-list">
               {items.map((a) => (
                 <Row key={a.id} cand={a} showVacancy={!vacancy} />

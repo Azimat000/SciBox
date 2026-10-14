@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
-import { ann, apiError, reply, signedInAs, stubApi, type Route } from '../../test/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ann, apiError, fileReply, reply, signedInAs, stubApi, type Route } from '../../test/api'
 import {
   APP_ID,
   INV_ID,
@@ -90,6 +90,71 @@ describe('candidates list', () => {
     expect(screen.queryByText(/Лаборатория катализа/, { selector: '.cand-vacancy' })).not.toBeInTheDocument()
     await userEvent.click(tabs.getByRole('link', { name: 'Приглашены: 1' }))
     await waitFor(() => expect(router.state.location.search).toBe(`?vacancy=${VACANCY_ID}&status=invited`))
+  })
+
+  describe('export to a file', () => {
+    let saved: { name: string; href: string }[]
+    beforeEach(() => {
+      saved = []
+      vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:test-csv', revokeObjectURL: vi.fn() }))
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        saved.push({ name: this.download, href: this.href })
+      })
+    })
+    afterEach(() => vi.restoreAllMocks())
+
+    it('explains what goes into the file and saves it under the name the server gave', async () => {
+      const { calls } = stubApi(signedIn({ [route]: reply(200, candidateList([candidate, second], { counts: counts({ sent: 1, invited: 1 }) })), ...facet, 'GET /api/my/candidates/export': fileReply('otkliki-2026-10-14.csv', '\uFEFFИмя') }))
+      renderApp('/candidates')
+      const button = await screen.findByRole('button', { name: 'Выгрузить в Excel' })
+      expect(button).toHaveAccessibleDescription(/Файл CSV для Excel: имя, почта для связи/)
+      expect(screen.getByText(/не только эта страница; не больше 5000/)).toBeInTheDocument()
+      await userEvent.click(button)
+      expect(await screen.findByText('Файл сохранён')).toBeInTheDocument()
+      expect(screen.getByText('В файле 2 отклика.')).toBeInTheDocument()
+      expect(saved).toEqual([{ name: 'otkliki-2026-10-14.csv', href: 'blob:test-csv' }])
+      expect(calls.filter((c) => c.path.startsWith('/api/my/candidates/export')).map((c) => c.path)).toEqual(['/api/my/candidates/export'])
+    })
+
+    it('exports the chosen vacancy and tab, not the page', async () => {
+      const { calls } = stubApi(signedIn({ [route]: reply(200, candidateList([candidate], { counts: counts({ sent: 4 }) })), ...facet, 'GET /api/my/candidates/export?*': fileReply('', 'x') }))
+      renderApp(`/candidates?vacancy=${VACANCY_ID}&status=sent&page=2`)
+      await userEvent.click(await screen.findByRole('button', { name: 'Выгрузить в Excel' }))
+      await waitFor(() => expect(saved).toHaveLength(1))
+      expect(calls.some((c) => c.path === `/api/my/candidates/export?vacancy=${VACANCY_ID}&status=sent`)).toBe(true)
+      expect(saved[0]?.name).toBe('otkliki.csv') // сервер имени не дал
+    })
+
+    it('says that only the first ones went into the file when there are more than the limit', async () => {
+      stubApi(signedIn({ [route]: reply(200, candidateList([candidate], { total: 5200, counts: counts({ sent: 5200 }) })), ...facet, 'GET /api/my/candidates/export': fileReply('o.csv', 'x') }))
+      renderApp('/candidates')
+      await userEvent.click(await screen.findByRole('button', { name: 'Выгрузить в Excel' }))
+      expect(await screen.findByText(/В файл вошли первые 5000 откликов/)).toBeInTheDocument()
+    })
+
+    it('tells about the limit of exports and about any other failure, and saves nothing', async () => {
+      stubApi(signedIn({ [route]: reply(200, candidateList([candidate])), ...facet, 'GET /api/my/candidates/export': apiError(429, 'rate_limited', 'Слишком много запросов', { retry_after: 30 }) }))
+      renderApp('/candidates')
+      await userEvent.click(await screen.findByRole('button', { name: 'Выгрузить в Excel' }))
+      expect(await screen.findByText('Не удалось выгрузить отклики')).toBeInTheDocument()
+      expect(screen.getByText('Выгрузок слишком много за минуту. Подождите немного и попробуйте снова.')).toBeInTheDocument()
+      expect(saved).toHaveLength(0)
+    })
+
+    it('shows the server text when the export fails for another reason', async () => {
+      stubApi(signedIn({ [route]: reply(200, candidateList([candidate])), ...facet, 'GET /api/my/candidates/export': apiError(500, 'internal', 'Что-то сломалось') }))
+      renderApp('/candidates')
+      await userEvent.click(await screen.findByRole('button', { name: 'Выгрузить в Excel' }))
+      expect(await screen.findByText('Не удалось выгрузить отклики')).toBeInTheDocument()
+      expect(saved).toHaveLength(0)
+    })
+
+    it('has no export button on an empty tab', async () => {
+      stubApi(signedIn({ [route]: reply(200, candidateList([], { counts: counts({ sent: 3 }) })), ...facet }))
+      renderApp('/candidates?status=rejected')
+      await screen.findByRole('heading', { level: 2, name: 'В этом списке никого нет' })
+      expect(screen.queryByRole('button', { name: 'Выгрузить в Excel' })).not.toBeInTheDocument()
+    })
   })
 
   it('selects a vacancy from the list of vacancies that have applications', async () => {

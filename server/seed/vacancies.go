@@ -325,7 +325,7 @@ func conditionsOf(orgSlug string, v vacSeed) vacSeed {
 	v.publications = (n/100)%100 < 30
 	v.conferences = (n/10000)%100 < 35
 	if v.equipment {
-		v.equipmentNote = equipmentNotes[(n/1000000)%uint32(len(equipmentNotes))]
+		v.equipmentNote = equipmentNotes[int(n/1000000)%len(equipmentNotes)]
 	}
 	return v
 }

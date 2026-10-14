@@ -76,8 +76,8 @@ describe('audit log page', () => {
   it('says how many applications went into an exported file', async () => {
     const items = [
       entry({ id: 9, action: 'vacancy.applications_exported', details: { rows: '3', scope: 'vacancy' }, target: { kind: 'vacancy', id: VACANCY, label: 'Старший научный сотрудник' } }),
-      entry({ id: 8, action: 'vacancy.applications_exported', details: { rows: '12', scope: 'list' }, target: null }),
-      entry({ id: 7, action: 'vacancy.applications_exported', details: {}, target: null }),
+      entry({ id: 8, action: 'vacancy.applications_exported', details: { rows: '12', scope: 'list' } }),
+      entry({ id: 7, action: 'vacancy.applications_exported', details: {} }),
     ]
     stubApi(asOwner({ [`GET ${api}?limit=30`]: page(items) }))
     renderApp(path)

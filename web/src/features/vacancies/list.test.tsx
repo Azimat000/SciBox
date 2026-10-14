@@ -23,6 +23,22 @@ describe('vacancies on the organization page', () => {
     expect(within(second).queryByText('Конкурс')).not.toBeInTheDocument()
   })
 
+  it('writes the scientific conditions under the facts in the order the server gives them, and skips unknown codes', async () => {
+    stubApi({
+      ...orgRoutes(null),
+      ...orgVacancies([
+        { ...card, perks: ['conference', 'equipment', 'something_new'] },
+        { ...card, id: 'b', title: 'Постдок без условий', perks: [] },
+      ]),
+    })
+    renderApp(`/organizations/${SLUG}`)
+    const entry = (await screen.findByRole('link', { name: card.title })).closest('article')!
+    const perks = within(entry).getByRole('list', { name: 'Научные условия' })
+    expect(within(perks).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Поездки на конференции', 'Оборудование и ЦКП'])
+    const bare = screen.getByRole('link', { name: 'Постдок без условий' }).closest('article')!
+    expect(within(bare).queryByRole('list', { name: 'Научные условия' })).not.toBeInTheDocument()
+  })
+
   it('shows loading, then an error that does not break the rest of the page', async () => {
     stubApi({ ...orgRoutes(null), [`GET /api/vacancies?org=${SLUG}`]: apiError(500, 'internal', 'Что-то сломалось') })
     renderApp(`/organizations/${SLUG}`)

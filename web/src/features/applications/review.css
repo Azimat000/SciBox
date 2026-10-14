@@ -186,6 +186,31 @@
   column-gap: var(--s-4);
 }
 
+/* Счётчик и выгрузка в одной строке под жирной линейкой; на узком экране кнопка переходит под счётчик */
+.cand-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-5);
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--ink);
+}
+
+.cand-toolbar .app-count {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cand-export-hint {
+  margin: var(--s-2) 0 0;
+  max-width: var(--measure);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
 .cand-list {
   list-style: none;
   margin: 0;

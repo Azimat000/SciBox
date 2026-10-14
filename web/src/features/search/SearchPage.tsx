@@ -121,7 +121,7 @@ export function SearchPage() {
                 {chips.map((ref) => {
                   const label = filterLabel(ref, search, names, regionName)
                   return (
-                    <li key={`${ref.kind}:${'value' in ref ? ref.value : ''}`}>
+                    <li key={`${ref.kind}:${'key' in ref ? ref.key : ''}:${'value' in ref ? ref.value : ''}`}>
                       <button type="button" className="filter-tag" aria-label={t.find.removeFilter(label)} onClick={() => go(removeFilter(search, ref))}>
                         <span>{label}</span>
                         <CloseIcon size={14} />

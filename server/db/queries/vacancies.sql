@@ -168,4 +168,4 @@ GROUP BY status;
 
 -- Подразделения организации с названиями: куда человек может поставить вакансию.
 -- name: ListUnitNames :many
-SELECT id, name FROM units WHERE org_id = $1 ORDER BY lower(name), id;
+SELECT id, name, kind FROM units WHERE org_id = $1 ORDER BY lower(name), id;

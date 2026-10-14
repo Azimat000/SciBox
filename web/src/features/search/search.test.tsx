@@ -77,9 +77,14 @@ describe('search page', () => {
     await user.click(within(filters()).getByRole('checkbox', { name: 'Только конкурсы' }))
     await user.click(within(filters()).getByRole('checkbox', { name: 'Предоставляется жильё' }))
     await user.selectOptions(within(filters()).getByRole('combobox', { name: 'Зарплата от' }), '100000')
+    await user.click(within(filters()).getByRole('checkbox', { name: 'Доступ к оборудованию и ЦКП' }))
+    await user.click(within(filters()).getByRole('checkbox', { name: 'Поездки на конференции' }))
     await user.selectOptions(screen.getByRole('combobox', { name: 'Регион' }), '77')
 
     await waitFor(() => expect(last().get('region')).toBe('77'))
+    expect(last().get('equipment')).toBe('1')
+    expect(last().get('conferences')).toBe('1')
+    expect(last().has('publications')).toBe(false)
     expect(last().getAll('format')).toEqual(['hybrid'])
     expect(last().get('deadline')).toBe('week')
     expect(last().get('competition')).toBe('1')
@@ -87,11 +92,14 @@ describe('search page', () => {
     expect(last().get('salary_min')).toBe('100000')
 
     const tags = within(chipsList()!)
-    for (const label of ['Научный работник', 'Гибрид', 'В ближайшие 7 дней', 'Только конкурсы', 'Предоставляется жильё', 'от 100 000 ₽', 'Москва']) {
+    for (const label of ['Научный работник', 'Гибрид', 'В ближайшие 7 дней', 'Только конкурсы', 'Предоставляется жильё', 'от 100 000 ₽', 'Москва', 'Доступ к оборудованию и ЦКП', 'Поездки на конференции']) {
       expect(tags.getByText(label)).toBeInTheDocument()
     }
 
     // Тег убирается нажатием; «Сбросить всё» убирает остальное.
+    await user.click(screen.getByRole('button', { name: 'Убрать фильтр: Поездки на конференции' }))
+    await waitFor(() => expect(last().has('conferences')).toBe(false))
+    expect(within(filters()).getByRole('checkbox', { name: 'Поездки на конференции' })).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Убрать фильтр: Гибрид' }))
     await waitFor(() => expect(last().has('format')).toBe(false))
     expect(within(filters()).getByRole('button', { name: 'Гибрид' })).toHaveAttribute('aria-pressed', 'false')

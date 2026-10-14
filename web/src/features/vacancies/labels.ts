@@ -106,6 +106,14 @@ export function entryTopics(c: Card): string {
   return rest.length > 0 ? `${first.name} ${t.vacancies.page.moreSpecialties(rest.length)}` : first.name
 }
 
+/** Научные условия вакансии словами, в одном порядке: оборудование, публикации, конференции. Незнакомый код пропускается. */
+export function entryPerks(c: Pick<Card, 'perks'>): string[] {
+  return c.perks.flatMap((code) => {
+    const label = t.vacancies.perks[code]
+    return label ? [label] : []
+  })
+}
+
 /** Город или регион, как показать у вакансии; пусто для удалённой работы без места. */
 export function placeText(c: Pick<Card, 'city' | 'region'>): string {
   return t.vacancies.place(c.city, c.region?.name ?? '')

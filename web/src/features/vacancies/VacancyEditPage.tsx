@@ -59,6 +59,11 @@ function valuesOf(v: Detail): FormValues {
     housing: v.housing,
     is_competition: v.is_competition,
     deadline: v.deadline,
+    equipment_access: v.equipment_access,
+    equipment_note: v.equipment_note,
+    equipment_unit_id: v.equipment_unit?.id ?? '',
+    publications_paid: v.publications_paid,
+    conference_travel: v.conference_travel,
   }
 }
 

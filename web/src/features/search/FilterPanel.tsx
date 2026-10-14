@@ -5,7 +5,7 @@ import { Select } from '../../ui/Select'
 import { FilterChip } from '../../ui/Tag'
 import type { Reference } from '../vacancies/api'
 import { optionsFor, salaryChip, salaryPresets } from './labels'
-import { change, toggleMulti, type DeadlineFilter, type MultiKey, type Search } from './params'
+import { change, perkKeys, toggleMulti, togglePerk, type DeadlineFilter, type MultiKey, type Search } from './params'
 
 type BaseProps = {
   search: Search
@@ -93,6 +93,11 @@ export function FilterPanel({ search, onChange, reference }: PanelProps) {
       </Group>
       <Group title={g.org_kind} selected={n('org_kind')}>
         <Checks search={search} onChange={onChange} name="org_kind" />
+      </Group>
+      <Group title={g.perks} selected={search.perks.length}>
+        {perkKeys.map((key) => (
+          <Checkbox key={key} label={t.find.perks[key]} checked={search.perks.includes(key)} onChange={() => onChange(togglePerk(search, key))} />
+        ))}
       </Group>
       <Group title={g.deadline} selected={search.deadline ? 1 : 0}>
         <div className="filter-chips" role="group" aria-label={g.deadline}>

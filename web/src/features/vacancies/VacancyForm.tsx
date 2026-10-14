@@ -60,6 +60,8 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
   )
   const regionOptions: Option[] = useMemo(() => reference.regions.map((r) => ({ value: r.code, label: r.name })), [reference])
   const organizationOptions: Option[] = targets.map((x) => ({ value: x.organization.slug, label: x.organization.name }))
+  const facilities = target?.facilities ?? []
+  const facilityOptions: Option[] = [{ value: '', label: f.equipmentUnitNone }, ...facilities.map((u) => ({ value: u.id, label: u.name }))]
   const unitOptions: Option[] = [
     ...(target?.whole_org ? [{ value: '', label: f.wholeOrg }] : []),
     ...(target?.units ?? []).map((u) => ({ value: u.id, label: u.name })),
@@ -67,6 +69,7 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
 
   function pickOrganization(slug: string) {
     set('organization', slug)
+    set('equipment_unit_id', '') // ЦКП принадлежит организации: у другой организации прежнего нет
     const next = targets.find((x) => x.organization.slug === slug)
     // Если «всей организации» у человека нет, подразделение выбирается сразу: пустое значение не годится.
     set('unit_id', next && !next.whole_org ? (next.units[0]?.id ?? '') : '')
@@ -181,6 +184,22 @@ export function VacancyForm({ initial, reference, targets, organizationLocked, d
           <TextField label={f.fundingNote} name="funding_note" hint={f.fundingNoteHint} value={values.funding_note} onChange={(e) => set('funding_note', e.target.value)} error={errors.funding_note} optional />
         )}
         <Select label={f.housing} name="housing" options={housingOptions} value={values.housing} onChange={(e) => set('housing', e.target.value)} error={errors.housing} />
+      </fieldset>
+
+      <fieldset className="form-block">
+        <legend>{f.sections.perks}</legend>
+        <p className="field-hint">{f.perksLead}</p>
+        <Checkbox label={f.equipment} checked={values.equipment_access} onChange={(e) => set('equipment_access', e.target.checked)} error={errors.equipment_access} />
+        {values.equipment_access && (
+          <>
+            <TextField label={f.equipmentNote} name="equipment_note" hint={f.equipmentNoteHint} value={values.equipment_note} onChange={(e) => set('equipment_note', e.target.value)} error={errors.equipment_note} optional />
+            {facilities.length > 0 && (
+              <Select label={f.equipmentUnit} hint={f.equipmentUnitHint} name="equipment_unit_id" options={facilityOptions} value={values.equipment_unit_id} onChange={(e) => set('equipment_unit_id', e.target.value)} error={errors.equipment_unit_id} optional />
+            )}
+          </>
+        )}
+        <Checkbox label={f.publicationsPaid} checked={values.publications_paid} onChange={(e) => set('publications_paid', e.target.checked)} error={errors.publications_paid} />
+        <Checkbox label={f.conferenceTravel} checked={values.conference_travel} onChange={(e) => set('conference_travel', e.target.checked)} error={errors.conference_travel} />
       </fieldset>
 
       <fieldset className="form-block">

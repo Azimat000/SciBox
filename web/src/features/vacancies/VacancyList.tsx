@@ -6,7 +6,7 @@ import { VacancyEntry } from '../../ui/VacancyEntry'
 import { describeError } from '../auth/errors'
 import { FavoriteButton } from '../matching/FavoriteButton'
 import { useOrgVacancies, type Card } from './api'
-import { entryFacts, entryTopics, levelParts, placeText } from './labels'
+import { entryFacts, entryPerks, entryTopics, levelParts, placeText } from './labels'
 import './vacancies.css'
 
 /**
@@ -37,6 +37,7 @@ export function VacancyCard({
       level={levelParts(card.career_level) ?? undefined}
       facts={entryFacts(card)}
       topics={entryTopics(card) || undefined}
+      perks={entryPerks(card)}
       competition={card.is_competition}
       deadline={showDeadline ? card.deadline || null : undefined}
       headingLevel={headingLevel}

@@ -28,6 +28,11 @@ export type FormValues = {
   housing: string
   is_competition: boolean
   deadline: string
+  equipment_access: boolean
+  equipment_note: string
+  equipment_unit_id: string
+  publications_paid: boolean
+  conference_travel: boolean
 }
 
 export const emptyValues: FormValues = {
@@ -57,6 +62,11 @@ export const emptyValues: FormValues = {
   housing: 'none',
   is_competition: false,
   deadline: '',
+  equipment_access: false,
+  equipment_note: '',
+  equipment_unit_id: '',
+  publications_paid: false,
+  conference_travel: false,
 }
 
 /** Поля сервера в том порядке, в каком они стоят в форме. */
@@ -83,6 +93,11 @@ export const formFieldOrder = [
   'funding_source',
   'funding_note',
   'housing',
+  'equipment_access',
+  'equipment_note',
+  'equipment_unit_id',
+  'publications_paid',
+  'conference_travel',
   'is_competition',
   'deadline',
 ] as const
@@ -118,6 +133,12 @@ export function toFields(v: FormValues): VacancyFields {
     is_competition: rulesOf(v.position_type).competition ? v.is_competition : false,
     deadline: v.deadline,
     specialties: v.specialties === '' ? [] : v.specialties.split(','),
+    // Описание и ЦКП имеют смысл только вместе с отметкой: без неё сервер их не примет.
+    equipment_access: v.equipment_access,
+    equipment_note: v.equipment_access ? v.equipment_note : '',
+    equipment_unit_id: v.equipment_access && v.equipment_unit_id !== '' ? v.equipment_unit_id : null,
+    publications_paid: v.publications_paid,
+    conference_travel: v.conference_travel,
   }
 }
 

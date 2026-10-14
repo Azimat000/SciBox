@@ -68,6 +68,7 @@ export const card: Card = {
     { code: '1.4.4', name: 'Физическая химия' },
     { code: '1.3.8', name: 'Физика конденсированного состояния' },
   ],
+  perks: [],
   published_at: '2026-10-01T10:00:00Z',
   updated_at: '2026-10-02T10:00:00Z',
 }
@@ -84,6 +85,11 @@ export const detail: Detail = {
   title_required: 'none',
   created_at: '2026-10-01T09:00:00Z',
   viewer: { can_manage: false, transitions: [] },
+  equipment_access: false,
+  equipment_note: '',
+  equipment_unit: null,
+  publications_paid: false,
+  conference_travel: false,
 }
 
 export const withViewer = (over: Partial<Detail>, canManage: boolean, transitions: Detail['viewer']['transitions'] = []): Detail => ({
@@ -111,4 +117,5 @@ export const target: Target = {
   organization: { slug: SLUG, name: 'Сибирский институт', kind: 'institute', city: 'Новосибирск' },
   whole_org: true,
   units: [{ id: lab.id, name: lab.name }],
+  facilities: [],
 }

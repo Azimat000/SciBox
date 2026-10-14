@@ -1,6 +1,6 @@
 import { usePageTitle } from '../../app/pageTitle'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { t } from '../../i18n'
 import { typo } from '../../lib/typo'
@@ -72,6 +72,25 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
     [p.degree, v.degree_required !== 'none' ? degreeLabel(v.degree_required) : null],
     [p.academicTitle, v.title_required !== 'none' ? titleLabel(v.title_required) : null],
   ]
+
+  // Научные условия (D-203): отметки и описание оборудования; значение пустое, если условие не заявлено.
+  const perkRows: [string, ReactNode][] = []
+  if (v.equipment_access) {
+    perkRows.push([
+      p.equipment,
+      <>
+        {v.equipment_note || p.equipmentOn}
+        {v.equipment_unit && (
+          <>
+            {v.equipment_note ? '. ' : ' · '}
+            {p.facility}: <Link to={`/organizations/${v.organization.slug}/units/${v.equipment_unit.id}`}>{v.equipment_unit.name}</Link>
+          </>
+        )}
+      </>,
+    ])
+  }
+  if (v.publications_paid) perkRows.push([p.publications, p.publicationsOn])
+  if (v.conference_travel) perkRows.push([p.conferences, p.conferencesOn])
 
   const forReader = (v.status === 'published' || v.status === 'closed') && !v.viewer.can_manage
 
@@ -160,6 +179,20 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
               )}
             </dl>
           </section>
+
+          {perkRows.length > 0 && (
+            <section className="vacancy-section" aria-labelledby="vacancy-perks">
+              <h2 id="vacancy-perks">{p.perks}</h2>
+              <dl className="vacancy-facts">
+                {perkRows.map(([label, value]) => (
+                  <div key={label} className="vacancy-fact">
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
           {v.focus && (
             <section className="vacancy-section" aria-labelledby="vacancy-focus">
