@@ -74,7 +74,7 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
   ]
 
   // Научные условия (D-203): отметки и описание оборудования; значение пустое, если условие не заявлено.
-  const perkRows: [string, ReactNode][] = []
+  const perkRows: [string, ReactNode, boolean][] = []
   if (v.equipment_access) {
     perkRows.push([
       p.equipment,
@@ -87,10 +87,11 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
           </>
         )}
       </>,
+      true, // описание оборудования длинное: на всю ширину, а не в половину
     ])
   }
-  if (v.publications_paid) perkRows.push([p.publications, p.publicationsOn])
-  if (v.conference_travel) perkRows.push([p.conferences, p.conferencesOn])
+  if (v.publications_paid) perkRows.push([p.publications, p.publicationsOn, false])
+  if (v.conference_travel) perkRows.push([p.conferences, p.conferencesOn, false])
 
   const forReader = (v.status === 'published' || v.status === 'closed') && !v.viewer.can_manage
 
@@ -184,8 +185,8 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
             <section className="vacancy-section" aria-labelledby="vacancy-perks">
               <h2 id="vacancy-perks">{p.perks}</h2>
               <dl className="vacancy-facts">
-                {perkRows.map(([label, value]) => (
-                  <div key={label} className="vacancy-fact">
+                {perkRows.map(([label, value, wide]) => (
+                  <div key={label} className={wide ? 'vacancy-fact vacancy-fact-wide' : 'vacancy-fact'}>
                     <dt>{label}</dt>
                     <dd>{value}</dd>
                   </div>
