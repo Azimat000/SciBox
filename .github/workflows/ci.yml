@@ -130,7 +130,7 @@ jobs:
           docker run --rm --read-only scibox:ci version
           ! docker run --rm --read-only scibox:ci serve
       - name: trivy scan of the server image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (D-219)
         with:
           image-ref: scibox:ci
           severity: HIGH,CRITICAL
@@ -140,7 +140,7 @@ jobs:
       - name: build the database and backup image
         run: docker build -t scibox-postgres:ci deploy/postgres
       - name: trivy scan of the database image (OS packages)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (D-219)
         with:
           image-ref: scibox-postgres:ci
           severity: CRITICAL
