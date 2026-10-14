@@ -338,6 +338,8 @@ func TestValidateSkills(t *testing.T) {
 	}{
 		{"нет навыков", nil, []string{}, ""},
 		{"чистка", []string{"  ПЦР  в реальном   времени ", "", "  ", "Python", "python", "ПЦР в реальном времени"}, []string{"ПЦР в реальном времени", "Python"}, ""},
+		{"«ё» и «е» — один навык", []string{"Бухгалтерский учёт", "бухгалтерский учет"}, []string{"Бухгалтерский учёт"}, ""},
+		{"виды тире — один навык", []string{"Масс\u2011спектрометрия", "масс-спектрометрия", "МАСС\u2014СПЕКТРОМЕТРИЯ"}, []string{"Масс\u2011спектрометрия"}, ""},
 		{"ровно предел длины", []string{strings.Repeat("я", MaxSkillLen)}, []string{strings.Repeat("я", MaxSkillLen)}, ""},
 		{"слишком длинный", []string{"Excel", long}, []string{}, fmt.Sprintf(msgSkillLong, long, MaxSkillLen)},
 		{"управляющие символы", []string{"Word\x00"}, []string{}, msgSkillInvalid},

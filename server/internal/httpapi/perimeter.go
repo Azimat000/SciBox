@@ -27,6 +27,14 @@ var (
 		Guest: httpguard.Rate{Requests: 300, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 120, Per: time.Minute},
 	}
+	// skillSuggest — подсказки навыков в форме профиля: запрос на каждую паузу в наборе (до четырёх в секунду у
+	// быстрого человека, два поля), поэтому выше общего предела чтения; гостю подсказки не отдаются, его предел мал
+	// (срез 33).
+	skillSuggest = &httpguard.Policy{
+		Name:  "skill_suggest",
+		Guest: httpguard.Rate{Requests: 30, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 240, Per: time.Minute},
+	}
 	// pdfBuilds — резюме PDF собирается на каждый запрос: это самое тяжёлое чтение.
 	pdfBuilds = &httpguard.Policy{
 		Name:  "pdf_build",
@@ -75,6 +83,7 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: get, Pattern: "/api/organizations/{slug}/", Limit: publicReads},
 		{Method: get, Pattern: "/api/organizations/{slug}/units/{unitID}/", Limit: publicReads},
 		{Method: get, Pattern: "/api/journals", Limit: publicReads},
+		{Method: get, Pattern: "/api/skills", Limit: skillSuggest},
 		{Method: get, Pattern: "/api/profile/doi", Limit: publicReads},
 
 		{Method: get, Pattern: "/api/profile/cv", Slow: true, Limit: pdfBuilds},

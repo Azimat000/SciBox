@@ -363,6 +363,23 @@ type Session struct {
 	ReauthAt   *time.Time
 }
 
+type Skill struct {
+	ID   int32
+	Kind string
+	Grp  string
+	Name string
+}
+
+type SkillTerm struct {
+	Kind    string
+	Key     string
+	Term    string
+	Words   string
+	SkillID int32
+	IsName  bool
+	Tsv     interface{}
+}
+
 type Specialty struct {
 	Code      string
 	GroupCode string

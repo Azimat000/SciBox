@@ -30,6 +30,7 @@ import (
 	"scibox/server/internal/refdata"
 	"scibox/server/internal/references"
 	"scibox/server/internal/reqid"
+	"scibox/server/internal/skills"
 	"scibox/server/internal/vacancies"
 )
 
@@ -69,6 +70,8 @@ type Deps struct {
 	Landing *landing.Handler
 	// Journals подключает поиск по справочнику журналов (/api/journals). Нужен вместе с Auth.
 	Journals *journals.Handler
+	// Skills подключает подсказки навыков (/api/skills). Нужен вместе с Auth.
+	Skills *skills.Handler
 	// Export подключает выгрузку своих данных (/api/account/export). Нужен вместе с Auth.
 	Export *dataexport.Handler
 	// Web отдаёт страницы сайта по всем адресам вне /api (см. WebHandler); без него там 404.
@@ -154,6 +157,9 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Landing != nil {
 			d.Landing.Mount(r)
+		}
+		if d.Skills != nil {
+			d.Skills.Mount(r)
 		}
 		if d.Journals != nil {
 			d.Journals.Mount(r)

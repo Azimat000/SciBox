@@ -13,6 +13,7 @@ import (
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/issn"
 	"scibox/server/internal/num"
+	"scibox/server/internal/skills"
 )
 
 // Тексты ошибок полей: показываются человеку как есть.
@@ -327,14 +328,15 @@ func validateCore(in CoreInput, now time.Time) (coreFields, fieldErrors) {
 	return f, errs
 }
 
-// skills проверяет список навыков: лишние пробелы убираются, пустые и повторы (без учёта регистра) отбрасываются,
+// skills проверяет список навыков: лишние пробелы убираются, пустые и повторы (без учёта регистра, «ё» и вида тире)
+// отбрасываются,
 // порядок человека сохраняется.
 func (e fieldErrors) skills(name string, in []string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(in))
 	for _, raw := range in {
 		v := collapse(raw)
-		key := strings.ToLower(v)
+		key := skills.Key(v)
 		switch {
 		case v == "" || seen[key]:
 			continue

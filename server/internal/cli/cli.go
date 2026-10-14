@@ -51,6 +51,7 @@ import (
 	"scibox/server/internal/references"
 	"scibox/server/internal/reqid"
 	"scibox/server/internal/resilience"
+	"scibox/server/internal/skills"
 	"scibox/server/internal/vacancies"
 	"scibox/server/seed"
 )
@@ -65,9 +66,10 @@ const usage = `Использование: scibox <команда>
   worker                     запустить только фоновые задачи (письма, подбор, напоминания, чистка, файлы)
   error-test                 отправить пробный отчёт в GlitchTip (проверка SCIBOX_ERROR_DSN)
   migrate up|down|reset|status   миграции базы данных (down и reset в боевом режиме только с SCIBOX_ALLOW_DESTRUCTIVE=on)
-  release                    шаг выкладки: накатить миграции и загрузить справочник журналов (оба шага повторяемы)
+  release                    шаг выкладки: накатить миграции и загрузить справочники журналов и навыков (все шаги повторяемы)
   seed                       загрузить демо-данные (в боевом режиме только с SCIBOX_ALLOW_DESTRUCTIVE=on)
   journals load [--force] [файл]  загрузить справочник журналов SCImago (без файла — встроенный в сервер)
+  skills load [--force] [файл]    загрузить справочник навыков для подсказок в профиле (без файла — встроенный в сервер)
   healthcheck [serve|worker] спросить внутренний порт процесса, готов ли он (для проверки контейнера)
   version                    показать версию
 `
@@ -105,7 +107,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return 0
 	case "healthcheck":
 		return runHealthcheck(ctx, args, env)
-	case "serve", "worker", "migrate", "release", "seed", "journals", "error-test":
+	case "serve", "worker", "migrate", "release", "seed", "journals", "skills", "error-test":
 	default:
 		fmt.Fprintf(env.Stderr, "неизвестная команда %q\n\n%s", cmd, usage)
 		return 2
@@ -150,9 +152,14 @@ func Run(ctx context.Context, args []string, env Env) int {
 			logger.Error("release: migrate", "err", err)
 			return 1
 		}
-		return runJournals(ctx, cfg.DatabaseURL, []string{"load"}, env, logger)
+		if code := runJournals(ctx, cfg.DatabaseURL, []string{"load"}, env, logger); code != 0 {
+			return code
+		}
+		return runSkills(ctx, cfg.DatabaseURL, []string{"load"}, env, logger)
 	case "journals":
 		return runJournals(ctx, cfg.DatabaseURL, args, env, logger)
+	case "skills":
+		return runSkills(ctx, cfg.DatabaseURL, args, env, logger)
 	case "seed":
 		if refuseDestructive(cfg, logger, "seed") {
 			return 1
@@ -283,6 +290,49 @@ func runJournals(ctx context.Context, databaseURL string, args []string, env Env
 		return 0
 	}
 	fmt.Fprintf(env.Stdout, "Справочник журналов загружен (%s): журналов %d, ISSN %d, пропущено без ISSN %d.\n", res.Edition, res.Journals, res.ISSNs, res.Skipped)
+	return 0
+}
+
+// runSkills: `skills load [--force] [файл]`. Тот же файл второй раз не загружается (без --force).
+func runSkills(ctx context.Context, databaseURL string, args []string, env Env, logger *slog.Logger) int {
+	if len(args) == 0 || args[0] != "load" {
+		fmt.Fprint(env.Stderr, usage)
+		return 2
+	}
+	src, force := skills.Embedded(), false
+	for _, a := range args[1:] {
+		switch {
+		case a == "--force":
+			force = true
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprint(env.Stderr, usage)
+			return 2
+		default:
+			data, err := os.ReadFile(a) //nolint:gosec // G304: файл указывает администратор в командной строке
+			if err != nil {
+				logger.Error("skills", "err", err)
+				return 1
+			}
+			info, _ := os.Stat(a) // файл только что прочитан
+			src = skills.Source{Data: data, Compiled: info.ModTime().UTC()}
+		}
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		logger.Error("skills", "err", fmt.Errorf("connect database: %w", err))
+		return 1
+	}
+	defer pool.Close()
+	res, err := skills.Load(ctx, pool, src, force)
+	if err != nil {
+		logger.Error("skills", "err", err)
+		return 1
+	}
+	if res.Unchanged {
+		fmt.Fprintf(env.Stdout, "Справочник навыков уже загружен (%s).\n", res.Edition)
+		return 0
+	}
+	fmt.Fprintf(env.Stdout, "Справочник навыков загружен (%s): научных %d, общих %d, написаний вместе с синонимами %d.\n", res.Edition, res.Research, res.General, res.Terms)
 	return 0
 }
 
@@ -600,6 +650,7 @@ func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
 		Journals:      journals.NewHandler(journals.NewService(pool), logger, requireUser),
+		Skills:        skills.NewHandler(skills.NewService(pool), logger, requireUser),
 		Export:        dataexport.NewHandler(dataexport.NewService(pool, s.vault, dataexport.DefaultConfig(cfg.Product.Name)), logger, requireUser),
 		Web:           web,
 		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: s.counters, Now: s.now},

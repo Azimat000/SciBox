@@ -76,6 +76,7 @@ db-down:
 migrate: db-up
 	$(SCIBOX) migrate up
 	$(SCIBOX) journals load
+	$(SCIBOX) skills load
 
 seed: migrate
 	$(SCIBOX) seed
@@ -86,6 +87,7 @@ db-reset: db-up
 	$(SCIBOX) migrate reset
 	$(SCIBOX) migrate up
 	$(SCIBOX) journals load
+	$(SCIBOX) skills load
 	$(SCIBOX) seed
 
 ## sqlc: пересобрать код запросов из server/db/queries

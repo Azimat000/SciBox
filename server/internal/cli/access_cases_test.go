@@ -367,6 +367,7 @@ func profileCases() []kase {
 		{route: "GET /api/profile/cv", kind: self, make: func(f *fx, _ actor) call { p := f.Subject(); return call{as: &p} }},
 		{route: "GET /api/profile/doi", kind: self, ok: []int{http.StatusBadGateway}, make: func(*fx, actor) call { return call{query: "?doi=10.1234/abc"} }},
 		{route: "GET /api/journals", kind: self, make: func(*fx, actor) call { return call{query: "?q=nature"} }},
+		{route: "GET /api/skills", kind: self, make: func(*fx, actor) call { return call{query: "?kind=research&q=pcr"} }},
 		{route: "PUT /api/profile/items/{id}", kind: object, allow: of(subject), deny: missing, twin: []string{"id"}, make: func(f *fx, _ actor) call {
 			return call{params: P{"id": f.profileItem().String()}, body: map[string]any{"title": "Статья (исправлено)", "authors": "Орлова Е.", "pub_type": "article", "year": 2023}}
 		}},

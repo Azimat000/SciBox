@@ -17,6 +17,7 @@ import (
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/issn"
 	"scibox/server/internal/privacy"
+	"scibox/server/internal/skills"
 )
 
 // Ошибки, которые обработчики превращают в ответы API.
@@ -428,6 +429,14 @@ func (s *Service) check(ctx context.Context, q *dbgen.Queries, in CoreInput) (co
 	}
 	if len(errs) > 0 {
 		return coreFields{}, &auth.ValidationError{Fields: errs}
+	}
+	// Навыки из справочника получают каноническое написание, синонимы сводятся к названию (срез 33, D-211).
+	var err error
+	if f.researchSkills, err = skills.Canonical(ctx, q, skills.KindResearch, f.researchSkills); err != nil {
+		return coreFields{}, fmt.Errorf("profiles: canonical research skills: %w", err)
+	}
+	if f.generalSkills, err = skills.Canonical(ctx, q, skills.KindGeneral, f.generalSkills); err != nil {
+		return coreFields{}, fmt.Errorf("profiles: canonical general skills: %w", err)
 	}
 	return f, nil
 }
