@@ -259,7 +259,7 @@ export function refreshOrganizations(client: QueryClient, slug: string) {
 export const isNotFound = (error: unknown) => error instanceof ApiError && error.code === 'not_found'
 
 /** Человек в записи журнала: имя берётся из аккаунта, у стёртого это «Аккаунт удалён». */
-export type AuditPerson = { id: string; name: string }
+export type AuditPerson = { id: string; name: string; /** Имя скрыто: анонимный профиль, имя этой организации не открыто (D-199). */ anonymous?: boolean }
 
 export type AuditEntry = {
   id: number

@@ -59,3 +59,27 @@ export const otherPage = (p: Profile = profile, contacts = false): ProfilePage =
   void _v
   return { profile: contacts ? rest : { ...rest, contact_email: undefined }, viewer: { is_owner: false, can_see_contacts: contacts } }
 }
+
+/** Безымянная карточка анонимного профиля, как её отдаёт сервер сотруднику организации (D-199). */
+export const anonProfile: Profile = {
+  id: PROFILE_ID,
+  name: '',
+  open_to_offers: true,
+  headline: '',
+  city: '',
+  region: { code: '54', name: 'Новосибирская область' },
+  about: '',
+  degree: { level: 'candidate', specialty: { code: '1.4.4', name: 'Физическая химия' }, year: null, institution: '', dissertation: '' },
+  academic_title: 'docent',
+  academic_title_year: null,
+  identifiers: { orcid: '', spin: '', scopus_id: '', wos_id: '' },
+  h_index: { rsci: 12, scopus: 9, wos: null, scholar: 15 },
+  specialties: [{ code: '1.4.4', name: 'Физическая химия' }, { code: '1.4.1', name: 'Неорганическая химия' }],
+  skills: { research: [], general: [] },
+  sections: { education: [], experience: [], publications: [], grants: [], patents: [], teaching: [] },
+  quartiles: { q12_total: 2, q12_recent: 1, recent_from: 2022, year: 2025 },
+  anonymous: true,
+  publication_count: 7,
+  level: 2,
+  updated_at: '2026-10-03T12:00:00Z',
+}

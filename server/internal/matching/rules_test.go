@@ -3,6 +3,8 @@ package matching
 import (
 	"reflect"
 	"testing"
+
+	"scibox/server/internal/profiles"
 )
 
 func lvl(n int) *int { return &n }
@@ -176,5 +178,17 @@ func TestScoreMaximumIsHundred(t *testing.T) {
 	m, ok := Score(p, Opening{Specialties: []string{"1.4.4"}, CareerLevel: lvl(2), Degree: "candidate", Region: "54"})
 	if !ok || m.Score != 100 {
 		t.Errorf("лучший случай: %d (ок=%v)", m.Score, ok)
+	}
+}
+
+// Карьерный уровень безымянной карточки профиля считается тем же правилом, что и в подборе (срез 15).
+func TestAnonymousCardLevelAgreesWithMatching(t *testing.T) {
+	for _, degree := range []string{"none", "candidate", "doctor"} {
+		for _, title := range []string{"none", "docent", "professor"} {
+			want := Profile{Degree: degree, Title: title}.Level()
+			if got := profiles.CareerLevel(degree, title); got != want {
+				t.Errorf("степень %s, звание %s: карточка %d, подбор %d", degree, title, got, want)
+			}
+		}
 	}
 }

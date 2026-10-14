@@ -22,6 +22,9 @@ export type CatalogCard = {
   q12_recent: number
   specialties: Code[]
   updated_at: string
+  /** Анонимный профиль: имени, должности и города нет (D-199); level — карьерный уровень R1–R4. */
+  anonymous?: boolean
+  level?: number
 }
 
 /** Страница выдачи; fuzzy — точных совпадений со словами нет, показаны похожие (с опечатками). */

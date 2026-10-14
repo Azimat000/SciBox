@@ -170,6 +170,9 @@ describe('describeAudit', () => {
 
   it('links a sent offer to the list of sent offers and builds an invitation detail', () => {
     expect(describeAudit(entry({ action: 'offer.sent', target: { kind: 'offer', id: VACANCY, label: 'Вакансия' } }), slug).target?.to).toBe('/sent-offers')
+    // Приглашённый с анонимным профилем: имени нет, его место занимает «Анонимный соискатель» (D-199)
+    const hidden = { id: '00000000-0000-0000-0000-000000000000', name: '', anonymous: true }
+    expect(describeAudit(entry({ action: 'offer.sent', subject: hidden, target: { kind: 'offer', id: VACANCY, label: 'Вакансия' } }), slug).subject).toBe('Соискатель: Анонимный соискатель')
     expect(describeAudit(entry({ action: 'invitation.sent', details: { role: 'hr', email: 'a***@msu.ru' } }), slug).detail).toBe('Кадровик, a***@msu.ru')
     expect(describeAudit(entry({ action: 'invitation.sent', details: { role: 'hr' } }), slug).detail).toBe('Кадровик')
     expect(describeAudit(entry({ action: 'invitation.sent', details: {} }), slug).detail).toBeNull()

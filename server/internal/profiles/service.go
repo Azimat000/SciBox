@@ -151,6 +151,8 @@ func (s *Service) Own(ctx context.Context, user auth.User) (Page, error) {
 	if err != nil {
 		return Page{}, fmt.Errorf("profiles: list hidden organizations: %w", err)
 	}
+	preview := blindView(page.Profile)
+	page.AnonymousPreview = &preview
 	page.HiddenOrgs = make([]HiddenOrg, 0, len(hidden))
 	for _, h := range hidden {
 		page.HiddenOrgs = append(page.HiddenOrgs, HiddenOrg{ID: h.ID, Slug: h.Slug, Name: h.Name, City: h.City})
@@ -272,8 +274,24 @@ func blindView(v View) View {
 		AcademicTitle: v.AcademicTitle,
 		HIndex:        v.HIndex, Specialties: v.Specialties,
 		Skills: Skills{Research: []string{}, General: []string{}}, Sections: emptySections(),
-		Quartiles: v.Quartiles, Anonymous: true, PublicationCount: &pubs, UpdatedAt: v.UpdatedAt,
+		Quartiles: v.Quartiles, Anonymous: true, PublicationCount: &pubs, Level: CareerLevel(v.Degree.Level, v.AcademicTitle),
+		// Точное время правки профиля у безымянной карточки не показывается: по нему сопоставляют с известными событиями.
 	}
+}
+
+// CareerLevel — карьерный уровень R1–R4 по степени и званию: без степени R1, кандидат наук R2, доктор наук R3, доктор наук
+// с учёным званием профессора R4. То же правило, что в подборе (matching.Profile.Level; их совпадение проверяет тест
+// пакета matching). Это оценка для подсказок, а не утверждение о человеке.
+func CareerLevel(degree, title string) int {
+	switch {
+	case degree == DegreeDoctor && title == TitleProfessor:
+		return 4
+	case degree == DegreeDoctor:
+		return 3
+	case degree == DegreeCandidate:
+		return 2
+	}
+	return 1
 }
 
 // RecentYears — сколько последних лет, считая текущий, входит в «статей в Q1–Q2 за 5 лет».

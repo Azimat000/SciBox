@@ -9,6 +9,7 @@ import { InviteButton } from '../offers/InviteButton'
 import { isNotFound } from '../orgs/api'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { cvPath, useScientist } from './api'
+import { anonymousLabel, bestHIndex } from './labels'
 import { ProfileView } from './ProfileView'
 import './profile.css'
 
@@ -17,7 +18,18 @@ export function ScientistPage() {
   const { id = '' } = useParams()
   const query = useScientist(id)
   const { user } = useMe()
-  usePageTitle(query.data?.profile.name)
+  const shown = query.data?.profile
+  // У анонимного профиля имени нет: и заголовок вкладки, и окно приглашения берут название из научных данных
+  const displayName = shown?.anonymous
+    ? anonymousLabel({
+        degree: shown.degree.level,
+        title: shown.academic_title,
+        codes: shown.specialties.map((s) => s.code),
+        level: shown.level ?? 0,
+        hIndex: bestHIndex(shown.h_index),
+      })
+    : shown?.name
+  usePageTitle(displayName)
 
   if (query.isPending) return <PageSkeleton />
   if (query.isError) {
@@ -57,7 +69,7 @@ export function ScientistPage() {
         page={page}
         actions={
           <>
-            {!page.viewer.is_owner && <InviteButton profileId={page.profile.id} name={page.profile.name} variant="primary" />}
+            {!page.viewer.is_owner && <InviteButton profileId={page.profile.id} name={displayName ?? ''} variant="primary" />}
             {user ? (
               <a className="btn btn-secondary" href={cvPath(id)} download>
                 {t.profile.downloadCv}

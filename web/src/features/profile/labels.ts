@@ -30,3 +30,35 @@ export function publicationMeta(it: Item): string {
   const vol = [it.volume && `Т. ${it.volume}`, it.issue && `№ ${it.issue}`, it.pages && `С. ${it.pages}`].filter(Boolean).join(', ')
   return [dot(it.authors ?? ''), dot(biblio), dot(vol)].filter(Boolean).join(' ')
 }
+
+/** Лучшее из введённых h-index (как в каталоге); null, если ничего не указано. */
+export function bestHIndex(h: { rsci: number | null; scopus: number | null; wos: number | null; scholar: number | null }): number | null {
+  const values = [h.rsci, h.scopus, h.wos, h.scholar].filter((v): v is number => v !== null)
+  return values.length > 0 ? Math.max(...values) : null
+}
+
+/** Из чего складывается название безымянной карточки. */
+export type AnonymousParts = {
+  degree: string
+  title: string
+  /** Коды специальностей; в названии не больше двух. */
+  codes: readonly string[]
+  level: number
+  hIndex: number | null
+}
+
+/**
+ * Название анонимного профиля вместо имени: «Кандидат наук, доцент, 1.4.4, R2, h-index 9».
+ * Без степени и звания начинается словом «Соискатель». Всё, что в нём есть, открыто и без имени.
+ */
+export function anonymousLabel(p: AnonymousParts): string {
+  const a = t.profile.anonymous
+  const parts: string[] = []
+  if (p.degree !== 'none' && p.degree !== '') parts.push(degreeLabel(p.degree))
+  if (p.title !== 'none' && p.title !== '') parts.push(parts.length > 0 ? titleLabel(p.title).toLowerCase() : titleLabel(p.title))
+  if (parts.length === 0) parts.push(a.head)
+  parts.push(...p.codes.slice(0, 2))
+  if (p.level > 0) parts.push(a.level(p.level))
+  if (p.hIndex !== null) parts.push(a.hIndex(p.hIndex))
+  return parts.join(', ')
+}

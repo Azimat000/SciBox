@@ -4,7 +4,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { Tag } from '../../ui/Tag'
 import { plural } from '../../lib/plural'
 import { itemKinds, sectionOf, skillsOf, type Item, type ItemKind, type ProfilePage, type Quartiles } from './api'
-import { degreeLabel, titleLabel } from './labels'
+import { anonymousLabel, bestHIndex, degreeLabel, titleLabel } from './labels'
 import { itemTitle, sectionDefs } from './sections'
 import { mailtoHref } from '../../lib/mailto'
 
@@ -71,6 +71,18 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
     [t.profile.identifiers.wos, p.identifiers.wos_id, 'wos'],
   ].filter((r) => r[1] !== '')
   const skills = skillsOf(p)
+  // Безымянная карточка анонимного профиля (D-199): вместо имени название из научных данных
+  const anon = p.anonymous === true
+  const heading = anon
+    ? anonymousLabel({
+        degree: p.degree.level,
+        title: p.academic_title,
+        codes: p.specialties.map((s) => s.code),
+        level: p.level ?? 0,
+        hIndex: bestHIndex(p.h_index),
+      })
+    : p.name
+  const publicationCount = p.publication_count ?? 0
   const degreeLine = p.degree.level !== 'none'
   const titleLine = p.academic_title !== 'none'
 
@@ -88,7 +100,7 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
     <SectionLevel.Provider value={nested ? 'h3' : 'h2'}>
       <article className="profile">
         <header className="profile-head">
-          {nested ? <h2 data-long={longName(p.name)}>{p.name}</h2> : <h1 data-long={longName(p.name)}>{p.name}</h1>}
+          {nested ? <h2 data-long={longName(heading)}>{heading}</h2> : <h1 data-long={longName(heading)}>{heading}</h1>}
           {p.headline && <p className="profile-headline">{p.headline}</p>}
           {(place || p.open_to_offers) && (
             <p className="profile-meta">
@@ -101,6 +113,7 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
               <a href={mailtoHref(p.contact_email)}>{p.contact_email}</a>
             </p>
           )}
+          {anon && <p className="profile-note profile-anon-note">{t.profile.anonymous.note}</p>}
           {actions && <div className="profile-toolbar">{actions}</div>}
         </header>
         {afterHead}
@@ -211,6 +224,16 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
             ) : (
               empty(t.profile.empty.identifiers)
             )}
+          </Section>
+        )}
+
+        {anon && publicationCount > 0 && (
+          <Section title={t.profile.anonymous.publications} id="publication">
+            <p className="profile-text">
+              {t.profile.anonymous.publicationsCount(publicationCount, plural(publicationCount, t.catalog.publicationForms))}.{' '}
+              {t.profile.anonymous.publicationsHidden}
+            </p>
+            {p.quartiles && <QuartileCount q={p.quartiles} />}
           </Section>
         )}
 

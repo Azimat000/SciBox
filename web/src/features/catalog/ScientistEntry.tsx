@@ -3,6 +3,7 @@ import { t } from '../../i18n'
 import { plural } from '../../lib/plural'
 import { Tag } from '../../ui/Tag'
 import { InviteButton } from '../offers/InviteButton'
+import { anonymousLabel } from '../profile/labels'
 import type { CatalogCard } from './api'
 import { degreeLabel, titleLabel } from './labels'
 import './catalog.css'
@@ -19,11 +20,16 @@ export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
   const c = t.catalog
   const Heading = `h${headingLevel}` as const
   const place = c.place(card.city, card.region)
+  // Анонимная карточка: вместо имени название из научных данных, без должности и города (D-199)
+  const title = card.anonymous
+    ? anonymousLabel({ degree: card.degree, title: card.academic_title, codes: card.specialties.map((s) => s.code), level: card.level ?? 0, hIndex: card.h_index })
+    : card.name
+  // У анонимной карточки степень, звание, уровень и h-index уже в названии: в строке фактов они не повторяются
   const facts: string[] = []
-  if (card.degree !== 'none') facts.push(degreeLabel(card.degree))
-  if (card.academic_title !== 'none') facts.push(titleLabel(card.academic_title))
+  if (!card.anonymous && card.degree !== 'none') facts.push(degreeLabel(card.degree))
+  if (!card.anonymous && card.academic_title !== 'none') facts.push(titleLabel(card.academic_title))
   if (place) facts.push(place)
-  if (card.h_index !== null) facts.push(c.hIndex(card.h_index))
+  if (!card.anonymous && card.h_index !== null) facts.push(c.hIndex(card.h_index))
   if (card.publications > 0) facts.push(c.publications(card.publications, plural(card.publications, c.publicationForms)))
   if (card.q12_total > 0) {
     const total = c.q12(card.q12_total, plural(card.q12_total, c.q12Forms))
@@ -32,18 +38,21 @@ export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
   return (
     <article className="entry sci-entry">
       <Heading className="entry-title">
-        <Link to={`/scientists/${card.id}`}>{card.name}</Link>
+        <Link to={`/scientists/${card.id}`}>{title}</Link>
       </Heading>
-      <p className="entry-org">{card.headline}</p>
-      {card.open_to_offers && (
+      {card.headline && <p className="entry-org">{card.headline}</p>}
+      {(card.open_to_offers || card.anonymous) && (
         <div className="entry-side sci-side">
-          <Tag tone="accent">{c.openToOffers}</Tag>
+          <div className="sci-tags">
+            {card.anonymous && <Tag>{t.profile.anonymous.badge}</Tag>}
+            {card.open_to_offers && <Tag tone="accent">{c.openToOffers}</Tag>}
+          </div>
         </div>
       )}
       {facts.length > 0 && (
         <ul className="entry-facts" aria-label={c.facts}>
           {facts.map((fact, i) => (
-            <li key={fact}>{i === 0 && card.degree !== 'none' ? <strong>{fact}</strong> : fact}</li>
+            <li key={fact}>{i === 0 && !card.anonymous && card.degree !== 'none' ? <strong>{fact}</strong> : fact}</li>
           ))}
         </ul>
       )}
@@ -59,7 +68,7 @@ export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
             ))}
           </ul>
         )}
-        <InviteButton profileId={card.id} name={card.name} size="sm" />
+        <InviteButton profileId={card.id} name={card.anonymous ? t.profile.anonymous.name : card.name} size="sm" />
       </div>
     </article>
   )

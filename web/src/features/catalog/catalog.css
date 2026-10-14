@@ -52,9 +52,20 @@
 }
 
 /* На телефоне «Открыт к предложениям» идёт сразу под должностью, как срок у вакансии */
+/* Метки справа в столбик: «Имя скрыто» у анонимного профиля и «Открыт к предложениям» */
+.sci-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
+
 @media (max-width: 40rem) {
-  .sci-side .tag {
+  /* На телефоне метки стоят строкой под названием */
+  .sci-tags {
     grid-area: side;
+    flex-direction: row;
+    flex-wrap: wrap;
     justify-self: start;
     margin-top: var(--s-2);
   }

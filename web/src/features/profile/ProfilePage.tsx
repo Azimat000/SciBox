@@ -10,6 +10,7 @@ import { RequireUser } from '../orgs/RequireUser'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { deleteItem, ownCvPath, refreshProfile, useOwnProfile, type Item, type ItemKind } from './api'
 import { ItemModal } from './ItemModal'
+import { HiddenOrgsPanel } from './HiddenOrgsPanel'
 import { PrivacyPanel } from './PrivacyPanel'
 import { ProfileView } from './ProfileView'
 import { itemTitle } from './sections'
@@ -68,7 +69,8 @@ function Own() {
         afterHead={
           <>
             {p.visibility === 'hidden' && <Alert kind="info">{t.profile.hiddenNote}</Alert>}
-            <PrivacyPanel visibility={p.visibility ?? 'hidden'} openToOffers={p.open_to_offers} />
+            <PrivacyPanel visibility={p.visibility ?? 'hidden'} openToOffers={p.open_to_offers} preview={page.anonymous_preview} />
+            <HiddenOrgsPanel hidden={page.hidden_orgs ?? []} />
           </>
         }
       />

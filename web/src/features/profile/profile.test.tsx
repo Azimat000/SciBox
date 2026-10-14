@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ann, apiError, reply, signedInAs, stubApi, type Route } from '../../test/api'
 import { field } from '../../test/forms'
 import { renderApp } from '../../test/render'
-import { book, education, emptyProfile, otherPage, ownPage, profile, PROFILE_ID, publication } from '../../test/profile'
+import { anonProfile, book, education, emptyProfile, otherPage, ownPage, profile, PROFILE_ID, publication } from '../../test/profile'
 import { reference } from '../../test/vacancies'
 
 const own = (page = ownPage(), extra: Record<string, Route> = {}): Record<string, Route> => ({
@@ -103,7 +103,7 @@ describe('privacy panel', () => {
     const api = stubApi(own(ownPage(), { 'PUT /api/profile/privacy': reply(200, ownPage({ ...profile, visibility: 'orgs' })) }))
     renderApp('/profile')
     expect(await screen.findByRole('radio', { name: /Все/ })).toBeChecked()
-    await userEvent.click(screen.getByRole('radio', { name: /Организации/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Организации/ }))
     expect(await screen.findByText('Приватность сохранена')).toBeInTheDocument()
     expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'orgs', open_to_offers: true })
   })
@@ -575,3 +575,131 @@ describe('profile edit page', () => {
   })
 })
 
+
+describe('anonymous mode and hiding from organizations', () => {
+  const orgA = { id: 'a1111111-1111-4111-8111-111111111111', slug: 'institut-a', name: 'Институт катализа', city: 'Новосибирск' }
+  const orgB = { id: 'b2222222-2222-4222-8222-222222222222', slug: 'universitet-b', name: 'Университет Б', city: 'Казань' }
+  const withHidden = (hidden = [orgA], visibility: 'hidden' | 'anon' | 'orgs' | 'public' = 'public') => ({
+    ...ownPage({ ...profile, visibility }),
+    hidden_orgs: hidden,
+    anonymous_preview: anonProfile,
+  })
+
+  it('offers four modes in order from closed to open and saves the anonymous one', async () => {
+    const api = stubApi(own(withHidden(), { 'PUT /api/profile/privacy': reply(200, withHidden([], 'anon')) }))
+    renderApp('/profile')
+    const group = await screen.findByRole('radiogroup')
+    expect(within(group).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['hidden', 'anon', 'orgs', 'public'])
+    expect(within(group).getByText('Анонимно')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: /Анонимно/ }))
+    await screen.findByText('Приватность сохранена')
+    expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'anon', open_to_offers: true })
+  })
+
+  it('shows how organizations will see the profile, only in the anonymous mode', async () => {
+    stubApi(own(withHidden([], 'anon')))
+    renderApp('/profile')
+    const preview = await screen.findByText('Так организации увидят вас:')
+    expect(preview.closest('p')).toHaveTextContent('Кандидат наук, доцент, 1.4.4, 1.4.1, R2, h-index 15')
+    expect(screen.queryByText(/В анонимной карточке пока почти пусто/)).not.toBeInTheDocument()
+  })
+
+  it('does not show the preview in other modes, and warns when the anonymous card would be empty', async () => {
+    stubApi(own(withHidden([], 'orgs')))
+    const first = renderApp('/profile')
+    await screen.findByRole('radio', { name: /Анонимно/ })
+    expect(screen.queryByText('Так организации увидят вас:')).not.toBeInTheDocument()
+    first.unmount()
+    stubApi(own({ ...withHidden([], 'anon'), anonymous_preview: { ...anonProfile, degree: { ...anonProfile.degree, level: 'none', specialty: null }, specialties: [], academic_title: 'none', level: 1, h_index: { rsci: null, scopus: null, wos: null, scholar: null } } }))
+    renderApp('/profile')
+    expect(await screen.findByText(/В анонимной карточке пока почти пусто/)).toBeInTheDocument()
+    expect(screen.getByText('Соискатель, R1')).toBeInTheDocument()
+  })
+
+  it('lists organizations the profile is hidden from and shows one again', async () => {
+    const api = stubApi(own(withHidden([orgA, orgB]), { 'PUT /api/profile/hidden-orgs': reply(200, withHidden([orgB])) }))
+    renderApp('/profile')
+    const list = await screen.findByRole('list', { name: 'Скрыто от организаций' })
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Институт катализаНовосибирскПоказать снова', 'Университет БКазаньПоказать снова'])
+    await userEvent.click(within(list).getByRole('button', { name: 'Снова показывать профиль организации «Институт катализа»' }))
+    expect(await screen.findByText('Список организаций сохранён')).toBeInTheDocument()
+    expect(api.called('PUT', '/api/profile/hidden-orgs')[0].body).toEqual({ org_ids: [orgB.id] })
+  })
+
+  it('says so when no organization is chosen yet', async () => {
+    stubApi(own(withHidden([])))
+    renderApp('/profile')
+    expect(await screen.findByText('Пока ни одной организации. Профиль виден по режиму выше.')).toBeInTheDocument()
+  })
+
+  it('finds an organization on the server and hides the profile from it', async () => {
+    const api = stubApi(
+      own(withHidden([orgA]), {
+        'GET /api/organizations?*': reply(200, { items: [{ ...orgA, kind: 'institute', summary: '', unit_count: 1 }, { ...orgB, kind: 'university', summary: '', unit_count: 2 }], total: 2 }),
+        'PUT /api/profile/hidden-orgs': reply(200, withHidden([orgA, orgB])),
+      }),
+    )
+    renderApp('/profile')
+    await userEvent.type(await screen.findByRole('searchbox', { name: /Найти организацию/ }), 'унив')
+    const results = await screen.findByRole('list', { name: 'Найденные организации' })
+    // уже скрытая организация в выдаче не повторяется
+    expect(within(results).getAllByRole('listitem')).toHaveLength(1)
+    await userEvent.click(within(results).getByRole('button', { name: 'Скрыть профиль от организации «Университет Б»' }))
+    await screen.findByText('Список организаций сохранён')
+    expect(api.called('PUT', '/api/profile/hidden-orgs')[0].body).toEqual({ org_ids: [orgA.id, orgB.id] })
+    expect(api.called('GET', '/api/organizations?q=%D1%83%D0%BD%D0%B8%D0%B2&limit=8')).toHaveLength(1)
+  })
+
+  it('asks for more letters, says when nothing is found and when the search fails', async () => {
+    let mode: 'none' | 'fail' = 'none'
+    stubApi(own(withHidden([]), { 'GET /api/organizations?*': () => (mode === 'fail' ? apiError(500, 'internal', 'Сбой') : reply(200, { items: [], total: 0 })) }))
+    renderApp('/profile')
+    const box = await screen.findByRole('searchbox', { name: /Найти организацию/ })
+    await userEvent.type(box, 'а')
+    expect(await screen.findByText('Введите ещё хотя бы один знак')).toBeInTheDocument()
+    await userEvent.type(box, 'бв')
+    expect(await screen.findByText('Такой организации нет')).toBeInTheDocument()
+    mode = 'fail'
+    await userEvent.type(box, 'г')
+    expect(await screen.findByText('Не удалось найти организации')).toBeInTheDocument()
+  })
+
+  it('tells when saving the list failed', async () => {
+    stubApi(own(withHidden([orgA]), { 'PUT /api/profile/hidden-orgs': apiError(422, 'validation', 'Такой организации нет') }))
+    renderApp('/profile')
+    await userEvent.click(await screen.findByRole('button', { name: 'Снова показывать профиль организации «Институт катализа»' }))
+    expect(await screen.findByText('Не удалось сохранить список организаций')).toBeInTheDocument()
+  })
+
+  it('stops at thirty organizations', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `c${String(i).padStart(7, '0')}-1111-4111-8111-111111111111`, slug: `org-${i}`, name: `Организация ${i}`, city: '' }))
+    stubApi(own(withHidden(many)))
+    renderApp('/profile')
+    expect(await screen.findByText('Можно выбрать не больше 30 организаций')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: /Найти организацию/ })).toBeDisabled()
+  })
+})
+
+describe('anonymous profile page', () => {
+  const path = `/scientists/${PROFILE_ID}`
+  const page = () => reply(200, otherPage(anonProfile))
+
+  it('puts the scientific facts in place of the name and shows no personal sections', async () => {
+    stubApi({ ...signedInAs(ann), [`GET /api${path}`]: page() })
+    renderApp(path)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Кандидат наук, доцент, 1.4.4, 1.4.1, R2, h-index 15' })).toBeInTheDocument()
+    expect(screen.getByText(/Анонимный профиль: имя, место работы, номера и названия работ скрыты/)).toBeInTheDocument()
+    expect(screen.getByText('Открыт к предложениям', { selector: '.tag' })).toBeInTheDocument()
+    expect(screen.getByText('Новосибирская область')).toBeInTheDocument()
+    expect((await section('Степень и звание')).getByText('Кандидат наук')).toBeInTheDocument()
+    expect((await section('Идентификаторы и метрики')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['РИНЦ 12', 'Scopus 9', 'Google Scholar 15'])
+    const pubs = await section('Публикации')
+    expect(pubs.getByText(/7 публикаций\. Названия скрыты\./)).toBeInTheDocument()
+    expect(pubs.getByText(/2 статьи в журналах Q1–Q2/)).toBeInTheDocument()
+    for (const heading of ['О себе', 'Научные навыки', 'Образование', 'Опыт работы', 'Гранты']) {
+      expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument()
+    }
+    expect(document.title).toBe('Кандидат наук, доцент, 1.4.4, 1.4.1, R2, h-index 15 — ИОН')
+    expect(screen.queryByRole('link', { name: /@/ })).not.toBeInTheDocument()
+  })
+})

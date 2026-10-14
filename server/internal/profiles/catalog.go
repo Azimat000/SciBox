@@ -76,6 +76,8 @@ type CatalogCard struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 	// Anonymous — анонимный профиль (D-199): имени, должности и города нет, остальное на месте.
 	Anonymous bool `json:"anonymous,omitzero"`
+	// Level — карьерный уровень R1–R4 по степени и званию; только у анонимной карточки (в ней нет должности и имени).
+	Level int `json:"level,omitzero"`
 }
 
 // CatalogResult — страница каталога.
@@ -251,7 +253,8 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 			c.Region = *r.RegionName
 		}
 		if privacy.Visibility(r.Visibility).Detail(privacy.Viewer{Revealed: revealed[r.ID]}) == privacy.Blind {
-			c.Name, c.Headline, c.City, c.Anonymous = "", "", "", true
+			c.Name, c.Headline, c.City, c.Anonymous, c.Level = "", "", "", true, CareerLevel(r.Degree, r.AcademicTitle)
+			c.UpdatedAt = time.Time{}
 		}
 		if r.HMax > 0 {
 			h := int(r.HMax)

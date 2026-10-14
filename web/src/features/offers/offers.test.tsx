@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ann, apiError, reply, signedInAs, stubApi, type Route } from '../../test/api'
 import { OFFER_ID, catalogCard, catalogResult, declined, interested, mineList, offer, secondTarget, sentAnswered, sentCancelled, sentList, sentOffer, target } from '../../test/offers'
-import { PROFILE_ID, profile } from '../../test/profile'
+import { PROFILE_ID, ownPage, profile } from '../../test/profile'
 import { renderApp } from '../../test/render'
 import { VACANCY_ID, reference } from '../../test/vacancies'
 import { ROLE_STORAGE_KEY } from '../shell/role-context'
@@ -128,6 +128,20 @@ describe('offer page', () => {
     await user.click(screen.getByRole('button', { name: 'Интересно' }))
     await toast('Ответ отправлен')
     expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ action: 'interested', note: 'Откликнусь на этой неделе' })
+  })
+
+  it('warns an anonymous profile that «Интересно» opens its name to the organization', async () => {
+    const { calls } = page(offer, { 'GET /api/profile': reply(200, ownPage({ ...profile, visibility: 'anon' })) })
+    renderApp(path)
+    expect(await screen.findByText(/Ваш профиль анонимный\. Ответ «Интересно» откроет этой организации профиль целиком/)).toBeInTheDocument()
+    expect(calls.some((c) => c.method === 'GET' && c.path === '/api/profile')).toBe(true)
+  })
+
+  it('does not warn when the profile is not anonymous', async () => {
+    page(offer, { 'GET /api/profile': reply(200, ownPage({ ...profile, visibility: 'orgs' })) })
+    renderApp(path)
+    await screen.findByRole('button', { name: 'Интересно' })
+    expect(screen.queryByText(/Ваш профиль анонимный/)).not.toBeInTheDocument()
   })
 
   it('answers «Не сейчас» without a note', async () => {
@@ -259,6 +273,16 @@ describe('sent offers', () => {
     stubApi()
     const { router } = renderApp('/sent-offers')
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
+  })
+
+  it('shows "Анонимный соискатель" instead of the name while the name is not opened to the organization', async () => {
+    employer()
+    const anon = { ...sentOffer, scientist: { profile_id: PROFILE_ID, name: '', anonymous: true } }
+    stubApi(signedIn({ [route]: reply(200, sentList([anon])) }))
+    renderApp('/sent-offers')
+    const link = await screen.findByRole('link', { name: 'Анонимный соискатель' })
+    expect(link).toHaveAttribute('href', `/scientists/${PROFILE_ID}`)
+    expect(screen.queryByText('Елена Орлова')).not.toBeInTheDocument()
   })
 
   it('lists whom the organization invited, what they answered, with tabs and counts', async () => {

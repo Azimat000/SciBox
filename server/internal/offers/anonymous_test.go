@@ -123,7 +123,7 @@ func TestDeclinedAnonymousOfferStaysAnonymous(t *testing.T) {
 
 func TestInterestedOpensTheNameToThatOrganizationOnly(t *testing.T) {
 	w := newWorld(t)
-	other := w.World.Team() // другая организация, к которой человек не обращался
+	other := w.Team() // другая организация, к которой человек не обращался
 	sci, profile := w.anonScientist()
 	o := w.mustInvite(w.tm.HR, w.vacancy.ID, profile, "")
 	if err := w.svc.Answer(bg, sci.User, o.ID, AnswerInput{Action: ActionInterested}); err != nil {
@@ -194,7 +194,7 @@ func TestApplicationOpensTheNameToThatOrganization(t *testing.T) {
 
 func TestHiddenFromOrganizationCannotBeInvited(t *testing.T) {
 	w := newWorld(t)
-	other := w.World.Team()
+	other := w.Team()
 	sci, profile := w.scientist("Борис Скрытов", "public")
 	hide(t, w, sci, w.tm.OrgID)
 

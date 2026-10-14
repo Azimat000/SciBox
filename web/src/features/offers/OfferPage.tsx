@@ -18,6 +18,7 @@ import { isNotFound } from '../orgs/api'
 import { longName } from '../orgs/labels'
 import { RequireUser } from '../orgs/RequireUser'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
+import { useOwnProfile } from '../profile/api'
 import { answerOffer, refreshOffers, useOffer, type Offer } from './api'
 import { statusLabel, statusTone, vacancyOpen } from './labels'
 import '../applications/applications.css'
@@ -141,6 +142,9 @@ function AnswerForm({ offer }: { offer: Offer }) {
       toast.show({ kind: 'success', title: o.sent })
     },
   })
+  // Анонимному профилю ответ «Интересно» открывает имя этой организации (D-199): человек должен знать об этом заранее
+  const own = useOwnProfile()
+  const anonymous = own.data?.profile.visibility === 'anon'
   const { values, set, errors, validate } = useForm({ note: '' }, send.error, formRef)
   const formError = send.error && Object.keys(fieldErrorsOf(send.error)).length === 0 ? describeError(send.error) : undefined
 
@@ -152,6 +156,7 @@ function AnswerForm({ offer }: { offer: Offer }) {
   return (
     <form className="offer-answer" ref={formRef} noValidate onSubmit={(ev) => ev.preventDefault()}>
       <p className="application-muted">{o.answerLead}</p>
+      {anonymous && <Alert kind="info">{o.anonymousHint}</Alert>}
       {formError && <Alert kind="error">{formError}</Alert>}
       <TextArea label={o.noteLabel} name="note" optional rows={4} hint={o.noteHint} value={values.note} onChange={(ev) => set('note', ev.target.value)} error={errors.note} />
       <div className="offer-actions">

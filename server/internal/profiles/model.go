@@ -241,9 +241,11 @@ type View struct {
 	Quartiles         QuartileStats `json:"quartiles"`
 	// Anonymous — безымянная карточка (D-199): остались научные данные, а имени, должности, города, номеров, «о себе»,
 	// навыков и записей разделов нет. Вместо записей публикаций — их число в PublicationCount.
-	Anonymous        bool      `json:"anonymous,omitzero"`
-	PublicationCount *int      `json:"publication_count,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	Anonymous        bool `json:"anonymous,omitzero"`
+	PublicationCount *int `json:"publication_count,omitempty"`
+	// Level — карьерный уровень R1–R4 по степени и званию (оценка для подсказок, как в подборе); только у безымянной карточки.
+	Level     int       `json:"level,omitzero"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // HiddenOrg — организация, от сотрудников которой человек скрыл профиль (D-200).
@@ -266,4 +268,6 @@ type Page struct {
 	Viewer  ViewerInfo `json:"viewer"`
 	// HiddenOrgs — только владельцу: организации, от которых скрыт профиль.
 	HiddenOrgs []HiddenOrg `json:"hidden_orgs,omitempty"`
+	// AnonymousPreview — только владельцу: что увидят организации, если включить анонимный режим (D-199).
+	AnonymousPreview *View `json:"anonymous_preview,omitempty"`
 }

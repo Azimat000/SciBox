@@ -291,3 +291,46 @@ func mailed(w *testkit.World, to, subject string) bool {
 	}
 	return false
 }
+
+// Анонимный профиль (срез 15): просьба об удалении прячет его, отмена возвращает анонимный режим, а стирание уносит и список
+// организаций, от которых профиль был скрыт.
+func TestDeletionOfAnAnonymousProfile(t *testing.T) {
+	w := newWorld(t)
+	who := w.Applicant("Анонимный Передумавший")
+	if _, err := w.Prof.SetPrivacy(bg, who.User, "anon", false); err != nil {
+		t.Fatal(err)
+	}
+	own, err := w.Prof.SetHiddenOrgs(bg, who.User, []uuid.UUID{w.Team().OrgID})
+	if err != nil || len(own.HiddenOrgs) != 1 {
+		t.Fatalf("hidden organizations: %+v %v", own.HiddenOrgs, err)
+	}
+	if _, err := w.Auth.RequestDeletion(bg, fresh(t, w.World, who.Email)); err != nil {
+		t.Fatal(err)
+	}
+	if vis := visibility(t, who.ID); vis != "hidden/anon" {
+		t.Fatalf("visibility during the grace period = %q, want hidden/anon", vis)
+	}
+	if err := w.Auth.CancelDeletion(bg, fresh(t, w.World, who.Email)); err != nil {
+		t.Fatal(err)
+	}
+	if vis := visibility(t, who.ID); vis != "anon/" {
+		t.Fatalf("visibility after cancelling = %q, want anon/", vis)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM profile_hidden_orgs h JOIN profiles p ON p.id = h.profile_id WHERE p.user_id = $1`, who.ID); n != 1 {
+		t.Fatalf("the list of hidden organizations is lost on cancelling: %d", n)
+	}
+
+	if _, err := w.Auth.RequestDeletion(bg, fresh(t, w.World, who.Email)); err != nil {
+		t.Fatal(err)
+	}
+	exec(t, `UPDATE users SET deletion_due_at = now() - interval '1 minute' WHERE id = $1`, who.ID)
+	if n, err := w.Auth.ProcessDueDeletions(bg); err != nil || n == 0 {
+		t.Fatalf("erase: %d %v", n, err)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM profile_hidden_orgs WHERE profile_id NOT IN (SELECT id FROM profiles)`); n != 0 {
+		t.Errorf("orphans left: %d", n)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM profiles WHERE user_id = $1`, who.ID); n != 0 {
+		t.Errorf("the profile survived the erasure: %d", n)
+	}
+}

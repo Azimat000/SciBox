@@ -85,7 +85,7 @@ export function describeAudit(e: AuditEntry, slug: string): AuditLine {
   return {
     what: known[code] ?? a.unknownAction(e.action),
     target: e.target.label ? { label: e.target.label, to: targetLink(e, slug) } : null,
-    subject: e.subject && subjectLabel ? `${subjectLabel}: ${e.subject.name}` : null,
+    subject: e.subject && subjectLabel ? `${subjectLabel}: ${e.subject.anonymous ? t.profile.anonymous.name : e.subject.name}` : null,
     detail: detailOf(e),
   }
 }

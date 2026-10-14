@@ -101,6 +101,9 @@ func TestAnonymousProfileForStaffIsBlind(t *testing.T) {
 	if p.PublicationCount == nil || *p.PublicationCount != 1 {
 		t.Errorf("число публикаций = %v, ожидали 1", p.PublicationCount)
 	}
+	if !p.UpdatedAt.IsZero() {
+		t.Errorf("в безымянной карточке время правки профиля %v: по нему сопоставляют с известными событиями", p.UpdatedAt)
+	}
 	if got.Viewer.CanSeeContacts || got.Viewer.IsOwner {
 		t.Errorf("viewer = %+v", got.Viewer)
 	}
@@ -365,7 +368,7 @@ func TestCatalogAnonymousCard(t *testing.T) {
 			card = c
 		}
 	}
-	if !card.Anonymous || card.Name != "" || card.Headline != "" || card.City != "" {
+	if !card.Anonymous || card.Name != "" || card.Headline != "" || card.City != "" || !card.UpdatedAt.IsZero() {
 		t.Errorf("анонимная карточка: %+v", card)
 	}
 	if card.Degree != DegreeCandidate || card.AcademicTitle != TitleDocent || card.Region != "Новосибирская область" || len(card.Specialties) != 2 ||
@@ -436,6 +439,18 @@ func TestSetPrivacyAnonymous(t *testing.T) {
 	page, err := w.svc.SetPrivacy(bg, p.User, "anon", true)
 	if err != nil || page.Profile.Visibility != "anon" || !page.Profile.OpenToOffers {
 		t.Fatalf("SetPrivacy anon: %+v, %v", page.Profile, err)
+	}
+	// Владелец видит заранее, как его увидят организации: безымянная карточка с научными данными и уровнем.
+	if _, err := w.svc.SaveCore(bg, p.User, goodCore()); err != nil {
+		t.Fatal(err)
+	}
+	own := ownPage(t, w, p)
+	prev := own.AnonymousPreview
+	if prev == nil || !prev.Anonymous || prev.Name != "" || prev.Headline != "" || prev.Level != 2 || prev.Degree.Level != DegreeCandidate {
+		t.Errorf("предпросмотр анонимной карточки: %+v", prev)
+	}
+	if own.Profile.Name != "Елена Громова" || own.Profile.Anonymous {
+		t.Errorf("собственная страница владельца изменилась: %+v", own.Profile)
 	}
 	var verr *auth.ValidationError
 	if _, err := w.svc.SetPrivacy(bg, p.User, "anonymous", true); !errors.As(err, &verr) || verr.Fields["visibility"] == "" {

@@ -485,3 +485,87 @@
   padding-block: var(--s-3);
   border-bottom: 1px solid var(--line);
 }
+
+/* ---- анонимный режим и «скрыть от организаций» (срез 15) ---- */
+
+.privacy-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-1) var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--wash);
+}
+
+.privacy-preview .field-hint {
+  flex-basis: 100%;
+}
+
+.profile-anon-note {
+  max-width: var(--measure);
+  margin-top: var(--s-3);
+}
+
+.hidden-orgs {
+  margin-top: var(--s-6);
+  max-width: 48rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.hidden-orgs h2 {
+  font-size: var(--text-xl);
+}
+
+.hidden-orgs-text {
+  color: var(--ink-body);
+  max-width: var(--measure);
+}
+
+.hidden-orgs-list,
+.hidden-orgs-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ink);
+}
+
+.hidden-orgs-results {
+  border-top-color: var(--line);
+}
+
+.hidden-org {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.hidden-org-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.hidden-org-city {
+  color: var(--ink-soft);
+  font-weight: 400;
+  font-size: var(--text-sm);
+}
+
+.hidden-orgs-status {
+  min-height: 1.5em;
+  margin-top: calc(var(--s-2) * -1);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}

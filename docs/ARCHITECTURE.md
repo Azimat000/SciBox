@@ -43,7 +43,7 @@ SciBox/
 │       ├── access/       права по ролям организации (критичная зона): Actor.Can(действие, подразделение), без базы и HTTP
 │       ├── orgs/         организации, подразделения, сотрудники, приглашения, каталог (критичная зона): сервис, письма, HTTP-обработчики
 │       ├── vacancies/    вакансии (критичная зона): поля и проверки по типу позиции, жизненный цикл (таблица переходов), права через access, поиск (`search.go`; разбор и запись условий в адресе: `query.go`), «мои вакансии», HTTP
-│       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / организациям / публичный, кто видит профиль и контакты; без базы и HTTP
+│       ├── privacy/      приватность профиля (критичная зона): режимы скрыт / анонимно / организациям / публичный, скрытие от организаций, открытое имя; кто видит профиль, контакты и с какой подробностью; без базы и HTTP
 │       ├── profiles/     профиль (критичная зона): основные поля и навыки, записи разделов, приватность, поиск по DOI, сборка резюме, раздел «Соискатели» (`catalog.go`), HTTP
 │       ├── applications/ отклики (критичная зона): отправка (снимок профиля, резюме, PDF-файлы, рекомендатели), «Мои отклики», карточка глазами соискателя и организации, выдача файлов, отзыв, «можно ли откликнуться»; разбор организацией (`review.go`: «просмотрен» при открытии, решение, приглашения и ответы на них, список откликов), таблицы переходов (`transitions.go`), проверка приглашений (`invitation_input.go`), тексты уведомлений (`notices.go`), HTTP
 │       ├── references/   рекомендательные письма (критичная зона): просьбы, одноразовые ссылки, письмо текстом/PDF, отказ, повтор и отмена, HTTP (в том числе страница рекомендателя без входа)
@@ -261,6 +261,7 @@ SciBox/
 - Миграция `00007_profiles.sql`:
   - `profiles` (id, user_id уникальный → `users` `ON DELETE CASCADE`, visibility `hidden|orgs|public`, open_to_offers, headline, city, region_code, about, degree `none|candidate|doctor`, degree_specialty_code, degree_year, degree_institution, dissertation_title, academic_title `none|docent|professor`, academic_title_year, orcid, spin, scopus_id, wos_id, h_rsci, h_scopus, h_wos, h_scholar, contact_email, created_at, updated_at; CHECK на длины и перечисления, форматы проверяет сервис);
   - `profile_specialties` (profile_id, specialty_code);
+  - `profile_hidden_orgs` (profile_id, org_id, created_at; PK по паре, `ON DELETE CASCADE` с обеих сторон): организации, чьи сотрудники не видят профиль ни в каком режиме (срез 15, D-200); `profiles.visibility` теперь `hidden` / `anon` / `orgs` / `public` (D-199);
   - `profile_items` (id, profile_id, kind `education|experience|publication|grant|patent|teaching`, sort_year, data jsonb, created_at, updated_at; уникальный индекс по `(profile_id, data->>'doi')` для публикаций).
   - Счётчик частоты `doi_lookup` (60 в час на человека) в общей `rate_events`.
 - Миграция `00008_applications.sql`:
@@ -344,7 +345,8 @@ SciBox/
 | `GET /api/my/vacancy-targets` | где человек может создать вакансию: `[{organization, whole_org, units}]` |
 | `GET /api/profile` | вошедший: свой профиль (создаётся пустым и скрытым): `{profile, viewer:{is_owner, can_see_contacts}}`; в `profile` есть `visibility`, `contact_email`, разделы `sections` (всегда списки; у публикации `issn` и подставленный `journal {title,issn,quartile,year}`), `quartiles {q12_total, q12_recent, recent_from, year}`, `skills {research, general}` (то же у `/api/scientists/{id}` и в снимке отклика; в старых снимках `skills` нет) |
 | `PUT /api/profile` | основные поля целиком (`headline, city, region_code, about, degree, degree_specialty_code, degree_year, degree_institution, dissertation_title, academic_title, academic_title_year, orcid, spin, scopus_id, wos_id, h_rsci, h_scopus, h_wos, h_scholar, contact_email, specialties, research_skills, general_skills`); 422 с полями; приватность и записи не трогает |
-| `PUT /api/profile/privacy` `{visibility, open_to_offers}` | 200 `{profile, viewer}`; 422 при неизвестном режиме |
+| `PUT /api/profile/privacy` `{visibility, open_to_offers}` | 200 `{profile, viewer, hidden_orgs, anonymous_preview}`; 422 при неизвестном режиме (`hidden`, `anon`, `orgs`, `public`) |
+| `PUT /api/profile/hidden-orgs` `{org_ids}` | 200 страница профиля; заменяет список организаций, от которых скрыт профиль (до 30); 422 `org_ids` при неизвестной организации или превышении |
 | `POST /api/profile/items` `{kind, …поля вида}` | 201 `{item}`; виды `education, experience, publication, grant, patent, teaching`; 422 с полями; 409 `too_many_items` |
 | `PUT /api/profile/items/{id}` `{kind?, …поля}` | 200 `{item}`; чужая или несуществующая запись 404; сменить вид нельзя (422) |
 | `DELETE /api/profile/items/{id}` | 204; чужая запись 404 |

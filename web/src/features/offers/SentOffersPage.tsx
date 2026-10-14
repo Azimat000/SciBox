@@ -139,10 +139,11 @@ function Row({ offer }: { offer: Offer }) {
     },
   })
   const who = offer.scientist
+  const shownName = who ? (who.anonymous ? t.profile.anonymous.name : who.name) : ''
   return (
     <li className="cand-row">
-      <h2 className="cand-name" data-long={who ? longName(who.name) : undefined}>
-        {who ? <Link to={`/scientists/${who.profile_id}`}>{who.name}</Link> : null}
+      <h2 className="cand-name" data-long={who ? longName(shownName) : undefined}>
+        {who ? <Link to={`/scientists/${who.profile_id}`}>{shownName}</Link> : null}
       </h2>
       <p className="cand-vacancy">
         <Link to={`/vacancies/${offer.vacancy.id}`}>{offer.vacancy.title}</Link>

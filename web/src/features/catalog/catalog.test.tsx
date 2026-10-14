@@ -51,6 +51,26 @@ describe('catalog page', () => {
     expect(chipsList()).not.toBeInTheDocument()
   })
 
+  it('sets an anonymous card by its scientific facts: no name, post or city, and says the name is hidden', async () => {
+    const anon = {
+      ...catalogCard, name: '', headline: '', city: '', anonymous: true, level: 3, degree: 'doctor' as const, academic_title: 'none' as const,
+      specialties: [{ code: '1.4.4', name: 'Физическая химия' }], h_index: 9, q12_total: 0, q12_recent: 0,
+    }
+    setup({}, { items: [anon] })
+    renderApp('/scientists')
+    const link = await screen.findByRole('link', { name: 'Доктор наук, 1.4.4, R3, h-index 9' })
+    expect(link).toHaveAttribute('href', `/scientists/${anon.id}`)
+    const entry = within(link.closest('article') as HTMLElement)
+    expect(entry.getByText('Имя скрыто')).toBeInTheDocument()
+    expect(entry.getByText('Открыт к предложениям')).toBeInTheDocument()
+    // степень, уровень и h-index уже в названии и в строке фактов не повторяются
+    expect(entry.queryByText('R3', { selector: 'li' })).not.toBeInTheDocument()
+    expect(entry.queryByText('h-index 9')).not.toBeInTheDocument()
+    expect(entry.getByText('Новосибирская область')).toBeInTheDocument()
+    expect(entry.queryByText('Старший научный сотрудник, лаборатория катализа')).not.toBeInTheDocument()
+    expect(entry.queryByText('Елена Орлова')).not.toBeInTheDocument()
+  })
+
   it('leaves out the facts a scientist did not give', async () => {
     setup({}, { items: [bareCard] })
     renderApp('/scientists')

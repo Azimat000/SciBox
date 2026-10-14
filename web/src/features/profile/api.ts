@@ -5,7 +5,7 @@ import { useMe } from '../auth/api'
 export const itemKinds = ['education', 'experience', 'publication', 'grant', 'patent', 'teaching'] as const
 export type ItemKind = (typeof itemKinds)[number]
 
-export const visibilities = ['hidden', 'orgs', 'public'] as const
+export const visibilities = ['hidden', 'anon', 'orgs', 'public'] as const
 export type Visibility = (typeof visibilities)[number]
 
 export const degreeLevels = ['none', 'candidate', 'doctor'] as const
@@ -88,10 +88,26 @@ export type Profile = {
   }
   /** Нет в снимках профиля, отправленных с откликом до среза 14. */
   quartiles?: Quartiles
+  /** Безымянная карточка анонимного профиля: нет имени, должности, города, номеров, записей (D-199). */
+  anonymous?: boolean
+  /** Число публикаций вместо записей: только у безымянной карточки. */
+  publication_count?: number
+  /** Карьерный уровень R1–R4 по степени и званию: только у безымянной карточки. */
+  level?: number
   updated_at: string
 }
 
-export type ProfilePage = { profile: Profile; viewer: { is_owner: boolean; can_see_contacts: boolean } }
+/** Организация, от которой скрыт профиль. */
+export type HiddenOrg = { id: string; slug: string; name: string; city: string }
+
+export type ProfilePage = {
+  profile: Profile
+  viewer: { is_owner: boolean; can_see_contacts: boolean }
+  /** Только владельцу: организации, от сотрудников которых профиль скрыт. */
+  hidden_orgs?: HiddenOrg[]
+  /** Только владельцу: как организации увидят анонимный профиль. */
+  anonymous_preview?: Profile
+}
 
 /** Основные поля, как их принимает сервер. */
 export type CoreFields = {
@@ -194,6 +210,8 @@ export const saveCore = (fields: CoreFields) => apiSend<ProfilePage>('PUT', '/ap
 
 export const savePrivacy = (visibility: Visibility, openToOffers: boolean) =>
   apiSend<ProfilePage>('PUT', '/api/profile/privacy', { visibility, open_to_offers: openToOffers })
+
+export const saveHiddenOrgs = (orgIds: string[]) => apiSend<ProfilePage>('PUT', '/api/profile/hidden-orgs', { org_ids: orgIds })
 
 export async function addItem(kind: ItemKind, fields: Record<string, unknown>): Promise<Item> {
   return (await apiSend<{ item: Item }>('POST', '/api/profile/items', { kind, ...fields })).item

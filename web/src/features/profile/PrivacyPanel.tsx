@@ -3,12 +3,18 @@ import { t } from '../../i18n'
 import { Checkbox } from '../../ui/Checkbox'
 import { useToast } from '../../ui/useToast'
 import { describeError } from '../auth/errors'
-import { refreshProfile, savePrivacy, visibilities, type Visibility } from './api'
+import { refreshProfile, savePrivacy, visibilities, type Profile, type Visibility } from './api'
+import { anonymousLabel, bestHIndex } from './labels'
 
-type Props = { visibility: Visibility; openToOffers: boolean }
+type Props = {
+  visibility: Visibility
+  openToOffers: boolean
+  /** Как организации увидят анонимный профиль (сервер собирает его из собственных данных человека). */
+  preview?: Profile
+}
 
-/** «Кто видит профиль»: три режима и отметка «открыт к предложениям». Каждое изменение сохраняется сразу. */
-export function PrivacyPanel({ visibility, openToOffers }: Props) {
+/** «Кто видит профиль»: четыре режима и отметка «открыт к предложениям». Каждое изменение сохраняется сразу. */
+export function PrivacyPanel({ visibility, openToOffers, preview }: Props) {
   const client = useQueryClient()
   const toast = useToast()
   const save = useMutation({
@@ -44,6 +50,7 @@ export function PrivacyPanel({ visibility, openToOffers }: Props) {
           </label>
         ))}
       </div>
+      {shownVisibility === 'anon' && preview && <AnonymousPreview preview={preview} />}
       <Checkbox
         label={t.profile.privacy.offers}
         checked={shownOffers}
@@ -52,5 +59,23 @@ export function PrivacyPanel({ visibility, openToOffers }: Props) {
       />
       <p className="field-hint">{t.profile.privacy.offersHint}</p>
     </section>
+  )
+}
+
+/** Строка «Так организации увидят вас»: то же название, что на карточке в каталоге, чтобы человек проверил её до показа. */
+function AnonymousPreview({ preview }: { preview: Profile }) {
+  const thin = preview.degree.level === 'none' && preview.specialties.length === 0 && bestHIndex(preview.h_index) === null
+  const label = anonymousLabel({
+    degree: preview.degree.level,
+    title: preview.academic_title,
+    codes: preview.specialties.map((s) => s.code),
+    level: preview.level ?? 0,
+    hIndex: bestHIndex(preview.h_index),
+  })
+  return (
+    <p className="privacy-preview">
+      <span>{t.profile.privacy.preview}</span> <strong>{label}</strong>
+      {thin && <span className="field-hint">{t.profile.privacy.previewThin}</span>}
+    </p>
   )
 }
