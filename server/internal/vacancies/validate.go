@@ -70,6 +70,9 @@ const (
 	msgSpecsMany        = "Специальностей не больше пяти"
 	msgSpecsUnknown     = "Выберите специальности из списка"
 	msgSpecsRequired    = "Выберите хотя бы одну научную специальность"
+	msgEquipmentLong    = "Слишком длинно: не больше 300 знаков"
+	msgEquipmentOff     = "Описание и подразделение указывают, когда отмечен доступ к оборудованию"
+	msgEquipmentUnit    = "Выберите ЦКП вашей организации из списка"
 )
 
 // typeRules — что требуется от вакансии каждого типа при публикации и что для неё допустимо.
@@ -124,6 +127,12 @@ type fields struct {
 	isCompetition  bool
 	deadline       *time.Time
 	specialties    []string
+
+	equipmentAccess  bool
+	equipmentNote    string
+	equipmentUnitID  *uuid.UUID
+	publicationsPaid bool
+	conferenceTravel bool
 }
 
 func collapse(s string) string { return strings.Join(strings.Fields(s), " ") }
@@ -369,6 +378,23 @@ func validate(in Input, positionType string, mode checkMode, today time.Time) (f
 		errs["specialties"] = msgSpecsMany
 	case strict && rules.needSpecialties && len(f.specialties) == 0:
 		errs["specialties"] = msgSpecsRequired
+	}
+
+	// Условия для учёного. Описание и ЦКП имеют смысл только при отметке про оборудование.
+	f.equipmentAccess = in.EquipmentAccess
+	f.publicationsPaid = in.PublicationsPaid
+	f.conferenceTravel = in.ConferenceTravel
+	if f.equipmentNote, msg = oneLine(in.EquipmentNote, MaxEquipment, msgEquipmentLong); msg != "" {
+		errs["equipment_note"] = msg
+	}
+	f.equipmentUnitID = in.EquipmentUnitID
+	if !f.equipmentAccess {
+		if f.equipmentNote != "" && errs["equipment_note"] == "" {
+			errs["equipment_note"] = msgEquipmentOff
+		}
+		if f.equipmentUnitID != nil {
+			errs["equipment_unit_id"] = msgEquipmentOff
+		}
 	}
 	return f, errs
 }

@@ -154,6 +154,12 @@ type body struct {
 	IsCompetition  bool     `json:"is_competition"`
 	Deadline       string   `json:"deadline"`
 	Specialties    []string `json:"specialties"`
+
+	EquipmentAccess  bool    `json:"equipment_access"`
+	EquipmentNote    string  `json:"equipment_note"`
+	EquipmentUnitID  *string `json:"equipment_unit_id"`
+	PublicationsPaid bool    `json:"publications_paid"`
+	ConferenceTravel bool    `json:"conference_travel"`
 }
 
 // input переводит запрос в поля вакансии. Если номер подразделения написан не как номер, это ошибка поля.
@@ -164,7 +170,8 @@ func (b body) input() (Input, error) {
 		RegionCode: b.RegionCode, City: b.City, Housing: b.Housing, RatePercent: b.RatePercent, SalaryFrom: b.SalaryFrom,
 		SalaryTo: b.SalaryTo, ContractType: b.ContractType, ContractMonth: b.ContractMonths, FundingSource: b.FundingSource,
 		FundingNote: b.FundingNote, Degree: b.Degree, AcademicTitle: b.AcademicTitle, IsCompetition: b.IsCompetition,
-		Deadline: b.Deadline, Specialties: b.Specialties,
+		Deadline: b.Deadline, Specialties: b.Specialties, EquipmentAccess: b.EquipmentAccess,
+		EquipmentNote: b.EquipmentNote, PublicationsPaid: b.PublicationsPaid, ConferenceTravel: b.ConferenceTravel,
 	}
 	if b.UnitID != nil && *b.UnitID != "" {
 		u, err := uuid.Parse(*b.UnitID)
@@ -172,6 +179,13 @@ func (b body) input() (Input, error) {
 			return Input{}, &auth.ValidationError{Fields: map[string]string{"unit_id": msgUnitUnknown}}
 		}
 		in.UnitID = &u
+	}
+	if b.EquipmentUnitID != nil && *b.EquipmentUnitID != "" {
+		u, err := uuid.Parse(*b.EquipmentUnitID)
+		if err != nil {
+			return Input{}, &auth.ValidationError{Fields: map[string]string{"equipment_unit_id": msgEquipmentUnit}}
+		}
+		in.EquipmentUnitID = &u
 	}
 	return in, nil
 }

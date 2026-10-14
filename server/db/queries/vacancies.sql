@@ -4,11 +4,13 @@
 INSERT INTO vacancies (
     org_id, unit_id, created_by, title, position_code, summary, description, requirements, focus, career_level,
     work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months,
-    funding_source, funding_note, degree_required, title_required, is_competition, deadline, created_at, updated_at
+    funding_source, funding_note, degree_required, title_required, is_competition, deadline,
+    equipment_access, equipment_note, equipment_unit_id, publications_paid, conference_travel, created_at, updated_at
 ) VALUES (
     @org_id, @unit_id, @created_by, @title, @position_code, @summary, @description, @requirements, @focus, @career_level,
     @work_format, @region_code, @city, @housing, @rate_percent, @salary_from, @salary_to, @contract_type, @contract_months,
-    @funding_source, @funding_note, @degree_required, @title_required, @is_competition, @deadline, @now, @now
+    @funding_source, @funding_note, @degree_required, @title_required, @is_competition, @deadline,
+    @equipment_access, @equipment_note, @equipment_unit_id, @publications_paid, @conference_travel, @now, @now
 ) RETURNING id;
 
 -- name: UpdateVacancy :execrows
@@ -18,7 +20,9 @@ UPDATE vacancies SET
     region_code = @region_code, city = @city, housing = @housing, rate_percent = @rate_percent,
     salary_from = @salary_from, salary_to = @salary_to, contract_type = @contract_type, contract_months = @contract_months,
     funding_source = @funding_source, funding_note = @funding_note, degree_required = @degree_required,
-    title_required = @title_required, is_competition = @is_competition, deadline = @deadline, updated_at = @now
+    title_required = @title_required, is_competition = @is_competition, deadline = @deadline,
+    equipment_access = @equipment_access, equipment_note = @equipment_note, equipment_unit_id = @equipment_unit_id,
+    publications_paid = @publications_paid, conference_travel = @conference_travel, updated_at = @now
 WHERE id = @id;
 
 -- Строка с блокировкой: два одновременных изменения одной вакансии выстроятся в очередь.
@@ -130,6 +134,9 @@ WITH hits AS MATERIALIZED (
     AND (@salary_min::int = 0 OR COALESCE(fv.salary_to, fv.salary_from) >= @salary_min::int)
     AND (NOT @housing::bool OR fv.housing <> 'none')
     AND (NOT @competition::bool OR fv.is_competition)
+    AND (NOT @equipment::bool OR fv.equipment_access)
+    AND (NOT @publications::bool OR fv.publications_paid)
+    AND (NOT @conferences::bool OR fv.conference_travel)
     AND (NOT @no_deadline::bool OR fv.deadline IS NULL)
     AND (sqlc.narg(deadline_to)::date IS NULL OR fv.deadline <= sqlc.narg(deadline_to)::date)
     AND (sqlc.narg(published_after)::timestamptz IS NULL OR fv.published_at > sqlc.narg(published_after)::timestamptz)

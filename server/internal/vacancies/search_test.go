@@ -35,6 +35,7 @@ func (w *world) searchTeam() *searchTeam {
 	chem.SalaryFrom, chem.SalaryTo, chem.FundingSource, chem.Degree = ptr(100000), ptr(130000), FundingGrant, DegreeCandidate
 	chem.IsCompetition, chem.Deadline, chem.Housing = true, "2026-10-13", HousingService
 	chem.UnitID = &tm.unitA.ID
+	chem.EquipmentAccess, chem.PublicationsPaid = true, true
 	w.published(tm, chem)
 
 	math := goodInput()
@@ -43,6 +44,7 @@ func (w *world) searchTeam() *searchTeam {
 	math.RatePercent, math.ContractType, math.ContractMonth, math.Specialties = ptr(50), ContractPermanent, nil, []string{"1.1.1"}
 	math.SalaryFrom, math.FundingSource, math.Degree, math.AcademicTitle, math.Deadline = ptr(70000), FundingBudget, DegreeCandidate, TitleDocent, ""
 	math.UnitID = &tm.unitB.ID
+	math.ConferenceTravel = true
 	w.published(tm, math)
 
 	gen := goodInput()
@@ -50,6 +52,7 @@ func (w *world) searchTeam() *searchTeam {
 	gen.Focus, gen.WorkFormat, gen.RegionCode, gen.City = "Геномика растений", FormatRemote, "", ""
 	gen.CareerLevel, gen.RatePercent, gen.ContractMonth, gen.Specialties = ptr(2), nil, ptr(12), []string{"1.5.7"}
 	gen.SalaryFrom, gen.SalaryTo, gen.FundingSource, gen.Degree, gen.Deadline = ptr(90000), ptr(110000), FundingGrant, DegreeDoctor, "2026-10-06"
+	gen.EquipmentAccess, gen.ConferenceTravel = true, true
 	w.published(tm, gen)
 
 	ckp := goodInput()
@@ -139,6 +142,11 @@ func TestSearchFilters(t *testing.T) {
 		{"salary min: above everything", SearchParams{SalaryMin: 200000}, nil},
 		{"housing", SearchParams{Housing: true}, []string{st.chem}},
 		{"competition", SearchParams{Competition: true}, []string{st.chem}},
+		{"equipment", SearchParams{Equipment: true}, []string{st.chem, st.gen}},
+		{"publications", SearchParams{Publications: true}, []string{st.chem}},
+		{"conferences", SearchParams{Conferences: true}, []string{st.math, st.gen}},
+		{"conditions combine with AND", SearchParams{Equipment: true, Conferences: true}, []string{st.gen}},
+		{"all three conditions", SearchParams{Equipment: true, Publications: true, Conferences: true}, nil},
 		{"deadline week", SearchParams{Deadline: DeadlineWeek}, []string{st.gen}},
 		{"deadline month", SearchParams{Deadline: DeadlineMonth}, []string{st.chem, st.gen, st.ckp}},
 		{"deadline none", SearchParams{Deadline: DeadlineNone}, []string{st.math}},

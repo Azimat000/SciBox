@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"scibox/server/internal/auth"
+	"scibox/server/internal/orgs"
 )
 
 // api — настоящие обработчики аккаунтов и вакансий за настоящим роутером.
@@ -243,5 +244,97 @@ func TestHTTPServerFailureIsHidden(t *testing.T) {
 	r.ServeHTTP(rec, httptest.NewRequest("GET", "/api/vacancies", nil))
 	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "injected") || !strings.Contains(rec.Body.String(), `"internal"`) {
 		t.Errorf("%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// Условия для учёного по HTTP: поля в теле, ответ, ошибки полей и фильтры поиска.
+func TestHTTPConditions(t *testing.T) {
+	a := newAPI(t)
+	tm := a.team()
+	ckp, err := a.orgs.CreateUnit(bg, tm.owner.User, tm.slug, orgs.UnitInput{Name: "ЦКП «Спектроскопия»", Kind: orgs.UnitSharedFacility})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := goodBody(tm.slug)
+	b["equipment_access"], b["equipment_note"], b["equipment_unit_id"] = true, "Спектрометры ЯМР", ckp.ID.String()
+	b["publications_paid"], b["conference_travel"] = true, true
+	r := a.do(&tm.owner, "POST", "/api/vacancies", b)
+	if r.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", r.Code, r.Raw)
+	}
+	v := r.vacancy(t)
+	unit, _ := v["equipment_unit"].(map[string]any)
+	if v["equipment_access"] != true || v["equipment_note"] != "Спектрометры ЯМР" || unit["id"] != ckp.ID.String() ||
+		v["publications_paid"] != true || v["conference_travel"] != true {
+		t.Errorf("vacancy: %v", v)
+	}
+	if perks, _ := v["perks"].([]any); len(perks) != 3 {
+		t.Errorf("perks: %v", v["perks"])
+	}
+	id := v["id"].(string)
+
+	// Номер ЦКП не номер: ошибка поля; ЦКП пустым значением — «нет».
+	bad := goodBody(tm.slug)
+	bad["equipment_access"], bad["equipment_unit_id"] = true, "not-a-uuid"
+	if r := a.do(&tm.owner, "POST", "/api/vacancies", bad); r.Code != http.StatusUnprocessableEntity || !strings.Contains(r.Raw, "equipment_unit_id") {
+		t.Errorf("bad equipment unit: %d %s", r.Code, r.Raw)
+	}
+	bad["equipment_unit_id"] = ""
+	if r := a.do(&tm.owner, "POST", "/api/vacancies", bad); r.Code != http.StatusCreated {
+		t.Errorf("empty equipment unit: %d %s", r.Code, r.Raw)
+	}
+	// Описание без отметки.
+	bad = goodBody(tm.slug)
+	bad["equipment_note"] = "Спектрометры"
+	if r := a.do(&tm.owner, "POST", "/api/vacancies", bad); r.Code != http.StatusUnprocessableEntity || !strings.Contains(r.Raw, "equipment_note") {
+		t.Errorf("note without the mark: %d %s", r.Code, r.Raw)
+	}
+
+	// Фильтры поиска: вакансию находят по условию и не находят без него.
+	if r := a.do(&tm.owner, "POST", "/api/vacancies/"+id+"/status", map[string]string{"status": "published"}); r.Code != http.StatusOK {
+		t.Fatal(r.Raw)
+	}
+	for q, want := range map[string]float64{
+		"equipment=1": 1, "publications=1": 1, "conferences=1": 1, "equipment=1&publications=1&conferences=1": 1, "equipment=0": 1,
+	} {
+		r := a.do(nil, "GET", "/api/vacancies?org="+tm.slug+"&"+q, nil)
+		if r.Code != http.StatusOK || r.json(t)["total"].(float64) != want {
+			t.Errorf("%s: %d %s", q, r.Code, r.Raw)
+		}
+	}
+	// У вакансии без условий фильтры её отсекают.
+	if r := a.do(&tm.owner, "PATCH", "/api/vacancies/"+id, func() map[string]any {
+		x := goodBody(tm.slug)
+		delete(x, "organization")
+		return x
+	}()); r.Code != http.StatusOK {
+		t.Fatalf("clear: %d %s", r.Code, r.Raw)
+	}
+	for _, q := range []string{"equipment=1", "publications=1", "conferences=1"} {
+		r := a.do(nil, "GET", "/api/vacancies?org="+tm.slug+"&"+q, nil)
+		if r.Code != http.StatusOK || r.json(t)["total"].(float64) != 0 {
+			t.Errorf("%s after clearing: %d %s", q, r.Code, r.Raw)
+		}
+	}
+}
+
+// Условия входят в ключ кеша поиска: запрос с отметкой не получает ответ запроса без неё.
+func TestCacheKeyIncludesConditions(t *testing.T) {
+	base, _ := cacheKey(SearchParams{Query: "химия"})
+	seen := map[string]string{"": base}
+	for name, p := range map[string]SearchParams{
+		"equipment": {Query: "химия", Equipment: true}, "publications": {Query: "химия", Publications: true},
+		"conferences": {Query: "химия", Conferences: true},
+	} {
+		key, ok := cacheKey(p)
+		if !ok {
+			t.Fatal(name)
+		}
+		for other, k := range seen {
+			if k == key {
+				t.Errorf("%s и %q дают один ключ кеша", name, other)
+			}
+		}
+		seen[name] = key
 	}
 }

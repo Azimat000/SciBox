@@ -30,6 +30,7 @@ func ParseSearchQuery(q url.Values) (SearchParams, error) {
 		Query: q.Get("q"), Fields: q["field"], Region: q.Get("region"), Formats: q["format"], Types: q["type"],
 		Levels: ints("level"), Degrees: q["degree"], OrgKinds: q["org_kind"], Fundings: q["funding"],
 		Rates: ints("rate"), Terms: q["term"], Housing: flag("housing"), Competition: flag("competition"),
+		Equipment: flag("equipment"), Publications: flag("publications"), Conferences: flag("conferences"),
 		Deadline: q.Get("deadline"), Sort: q.Get("sort"), OrgSlug: q.Get("org"),
 	}
 	if n, err := strconv.Atoi(q.Get("limit")); err == nil {
@@ -65,7 +66,7 @@ func ValidateSearch(p *SearchParams) error { return validateSearch(p) }
 func (p SearchParams) HasConditions() bool {
 	return p.Query != "" || len(p.Fields) > 0 || p.Region != "" || len(p.Formats) > 0 || len(p.Types) > 0 ||
 		len(p.Levels) > 0 || len(p.Degrees) > 0 || len(p.OrgKinds) > 0 || len(p.Fundings) > 0 || len(p.Rates) > 0 ||
-		len(p.Terms) > 0 || p.SalaryMin > 0 || p.Housing || p.Competition || p.Deadline != ""
+		len(p.Terms) > 0 || p.SalaryMin > 0 || p.Housing || p.Competition || p.Equipment || p.Publications || p.Conferences || p.Deadline != ""
 }
 
 // Encode записывает условия поиска строкой запроса, как они стоят в адресе страницы поиска: параметры по алфавиту, без
@@ -113,6 +114,15 @@ func (p SearchParams) Encode() string {
 	}
 	if p.Competition {
 		v.Set("competition", "1")
+	}
+	if p.Equipment {
+		v.Set("equipment", "1")
+	}
+	if p.Publications {
+		v.Set("publications", "1")
+	}
+	if p.Conferences {
+		v.Set("conferences", "1")
 	}
 	if p.Deadline != "" {
 		v.Set("deadline", p.Deadline)

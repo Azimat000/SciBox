@@ -117,11 +117,13 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00027_anonymous_profile.sql", 2, allTables},
+		{"up", "00028_vacancy_conditions.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
 		// Столбцы привязки ссылки (00025) и неактивности (00026), индексы для чисел главной (00024) и метрики очереди
-		// писем (00023) таблиц не добавляют; 00027 добавляет таблицу скрытых от организаций.
+		// писем (00023) таблиц не добавляют; 00027 добавляет таблицу скрытых от организаций; 00028 (условия вакансии)
+		// только столбцы.
+		{"down", "00028_vacancy_conditions.sql", 2, allTables},
 		{"down", "00027_anonymous_profile.sql", 2, jobTables},
 		{"down", "00026_inactive_accounts.sql", 2, jobTables},
 		{"down", "00025_confirm_binding.sql", 2, jobTables},
@@ -151,7 +153,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00027_anonymous_profile.sql", 2, allTables},
+		{"up", "00028_vacancy_conditions.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

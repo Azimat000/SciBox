@@ -77,8 +77,10 @@ type SearchParams struct {
 	SalaryMin   int  // рублей в месяц; 0 — без ограничения
 	Housing     bool // только с жильём
 	Competition bool // только конкурсы
-	Deadline    string
-	Sort        string
+	// Условия для учёного (D-203): только вакансии, где они заявлены.
+	Equipment, Publications, Conferences bool
+	Deadline                             string
+	Sort                                 string
 
 	// PublishedAfter и PublishedUntil — отбор по моменту первой публикации: после первого (не включая) и до второго
 	// (включая). Из адреса не читаются: нужны рассылкам по сохранённым поискам (срез 11).
@@ -232,7 +234,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 		Fields: nonNil(p.Fields), Region: p.Region, Formats: nonNil(p.Formats), Types: nonNil(p.Types),
 		Levels: num.Int32s(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds), Fundings: nonNil(p.Fundings),
 		Rates: num.Int32s(p.Rates), Terms: nonNil(p.Terms), SalaryMin: num.Int32(p.SalaryMin), Housing: p.Housing,
-		Competition: p.Competition, NoDeadline: p.Deadline == DeadlineNone, Sort: sort, RowLimit: limit, RowOffset: offset,
+		Competition: p.Competition, Equipment: p.Equipment, Publications: p.Publications, Conferences: p.Conferences, NoDeadline: p.Deadline == DeadlineNone, Sort: sort, RowLimit: limit, RowOffset: offset,
 		PublishedAfter: p.PublishedAfter, PublishedUntil: p.PublishedUntil, RowCap: num.Int32(s.cfg.maxResults() + 1), HitCap: num.Int32(s.cfg.maxResults() + 1), MaxResults: num.Int32(s.cfg.maxResults()),
 	}
 	switch p.Deadline {

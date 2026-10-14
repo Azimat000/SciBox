@@ -16,6 +16,7 @@ func TestParseSearchQueryReadsEveryParameter(t *testing.T) {
 		"q": {"химия"}, "field": {"1.4", "1.5"}, "region": {"54"}, "format": {"remote"}, "type": {"research"}, "level": {"2", "3"},
 		"degree": {"candidate"}, "org_kind": {"institute"}, "funding": {"grant"}, "rate": {"100", "50"}, "term": {"short"},
 		"salary_min": {"80000"}, "housing": {"1"}, "competition": {"true"}, "deadline": {"week"}, "sort": {"new"}, "org": {"baikal"},
+		"equipment": {"1"}, "publications": {"true"}, "conferences": {"1"},
 		"unit": {"6f9619ff-8b86-d011-b42d-00c04fc964ff"}, "limit": {"15"}, "offset": {"30"},
 	}
 	p, err := ParseSearchQuery(q)
@@ -24,7 +25,8 @@ func TestParseSearchQueryReadsEveryParameter(t *testing.T) {
 	}
 	if p.Query != "химия" || !reflect.DeepEqual(p.Fields, []string{"1.4", "1.5"}) || p.Region != "54" || !reflect.DeepEqual(p.Levels, []int{2, 3}) ||
 		!reflect.DeepEqual(p.Rates, []int{100, 50}) || p.SalaryMin != 80000 || !p.Housing || !p.Competition || p.Deadline != "week" ||
-		p.Sort != "new" || p.OrgSlug != "baikal" || p.UnitID == nil || p.Limit != 15 || p.Offset != 30 {
+		p.Sort != "new" || p.OrgSlug != "baikal" || p.UnitID == nil || p.Limit != 15 || p.Offset != 30 ||
+		!p.Equipment || !p.Publications || !p.Conferences {
 		t.Errorf("%+v", p)
 	}
 	// Пустой запрос: ничего не задано.
@@ -32,7 +34,7 @@ func TestParseSearchQueryReadsEveryParameter(t *testing.T) {
 		t.Errorf("%+v %v", p, err)
 	}
 	// Галочки: только 1 и true.
-	if p, _ := ParseSearchQuery(url.Values{"housing": {"yes"}, "competition": {"0"}}); p.Housing || p.Competition {
+	if p, _ := ParseSearchQuery(url.Values{"housing": {"yes"}, "competition": {"0"}, "equipment": {"on"}, "publications": {"0"}, "conferences": {"да"}}); p.Housing || p.Competition || p.Equipment || p.Publications || p.Conferences {
 		t.Errorf("%+v", p)
 	}
 }
@@ -62,7 +64,7 @@ func TestHasConditions(t *testing.T) {
 		"тип": {Types: []string{"research"}}, "уровень": {Levels: []int{1}}, "степень": {Degrees: []string{"none"}},
 		"тип организации": {OrgKinds: []string{"institute"}}, "финансирование": {Fundings: []string{"grant"}}, "ставка": {Rates: []int{100}},
 		"срок договора": {Terms: []string{"short"}}, "зарплата": {SalaryMin: 1}, "жильё": {Housing: true}, "конкурс": {Competition: true},
-		"срок подачи": {Deadline: "week"},
+		"срок подачи": {Deadline: "week"}, "оборудование": {Equipment: true}, "публикации": {Publications: true}, "конференции": {Conferences: true},
 	} {
 		if !p.HasConditions() {
 			t.Errorf("%s: условие не замечено", name)
@@ -83,6 +85,7 @@ func TestEncodeRoundTrip(t *testing.T) {
 		Query: "химия катализа", Fields: []string{"1.4", "1.5.7"}, Region: "54", Formats: []string{"remote", "hybrid"}, Types: []string{"research"},
 		Levels: []int{2, 3}, Degrees: []string{"candidate"}, OrgKinds: []string{"institute"}, Fundings: []string{"grant"}, Rates: []int{100, 50},
 		Terms: []string{"short"}, SalaryMin: 90000, Housing: true, Competition: true, Deadline: "month", Sort: "deadline",
+		Equipment: true, Publications: true, Conferences: true,
 	}
 	enc := p.Encode()
 	values, err := url.ParseQuery(enc)

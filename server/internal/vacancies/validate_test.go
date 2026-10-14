@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var today = time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
@@ -291,5 +293,54 @@ func TestSalaryRangeAllowsOneBound(t *testing.T) {
 		if _, errs := check(t, in, TypeResearch, modeDraft); len(errs) != 0 {
 			t.Errorf("%+v: %v", in, errs)
 		}
+	}
+}
+
+// Условия для учёного (D-203): описание и ЦКП имеют смысл только при отметке про оборудование.
+func TestConditionsRules(t *testing.T) {
+	unit := ptr(uuid.New())
+	cases := []struct {
+		name   string
+		mutate func(in *Input)
+		field  string // поле с ошибкой; пусто — ошибок нет
+		msg    string
+	}{
+		{"nothing declared", func(in *Input) {}, "", ""},
+		{"all three marks", func(in *Input) { in.EquipmentAccess, in.PublicationsPaid, in.ConferenceTravel = true, true, true }, "", ""},
+		{"equipment with note and unit", func(in *Input) {
+			in.EquipmentAccess, in.EquipmentNote, in.EquipmentUnitID = true, "Масс-спектрометр, доступ по записи", unit
+		}, "", ""},
+		{"note without the mark", func(in *Input) { in.EquipmentNote = "Масс-спектрометр" }, "equipment_note", msgEquipmentOff},
+		{"unit without the mark", func(in *Input) { in.EquipmentUnitID = unit }, "equipment_unit_id", msgEquipmentOff},
+		{"note too long", func(in *Input) { in.EquipmentAccess, in.EquipmentNote = true, strings.Repeat("я", MaxEquipment+1) }, "equipment_note", msgEquipmentLong},
+		{"note at the limit", func(in *Input) { in.EquipmentAccess, in.EquipmentNote = true, strings.Repeat("я", MaxEquipment) }, "", ""},
+		{"control characters", func(in *Input) { in.EquipmentAccess, in.EquipmentNote = true, "прибор\x00" }, "equipment_note", msgTextInvalid},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, mode := range []checkMode{modeDraft, modeStrict, modePublish} {
+				in := goodInput()
+				c.mutate(&in)
+				f, errs := check(t, in, TypeResearch, mode)
+				if c.field == "" {
+					if len(errs) != 0 {
+						t.Fatalf("mode %d: %v", mode, errs)
+					}
+					if f.equipmentAccess != in.EquipmentAccess || f.publicationsPaid != in.PublicationsPaid || f.conferenceTravel != in.ConferenceTravel {
+						t.Errorf("marks lost: %+v", f)
+					}
+					continue
+				}
+				if errs[c.field] != c.msg || len(errs) != 1 {
+					t.Errorf("mode %d: %v, want %s=%q", mode, errs, c.field, c.msg)
+				}
+			}
+		})
+	}
+	// Пробелы и переносы в описании схлопываются в одну строку.
+	in := goodInput()
+	in.EquipmentAccess, in.EquipmentNote = true, "  ЦКП  «Геномика»,\n  запись  по  заявке "
+	if f, errs := check(t, in, TypeResearch, modeStrict); len(errs) != 0 || f.equipmentNote != "ЦКП «Геномика», запись по заявке" {
+		t.Errorf("%q %v", f.equipmentNote, errs)
 	}
 }

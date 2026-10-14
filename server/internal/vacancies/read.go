@@ -63,7 +63,7 @@ func cardFrom(v dbgen.VacancyView, specialties []Ref) Card {
 		City:         v.City, WorkFormat: deref(v.WorkFormat), CareerLevel: widen(v.CareerLevel),
 		RatePercent: widen(v.RatePercent), SalaryFrom: widen32(v.SalaryFrom), SalaryTo: widen32(v.SalaryTo),
 		ContractType: deref(v.ContractType), ContractMonths: widen(v.ContractMonths), IsCompetition: v.IsCompetition,
-		Specialties: specialties, PublishedAt: v.PublishedAt, UpdatedAt: v.UpdatedAt,
+		Specialties: specialties, PublishedAt: v.PublishedAt, UpdatedAt: v.UpdatedAt, Perks: perksOf(v),
 	}
 	if specialties == nil {
 		c.Specialties = []Ref{}
@@ -78,6 +78,21 @@ func cardFrom(v dbgen.VacancyView, specialties []Ref) Card {
 		c.Deadline = v.Deadline.Format(dateLayout)
 	}
 	return c
+}
+
+// perksOf — какие условия для учёного заявлены у вакансии; пустой список, а не nil.
+func perksOf(v dbgen.VacancyView) []string {
+	out := []string{}
+	if v.EquipmentAccess {
+		out = append(out, PerkEquipment)
+	}
+	if v.PublicationsPaid {
+		out = append(out, PerkPublication)
+	}
+	if v.ConferenceTravel {
+		out = append(out, PerkConference)
+	}
+	return out
 }
 
 // specialtiesOf читает специальности сразу для нескольких вакансий.
@@ -136,7 +151,12 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Det
 		Card: cardFrom(v, specs[id]), Description: v.Description, Requirements: v.Requirements, Focus: v.Focus,
 		Housing: v.Housing, FundingSource: deref(v.FundingSource), FundingNote: v.FundingNote,
 		Degree: v.DegreeRequired, AcademicTitle: v.TitleRequired, CreatedAt: v.CreatedAt,
-		Viewer: Viewer{CanManage: can, Transitions: []string{}},
+		Viewer:          Viewer{CanManage: can, Transitions: []string{}},
+		EquipmentAccess: v.EquipmentAccess, EquipmentNote: v.EquipmentNote,
+		PublicationsPaid: v.PublicationsPaid, ConferenceTravel: v.ConferenceTravel,
+	}
+	if v.EquipmentUnitID != nil && v.EquipmentUnitName != nil {
+		d.EquipmentUnit = &UnitRef{ID: *v.EquipmentUnitID, Name: *v.EquipmentUnitName}
 	}
 	if can {
 		d.Viewer.Transitions = NextStatuses(v.Status)

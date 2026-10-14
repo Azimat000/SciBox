@@ -189,6 +189,16 @@ func (s *Service) check(ctx context.Context, q *dbgen.Queries, orgID uuid.UUID, 
 			errs["unit_id"] = msgUnitUnknown
 		}
 	}
+	// ЦКП из условий: подразделение этой же организации вида «ЦКП».
+	if f.equipmentUnitID != nil && errs["equipment_unit_id"] == "" {
+		u, err := q.GetUnitInOrg(ctx, dbgen.GetUnitInOrgParams{ID: *f.equipmentUnitID, OrgID: orgID})
+		switch {
+		case errors.Is(err, pgx.ErrNoRows) || (err == nil && u.Kind != orgs.UnitSharedFacility):
+			errs["equipment_unit_id"] = msgEquipmentUnit
+		case err != nil:
+			return fields{}, fmt.Errorf("vacancies: load equipment unit: %w", err)
+		}
+	}
 	if f.regionCode != nil {
 		ok, err := q.RegionExists(ctx, *f.regionCode)
 		if err != nil {
@@ -247,7 +257,8 @@ func (s *Service) Create(ctx context.Context, user auth.User, orgSlug string, in
 			RatePercent: f.rate, SalaryFrom: f.salaryFrom, SalaryTo: f.salaryTo, ContractType: f.contractType,
 			ContractMonths: f.contractMonths, FundingSource: f.fundingSource, FundingNote: f.fundingNote,
 			DegreeRequired: f.degree, TitleRequired: f.academicTitle, IsCompetition: f.isCompetition, Deadline: f.deadline,
-			Now: s.now(),
+			EquipmentAccess: f.equipmentAccess, EquipmentNote: f.equipmentNote, EquipmentUnitID: f.equipmentUnitID,
+			PublicationsPaid: f.publicationsPaid, ConferenceTravel: f.conferenceTravel, Now: s.now(),
 		})
 		if err != nil {
 			return fmt.Errorf("vacancies: create vacancy: %w", err)
@@ -298,7 +309,9 @@ func (s *Service) Update(ctx context.Context, user auth.User, id uuid.UUID, in I
 			WorkFormat: f.workFormat, RegionCode: f.regionCode, City: f.city, Housing: f.housing, RatePercent: f.rate,
 			SalaryFrom: f.salaryFrom, SalaryTo: f.salaryTo, ContractType: f.contractType, ContractMonths: f.contractMonths,
 			FundingSource: f.fundingSource, FundingNote: f.fundingNote, DegreeRequired: f.degree,
-			TitleRequired: f.academicTitle, IsCompetition: f.isCompetition, Deadline: f.deadline, Now: s.now(),
+			TitleRequired: f.academicTitle, IsCompetition: f.isCompetition, Deadline: f.deadline,
+			EquipmentAccess: f.equipmentAccess, EquipmentNote: f.equipmentNote, EquipmentUnitID: f.equipmentUnitID,
+			PublicationsPaid: f.publicationsPaid, ConferenceTravel: f.conferenceTravel, Now: s.now(),
 		})
 		if err != nil {
 			return fmt.Errorf("vacancies: update vacancy: %w", err)
@@ -322,6 +335,8 @@ func inputOf(v dbgen.Vacancy, specialties []string) Input {
 		RatePercent: widen(v.RatePercent), SalaryFrom: widen32(v.SalaryFrom), SalaryTo: widen32(v.SalaryTo),
 		ContractMonth: widen(v.ContractMonths), FundingNote: v.FundingNote, Degree: v.DegreeRequired,
 		AcademicTitle: v.TitleRequired, IsCompetition: v.IsCompetition, Specialties: specialties,
+		EquipmentAccess: v.EquipmentAccess, EquipmentNote: v.EquipmentNote, EquipmentUnitID: v.EquipmentUnitID,
+		PublicationsPaid: v.PublicationsPaid, ConferenceTravel: v.ConferenceTravel,
 		WorkFormat: deref(v.WorkFormat), RegionCode: deref(v.RegionCode), ContractType: deref(v.ContractType),
 		FundingSource: deref(v.FundingSource),
 	}

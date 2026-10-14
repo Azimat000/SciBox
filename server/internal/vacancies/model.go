@@ -110,6 +110,7 @@ const (
 	MaxFocusLen     = 300
 	MaxCityLen      = 100
 	MaxFundingNote  = 200
+	MaxEquipment    = 300
 	MaxSalary       = 100_000_000
 	MaxContractMon  = 120
 	MaxSpecialties  = 5
@@ -141,7 +142,22 @@ type Input struct {
 	IsCompetition bool
 	Deadline      string // 2026-11-14 или пусто
 	Specialties   []string
+
+	// Условия для учёного (D-203): доступ к оборудованию (описание и ЦКП допустимы только вместе с отметкой),
+	// оплата публикаций, поездки на конференции.
+	EquipmentAccess  bool
+	EquipmentNote    string
+	EquipmentUnitID  *uuid.UUID
+	PublicationsPaid bool
+	ConferenceTravel bool
 }
+
+// Условия для учёного, которые видны в списках короткими метками (Card.Perks). Строки уходят в API и на сайт.
+const (
+	PerkEquipment   = "equipment"   // доступ к оборудованию и ЦКП
+	PerkPublication = "publication" // оплата публикаций
+	PerkConference  = "conference"  // поездки на конференции
+)
 
 // Ref — запись справочника: код и название.
 type Ref struct {
@@ -191,8 +207,10 @@ type Card struct {
 	IsCompetition  bool        `json:"is_competition"`
 	Deadline       string      `json:"deadline"`
 	Specialties    []Ref       `json:"specialties"`
-	PublishedAt    *time.Time  `json:"published_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	// Perks — какие условия для учёного заявлены (коды Perk*); пустой список, если ни одного.
+	Perks       []string   `json:"perks"`
+	PublishedAt *time.Time `json:"published_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // Viewer — что смотрящий может с этой вакансией.
@@ -215,6 +233,12 @@ type Detail struct {
 	AcademicTitle string    `json:"title_required"`
 	CreatedAt     time.Time `json:"created_at"`
 	Viewer        Viewer    `json:"viewer"`
+
+	EquipmentAccess  bool     `json:"equipment_access"`
+	EquipmentNote    string   `json:"equipment_note"`
+	EquipmentUnit    *UnitRef `json:"equipment_unit"`
+	PublicationsPaid bool     `json:"publications_paid"`
+	ConferenceTravel bool     `json:"conference_travel"`
 }
 
 // List — страница списка вакансий.

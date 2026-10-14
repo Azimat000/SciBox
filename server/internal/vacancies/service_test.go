@@ -2,6 +2,7 @@ package vacancies
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -640,5 +641,110 @@ func TestSalaryAndOptionalFieldsRoundTrip(t *testing.T) {
 	plain := w.create(tm, tm.owner, goodInput())
 	if plain.SalaryFrom != nil || plain.SalaryTo != nil || plain.FundingSource != "" || plain.Housing != HousingNone {
 		t.Errorf("%+v", plain)
+	}
+}
+
+// Условия для учёного: запись и чтение обратно, ЦКП только своей организации и только вида «ЦКП», метки в списках.
+func TestConditionsRoundTripAndUnitRules(t *testing.T) {
+	w := newWorld(t)
+	tm := w.team()
+	ckp, err := w.orgs.CreateUnit(bg, tm.owner.User, tm.slug, orgs.UnitInput{Name: "ЦКП «Геномика»", Kind: orgs.UnitSharedFacility})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := w.team() // чужая организация со своим ЦКП
+	foreign, err := w.orgs.CreateUnit(bg, other.owner.User, other.slug, orgs.UnitInput{Name: "Чужой ЦКП", Kind: orgs.UnitSharedFacility})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	in := goodInput()
+	in.EquipmentAccess, in.EquipmentNote, in.EquipmentUnitID = true, "Секвенаторы, доступ по заявке", &ckp.ID
+	in.PublicationsPaid, in.ConferenceTravel = true, true
+	d := w.published(tm, in)
+	if !d.EquipmentAccess || d.EquipmentNote != in.EquipmentNote || d.EquipmentUnit == nil || d.EquipmentUnit.ID != ckp.ID ||
+		d.EquipmentUnit.Name != "ЦКП «Геномика»" || !d.PublicationsPaid || !d.ConferenceTravel {
+		t.Fatalf("conditions lost: %+v", d)
+	}
+	if !slices.Equal(d.Perks, []string{PerkEquipment, PerkPublication, PerkConference}) {
+		t.Errorf("perks %v", d.Perks)
+	}
+
+	// Без условий: пустой список меток, а не nil (в JSON это []).
+	plain := w.create(tm, tm.owner, goodInput())
+	if plain.Perks == nil || len(plain.Perks) != 0 || plain.EquipmentAccess || plain.EquipmentUnit != nil {
+		t.Errorf("plain vacancy: %+v", plain.Perks)
+	}
+
+	// Подразделение должно быть ЦКП этой же организации.
+	for name, unit := range map[string]uuid.UUID{
+		"laboratory of the same organization": tm.unitA.ID, "shared facility of another organization": foreign.ID, "unknown unit": uuid.New(),
+	} {
+		bad := goodInput()
+		bad.EquipmentAccess, bad.EquipmentUnitID = true, &unit
+		if _, err := w.svc.Create(bg, tm.owner.User, tm.slug, bad); !isValidation(err, "equipment_unit_id") {
+			t.Errorf("%s: %v", name, err)
+		}
+		if _, err := w.svc.Update(bg, tm.owner.User, d.ID, bad); !isValidation(err, "equipment_unit_id") {
+			t.Errorf("update, %s: %v", name, err)
+		}
+	}
+
+	// Снятие отметки очищает описание и ЦКП только вместе с ними.
+	off := goodInput()
+	off.PublicationsPaid = true
+	got, err := w.svc.Update(bg, tm.owner.User, d.ID, off)
+	if err != nil || got.EquipmentAccess || got.EquipmentNote != "" || got.EquipmentUnit != nil || !got.PublicationsPaid || got.ConferenceTravel {
+		t.Fatalf("update: %+v %v", got, err)
+	}
+
+	// Подразделение-ЦКП удалили: ссылка пропала, описание и отметка остались.
+	back := goodInput()
+	back.EquipmentAccess, back.EquipmentNote, back.EquipmentUnitID = true, "Секвенаторы", &ckp.ID
+	if _, err := w.svc.Update(bg, tm.owner.User, d.ID, back); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.orgs.DeleteUnit(bg, tm.owner.User, tm.slug, ckp.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err = w.svc.Get(bg, d.ID, nil)
+	if err != nil || !got.EquipmentAccess || got.EquipmentNote != "Секвенаторы" || got.EquipmentUnit != nil {
+		t.Errorf("after the unit was deleted: %+v %v", got, err)
+	}
+
+	// Публикация проверяет условия так же, как правка: описание без отметки в базу попасть не может, но готовность считается.
+	if _, err := w.svc.SetStatus(bg, tm.owner.User, plain.ID, StatusPublished); err != nil {
+		t.Errorf("publish: %v", err)
+	}
+}
+
+// Метки условий видны в списках и в «Моих вакансиях».
+func TestPerksInLists(t *testing.T) {
+	w := newWorld(t)
+	st := w.searchTeam()
+	res := w.search(st, SearchParams{Equipment: true, Sort: SortNew})
+	if res.Total != 2 {
+		t.Fatalf("%v", titles(res))
+	}
+	for _, c := range res.Items {
+		if !slices.Contains(c.Perks, PerkEquipment) {
+			t.Errorf("%s: %v", c.Title, c.Perks)
+		}
+	}
+	mine, err := w.svc.ListMine(bg, st.owner.User, StatusPublished, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withPerks := 0
+	for _, c := range mine.Items {
+		if c.Perks == nil {
+			t.Errorf("%s: perks must be a list", c.Title)
+		}
+		if len(c.Perks) > 0 {
+			withPerks++
+		}
+	}
+	if withPerks != 3 {
+		t.Errorf("с условиями %d, ожидали 3", withPerks)
 	}
 }

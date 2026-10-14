@@ -67,41 +67,48 @@ const createVacancy = `-- name: CreateVacancy :one
 INSERT INTO vacancies (
     org_id, unit_id, created_by, title, position_code, summary, description, requirements, focus, career_level,
     work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months,
-    funding_source, funding_note, degree_required, title_required, is_competition, deadline, created_at, updated_at
+    funding_source, funding_note, degree_required, title_required, is_competition, deadline,
+    equipment_access, equipment_note, equipment_unit_id, publications_paid, conference_travel, created_at, updated_at
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
     $11, $12, $13, $14, $15, $16, $17, $18, $19,
-    $20, $21, $22, $23, $24, $25, $26, $26
+    $20, $21, $22, $23, $24, $25,
+    $26, $27, $28, $29, $30, $31, $31
 ) RETURNING id
 `
 
 type CreateVacancyParams struct {
-	OrgID          uuid.UUID
-	UnitID         *uuid.UUID
-	CreatedBy      *uuid.UUID
-	Title          string
-	PositionCode   string
-	Summary        string
-	Description    string
-	Requirements   string
-	Focus          string
-	CareerLevel    *int16
-	WorkFormat     *string
-	RegionCode     *string
-	City           string
-	Housing        string
-	RatePercent    *int16
-	SalaryFrom     *int32
-	SalaryTo       *int32
-	ContractType   *string
-	ContractMonths *int16
-	FundingSource  *string
-	FundingNote    string
-	DegreeRequired string
-	TitleRequired  string
-	IsCompetition  bool
-	Deadline       *time.Time
-	Now            time.Time
+	OrgID            uuid.UUID
+	UnitID           *uuid.UUID
+	CreatedBy        *uuid.UUID
+	Title            string
+	PositionCode     string
+	Summary          string
+	Description      string
+	Requirements     string
+	Focus            string
+	CareerLevel      *int16
+	WorkFormat       *string
+	RegionCode       *string
+	City             string
+	Housing          string
+	RatePercent      *int16
+	SalaryFrom       *int32
+	SalaryTo         *int32
+	ContractType     *string
+	ContractMonths   *int16
+	FundingSource    *string
+	FundingNote      string
+	DegreeRequired   string
+	TitleRequired    string
+	IsCompetition    bool
+	Deadline         *time.Time
+	EquipmentAccess  bool
+	EquipmentNote    string
+	EquipmentUnitID  *uuid.UUID
+	PublicationsPaid bool
+	ConferenceTravel bool
+	Now              time.Time
 }
 
 // Вакансии (срез 5).
@@ -132,6 +139,11 @@ func (q *Queries) CreateVacancy(ctx context.Context, arg CreateVacancyParams) (u
 		arg.TitleRequired,
 		arg.IsCompetition,
 		arg.Deadline,
+		arg.EquipmentAccess,
+		arg.EquipmentNote,
+		arg.EquipmentUnitID,
+		arg.PublicationsPaid,
+		arg.ConferenceTravel,
 		arg.Now,
 	)
 	var id uuid.UUID
@@ -161,7 +173,7 @@ func (q *Queries) DeleteVacancySpecialties(ctx context.Context, vacancyID uuid.U
 }
 
 const getVacancyView = `-- name: GetVacancyView :one
-SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at, position_name, position_type, region_name, org_slug, org_name, org_kind, org_city, unit_name FROM vacancy_view WHERE id = $1
+SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at, position_name, position_type, region_name, org_slug, org_name, org_kind, org_city, unit_name, equipment_access, equipment_note, equipment_unit_id, publications_paid, conference_travel, equipment_unit_name FROM vacancy_view WHERE id = $1
 `
 
 func (q *Queries) GetVacancyView(ctx context.Context, id uuid.UUID) (VacancyView, error) {
@@ -208,12 +220,18 @@ func (q *Queries) GetVacancyView(ctx context.Context, id uuid.UUID) (VacancyView
 		&i.OrgKind,
 		&i.OrgCity,
 		&i.UnitName,
+		&i.EquipmentAccess,
+		&i.EquipmentNote,
+		&i.EquipmentUnitID,
+		&i.PublicationsPaid,
+		&i.ConferenceTravel,
+		&i.EquipmentUnitName,
 	)
 	return i, err
 }
 
 const listMyVacancies = `-- name: ListMyVacancies :many
-SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at, position_name, position_type, region_name, org_slug, org_name, org_kind, org_city, unit_name FROM vacancy_view
+SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at, position_name, position_type, region_name, org_slug, org_name, org_kind, org_city, unit_name, equipment_access, equipment_note, equipment_unit_id, publications_paid, conference_travel, equipment_unit_name FROM vacancy_view
 WHERE (org_id = ANY($1::uuid[]) OR unit_id = ANY($2::uuid[]))
   AND ($3::text = '' OR status = $3::text)
 ORDER BY updated_at DESC, id
@@ -285,6 +303,12 @@ func (q *Queries) ListMyVacancies(ctx context.Context, arg ListMyVacanciesParams
 			&i.OrgKind,
 			&i.OrgCity,
 			&i.UnitName,
+			&i.EquipmentAccess,
+			&i.EquipmentNote,
+			&i.EquipmentUnitID,
+			&i.PublicationsPaid,
+			&i.ConferenceTravel,
+			&i.EquipmentUnitName,
 		); err != nil {
 			return nil, err
 		}
@@ -297,7 +321,7 @@ func (q *Queries) ListMyVacancies(ctx context.Context, arg ListMyVacanciesParams
 }
 
 const listPublishedVacancyViewsByIDs = `-- name: ListPublishedVacancyViewsByIDs :many
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, v.equipment_access, v.equipment_note, v.equipment_unit_id, v.publications_paid, v.conference_travel, v.equipment_unit_name
 FROM unnest($1::uuid[]) WITH ORDINALITY AS u(id, ord)
 JOIN vacancy_view v ON v.id = u.id
 WHERE v.status = 'published'
@@ -360,6 +384,12 @@ func (q *Queries) ListPublishedVacancyViewsByIDs(ctx context.Context, ids []uuid
 			&i.VacancyView.OrgKind,
 			&i.VacancyView.OrgCity,
 			&i.VacancyView.UnitName,
+			&i.VacancyView.EquipmentAccess,
+			&i.VacancyView.EquipmentNote,
+			&i.VacancyView.EquipmentUnitID,
+			&i.VacancyView.PublicationsPaid,
+			&i.VacancyView.ConferenceTravel,
+			&i.VacancyView.EquipmentUnitName,
 		); err != nil {
 			return nil, err
 		}
@@ -435,7 +465,7 @@ func (q *Queries) ListVacancySpecialties(ctx context.Context, ids []uuid.UUID) (
 }
 
 const lockVacancy = `-- name: LockVacancy :one
-SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at FROM vacancies WHERE id = $1 FOR UPDATE
+SELECT id, org_id, unit_id, created_by, status, title, position_code, summary, description, requirements, focus, career_level, work_format, region_code, city, housing, rate_percent, salary_from, salary_to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline, published_at, closed_at, archived_at, created_at, updated_at, equipment_access, equipment_note, equipment_unit_id, publications_paid, conference_travel FROM vacancies WHERE id = $1 FOR UPDATE
 `
 
 // Строка с блокировкой: два одновременных изменения одной вакансии выстроятся в очередь.
@@ -475,6 +505,11 @@ func (q *Queries) LockVacancy(ctx context.Context, id uuid.UUID) (Vacancy, error
 		&i.ArchivedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EquipmentAccess,
+		&i.EquipmentNote,
+		&i.EquipmentUnitID,
+		&i.PublicationsPaid,
+		&i.ConferenceTravel,
 	)
 	return i, err
 }
@@ -529,18 +564,21 @@ WITH hits AS MATERIALIZED (
     AND ($21::int = 0 OR COALESCE(fv.salary_to, fv.salary_from) >= $21::int)
     AND (NOT $22::bool OR fv.housing <> 'none')
     AND (NOT $23::bool OR fv.is_competition)
-    AND (NOT $24::bool OR fv.deadline IS NULL)
-    AND ($25::date IS NULL OR fv.deadline <= $25::date)
-    AND ($26::timestamptz IS NULL OR fv.published_at > $26::timestamptz)
-    AND ($27::timestamptz IS NULL OR fv.published_at <= $27::timestamptz)
+    AND (NOT $24::bool OR fv.equipment_access)
+    AND (NOT $25::bool OR fv.publications_paid)
+    AND (NOT $26::bool OR fv.conference_travel)
+    AND (NOT $27::bool OR fv.deadline IS NULL)
+    AND ($28::date IS NULL OR fv.deadline <= $28::date)
+    AND ($29::timestamptz IS NULL OR fv.published_at > $29::timestamptz)
+    AND ($30::timestamptz IS NULL OR fv.published_at <= $30::timestamptz)
   ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, fv.published_at DESC, fv.id
-  LIMIT $28
+  LIMIT $31
 ), page AS (
   SELECT f.id, count(*) OVER () AS total,
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_deadline ASC NULLS LAST, f.k_pay DESC NULLS LAST, f.published_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, p.total
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, v.equipment_access, v.equipment_note, v.equipment_unit_id, v.publications_paid, v.conference_travel, v.equipment_unit_name, p.total
 FROM (SELECT id, total, ord FROM page WHERE ord <= $1::int ORDER BY ord LIMIT $3 OFFSET $2) p
 JOIN vacancy_view v ON v.id = p.id
 ORDER BY p.ord
@@ -570,6 +608,9 @@ type SearchVacanciesParams struct {
 	SalaryMin      int32
 	Housing        bool
 	Competition    bool
+	Equipment      bool
+	Publications   bool
+	Conferences    bool
 	NoDeadline     bool
 	DeadlineTo     *time.Time
 	PublishedAfter *time.Time
@@ -625,6 +666,9 @@ func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams
 		arg.SalaryMin,
 		arg.Housing,
 		arg.Competition,
+		arg.Equipment,
+		arg.Publications,
+		arg.Conferences,
 		arg.NoDeadline,
 		arg.DeadlineTo,
 		arg.PublishedAfter,
@@ -679,6 +723,12 @@ func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams
 			&i.VacancyView.OrgKind,
 			&i.VacancyView.OrgCity,
 			&i.VacancyView.UnitName,
+			&i.VacancyView.EquipmentAccess,
+			&i.VacancyView.EquipmentNote,
+			&i.VacancyView.EquipmentUnitID,
+			&i.VacancyView.PublicationsPaid,
+			&i.VacancyView.ConferenceTravel,
+			&i.VacancyView.EquipmentUnitName,
 			&i.Total,
 		); err != nil {
 			return nil, err
@@ -729,36 +779,43 @@ UPDATE vacancies SET
     region_code = $10, city = $11, housing = $12, rate_percent = $13,
     salary_from = $14, salary_to = $15, contract_type = $16, contract_months = $17,
     funding_source = $18, funding_note = $19, degree_required = $20,
-    title_required = $21, is_competition = $22, deadline = $23, updated_at = $24
-WHERE id = $25
+    title_required = $21, is_competition = $22, deadline = $23,
+    equipment_access = $24, equipment_note = $25, equipment_unit_id = $26,
+    publications_paid = $27, conference_travel = $28, updated_at = $29
+WHERE id = $30
 `
 
 type UpdateVacancyParams struct {
-	UnitID         *uuid.UUID
-	Title          string
-	PositionCode   string
-	Summary        string
-	Description    string
-	Requirements   string
-	Focus          string
-	CareerLevel    *int16
-	WorkFormat     *string
-	RegionCode     *string
-	City           string
-	Housing        string
-	RatePercent    *int16
-	SalaryFrom     *int32
-	SalaryTo       *int32
-	ContractType   *string
-	ContractMonths *int16
-	FundingSource  *string
-	FundingNote    string
-	DegreeRequired string
-	TitleRequired  string
-	IsCompetition  bool
-	Deadline       *time.Time
-	Now            time.Time
-	ID             uuid.UUID
+	UnitID           *uuid.UUID
+	Title            string
+	PositionCode     string
+	Summary          string
+	Description      string
+	Requirements     string
+	Focus            string
+	CareerLevel      *int16
+	WorkFormat       *string
+	RegionCode       *string
+	City             string
+	Housing          string
+	RatePercent      *int16
+	SalaryFrom       *int32
+	SalaryTo         *int32
+	ContractType     *string
+	ContractMonths   *int16
+	FundingSource    *string
+	FundingNote      string
+	DegreeRequired   string
+	TitleRequired    string
+	IsCompetition    bool
+	Deadline         *time.Time
+	EquipmentAccess  bool
+	EquipmentNote    string
+	EquipmentUnitID  *uuid.UUID
+	PublicationsPaid bool
+	ConferenceTravel bool
+	Now              time.Time
+	ID               uuid.UUID
 }
 
 func (q *Queries) UpdateVacancy(ctx context.Context, arg UpdateVacancyParams) (int64, error) {
@@ -786,6 +843,11 @@ func (q *Queries) UpdateVacancy(ctx context.Context, arg UpdateVacancyParams) (i
 		arg.TitleRequired,
 		arg.IsCompetition,
 		arg.Deadline,
+		arg.EquipmentAccess,
+		arg.EquipmentNote,
+		arg.EquipmentUnitID,
+		arg.PublicationsPaid,
+		arg.ConferenceTravel,
 		arg.Now,
 		arg.ID,
 	)

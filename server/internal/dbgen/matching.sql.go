@@ -290,7 +290,7 @@ func (q *Queries) ListDueSavedSearches(ctx context.Context, arg ListDueSavedSear
 }
 
 const listFavoriteDeadlines = `-- name: ListFavoriteDeadlines :many
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, f.created_at AS added_at, a.id AS application_id
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, v.equipment_access, v.equipment_note, v.equipment_unit_id, v.publications_paid, v.conference_travel, v.equipment_unit_name, f.created_at AS added_at, a.id AS application_id
 FROM favorites f
 JOIN vacancy_view v ON v.id = f.vacancy_id
 LEFT JOIN applications a ON a.vacancy_id = v.id AND a.user_id = f.user_id AND a.status <> 'withdrawn'
@@ -360,6 +360,12 @@ func (q *Queries) ListFavoriteDeadlines(ctx context.Context, arg ListFavoriteDea
 			&i.VacancyView.OrgKind,
 			&i.VacancyView.OrgCity,
 			&i.VacancyView.UnitName,
+			&i.VacancyView.EquipmentAccess,
+			&i.VacancyView.EquipmentNote,
+			&i.VacancyView.EquipmentUnitID,
+			&i.VacancyView.PublicationsPaid,
+			&i.VacancyView.ConferenceTravel,
+			&i.VacancyView.EquipmentUnitName,
 			&i.AddedAt,
 			&i.ApplicationID,
 		); err != nil {
@@ -399,7 +405,7 @@ func (q *Queries) ListFavoriteIDs(ctx context.Context, userID uuid.UUID) ([]uuid
 }
 
 const listFavorites = `-- name: ListFavorites :many
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, f.created_at AS added_at, a.id AS application_id, count(*) OVER () AS total
+SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, v.equipment_access, v.equipment_note, v.equipment_unit_id, v.publications_paid, v.conference_travel, v.equipment_unit_name, f.created_at AS added_at, a.id AS application_id, count(*) OVER () AS total
 FROM favorites f
 JOIN vacancy_view v ON v.id = f.vacancy_id
 LEFT JOIN applications a ON a.vacancy_id = v.id AND a.user_id = f.user_id AND a.status <> 'withdrawn'
@@ -479,6 +485,12 @@ func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([
 			&i.VacancyView.OrgKind,
 			&i.VacancyView.OrgCity,
 			&i.VacancyView.UnitName,
+			&i.VacancyView.EquipmentAccess,
+			&i.VacancyView.EquipmentNote,
+			&i.VacancyView.EquipmentUnitID,
+			&i.VacancyView.PublicationsPaid,
+			&i.VacancyView.ConferenceTravel,
+			&i.VacancyView.EquipmentUnitName,
 			&i.AddedAt,
 			&i.ApplicationID,
 			&i.Total,
