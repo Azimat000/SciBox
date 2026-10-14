@@ -204,6 +204,16 @@ func (f *fx) scientist(visibility string) uuid.UUID {
 	return own.Profile.ID
 }
 
+// scientistHiddenFromTeam — публичный профиль субъекта, скрытый от организации A (D-200); возвращает номер профиля.
+func (f *fx) scientistHiddenFromTeam() uuid.UUID {
+	f.t.Helper()
+	id := f.scientist("public")
+	if _, err := f.w.k.Prof.SetHiddenOrgs(bgctx, f.Subject().User, []uuid.UUID{f.tm().OrgID}); err != nil {
+		f.t.Fatal(err)
+	}
+	return id
+}
+
 // offer — приглашение субъекта на новую вакансию подразделения A.
 func (f *fx) offer() (offerID, vacancyID uuid.UUID) {
 	f.t.Helper()

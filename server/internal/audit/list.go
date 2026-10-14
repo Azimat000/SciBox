@@ -11,6 +11,7 @@ import (
 
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/num"
+	"scibox/server/internal/privacy"
 )
 
 // Размер страницы журнала.
@@ -23,6 +24,9 @@ const (
 type Person struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
+	// Anonymous — имя и номер скрыты: человек приглашён с анонимным профилем (или скрылся от этой
+	// организации) и ещё не открыл ей имя откликом или ответом «Интересно» (D-199, D-200). Тогда ID пуст, а Name не заполнен.
+	Anonymous bool `json:"anonymous,omitzero"`
 }
 
 // Target — над чем сделано действие.
@@ -75,6 +79,9 @@ func List(ctx context.Context, q *dbgen.Queries, orgID uuid.UUID, before int64, 
 			ID: r.ID, At: r.At, Action: Action(r.Action), Details: map[string]string{},
 			Actor: person(r.ActorID, r.ActorName), Subject: person(r.SubjectID, r.SubjectName),
 			Target: Target{Kind: r.TargetKind, ID: r.TargetID, Label: r.TargetLabel},
+		}
+		if e.Subject != nil && !privacy.ShowsName(r.SubjectConcealed, r.SubjectRevealed) {
+			e.Subject = &Person{Anonymous: true}
 		}
 		if err := json.Unmarshal(r.Details, &e.Details); err != nil {
 			return Page{}, fmt.Errorf("audit: decode details of %d: %w", r.ID, err)

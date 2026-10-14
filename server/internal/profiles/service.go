@@ -143,7 +143,19 @@ func (s *Service) Own(ctx context.Context, user auth.User) (Page, error) {
 	if err != nil {
 		return Page{}, fmt.Errorf("profiles: load profile: %w", err)
 	}
-	return s.build(ctx, s.q, row.Profile, row.DisplayName, row.RegionName, row.DegreeSpecialtyName, privacy.Viewer{Owner: true})
+	page, err := s.build(ctx, s.q, row.Profile, row.DisplayName, row.RegionName, row.DegreeSpecialtyName, privacy.Viewer{Owner: true})
+	if err != nil {
+		return Page{}, err
+	}
+	hidden, err := s.q.ListHiddenOrgs(ctx, row.Profile.ID)
+	if err != nil {
+		return Page{}, fmt.Errorf("profiles: list hidden organizations: %w", err)
+	}
+	page.HiddenOrgs = make([]HiddenOrg, 0, len(hidden))
+	for _, h := range hidden {
+		page.HiddenOrgs = append(page.HiddenOrgs, HiddenOrg{ID: h.ID, Slug: h.Slug, Name: h.Name, City: h.City})
+	}
+	return page, nil
 }
 
 // Get — профиль по номеру глазами смотрящего (nil — аноним). Если приватность не пускает, ответ тот же, что у несуществующего.
@@ -155,7 +167,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Pag
 	if err != nil {
 		return Page{}, fmt.Errorf("profiles: load profile: %w", err)
 	}
-	who, err := s.viewerOf(ctx, row.Profile.UserID, viewer)
+	who, err := s.viewerOf(ctx, row.Profile.ID, row.Profile.UserID, viewer)
 	if err != nil {
 		return Page{}, err
 	}
@@ -172,19 +184,27 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Pag
 	return s.build(ctx, s.q, row.Profile, row.DisplayName, row.RegionName, row.DegreeSpecialtyName, who)
 }
 
-// viewerOf собирает сведения о смотрящем для приватности: владелец ли он и состоит ли в организации.
-func (s *Service) viewerOf(ctx context.Context, owner uuid.UUID, viewer *auth.User) (privacy.Viewer, error) {
+// viewerOf собирает сведения о смотрящем для приватности: владелец ли он, состоит ли в организации, скрыт ли профиль от
+// одной из его организаций и открыто ли ей имя (D-199, D-200).
+func (s *Service) viewerOf(ctx context.Context, profileID, owner uuid.UUID, viewer *auth.User) (privacy.Viewer, error) {
 	if viewer == nil {
 		return privacy.Viewer{}, nil
 	}
 	if viewer.ID == owner {
 		return privacy.Viewer{Owner: true}, nil
 	}
-	staff, err := s.q.IsOrgStaff(ctx, viewer.ID)
+	orgIDs, err := s.q.ListUserOrgIDs(ctx, viewer.ID)
 	if err != nil {
-		return privacy.Viewer{}, fmt.Errorf("profiles: check organization staff: %w", err)
+		return privacy.Viewer{}, fmt.Errorf("profiles: list organizations: %w", err)
 	}
-	return privacy.Viewer{Staff: staff}, nil
+	if len(orgIDs) == 0 {
+		return privacy.Viewer{}, nil
+	}
+	rel, err := s.q.ProfileOrgRelations(ctx, dbgen.ProfileOrgRelationsParams{ProfileID: profileID, UserID: owner, OrgIds: orgIDs})
+	if err != nil {
+		return privacy.Viewer{}, fmt.Errorf("profiles: check profile relations: %w", err)
+	}
+	return privacy.Viewer{Staff: true, HiddenFrom: rel.HiddenFrom, Revealed: rel.Revealed}, nil
 }
 
 // build собирает профиль для смотрящего: контакты и приватность попадают в ответ, только если им это положено.
@@ -235,7 +255,25 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 	if canContacts {
 		v.ContactEmail = p.ContactEmail
 	}
+	if vis.Detail(who) == privacy.Blind {
+		v = blindView(v)
+	}
 	return Page{Profile: v, Viewer: ViewerInfo{IsOwner: who.Owner, CanSeeContacts: canContacts}}, nil
+}
+
+// blindView — безымянная карточка (D-199). Собирается списком разрешённого, а не вычёркиванием лишнего: новое поле
+// профиля по умолчанию в безымянную карточку не попадает. Разрешено: степень (уровень и специальность), звание, регион,
+// специальности, h-index, счётчики публикаций и статей в Q1–Q2, «открыт к предложениям», дата обновления.
+func blindView(v View) View {
+	pubs := len(v.Sections.Publications)
+	return View{
+		ID: v.ID, OpenToOffers: v.OpenToOffers, Region: v.Region,
+		Degree:        DegreeInfo{Level: v.Degree.Level, Specialty: v.Degree.Specialty},
+		AcademicTitle: v.AcademicTitle,
+		HIndex:        v.HIndex, Specialties: v.Specialties,
+		Skills: Skills{Research: []string{}, General: []string{}}, Sections: emptySections(),
+		Quartiles: v.Quartiles, Anonymous: true, PublicationCount: &pubs, UpdatedAt: v.UpdatedAt,
+	}
 }
 
 // RecentYears — сколько последних лет, считая текущий, входит в «статей в Q1–Q2 за 5 лет».
@@ -435,6 +473,54 @@ func (s *Service) SetPrivacy(ctx context.Context, user auth.User, visibility str
 		}
 		if n == 0 {
 			return ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return Page{}, err
+	}
+	return s.Own(ctx, user)
+}
+
+// MaxHiddenOrgs — от скольких организаций человек может скрыть профиль.
+const MaxHiddenOrgs = 30
+
+// SetHiddenOrgs заменяет список организаций, от сотрудников которых скрыт профиль (D-200): они не видят его ни в каком
+// режиме. Организации выбираются из существующих; повторы отбрасываются. Скрытый от организации человек, который сам
+// откликается на её вакансию, откликается обычным образом: отклик его осознанный шаг (D-079).
+func (s *Service) SetHiddenOrgs(ctx context.Context, user auth.User, orgIDs []uuid.UUID) (Page, error) {
+	seen := map[uuid.UUID]bool{}
+	ids := make([]uuid.UUID, 0, len(orgIDs))
+	for _, id := range orgIDs {
+		if id != uuid.Nil && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) > MaxHiddenOrgs {
+		return Page{}, &auth.ValidationError{Fields: map[string]string{"org_ids": fmt.Sprintf("Не больше %d организаций", MaxHiddenOrgs)}}
+	}
+	err := s.inTx(ctx, func(q *dbgen.Queries) error {
+		id, err := s.ensure(ctx, q, user.ID)
+		if err != nil {
+			return err
+		}
+		if len(ids) > 0 {
+			known, err := q.ExistingOrgIDs(ctx, ids)
+			if err != nil {
+				return fmt.Errorf("profiles: check organizations: %w", err)
+			}
+			if len(known) != len(ids) {
+				return &auth.ValidationError{Fields: map[string]string{"org_ids": "Такой организации нет. Выберите организации из списка"}}
+			}
+		}
+		if err := q.DeleteHiddenOrgs(ctx, id); err != nil {
+			return fmt.Errorf("profiles: clear hidden organizations: %w", err)
+		}
+		if len(ids) > 0 {
+			if err := q.AddHiddenOrgs(ctx, dbgen.AddHiddenOrgsParams{ProfileID: id, OrgIds: ids, Now: s.now()}); err != nil {
+				return fmt.Errorf("profiles: add hidden organizations: %w", err)
+			}
 		}
 		return nil
 	})

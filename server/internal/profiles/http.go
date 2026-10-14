@@ -60,6 +60,7 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Get("/", h.own)
 		r.Put("/", h.saveCore)
 		r.Put("/privacy", h.setPrivacy)
+		r.Put("/hidden-orgs", h.setHiddenOrgs)
 		r.Post("/items", h.addItem)
 		r.Put("/items/{id}", h.updateItem)
 		r.Delete("/items/{id}", h.deleteItem)
@@ -125,6 +126,21 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 
 func (h *Handler) own(w http.ResponseWriter, r *http.Request) {
 	page, err := h.svc.Own(r.Context(), actor(r))
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	apierr.WriteJSON(w, http.StatusOK, page)
+}
+
+func (h *Handler) setHiddenOrgs(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		OrgIDs []uuid.UUID `json:"org_ids"`
+	}
+	if !apierr.DecodeJSON(w, r, &in, maxBody) {
+		return
+	}
+	page, err := h.svc.SetHiddenOrgs(r.Context(), actor(r), in.OrgIDs)
 	if err != nil {
 		h.fail(w, r, err)
 		return

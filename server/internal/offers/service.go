@@ -170,8 +170,13 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 		if err != nil {
 			return fmt.Errorf("offers: load profile: %w", err)
 		}
-		// Приглашающий состоит в организации, поэтому смотрит на профиль как сотрудник.
-		if vis, _ := privacy.Parse(p.Visibility); !vis.CanView(privacy.Viewer{Staff: true}) {
+		// Приглашающий состоит в организации, поэтому смотрит на профиль как сотрудник. Анонимного приглашать можно (D-199);
+		// от сотрудника организации, от которой человек скрылся, профиль закрыт в любом режиме (D-200).
+		ok, err := s.canSee(ctx, q, user.ID, p)
+		if err != nil {
+			return err
+		}
+		if !ok {
 			return ErrNotFound
 		}
 		message, msgErr := checkText(in.Message, maxMessage, "Сообщение длиннее 1000 знаков. Сократите его")
@@ -225,6 +230,25 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 		})
 	})
 	return out, err
+}
+
+// canSee — виден ли профиль человеку как сотруднику организаций (по правилам privacy): приглашает только тот, кому профиль
+// открыт. Не состоящий в организациях или скрытый от одной из его организаций профиль закрыт.
+func (s *Service) canSee(ctx context.Context, q *dbgen.Queries, viewer uuid.UUID, p dbgen.GetProfileForOfferRow) (bool, error) {
+	orgIDs, err := q.ListUserOrgIDs(ctx, viewer)
+	if err != nil {
+		return false, fmt.Errorf("offers: list organizations: %w", err)
+	}
+	who := privacy.Viewer{Staff: len(orgIDs) > 0}
+	if who.Staff {
+		rel, err := q.ProfileOrgRelations(ctx, dbgen.ProfileOrgRelationsParams{ProfileID: p.ID, UserID: p.UserID, OrgIds: orgIDs})
+		if err != nil {
+			return false, fmt.Errorf("offers: check profile relations: %w", err)
+		}
+		who.HiddenFrom, who.Revealed = rel.HiddenFrom, rel.Revealed
+	}
+	vis, _ := privacy.Parse(p.Visibility)
+	return vis.CanView(who), nil
 }
 
 // loadForStaff находит приглашение, которым вправе распоряжаться организация: ведущему вакансию оно есть, остальным нет.
@@ -300,7 +324,12 @@ func (s *Service) Answer(ctx context.Context, user auth.User, id uuid.UUID, in A
 		if err != nil {
 			return err
 		}
-		title, body := answeredNotice(o.ScientistName, o.VacancyTitle, o.OrgName, in.Action, note)
+		// «Интересно» открывает организации имя, «Не сейчас» оставляет анонимный профиль анонимным (D-199).
+		name := ""
+		if privacy.ShowsName(o.Concealed, o.Revealed || in.Action == ActionInterested) {
+			name = o.ScientistName
+		}
+		title, body := answeredNotice(name, o.VacancyTitle, o.OrgName, in.Action, note)
 		for _, uid := range staff {
 			if uid == user.ID {
 				continue
@@ -335,7 +364,7 @@ func offerFromRow(o dbgen.GetOfferRow, forStaff bool) Offer {
 	}
 	pending := o.Status == StatusPending
 	if forStaff {
-		out.Scientist = &ScientistRef{ProfileID: o.ProfileID, Name: o.ScientistName}
+		out.Scientist = scientistRef(o.ProfileID, o.ScientistName, o.Concealed, o.Revealed)
 		out.CanCancel = pending
 	} else {
 		out.ApplicationID = o.ApplicationID
@@ -432,7 +461,7 @@ func (s *Service) Sent(ctx context.Context, user auth.User, f SentFilter) (SentL
 		out.Items = append(out.Items, Offer{
 			ID: r.ID, Status: r.Status, Message: r.Message, AnswerNote: r.AnswerNote, AnsweredAt: r.AnsweredAt, CreatedAt: r.CreatedAt,
 			Vacancy:   VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug, UnitName: deref(r.UnitName)},
-			Scientist: &ScientistRef{ProfileID: r.ProfileID, Name: r.ScientistName}, CanCancel: r.Status == StatusPending,
+			Scientist: scientistRef(r.ProfileID, r.ScientistName, r.Concealed, r.Revealed), CanCancel: r.Status == StatusPending,
 		})
 	}
 	return out, nil
@@ -457,11 +486,11 @@ func (s *Service) Targets(ctx context.Context, user auth.User, profileID uuid.UU
 	if err != nil {
 		return nil, fmt.Errorf("offers: load profile: %w", err)
 	}
-	staff, err := s.q.IsOrgStaff(ctx, user.ID)
+	ok, err := s.canSee(ctx, s.q, user.ID, p)
 	if err != nil {
-		return nil, fmt.Errorf("offers: check organization staff: %w", err)
+		return nil, err
 	}
-	if vis, _ := privacy.Parse(p.Visibility); !vis.CanView(privacy.Viewer{Staff: staff}) {
+	if !ok {
 		return nil, ErrNotFound
 	}
 	if p.UserID == user.ID {

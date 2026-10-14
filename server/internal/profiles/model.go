@@ -239,7 +239,19 @@ type View struct {
 	ContactEmail      string        `json:"contact_email,omitempty"` // только владельцу и сотрудникам организаций
 	Sections          Sections      `json:"sections"`
 	Quartiles         QuartileStats `json:"quartiles"`
-	UpdatedAt         time.Time     `json:"updated_at"`
+	// Anonymous — безымянная карточка (D-199): остались научные данные, а имени, должности, города, номеров, «о себе»,
+	// навыков и записей разделов нет. Вместо записей публикаций — их число в PublicationCount.
+	Anonymous        bool      `json:"anonymous,omitzero"`
+	PublicationCount *int      `json:"publication_count,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// HiddenOrg — организация, от сотрудников которой человек скрыл профиль (D-200).
+type HiddenOrg struct {
+	ID   uuid.UUID `json:"id"`
+	Slug string    `json:"slug"`
+	Name string    `json:"name"`
+	City string    `json:"city"`
 }
 
 // ViewerInfo — что смотрящему можно: страница сама решает, какие кнопки показать.
@@ -252,4 +264,6 @@ type ViewerInfo struct {
 type Page struct {
 	Profile View       `json:"profile"`
 	Viewer  ViewerInfo `json:"viewer"`
+	// HiddenOrgs — только владельцу: организации, от которых скрыт профиль.
+	HiddenOrgs []HiddenOrg `json:"hidden_orgs,omitempty"`
 }

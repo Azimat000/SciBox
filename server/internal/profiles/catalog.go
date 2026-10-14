@@ -74,6 +74,8 @@ type CatalogCard struct {
 	Q12Recent     int       `json:"q12_recent"` // из них с года RecentFrom ответа
 	Specialties   []Code    `json:"specialties"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	// Anonymous — анонимный профиль (D-199): имени, должности и города нет, остальное на месте.
+	Anonymous bool `json:"anonymous,omitzero"`
 }
 
 // CatalogResult — страница каталога.
@@ -160,12 +162,16 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	}
 	who := privacy.Viewer{}
 	var exclude *uuid.UUID
+	viewerOrgs := []uuid.UUID{}
 	if viewer != nil {
-		staff, err := s.q.IsOrgStaff(ctx, viewer.ID)
+		ids, err := s.q.ListUserOrgIDs(ctx, viewer.ID)
 		if err != nil {
-			return CatalogResult{}, fmt.Errorf("profiles: check organization staff: %w", err)
+			return CatalogResult{}, fmt.Errorf("profiles: list organizations: %w", err)
 		}
-		who.Staff = staff
+		who.Staff = len(ids) > 0
+		if who.Staff {
+			viewerOrgs = ids
+		}
 		exclude = &viewer.ID
 	}
 	modes := make([]string, 0, len(privacy.Modes))
@@ -184,7 +190,7 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 		sort = SortRelevance
 	}
 	arg := dbgen.SearchScientistsParams{
-		Modes: modes, ExcludeUser: exclude, Q: p.Query, Fields: nonNil(p.Fields), Region: p.Region,
+		Modes: modes, ExcludeUser: exclude, ViewerOrgs: viewerOrgs, Q: p.Query, Fields: nonNil(p.Fields), Region: p.Region,
 		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), OpenOnly: p.OpenOnly, HMin: num.Int32(p.HMin),
 		Q12Min: num.Int32(p.Q12Min), RecentFrom: num.Int32(s.recentFrom()),
 		Sort: sort, RowLimit: num.Int32(limit), RowOffset: num.Int32(offset), RowCap: num.Int32(s.cfg.maxResults() + 1), HitCap: num.Int32(s.cfg.maxResults() + 1), MaxResults: num.Int32(s.cfg.maxResults()),
@@ -214,6 +220,23 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	for _, sp := range specs {
 		byProfile[sp.ProfileID] = append(byProfile[sp.ProfileID], Code{Code: sp.Code, Name: sp.Name})
 	}
+	// Анонимным карточкам имя открывается, если человек открыл его одной из организаций смотрящего.
+	var blind []uuid.UUID
+	for _, r := range rows {
+		if privacy.Visibility(r.Visibility) == privacy.Anonymous {
+			blind = append(blind, r.ID)
+		}
+	}
+	revealed := map[uuid.UUID]bool{}
+	if len(blind) > 0 && len(viewerOrgs) > 0 {
+		open, err := s.q.RevealedProfileIDs(ctx, dbgen.RevealedProfileIDsParams{Ids: blind, OrgIds: viewerOrgs})
+		if err != nil {
+			return CatalogResult{}, fmt.Errorf("profiles: load revealed profiles: %w", err)
+		}
+		for _, id := range open {
+			revealed[id] = true
+		}
+	}
 	out := CatalogResult{Items: make([]CatalogCard, 0, len(rows)), Total: min(total, s.cfg.maxResults()), Capped: total > s.cfg.maxResults(), Fuzzy: fuzzy, RecentFrom: int(arg.RecentFrom)}
 	for _, r := range rows {
 		c := CatalogCard{
@@ -226,6 +249,9 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 		}
 		if r.RegionName != nil {
 			c.Region = *r.RegionName
+		}
+		if privacy.Visibility(r.Visibility).Detail(privacy.Viewer{Revealed: revealed[r.ID]}) == privacy.Blind {
+			c.Name, c.Headline, c.City, c.Anonymous = "", "", "", true
 		}
 		if r.HMax > 0 {
 			h := int(r.HMax)

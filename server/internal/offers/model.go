@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"scibox/server/internal/privacy"
 )
 
 // Состояния приглашения. Строки лежат в базе, не менять.
@@ -84,6 +86,17 @@ type VacancyRef struct {
 type ScientistRef struct {
 	ProfileID uuid.UUID `json:"profile_id"`
 	Name      string    `json:"name"`
+	// Anonymous — профиль анонимный (или скрыт от этой организации) и человек ещё не открыл ей имя: ни откликом, ни
+	// ответом «Интересно». Имени в ответе тогда нет (D-199, D-200).
+	Anonymous bool `json:"anonymous,omitzero"`
+}
+
+// scientistRef — приглашённый глазами организации: имя только если privacy.ShowsName.
+func scientistRef(profileID uuid.UUID, name string, concealed, revealed bool) *ScientistRef {
+	if !privacy.ShowsName(concealed, revealed) {
+		return &ScientistRef{ProfileID: profileID, Anonymous: true}
+	}
+	return &ScientistRef{ProfileID: profileID, Name: name}
 }
 
 // Offer — приглашение. Учёный видит организацию и вакансию (без имени сотрудника, D-096), организация видит учёного.

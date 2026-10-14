@@ -709,3 +709,18 @@ func TestArchiveSkipsUncheckedFilesAndFailsOnAMissingObject(t *testing.T) {
 		t.Error("an archive with a missing object was written without an error")
 	}
 }
+
+// Организации, от которых человек скрыл профиль, входят в архив названием (срез 15, D-200).
+func TestArchiveListsOrganizationsTheProfileIsHiddenFrom(t *testing.T) {
+	w := newWorld(t)
+	me := w.Applicant("Скрывающий Профиль")
+	if _, err := w.Prof.SetHiddenOrgs(bg, me.User, []uuid.UUID{w.tm.OrgID}); err != nil {
+		t.Fatal(err)
+	}
+	a := export(t, w.service(), fresh(t, w.World, me.Email))
+	var hidden []map[string]string
+	a.section(t, "profile_hidden_organizations", &hidden)
+	if len(hidden) != 1 || !strings.HasPrefix(hidden[0]["organization"], "Институт набора") || hidden[0]["hidden_at"] == "" {
+		t.Errorf("profile_hidden_organizations = %v", hidden)
+	}
+}

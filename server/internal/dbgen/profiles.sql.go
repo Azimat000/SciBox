@@ -12,6 +12,23 @@ import (
 	"github.com/google/uuid"
 )
 
+const addHiddenOrgs = `-- name: AddHiddenOrgs :exec
+INSERT INTO profile_hidden_orgs (profile_id, org_id, created_at)
+SELECT $1, x, $2 FROM unnest($3::uuid[]) AS x
+ON CONFLICT DO NOTHING
+`
+
+type AddHiddenOrgsParams struct {
+	ProfileID uuid.UUID
+	Now       time.Time
+	OrgIds    []uuid.UUID
+}
+
+func (q *Queries) AddHiddenOrgs(ctx context.Context, arg AddHiddenOrgsParams) error {
+	_, err := q.db.Exec(ctx, addHiddenOrgs, arg.ProfileID, arg.Now, arg.OrgIds)
+	return err
+}
+
 const addProfileSpecialties = `-- name: AddProfileSpecialties :exec
 INSERT INTO profile_specialties (profile_id, specialty_code) SELECT $1, unnest($2::text[])
 `
@@ -40,6 +57,15 @@ func (q *Queries) CountProfileItems(ctx context.Context, arg CountProfileItemsPa
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const deleteHiddenOrgs = `-- name: DeleteHiddenOrgs :exec
+DELETE FROM profile_hidden_orgs WHERE profile_id = $1
+`
+
+func (q *Queries) DeleteHiddenOrgs(ctx context.Context, profileID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteHiddenOrgs, profileID)
+	return err
 }
 
 const deleteProfileItem = `-- name: DeleteProfileItem :execrows
@@ -78,6 +104,31 @@ type EnsureProfileParams struct {
 func (q *Queries) EnsureProfile(ctx context.Context, arg EnsureProfileParams) error {
 	_, err := q.db.Exec(ctx, ensureProfile, arg.UserID, arg.Now)
 	return err
+}
+
+const existingOrgIDs = `-- name: ExistingOrgIDs :many
+SELECT id FROM organizations WHERE id = ANY($1::uuid[])
+`
+
+// Какие из этих организаций существуют (проверка перед записью).
+func (q *Queries) ExistingOrgIDs(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, existingOrgIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getProfileByID = `-- name: GetProfileByID :one
@@ -258,6 +309,46 @@ func (q *Queries) IsOrgStaff(ctx context.Context, userID uuid.UUID) (bool, error
 	return exists, err
 }
 
+const listHiddenOrgs = `-- name: ListHiddenOrgs :many
+SELECT o.id, o.slug, o.name, o.city
+FROM profile_hidden_orgs h JOIN organizations o ON o.id = h.org_id
+WHERE h.profile_id = $1
+ORDER BY lower(o.name), o.id
+`
+
+type ListHiddenOrgsRow struct {
+	ID   uuid.UUID
+	Slug string
+	Name string
+	City string
+}
+
+// Организации, от которых скрыт профиль, с названиями.
+func (q *Queries) ListHiddenOrgs(ctx context.Context, profileID uuid.UUID) ([]ListHiddenOrgsRow, error) {
+	rows, err := q.db.Query(ctx, listHiddenOrgs, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHiddenOrgsRow
+	for rows.Next() {
+		var i ListHiddenOrgsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.City,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProfileItems = `-- name: ListProfileItems :many
 SELECT id, kind, data, created_at, updated_at FROM profile_items
 WHERE profile_id = $1
@@ -365,6 +456,33 @@ func (q *Queries) ListSpecialtiesForProfiles(ctx context.Context, ids []uuid.UUI
 	return items, nil
 }
 
+const listUserOrgIDs = `-- name: ListUserOrgIDs :many
+
+SELECT org_id FROM org_members WHERE user_id = $1
+`
+
+// ---- анонимный режим и «скрыть от организаций» (срез 15, D-199, D-200) ----
+// Организации человека (в любой роли): по ним считается, скрыт ли от него профиль и открыто ли ему имя.
+func (q *Queries) ListUserOrgIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listUserOrgIDs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var org_id uuid.UUID
+		if err := rows.Scan(&org_id); err != nil {
+			return nil, err
+		}
+		items = append(items, org_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockProfileByUser = `-- name: LockProfileByUser :one
 SELECT id FROM profiles WHERE user_id = $1 FOR UPDATE
 `
@@ -399,6 +517,71 @@ func (q *Queries) ProfileHasDOI(ctx context.Context, arg ProfileHasDOIParams) (b
 	return exists, err
 }
 
+const profileOrgRelations = `-- name: ProfileOrgRelations :one
+SELECT
+    EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = $1 AND h.org_id = ANY($2::uuid[])) AS hidden_from,
+    COALESCE(EXISTS (SELECT 1 FROM applications a JOIN vacancies v ON v.id = a.vacancy_id
+                      WHERE a.user_id = $3 AND a.status <> 'withdrawn' AND v.org_id = ANY($2::uuid[]))
+             OR EXISTS (SELECT 1 FROM vacancy_offers o JOIN vacancies v ON v.id = o.vacancy_id
+                         WHERE o.user_id = $3 AND o.status = 'interested' AND v.org_id = ANY($2::uuid[])), false)::boolean AS revealed
+`
+
+type ProfileOrgRelationsParams struct {
+	ProfileID uuid.UUID
+	OrgIds    []uuid.UUID
+	UserID    uuid.UUID
+}
+
+type ProfileOrgRelationsRow struct {
+	HiddenFrom bool
+	Revealed   bool
+}
+
+// Что связывает смотрящего (его организации) с одним профилем: скрыт ли профиль от одной из них и открыл ли человек имя одной
+// из них (откликнулся на вакансию или ответил «Интересно» на приглашение).
+func (q *Queries) ProfileOrgRelations(ctx context.Context, arg ProfileOrgRelationsParams) (ProfileOrgRelationsRow, error) {
+	row := q.db.QueryRow(ctx, profileOrgRelations, arg.ProfileID, arg.OrgIds, arg.UserID)
+	var i ProfileOrgRelationsRow
+	err := row.Scan(&i.HiddenFrom, &i.Revealed)
+	return i, err
+}
+
+const revealedProfileIDs = `-- name: RevealedProfileIDs :many
+SELECT p.id
+FROM profiles p
+WHERE p.id = ANY($1::uuid[])
+  AND (EXISTS (SELECT 1 FROM applications a JOIN vacancies v ON v.id = a.vacancy_id
+                WHERE a.user_id = p.user_id AND a.status <> 'withdrawn' AND v.org_id = ANY($2::uuid[]))
+       OR EXISTS (SELECT 1 FROM vacancy_offers o JOIN vacancies v ON v.id = o.vacancy_id
+                   WHERE o.user_id = p.user_id AND o.status = 'interested' AND v.org_id = ANY($2::uuid[])))
+`
+
+type RevealedProfileIDsParams struct {
+	Ids    []uuid.UUID
+	OrgIds []uuid.UUID
+}
+
+// Из этих профилей те, чьё имя открыто одной из организаций смотрящего (карточки каталога).
+func (q *Queries) RevealedProfileIDs(ctx context.Context, arg RevealedProfileIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, revealedProfileIDs, arg.Ids, arg.OrgIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchScientists = `-- name: SearchScientists :many
 WITH hits AS MATERIALIZED (
   SELECT m.profile_id, ts_rank_cd(m.doc, websearch_to_tsquery('russian', $5::text)) AS rank
@@ -420,7 +603,8 @@ WITH hits AS MATERIALIZED (
   SELECT p.id, p.updated_at,
          CASE WHEN $8::text = 'relevance' AND $5::text <> '' THEN h.rank END AS k_rank,
          CASE WHEN $8::text = 'h_index' THEN p.h_max END AS k_h,
-         CASE WHEN $8::text = 'name' THEN u.display_name END AS k_name
+         -- Порядок «по алфавиту» не должен выдавать имя анонимного профиля положением в списке: такие профили в конце.
+         CASE WHEN $8::text = 'name' AND p.visibility <> 'anon' THEN u.display_name END AS k_name
   FROM profiles p
   JOIN users u ON u.id = p.user_id
   LEFT JOIN hits h ON h.profile_id = p.id
@@ -428,22 +612,25 @@ WITH hits AS MATERIALIZED (
   WHERE p.visibility = ANY($9::text[])
     AND p.headline <> ''
     AND ($10::uuid IS NULL OR p.user_id <> $10::uuid)
+    -- Профиль, скрытый от организации смотрящего, не виден ему ни в каком режиме (D-200).
+    AND (cardinality($11::uuid[]) = 0
+         OR NOT EXISTS (SELECT 1 FROM profile_hidden_orgs ho WHERE ho.profile_id = p.id AND ho.org_id = ANY($11::uuid[])))
     AND ($5::text = '' OR h.profile_id IS NOT NULL)
-    AND (cardinality($11::text[]) = 0 OR d.codes && $11::text[])
-    AND ($12::text = '' OR p.region_code = $12::text)
-    AND (cardinality($13::text[]) = 0 OR p.degree = ANY($13::text[]))
-    AND (cardinality($14::text[]) = 0 OR p.academic_title = ANY($14::text[]))
-    AND (NOT $15::bool OR p.open_to_offers)
-    AND ($16::int = 0 OR p.h_max >= $16::int)
-    AND ($17::int = 0 OR p.q12_total >= $17::int)
+    AND (cardinality($12::text[]) = 0 OR d.codes && $12::text[])
+    AND ($13::text = '' OR p.region_code = $13::text)
+    AND (cardinality($14::text[]) = 0 OR p.degree = ANY($14::text[]))
+    AND (cardinality($15::text[]) = 0 OR p.academic_title = ANY($15::text[]))
+    AND (NOT $16::bool OR p.open_to_offers)
+    AND ($17::int = 0 OR p.h_max >= $17::int)
+    AND ($18::int = 0 OR p.q12_total >= $18::int)
   ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
-  LIMIT $18
+  LIMIT $19
 ), page AS (
   SELECT f.id, count(*) OVER () AS total,
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+SELECT p.id, p.visibility, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
        p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
        p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
@@ -473,6 +660,7 @@ type SearchScientistsParams struct {
 	Sort        string
 	Modes       []string
 	ExcludeUser *uuid.UUID
+	ViewerOrgs  []uuid.UUID
 	Fields      []string
 	Region      string
 	Degrees     []string
@@ -485,6 +673,7 @@ type SearchScientistsParams struct {
 
 type SearchScientistsRow struct {
 	ID            uuid.UUID
+	Visibility    string
 	DisplayName   string
 	Headline      string
 	City          string
@@ -522,6 +711,7 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 		arg.Sort,
 		arg.Modes,
 		arg.ExcludeUser,
+		arg.ViewerOrgs,
 		arg.Fields,
 		arg.Region,
 		arg.Degrees,
@@ -540,6 +730,7 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 		var i SearchScientistsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Visibility,
 			&i.DisplayName,
 			&i.Headline,
 			&i.City,

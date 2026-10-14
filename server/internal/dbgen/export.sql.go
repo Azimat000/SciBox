@@ -176,6 +176,22 @@ func (q *Queries) ExportFiles(ctx context.Context, userID uuid.UUID) ([]ExportFi
 	return items, nil
 }
 
+const exportHiddenOrgs = `-- name: ExportHiddenOrgs :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('organization', o.name, 'city', o.city, 'hidden_at', h.created_at) ORDER BY o.name, o.id), '[]'::jsonb)::jsonb AS doc
+FROM profile_hidden_orgs h
+JOIN profiles p ON p.id = h.profile_id
+JOIN organizations o ON o.id = h.org_id
+WHERE p.user_id = $1
+`
+
+// Организации, от которых человек скрыл профиль (срез 15).
+func (q *Queries) ExportHiddenOrgs(ctx context.Context, userID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportHiddenOrgs, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
 const exportKnownDevices = `-- name: ExportKnownDevices :one
 SELECT COALESCE(jsonb_agg(jsonb_build_object('first_seen_at', d.first_seen_at, 'last_seen_at', d.last_seen_at)
     ORDER BY d.first_seen_at), '[]'::jsonb)::jsonb AS doc

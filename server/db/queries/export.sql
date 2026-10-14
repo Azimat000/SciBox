@@ -24,6 +24,14 @@ JOIN profiles p ON p.id = ps.profile_id
 JOIN specialties s ON s.code = ps.specialty_code
 WHERE p.user_id = sqlc.arg(user_id);
 
+-- Организации, от которых человек скрыл профиль (срез 15).
+-- name: ExportHiddenOrgs :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('organization', o.name, 'city', o.city, 'hidden_at', h.created_at) ORDER BY o.name, o.id), '[]'::jsonb)::jsonb AS doc
+FROM profile_hidden_orgs h
+JOIN profiles p ON p.id = h.profile_id
+JOIN organizations o ON o.id = h.org_id
+WHERE p.user_id = sqlc.arg(user_id);
+
 -- Отклики вместе с приглашениями организаций, рекомендателями (без их писем: соискатель их не видит, D-082) и описанием
 -- файлов. Сами файлы кладёт в архив сервис. Сотрудники организации названы только там, где они сами оставили контакты.
 -- name: ExportApplications :one

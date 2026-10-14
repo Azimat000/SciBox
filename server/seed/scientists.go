@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"scibox/server/internal/auth"
+	"scibox/server/internal/dbgen"
 	prof "scibox/server/internal/profiles"
 )
 
@@ -131,6 +132,8 @@ type scientist struct {
 	key          string
 	visibility   string
 	openToOffers bool
+	// hiddenFrom — адреса организаций, от сотрудников которых профиль скрыт (D-200).
+	hiddenFrom []string
 	core         prof.CoreInput
 	items        []prof.ItemInput
 }
@@ -268,7 +271,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "lebedeva", visibility: "orgs", openToOffers: false,
+		key: "lebedeva", visibility: "anon", openToOffers: false,
 		core: prof.CoreInput{
 			Headline: "Старший научный сотрудник, геохимия", City: "Томск", RegionCode: "70",
 			About:  "Геохимия редких элементов в мерзлотных почвах.",
@@ -346,7 +349,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "tarasov", visibility: "public", openToOffers: false,
+		key: "tarasov", visibility: "public", openToOffers: false, hiddenFrom: []string{"neurofotonika"},
 		core: prof.CoreInput{
 			Headline: "Профессор, главный научный сотрудник, материаловедение", City: "Томск", RegionCode: "70",
 			About:  "Порошковая металлургия и композиционные материалы. Создал научную школу по спечённым композитам, подготовил четырнадцать кандидатов наук.",
@@ -408,6 +411,19 @@ func seedScientists(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid
 		}
 		if _, err := svc.SetPrivacy(ctx, user, s.visibility, s.openToOffers); err != nil {
 			return 0, fmt.Errorf("seed profile %s: %w", s.key, err)
+		}
+		if len(s.hiddenFrom) > 0 {
+			var orgIDs []uuid.UUID
+			for _, slug := range s.hiddenFrom {
+				org, err := dbgen.New(pool).GetOrganizationBySlug(ctx, slug)
+				if err != nil {
+					return 0, fmt.Errorf("seed profile %s: organization %s: %w", s.key, slug, err)
+				}
+				orgIDs = append(orgIDs, org.ID)
+			}
+			if _, err := svc.SetHiddenOrgs(ctx, user, orgIDs); err != nil {
+				return 0, fmt.Errorf("seed profile %s: %w", s.key, err)
+			}
 		}
 		for _, it := range s.items {
 			if _, err := svc.AddItem(ctx, user, it); err != nil {

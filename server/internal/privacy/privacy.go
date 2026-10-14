@@ -9,6 +9,10 @@ type Visibility string
 const (
 	// Hidden — профиль скрыт: его видит только владелец. По умолчанию.
 	Hidden Visibility = "hidden"
+	// Anonymous — профиль виден сотрудникам организаций без имени и без всего, по чему человека легко узнать (D-199):
+	// научные данные есть, имени, места работы, номеров, названий работ и «о себе» нет. Имя организации открывается само,
+	// когда человек откликнулся на её вакансию или ответил «Интересно» на её приглашение.
+	Anonymous Visibility = "anon"
 	// Orgs — профиль виден сотрудникам организаций (любой роли), вошедшим в аккаунт.
 	Orgs Visibility = "orgs"
 	// Public — профиль виден всем, в том числе без входа.
@@ -16,12 +20,12 @@ const (
 )
 
 // Modes — все режимы от закрытого к открытому.
-var Modes = []Visibility{Hidden, Orgs, Public}
+var Modes = []Visibility{Hidden, Anonymous, Orgs, Public}
 
 // Parse превращает строку в режим; ok == false, если такого режима нет.
 func Parse(s string) (Visibility, bool) {
 	switch v := Visibility(s); v {
-	case Hidden, Orgs, Public:
+	case Hidden, Anonymous, Orgs, Public:
 		return v, true
 	}
 	return "", false
@@ -33,33 +37,65 @@ type Viewer struct {
 	Owner bool
 	// Staff — человек вошёл в аккаунт и состоит хотя бы в одной организации.
 	Staff bool
+	// HiddenFrom — хозяин профиля скрылся от одной из организаций смотрящего («скрыть от моей организации», D-200).
+	// Сотрудник такой организации не видит профиль ни в каком режиме, даже состоя ещё и в другой организации.
+	HiddenFrom bool
+	// Revealed — хозяин профиля сам открыл имя одной из организаций смотрящего: откликнулся на её вакансию или ответил
+	// «Интересно» на её приглашение (D-199).
+	Revealed bool
 }
 
+// Detail — сколько о профиле видит смотрящий.
+type Detail int
+
+const (
+	// Full — профиль целиком, каким его заполнил человек (с учётом контактов по CanSeeContacts).
+	Full Detail = iota
+	// Blind — безымянная карточка: только научные данные (степень, звание, специальности, метрики, счётчики), без имени,
+	// места работы, города, номеров, названий работ и «о себе».
+	Blind
+)
+
 // CanView — может ли этот человек открыть профиль в таком режиме. Неизвестный режим закрыт для всех, кроме владельца
-// (лучше спрятать лишнее, чем показать скрытое).
+// (лучше спрятать лишнее, чем показать скрытое). Сотрудник организации, от которой человек скрылся, не видит профиль
+// ни в каком режиме.
 func (v Visibility) CanView(who Viewer) bool {
 	if who.Owner {
 		return true
 	}
+	if who.HiddenFrom {
+		return false
+	}
 	switch v {
 	case Public:
 		return true
-	case Orgs:
+	case Orgs, Anonymous:
 		return who.Staff
 	}
 	return false
 }
 
-// CanSeeContacts — контактную почту видит владелец и сотрудники организаций, если профиль им вообще виден.
-// Аноним и вошедший без организации контактов не видят даже у публичного профиля: их нельзя собрать парсером.
+// Detail — степень подробности, которую увидит этот смотрящий. Значение осмысленно, когда CanView истинно: безымянно
+// только то, что хозяин пометил анонимным и чьей организации имя ещё не открыто.
+func (v Visibility) Detail(who Viewer) Detail {
+	if v == Anonymous && !who.Owner && !who.Revealed {
+		return Blind
+	}
+	return Full
+}
+
+// CanSeeContacts — контактную почту видит владелец и сотрудники организаций, если профиль им вообще виден и не
+// безымянный. Аноним и вошедший без организации контактов не видят даже у публичного профиля: их нельзя собрать парсером.
 func (v Visibility) CanSeeContacts(who Viewer) bool {
-	return v.CanView(who) && (who.Owner || who.Staff)
+	return v.CanView(who) && (who.Owner || who.Staff) && v.Detail(who) == Full
 }
 
 // CatalogModes — профили в каких режимах видит в каталоге учёных такой смотрящий (D-097). Решает CanView, своих
 // правил здесь нет. Собственный профиль в каталог не попадает, поэтому владельцем смотрящий не считается.
+// Скрытость от организаций («HiddenFrom») зависит от профиля, а не от режима: её применяет сам запрос каталога.
 func CatalogModes(who Viewer) []Visibility {
 	who.Owner = false
+	who.HiddenFrom = false
 	var out []Visibility
 	for _, m := range Modes {
 		if m.CanView(who) {
@@ -67,4 +103,11 @@ func CatalogModes(who Viewer) []Visibility {
 		}
 	}
 	return out
+}
+
+// ShowsName — показывается ли имя человека в списках организации (отправленные приглашения, журнал действий),
+// где смотрящий всегда сотрудник организации, а нужные факты известны заранее: профиль анонимный или скрыт от этой
+// организации (concealed), человек открыл ей имя откликом или ответом «Интересно» (revealed). Решение одно для всех мест.
+func ShowsName(concealed, revealed bool) bool {
+	return !concealed || revealed
 }

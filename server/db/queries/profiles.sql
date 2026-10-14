@@ -119,7 +119,8 @@ WITH hits AS MATERIALIZED (
   SELECT p.id, p.updated_at,
          CASE WHEN @sort::text = 'relevance' AND @q::text <> '' THEN h.rank END AS k_rank,
          CASE WHEN @sort::text = 'h_index' THEN p.h_max END AS k_h,
-         CASE WHEN @sort::text = 'name' THEN u.display_name END AS k_name
+         -- Порядок «по алфавиту» не должен выдавать имя анонимного профиля положением в списке: такие профили в конце.
+         CASE WHEN @sort::text = 'name' AND p.visibility <> 'anon' THEN u.display_name END AS k_name
   FROM profiles p
   JOIN users u ON u.id = p.user_id
   LEFT JOIN hits h ON h.profile_id = p.id
@@ -127,6 +128,9 @@ WITH hits AS MATERIALIZED (
   WHERE p.visibility = ANY(@modes::text[])
     AND p.headline <> ''
     AND (sqlc.narg(exclude_user)::uuid IS NULL OR p.user_id <> sqlc.narg(exclude_user)::uuid)
+    -- Профиль, скрытый от организации смотрящего, не виден ему ни в каком режиме (D-200).
+    AND (cardinality(@viewer_orgs::uuid[]) = 0
+         OR NOT EXISTS (SELECT 1 FROM profile_hidden_orgs ho WHERE ho.profile_id = p.id AND ho.org_id = ANY(@viewer_orgs::uuid[])))
     AND (@q::text = '' OR h.profile_id IS NOT NULL)
     AND (cardinality(@fields::text[]) = 0 OR d.codes && @fields::text[])
     AND (@region::text = '' OR p.region_code = @region::text)
@@ -142,7 +146,7 @@ WITH hits AS MATERIALIZED (
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT p.id, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+SELECT p.id, p.visibility, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
        p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
        p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
@@ -167,3 +171,48 @@ SELECT ps.profile_id, s.code, s.name
 FROM profile_specialties ps JOIN specialties s ON s.code = ps.specialty_code
 WHERE ps.profile_id = ANY(@ids::uuid[])
 ORDER BY ps.profile_id, string_to_array(s.code, '.')::int[];
+
+-- ---- анонимный режим и «скрыть от организаций» (срез 15, D-199, D-200) ----
+
+-- Организации человека (в любой роли): по ним считается, скрыт ли от него профиль и открыто ли ему имя.
+-- name: ListUserOrgIDs :many
+SELECT org_id FROM org_members WHERE user_id = $1;
+
+-- Что связывает смотрящего (его организации) с одним профилем: скрыт ли профиль от одной из них и открыл ли человек имя одной
+-- из них (откликнулся на вакансию или ответил «Интересно» на приглашение).
+-- name: ProfileOrgRelations :one
+SELECT
+    EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = @profile_id AND h.org_id = ANY(@org_ids::uuid[])) AS hidden_from,
+    COALESCE(EXISTS (SELECT 1 FROM applications a JOIN vacancies v ON v.id = a.vacancy_id
+                      WHERE a.user_id = @user_id AND a.status <> 'withdrawn' AND v.org_id = ANY(@org_ids::uuid[]))
+             OR EXISTS (SELECT 1 FROM vacancy_offers o JOIN vacancies v ON v.id = o.vacancy_id
+                         WHERE o.user_id = @user_id AND o.status = 'interested' AND v.org_id = ANY(@org_ids::uuid[])), false)::boolean AS revealed;
+
+-- Из этих профилей те, чьё имя открыто одной из организаций смотрящего (карточки каталога).
+-- name: RevealedProfileIDs :many
+SELECT p.id
+FROM profiles p
+WHERE p.id = ANY(@ids::uuid[])
+  AND (EXISTS (SELECT 1 FROM applications a JOIN vacancies v ON v.id = a.vacancy_id
+                WHERE a.user_id = p.user_id AND a.status <> 'withdrawn' AND v.org_id = ANY(@org_ids::uuid[]))
+       OR EXISTS (SELECT 1 FROM vacancy_offers o JOIN vacancies v ON v.id = o.vacancy_id
+                   WHERE o.user_id = p.user_id AND o.status = 'interested' AND v.org_id = ANY(@org_ids::uuid[])));
+
+-- Организации, от которых скрыт профиль, с названиями.
+-- name: ListHiddenOrgs :many
+SELECT o.id, o.slug, o.name, o.city
+FROM profile_hidden_orgs h JOIN organizations o ON o.id = h.org_id
+WHERE h.profile_id = $1
+ORDER BY lower(o.name), o.id;
+
+-- Какие из этих организаций существуют (проверка перед записью).
+-- name: ExistingOrgIDs :many
+SELECT id FROM organizations WHERE id = ANY(@ids::uuid[]);
+
+-- name: DeleteHiddenOrgs :exec
+DELETE FROM profile_hidden_orgs WHERE profile_id = $1;
+
+-- name: AddHiddenOrgs :exec
+INSERT INTO profile_hidden_orgs (profile_id, org_id, created_at)
+SELECT @profile_id, x, @now FROM unnest(@org_ids::uuid[]) AS x
+ON CONFLICT DO NOTHING;

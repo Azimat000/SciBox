@@ -124,10 +124,18 @@ func cvDocument(page Page, product string, now time.Time) cv.Document {
 	if page.Viewer.CanSeeContacts && v.ContactEmail != "" {
 		doc.Where = append(doc.Where, v.ContactEmail)
 	}
+	if v.Anonymous {
+		// Безымянная карточка (D-199): в резюме только научные данные, как на странице.
+		doc.Title = "Анонимный соискатель"
+		doc.Subtitle = anonymousSubtitle(v)
+	}
 	doc.IDs = idFacts(v.Identifiers)
 	doc.Stats = hFacts(v.HIndex)
 	if line := quartileLine(v.Quartiles); line != "" {
 		doc.Notes = append(doc.Notes, line)
+	}
+	if v.PublicationCount != nil && *v.PublicationCount > 0 {
+		doc.Notes = append(doc.Notes, fmt.Sprintf("Публикаций: %d", *v.PublicationCount))
 	}
 
 	add := func(s cv.Section) {
@@ -243,6 +251,21 @@ func wrapQuote(s string) string {
 		return ""
 	}
 	return s + "»"
+}
+
+// anonymousSubtitle: «Кандидат наук, 1.4.4», у анонимного профиля это всё, что можно сказать о человеке в заголовке.
+func anonymousSubtitle(v View) string {
+	var parts []string
+	if label, ok := degreeLabel[v.Degree.Level]; ok {
+		parts = append(parts, label)
+		if v.Degree.Specialty != nil {
+			parts = append(parts, v.Degree.Specialty.Code)
+		}
+	}
+	if label, ok := titleLabel[v.AcademicTitle]; ok {
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func renderCV(page Page, product string, now time.Time) ([]byte, error) {
