@@ -1,6 +1,6 @@
 # Архитектура
 
-Состояние: после среза 29 (итоговый аудит: привязка ссылки подтверждения к браузеру, неделимые лимиты, `internal/textsafe`, неактивные аккаунты; до этого срез 28: сборка и выкладка: образ сервера, боевой compose с Caddy, двумя копиями, воркером, базой с непрерывным архивом и копиями, мониторингом; до этого срез 26: наблюдаемость: номер запроса в каждой строке журнала, JSON-журнал в бою, метрики Prometheus и внутренний порт `/livez` `/readyz` `/metrics` `pprof`, отправка ошибок в GlitchTip без личных данных, панель Grafana и правила тревог; до этого срез 25: несколько копий сервера и отдельный процесс фоновых задач `worker`: общее расписание в базе, предохранитель и ограничитель у Crossref и почты, мягкая остановка; до этого срез 24: база под объём «вся наука РФ»: пул со сроками, индексируемый поиск, предел выдачи, кеш; срез 23: файлы в S3-совместимом хранилище с проверкой на вирусы, срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
+Состояние: после среза 16 (научные условия вакансии и выгрузка откликов в CSV: миграция `00028`, `applications/export.go`, политика периметра `export_file`; до этого срез 15: анонимный режим профиля и скрытие от организаций; до этого срез 29 (итоговый аудит: привязка ссылки подтверждения к браузеру, неделимые лимиты, `internal/textsafe`, неактивные аккаунты; до этого срез 28: сборка и выкладка: образ сервера, боевой compose с Caddy, двумя копиями, воркером, базой с непрерывным архивом и копиями, мониторингом; до этого срез 26: наблюдаемость: номер запроса в каждой строке журнала, JSON-журнал в бою, метрики Prometheus и внутренний порт `/livez` `/readyz` `/metrics` `pprof`, отправка ошибок в GlitchTip без личных данных, панель Grafana и правила тревог; до этого срез 25: несколько копий сервера и отдельный процесс фоновых задач `worker`: общее расписание в базе, предохранитель и ограничитель у Crossref и почты, мягкая остановка; до этого срез 24: база под объём «вся наука РФ»: пул со сроками, индексируемый поиск, предел выдачи, кеш; срез 23: файлы в S3-совместимом хранилище с проверкой на вирусы, срез 22: персональные данные, срез 21: журнал действий и таблица доступа на каждом адресе). Правило: если этот файл расходится с кодом, прав код, а файл чинится в том же коммите.
 
 ## Структура папок
 
@@ -121,6 +121,13 @@ SciBox/
 Страницы организации и подразделения показывают список опубликованных вакансий (`VacancyList`).
 
 Файлы откликов и писем рекомендателей лежат в S3-совместимом хранилище, в базе только строка с ключом `files/<uuid>`, контрольной суммой и итогом проверки на вирусы (D-157, D-158); папки `storage/uploads/` нет. Журнал сервера пишется в stderr текстом и проходит через `logmask` (D-152).
+
+## Изменения среза 16
+
+- Миграция `00028_vacancy_conditions.sql`: `vacancies.equipment_access`, `equipment_note` (≤ 300), `equipment_unit_id` (→ `units`, `ON DELETE SET NULL`), `publications_paid`, `conference_travel`; `vacancy_view` пересоздана (новые столбцы и `equipment_unit_name` в конце). Таблиц не добавляет.
+- Вакансии: `Input`/`Detail` с условиями, `Card.Perks` (`equipment`, `publication`, `conference`), `Target.Facilities` (все ЦКП организации); поиск: `SearchParams.Equipment/Publications/Conferences` (параметры `equipment`, `publications`, `conferences`; в адресе, сохранённом поиске, письмах по нему и ключе кеша).
+- Отклики: `Service.ExportCandidates` и `WriteCSV` (`export.go`), `GET /api/my/candidates/export?vacancy=&status=`; `Config.PublicURL` (ссылки в файле); аудит `vacancy.applications_exported`; политика периметра `export_file` (10 в минуту).
+- Сайт: блок «Научные условия» в форме и на странице вакансии, строка условий в записи вакансии (`VacancyEntry.perks`), группа фильтров, кнопка «Выгрузить в Excel» на `/candidates`, общий `lib/saveFile.ts`.
 
 ## Изменения среза 29
 
@@ -255,7 +262,7 @@ SciBox/
 - Миграция `00005_vacancies.sql`:
   - `vacancies` (id, org_id, unit_id → `ON DELETE RESTRICT`, created_by, status `draft|published|closed|archived`, title, position_code, summary, description, requirements, focus, career_level 1–4, work_format, region_code, city, housing, rate_percent, salary_from/to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline date, published_at, closed_at, archived_at, created_at, updated_at; CHECK на значения);
   - `vacancy_specialties` (vacancy_id, specialty_code);
-  - представление `vacancy_view` (вакансия + названия должности, региона, организации, подразделения; при добавлении колонок в `vacancies` пересоздать).
+  - представление `vacancy_view` (в срезе 16 расширено условиями, `00028`) (вакансия + названия должности, региона, организации, подразделения; при добавлении колонок в `vacancies` пересоздать).
   - Счётчик частоты `vacancy_create` (100 в сутки на человека) в общей `rate_events`.
 - Миграция `00006_search.sql`: `vacancy_search` (vacancy_id, doc tsvector; индекс GIN), функция `refresh_vacancy_search(uuid)` и триггеры: на `vacancies` (при вставке и смене текстовых полей), `vacancy_specialties`, `organizations` (название, город), `units` (название). Текст в `vacancy_view` не входит.
 - Миграция `00007_profiles.sql`:
@@ -367,6 +374,7 @@ SciBox/
 | `POST /api/recommendations/submit` (multipart: `data` `{token,text}` первой, не более одной части `file`; ссылка и длина текста проверяются до приёма файла) | 200; 422 (`text`, `file`, вирус в поле `file`); 409 `already_answered`; 503 `storage_unavailable` |
 | `POST /api/recommendations/decline {token}` | 200; те же ошибки |
 | `GET /api/my/candidates?vacancy=&status=&limit=&offset=` | отклики на вакансии, которые вошедший вправе разбирать (`ViewApplications`: организации целиком и подразделения, которыми руководит): `{items:[{id,status,created_at,applicant_name,headline,vacancy,unit_name,references,pending_invitations,proposed_invitations}], total, counts}`; `counts` по всем статусам (при выбранной вакансии только по ней); 422 на неизвестный статус и неверный номер вакансии; чужая вакансия даёт пустой список |
+| `GET /api/my/candidates/export?vacancy=&status=` | файл `text/csv` для Excel (UTF-8 с BOM, разделитель «;», CRLF), `attachment; filename="otkliki-<дата>.csv"`, `Cache-Control: no-store`; те же права и отборы, что у списка, без страниц; не больше 5000 строк (заголовок `X-Export-Truncated: 1`, если больше); пишет `vacancy.applications_exported` в журнал каждой организации; 10 в минуту с аккаунта; 401 без входа, 422 по `vacancy`/`status` |
 | `GET /api/my/candidate-vacancies` | `{items:[{id,title,status,org_name,org_slug,total,new}]}`: вакансии с откликами (отозванные не считаются, `new` = «отправлен») |
 | `POST /api/applications/{id}/status` `{status: accepted|rejected, note}` | 204; только сотрудник с правом (иначе 404); 409 `invalid_status_change` из недопустимого статуса; 422 `status`, `note`; отказ закрывает открытые приглашения |
 | `POST /api/applications/{id}/invitations` `{kind, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone}` | 201 `{invitation}`; 422 по полям (`starts_at` RFC 3339, будущее, не дальше года); 409 `invalid_status_change` (отклик решён/отозван), `too_many_invitations` (10); отклик становится «приглашён», новое собеседование заменяет прежнее открытое |
