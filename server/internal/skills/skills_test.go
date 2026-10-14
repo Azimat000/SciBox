@@ -73,7 +73,7 @@ func names(r skills.SearchResult) []string {
 
 func TestLoadReplacesTheDictionaryOnce(t *testing.T) {
 	res := loadFixture(t, fixture)
-	if res.Skills != 14 || res.Research != 9+1 || res.General != 4 || res.Terms != 14+13 || res.Unchanged || !strings.HasPrefix(res.Edition, "14 навыков · ") {
+	if res.Skills != 14 || res.Research != 9+1 || res.General != 4 || res.Terms != 14+13 || res.Unchanged || !strings.HasPrefix(res.Edition, "навыков: 14 · ") {
 		t.Fatalf("first load = %+v", res)
 	}
 	if n := testkit.Count(t, `SELECT count(*) FROM skills`); n != 14 {
@@ -385,3 +385,17 @@ func TestHTTP(t *testing.T) {
 
 func testQueries() *dbgen.Queries            { return dbgen.New(testkit.Pool) }
 func dbQueries(db testkit.DB) *dbgen.Queries { return dbgen.New(db) }
+
+// Совпавшее название выше совпавшего синонима того же яруса: «Масс-спектрометрия» раньше «ИСП-МС» по слову «масс».
+func TestSearchPutsANameBeforeASynonymOfTheSameTier(t *testing.T) {
+	loadFixture(t, head+
+		"research;Г;ИСП-МС;Масс-спектрометрия с индуктивно связанной плазмой\n"+
+		"research;Г;Масс-спектрометрия;\n")
+	got, err := skills.NewService(testkit.Pool).Search(testkit.BG, skills.KindResearch, "масс спектр", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(names(got), []string{"Масс-спектрометрия", "ИСП-МС"}) {
+		t.Fatalf("order = %v", names(got))
+	}
+}

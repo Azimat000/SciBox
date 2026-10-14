@@ -134,8 +134,8 @@ type scientist struct {
 	openToOffers bool
 	// hiddenFrom — адреса организаций, от сотрудников которых профиль скрыт (D-200).
 	hiddenFrom []string
-	core         prof.CoreInput
-	items        []prof.ItemInput
+	core       prof.CoreInput
+	items      []prof.ItemInput
 }
 
 var scientists = []scientist{
@@ -406,7 +406,7 @@ func seedScientists(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid
 		if page.Profile.Headline != "" {
 			continue
 		}
-		if _, err := svc.SaveCore(ctx, user, s.core); err != nil {
+		if _, err := svc.SaveCore(ctx, user, withSkills(s.key, s.core)); err != nil {
 			return 0, fmt.Errorf("seed profile %s: %w", s.key, err)
 		}
 		if _, err := svc.SetPrivacy(ctx, user, s.visibility, s.openToOffers); err != nil {

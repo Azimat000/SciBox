@@ -3,6 +3,8 @@ package profiles
 import (
 	"slices"
 	"testing"
+
+	"scibox/server/internal/skills"
 )
 
 // useSkillsDictionary кладёт в справочник несколько навыков с редкими названиями (база общая на пакет, другие тесты
@@ -73,5 +75,31 @@ func TestSaveCoreKeepsSkillsThatTheDictionaryDoesNotKnow(t *testing.T) {
 	}
 	if !slices.Equal(first.Profile.Skills.Research, second.Profile.Skills.Research) || !slices.Equal(second.Profile.Skills.General, []string{"Английский B2"}) {
 		t.Errorf("%+v → %+v", first.Profile.Skills, second.Profile.Skills)
+	}
+}
+
+// Навык, вписанный человеком, остаётся в его профиле и не попадает в чужие подсказки (D-212, I-108).
+func TestOwnSkillsNeverReachTheSuggestions(t *testing.T) {
+	useSkillsDictionary(t)
+	w := newWorld(t)
+	p := w.user("Елена Орлова")
+	const own = "Криоэлектронная ультрамикротомия личная"
+	if _, err := w.svc.SaveCore(bg, p.User, CoreInput{ResearchSkills: []string{own}, GeneralSkills: []string{own}}); err != nil {
+		t.Fatal(err)
+	}
+	svc := skills.NewService(sharedPool)
+	for _, kind := range []string{skills.KindResearch, skills.KindGeneral} {
+		for _, q := range []string{"ультрамикротомия", own, "Криоэлектронная"} {
+			got, err := svc.Search(bg, kind, q, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Items) != 0 {
+				t.Errorf("%s %q: %+v", kind, q, got.Items)
+			}
+		}
+	}
+	if n := countRows(t, `SELECT count(*) FROM skill_terms WHERE key LIKE '%ультрамикротомия%'`); n != 0 {
+		t.Errorf("the dictionary grew by %d own skills", n)
 	}
 }

@@ -16,7 +16,7 @@ import { RequireUser } from '../orgs/RequireUser'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { SpecialtiesPicker } from '../vacancies/SpecialtiesPicker'
 import { useReference } from '../vacancies/api'
-import { MAX_SKILL_LENGTH, MAX_SKILLS, refreshProfile, saveCore, skillsOf, useOwnProfile, type CoreFields, type Profile } from './api'
+import { MAX_SKILL_LENGTH, MAX_SKILLS, refreshProfile, saveCore, searchSkills, skillsOf, useOwnProfile, type CoreFields, type Profile } from './api'
 import { degreeOptions, titleOptions } from './labels'
 import '../vacancies/vacancies.css'
 import './profile.css'
@@ -36,6 +36,10 @@ function Loader() {
 }
 
 type Values = Record<'headline' | 'city' | 'region_code' | 'about' | 'degree' | 'degree_specialty_code' | 'degree_year' | 'degree_institution' | 'dissertation_title' | 'academic_title' | 'academic_title_year' | 'orcid' | 'spin' | 'scopus_id' | 'wos_id' | 'github_url' | 'h_rsci' | 'h_scopus' | 'h_wos' | 'h_scholar' | 'contact_email' | 'specialties' | 'research_skills' | 'general_skills', string>
+
+/** Подсказки навыков: один и тот же поиск на всю жизнь страницы (ключ кеша в поле зависит от вида). */
+const researchSearch = searchSkills('research')
+const generalSearch = searchSkills('general')
 
 const str = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n))
 const num = (s: string): number | null => (s.trim() === '' ? null : Number(s))
@@ -160,8 +164,8 @@ function EditForm({ profile, reference }: { profile: Profile; reference: NonNull
         <fieldset className="form-block">
           <legend>{e.groups.skills}</legend>
           <p className="field-hint">{e.skillsLead}</p>
-          <SkillsInput label={e.researchSkills} hint={e.researchSkillsHint} placeholder={e.researchSkillsPlaceholder} value={list(values.research_skills)} onChange={(next) => set('research_skills', next.join('\n'))} error={errors.research_skills} max={MAX_SKILLS} maxLength={MAX_SKILL_LENGTH} />
-          <SkillsInput label={e.generalSkills} hint={e.generalSkillsHint} placeholder={e.generalSkillsPlaceholder} value={list(values.general_skills)} onChange={(next) => set('general_skills', next.join('\n'))} error={errors.general_skills} max={MAX_SKILLS} maxLength={MAX_SKILL_LENGTH} />
+          <SkillsInput label={e.researchSkills} hint={e.researchSkillsHint} placeholder={e.researchSkillsPlaceholder} value={list(values.research_skills)} onChange={(next) => set('research_skills', next.join('\n'))} error={errors.research_skills} max={MAX_SKILLS} maxLength={MAX_SKILL_LENGTH} search={researchSearch} searchKey="research" />
+          <SkillsInput label={e.generalSkills} hint={e.generalSkillsHint} placeholder={e.generalSkillsPlaceholder} value={list(values.general_skills)} onChange={(next) => set('general_skills', next.join('\n'))} error={errors.general_skills} max={MAX_SKILLS} maxLength={MAX_SKILL_LENGTH} search={generalSearch} searchKey="general" />
         </fieldset>
 
         <fieldset className="form-block">

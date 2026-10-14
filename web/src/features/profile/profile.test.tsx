@@ -502,6 +502,32 @@ describe('profile edit page', () => {
     })
   })
 
+  it('suggests skills from the dictionary for each list and saves the chosen spelling', async () => {
+    const api = stubApi(
+      base(ownPage(emptyProfile), {
+        'PUT /api/profile': reply(200, ownPage(emptyProfile)),
+        'GET /api/skills*': (call) =>
+          call.path.includes('kind=research')
+            ? reply(200, { items: [{ name: 'ПЦР', group: 'Методы', via: 'Полимеразная цепная реакция' }], fuzzy: false })
+            : reply(200, { items: [{ name: 'Microsoft Excel', group: 'Офисные программы', via: 'Excel' }], fuzzy: false }),
+      }),
+    )
+    renderApp('/profile/edit')
+    await screen.findByRole('heading', { level: 1, name: 'Основное в профиле' })
+    await userEvent.type(field(/^Научные навыки ·/), 'полимеразная')
+    await userEvent.click(await screen.findByRole('option', { name: /^ПЦР/ }))
+    await userEvent.type(field(/^Общие навыки ·/), 'excel')
+    await userEvent.click(await screen.findByRole('option', { name: /^Microsoft Excel/ }))
+    expect(screen.getByRole('list', { name: 'Научные навыки: добавлено' }).textContent).toBe('ПЦР')
+    expect(screen.getByRole('list', { name: 'Общие навыки: добавлено' }).textContent).toBe('Microsoft Excel')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    await screen.findByText('Профиль сохранён')
+    expect(api.called('PUT', '/api/profile')[0].body).toMatchObject({ research_skills: ['ПЦР'], general_skills: ['Microsoft Excel'] })
+    const asked = api.calls.filter((c) => c.path.startsWith('/api/skills')).map((c) => c.path)
+    expect(asked).toContain('/api/skills?kind=research&q=%D0%BF%D0%BE%D0%BB%D0%B8%D0%BC%D0%B5%D1%80%D0%B0%D0%B7%D0%BD%D0%B0%D1%8F&limit=8')
+    expect(asked.some((p) => p.includes('kind=general&q=excel'))).toBe(true)
+  })
+
   it('pastes plain text into a skill as usual and shows the server problem under the list', async () => {
     stubApi(base(ownPage(), { 'PUT /api/profile': apiError(422, 'validation_failed', 'Проверьте поля формы', { fields: { general_skills: 'Навыков в списке не больше 30' } }) }))
     renderApp('/profile/edit')

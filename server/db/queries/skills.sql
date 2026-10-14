@@ -17,7 +17,8 @@ SET title = EXCLUDED.title, url = EXCLUDED.url, edition = EXCLUDED.edition, chec
 -- Подсказки навыков. @key — ключ запроса целиком, @prefix — он же с экранированием для LIKE и знаком «%» в конце,
 -- @words — слова запроса, @tsq — запрос по основам слов («слово:* & слово:*», только буквы и цифры) или пусто.
 -- Ярусы: 0 — точное написание, 1 — начало написания, 2 — начало каждого слова, 3 — словоформы. На каждый навык
--- берётся лучшее совпадение (название выигрывает у синонима), порядок: ярус, короткое название раньше, по алфавиту.
+-- берётся лучшее совпадение (название выигрывает у синонима), порядок: ярус, совпало название раньше совпавшего
+-- синонима, короткое название раньше, по алфавиту.
 -- name: SearchSkills :many
 WITH hit AS (
     SELECT t.skill_id, t.term, t.is_name,
@@ -39,7 +40,7 @@ WITH hit AS (
 SELECT s.id, s.name, s.grp, h.term AS via, h.is_name, h.rank::int AS rank
 FROM (SELECT DISTINCT ON (skill_id) skill_id, term, is_name, rank FROM hit ORDER BY skill_id, rank, is_name DESC, term) h
 JOIN skills s ON s.id = h.skill_id
-ORDER BY h.rank, char_length(s.name), s.name
+ORDER BY h.rank, h.is_name DESC, char_length(s.name), s.name
 LIMIT @row_limit;
 
 -- Запасной поиск по похожим написаниям (опечатки): только когда обычный ничего не нашёл.

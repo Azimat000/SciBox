@@ -61,7 +61,7 @@ type LoadResult struct {
 // edition — выпуск справочника: число навыков и отпечаток файла. По нему повторная загрузка того же файла ничего не делает.
 func edition(n int, data []byte) string {
 	sum := sha256.Sum256(data)
-	return fmt.Sprintf("%d навыков · %s", n, hex.EncodeToString(sum[:])[:12])
+	return fmt.Sprintf("навыков: %d · %s", n, hex.EncodeToString(sum[:])[:12])
 }
 
 // unpack распаковывает gzip; несжатый файл отдаёт как есть.

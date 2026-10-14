@@ -70,3 +70,52 @@
   color: var(--ink-soft);
   font-size: var(--text-xs);
 }
+
+/* Подсказки навыков: список строится на оформлении Combobox (.combo-list, .combo-option). */
+/* Список подсказок растягивается на всю строку «поле + кнопка»: на телефоне поле узкое, а синонимы длинные. */
+.skills-entry {
+  position: relative;
+}
+
+.skills-search {
+  position: static;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.skills-search .control {
+  width: 100%;
+}
+
+.skill-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-height: 2.75rem;
+  justify-content: center;
+}
+
+.skill-option-meta {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+/* «Не нашли?» остаётся видимой в низу списка, сколько бы подсказок ни было. */
+.skill-option-own {
+  position: sticky;
+  bottom: calc(var(--s-1) * -1);
+  margin-top: var(--s-1);
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  background: var(--paper);
+}
+
+.skill-option-own[data-active] {
+  background: var(--blue-wash);
+}
+
+.skills-status {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}

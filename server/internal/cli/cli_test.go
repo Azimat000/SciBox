@@ -89,6 +89,12 @@ func TestCommandsWithoutDatabase(t *testing.T) {
 		{"journals unknown flag", []string{"journals", "load", "--fast"}, map[string]string{}, 2, "", "Использование"},
 		{"journals missing file", []string{"journals", "load", "/nope.csv"}, map[string]string{}, 1, "", "no such file"},
 		{"journals bad url", []string{"journals", "load"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "connect database"},
+		{"skills without subcommand", []string{"skills"}, map[string]string{}, 2, "", "Использование"},
+		{"skills unknown subcommand", []string{"skills", "drop"}, map[string]string{}, 2, "", "Использование"},
+		{"skills unknown flag", []string{"skills", "load", "--fast"}, map[string]string{}, 2, "", "Использование"},
+		{"skills missing file", []string{"skills", "load", "/nope.csv"}, map[string]string{}, 1, "", "no such file"},
+		{"skills bad url", []string{"skills", "load"}, map[string]string{"DATABASE_URL": "::bad"}, 1, "", "connect database"},
+		{"skills without migrations", []string{"skills", "load"}, map[string]string{"DATABASE_URL": testdb.Create(t, false)}, 1, "", "skills"},
 		{"journals without migrations", []string{"journals", "load"}, map[string]string{"DATABASE_URL": testdb.Create(t, false)}, 1, "", "journals"},
 	}
 	for _, tc := range cases {
@@ -138,6 +144,38 @@ func TestJournalsLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	if bad := run(context.Background(), []string{"journals", "load", file}, env, nil); bad.code != 1 || !strings.Contains(bad.stderr, "not a SCImago") {
+		t.Fatalf("bad file: %+v", bad)
+	}
+}
+
+func TestSkillsLoad(t *testing.T) {
+	dbURL := testdb.Create(t, true)
+	env := map[string]string{"DATABASE_URL": dbURL}
+	first := run(context.Background(), []string{"skills", "load"}, env, nil)
+	if first.code != 0 || !strings.Contains(first.stdout, "Справочник навыков загружен (навыков: ") || !strings.Contains(first.stdout, "научных ") {
+		t.Fatalf("first: %+v", first)
+	}
+	again := run(context.Background(), []string{"skills", "load"}, env, nil)
+	if again.code != 0 || !strings.Contains(again.stdout, "уже загружен") {
+		t.Fatalf("again: %+v", again)
+	}
+	forced := run(context.Background(), []string{"skills", "load", "--force"}, env, nil)
+	if forced.code != 0 || !strings.Contains(forced.stdout, "загружен (навыков") {
+		t.Fatalf("forced: %+v", forced)
+	}
+	// Свой файл: справочник заменяется им.
+	file := t.TempDir() + "/skills.csv"
+	if err := os.WriteFile(file, []byte("kind;group;name;aliases\nresearch;Методы;Один;\ngeneral;Языки;Два;Second|Deux\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	own := run(context.Background(), []string{"skills", "load", file}, env, nil)
+	if own.code != 0 || !strings.Contains(own.stdout, "навыков: 2 ·") || !strings.Contains(own.stdout, "написаний вместе с синонимами 4") {
+		t.Fatalf("own file: %+v", own)
+	}
+	if err := os.WriteFile(file, []byte("not a csv"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if bad := run(context.Background(), []string{"skills", "load", file}, env, nil); bad.code != 1 || !strings.Contains(bad.stderr, "bad dictionary file") {
 		t.Fatalf("bad file: %+v", bad)
 	}
 }
@@ -257,6 +295,10 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	}
 	if n := count("SELECT count(*) FROM profiles p WHERE headline = '' OR NOT EXISTS (SELECT 1 FROM profile_specialties s WHERE s.profile_id = p.id) OR NOT EXISTS (SELECT 1 FROM profile_items i WHERE i.profile_id = p.id)"); n != 0 {
 		t.Errorf("%d demo profiles are empty", n)
+	}
+	// Навыки (срез 33): у каждого демо-учёного заполнены оба списка.
+	if n := count("SELECT count(*) FROM profiles WHERE cardinality(research_skills) = 0 OR cardinality(general_skills) = 0"); n != 0 {
+		t.Errorf("%d demo profiles without skills", n)
 	}
 	// Журналы демо-публикаций (срез 14): у статей настоящие ISSN из SCImago; после загрузки справочника все находятся,
 	// у нескольких учёных есть статьи в Q1–Q2.

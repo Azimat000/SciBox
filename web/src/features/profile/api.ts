@@ -168,6 +168,10 @@ export async function searchJournals(q: string, signal?: AbortSignal): Promise<F
   return (await apiGet<{ items: FoundJournal[] }>(`/api/journals?q=${encodeURIComponent(q)}`, { signal })).items
 }
 
+/** Подсказки навыков из справочника: научные (`research`) или общие (`general`). Только для вошедших. */
+export const searchSkills = (kind: 'research' | 'general') => (q: string, signal?: AbortSignal) =>
+  apiGet<{ items: { name: string; group: string; via?: string }[]; fuzzy: boolean }>(`/api/skills?kind=${kind}&q=${encodeURIComponent(q)}&limit=8`, { signal })
+
 /** Раздел профиля на странице → вид записи (в ответе разделы названы во множественном числе). */
 export const sectionOf: Record<ItemKind, keyof Profile['sections']> = {
   education: 'education',

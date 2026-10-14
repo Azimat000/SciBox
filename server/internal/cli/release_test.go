@@ -11,15 +11,15 @@ import (
 	"scibox/server/internal/testdb"
 )
 
-func TestReleaseMigratesAndLoadsTheJournalsAndIsRepeatable(t *testing.T) {
+func TestReleaseMigratesAndLoadsTheDictionariesAndIsRepeatable(t *testing.T) {
 	env := map[string]string{"DATABASE_URL": testdb.Create(t, false)}
 	first := run(context.Background(), []string{"release"}, env, nil)
-	if first.code != 0 || !strings.Contains(first.stdout, "Справочник журналов загружен") {
+	if first.code != 0 || !strings.Contains(first.stdout, "Справочник журналов загружен") || !strings.Contains(first.stdout, "Справочник навыков загружен") {
 		t.Fatalf("first release: code %d, stdout %q, stderr %q", first.code, first.stdout, first.stderr)
 	}
 	// Выкладку повторяют после сбоя: второй раз ничего не ломается и ничего не грузится заново.
 	second := run(context.Background(), []string{"release"}, env, nil)
-	if second.code != 0 || !strings.Contains(second.stdout, "no migrations to apply") || !strings.Contains(second.stdout, "уже загружен") {
+	if second.code != 0 || !strings.Contains(second.stdout, "no migrations to apply") || !strings.Contains(second.stdout, "Справочник журналов уже загружен") || !strings.Contains(second.stdout, "Справочник навыков уже загружен") {
 		t.Fatalf("second release: code %d, stdout %q, stderr %q", second.code, second.stdout, second.stderr)
 	}
 }
