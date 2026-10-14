@@ -36,6 +36,7 @@ func TestCreateSearchStoresCanonicalQuery(t *testing.T) {
 		{"лишние пробелы в словах", "q=%20a%20%20b%20", "q=a+b"},
 		{"порядок остаётся", "field=1.4&sort=deadline", "field=1.4&sort=deadline"},
 		{"галочки", "housing=true&competition=1&salary_min=80000", "competition=1&housing=1&salary_min=80000"},
+		{"условия для учёного", "conferences=1&equipment=true&publications=1&housing=0", "conferences=1&equipment=1&publications=1"},
 		{"пустые значения не пишутся", "q=&region=&field=1.4", "field=1.4"},
 		{"все виды фильтров", "format=remote&type=research&degree=candidate&org_kind=institute&funding=grant&rate=100&term=short&deadline=week",
 			"deadline=week&degree=candidate&format=remote&funding=grant&org_kind=institute&rate=100&term=short&type=research"},

@@ -3,6 +3,7 @@ package seed
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/num"
+	"scibox/server/internal/orgs"
 	"scibox/server/internal/vacancies"
 )
 
@@ -32,6 +34,10 @@ type vacSeed struct {
 	daysLeft              int // дней до срока подачи; 0 — срока нет
 	specialties           []string
 	status                string // пусто — опубликована
+	// Условия для учёного (срез 16). Если не задано ни одно, для вакансий научных, преподавательских и учебных видов
+	// условия выбираются по названию (demoConditions): набор не меняется между запусками.
+	equipment, publications, conferences bool
+	equipmentNote                        string
 }
 
 const (
@@ -46,7 +52,8 @@ var vacanciesByOrg = map[string][]vacSeed{
 			requirements: "Кандидат физико-математических наук, опыт эпитаксии или магнитотранспортных измерений, не менее пяти публикаций за последние пять лет.",
 			focus:        "Рост и характеризация плёнок", level: 3, format: "onsite", region: nsk, city: "Новосибирск", housing: "service", rate: 100,
 			salaryFrom: 95000, salaryTo: 130000, contract: "fixed", months: 36, funding: "grant", note: "Грант РНФ, проект 24-12-00184", degree: "candidate",
-			competition: true, daysLeft: 18, specialties: []string{"1.3.8", "1.3.10"}},
+			competition: true, daysLeft: 18, specialties: []string{"1.3.8", "1.3.10"},
+			equipment: true, equipmentNote: "Криостаты института, доступ к синхротрону по заявкам", publications: true, conferences: true},
 		{unit: 0, position: "phd_student", title: "Аспирантура: транспорт в топологических сверхпроводниках",
 			summary:      "Место в аспирантуре на бюджетной основе с темой по электронному транспорту в топологических сверхпроводниках.",
 			description:  "Тема диссертации: эффекты ближнего порядка в гибридных структурах сверхпроводник — топологический изолятор. Научный руководитель — заведующая лабораторией. Стипендия аспиранта плюс надбавка из гранта.",
@@ -244,6 +251,12 @@ func seedVacancies(ctx context.Context, tx pgx.Tx, q *dbgen.Queries, org dbgen.O
 			// Разное время создания, чтобы порядок «новые сверху» выглядел естественно.
 			Now: now.Add(-time.Duration(len(list)-i) * 26 * time.Hour),
 		}
+		c := conditionsOf(org.Slug, v)
+		params.EquipmentAccess, params.EquipmentNote = c.equipment, c.equipmentNote
+		params.PublicationsPaid, params.ConferenceTravel = c.publications, c.conferences
+		if c.equipment {
+			params.EquipmentUnitID = equipmentUnit(org.Slug, units)
+		}
 		params.CareerLevel = int16Ptr(v.level)
 		params.RatePercent = int16Ptr(v.rate)
 		params.SalaryFrom = int32Ptr(v.salaryFrom)
@@ -283,6 +296,59 @@ func seedVacancies(ctx context.Context, tx pgx.Tx, q *dbgen.Queries, org dbgen.O
 		created++
 	}
 	return created, nil
+}
+
+// Заметки об оборудовании для демо: короткие и без выдуманных цифр.
+var equipmentNotes = []string{
+	"Приборная база подразделения, работа на оборудовании по записи",
+	"Доступ к оборудованию центра коллективного пользования по заявке",
+	"Собственная экспериментальная установка и расходные материалы за счёт проекта",
+	"Вычислительный кластер института и лицензионное программное обеспечение",
+}
+
+// conditionsOf — условия для учёного у демо-вакансии: заданные явно или выбранные по названию.
+func conditionsOf(orgSlug string, v vacSeed) vacSeed {
+	if v.equipment || v.publications || v.conferences {
+		return v
+	}
+	if v.status == vacancies.StatusDraft {
+		return v
+	}
+	switch v.position {
+	case "shared_facility_head", "grant_manager", "tech_transfer", "methodist", "project_specialist", "grant_executor":
+		return v
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(orgSlug + "|" + v.title))
+	n := h.Sum32()
+	v.equipment = n%100 < 40
+	v.publications = (n/100)%100 < 30
+	v.conferences = (n/10000)%100 < 35
+	if v.equipment {
+		v.equipmentNote = equipmentNotes[(n/1000000)%uint32(len(equipmentNotes))]
+	}
+	return v
+}
+
+// equipmentUnit — подразделение-ЦКП организации (первое по порядку в списке), если оно есть.
+func equipmentUnit(orgSlug string, units []dbgen.ListUnitNamesRow) *uuid.UUID {
+	for _, o := range organizations {
+		if o.slug != orgSlug {
+			continue
+		}
+		for _, u := range o.units {
+			if u.kind != orgs.UnitSharedFacility {
+				continue
+			}
+			for _, x := range units {
+				if x.Name == u.name {
+					id := x.ID
+					return &id
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func organizationUnitName(slug string, index int) string {

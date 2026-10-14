@@ -82,6 +82,8 @@ type vacancyOpts struct {
 	deadline    string // пусто — срок через 90 дней
 	noDeadline  bool
 	unit        *uuid.UUID
+	// Условия для учёного (срез 16).
+	equipment, publications, conferences bool
 }
 
 // publish создаёт вакансию владельцем и публикует её.
@@ -125,6 +127,7 @@ func (w *world) create(o vacancyOpts) vacancies.Detail {
 	if o.noDeadline {
 		in.Deadline = ""
 	}
+	in.EquipmentAccess, in.PublicationsPaid, in.ConferenceTravel = o.equipment, o.publications, o.conferences
 	d, err := w.Vac.Create(bg, w.tm.Owner.User, w.tm.Slug, in)
 	if err != nil {
 		w.T.Fatalf("create vacancy: %v", err)

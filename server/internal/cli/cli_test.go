@@ -221,6 +221,25 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 		OR (v.is_competition AND v.deadline IS NULL))`); n != 0 {
 		t.Errorf("%d published vacancies are not complete", n)
 	}
+	// Условия для учёного (срез 16): есть у части вакансий каждого вида; описание и ЦКП только при отметке про оборудование,
+	// ЦКП — подразделение той же организации вида «ЦКП».
+	for col, what := range map[string]string{"equipment_access": "equipment", "publications_paid": "paid publications", "conference_travel": "conference travel"} {
+		if n := count("SELECT count(*) FROM vacancies WHERE status = 'published' AND " + col); n < 15 {
+			t.Errorf("%d published vacancies with %s, want at least 15", n, what)
+		}
+	}
+	if n := count("SELECT count(*) FROM vacancies WHERE status = 'published' AND NOT equipment_access AND NOT publications_paid AND NOT conference_travel"); n == 0 {
+		t.Error("every published vacancy has conditions: the filter would have nothing to cut")
+	}
+	if n := count("SELECT count(*) FROM vacancies WHERE NOT equipment_access AND (equipment_note <> '' OR equipment_unit_id IS NOT NULL)"); n != 0 {
+		t.Errorf("%d vacancies with an equipment note or unit but without the mark", n)
+	}
+	if n := count("SELECT count(*) FROM vacancies WHERE equipment_unit_id IS NOT NULL"); n == 0 {
+		t.Error("no vacancy refers to a shared facility")
+	}
+	if n := count("SELECT count(*) FROM vacancies v JOIN units u ON u.id = v.equipment_unit_id WHERE u.org_id <> v.org_id OR u.kind <> 'shared_facility'"); n != 0 {
+		t.Errorf("%d vacancies refer to a foreign unit or to a unit that is not a shared facility", n)
+	}
 	// Профили демо-учёных: во всех режимах приватности, заполнены, записи по порядку.
 	if n := count("SELECT count(*) FROM profiles"); n != 14 {
 		t.Errorf("%d profiles, want 14", n)

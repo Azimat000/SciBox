@@ -516,3 +516,34 @@ func TestDigestNeverMovesTheBoundaryBack(t *testing.T) {
 		t.Errorf("уведомлений %d", d.notices())
 	}
 }
+
+// Условия для учёного входят в сохранённый поиск: письмо приходит только о вакансиях, где они заявлены (срез 16).
+func TestDigestFollowsConditionsOfTheSearch(t *testing.T) {
+	w := newWorld(t)
+	who := w.User("Анна")
+	mark := marker()
+	t0 := time.Now().UTC().Truncate(time.Microsecond)
+	w.clock.Set(t0)
+	s, err := w.svc.CreateSearch(bg, who.User, SearchInput{Name: "Оборудование " + mark, Query: "q=" + mark + "&equipment=1&conferences=1", Frequency: FreqDaily})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(s.Query, "equipment=1") || !strings.Contains(s.Query, "conferences=1") {
+		t.Fatalf("условия не сохранены: %q", s.Query)
+	}
+	w.publish(vacancyOpts{title: "С обоими " + mark, equipment: true, conferences: true})
+	w.publish(vacancyOpts{title: "Только оборудование " + mark, equipment: true})
+	w.publish(vacancyOpts{title: "Без условий " + mark})
+
+	w.clock.Set(NextRun(FreqDaily, t0).Add(5 * time.Minute))
+	if n, err := w.svc.SendDigests(bg); err != nil || n != 1 {
+		t.Fatalf("отправлено %d %v", n, err)
+	}
+	var body string
+	if err := testkit.Pool.QueryRow(bg, `SELECT body FROM notifications WHERE user_id = $1 AND kind = 'saved_search'`, who.ID).Scan(&body); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "С обоими "+mark) || strings.Contains(body, "Только оборудование") || strings.Contains(body, "Без условий") {
+		t.Errorf("в письме должна быть только вакансия с обоими условиями:\n%s", body)
+	}
+}
