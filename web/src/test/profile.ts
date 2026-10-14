@@ -25,7 +25,7 @@ export const profile: Profile = {
   degree: { level: 'candidate', specialty: { code: '1.4.4', name: 'Физическая химия' }, year: 2016, institution: 'Институт катализа', dissertation: 'Активные центры оксидных катализаторов' },
   academic_title: 'docent',
   academic_title_year: 2021,
-  identifiers: { orcid: '0000-0002-1825-0097', spin: '12345678', scopus_id: '57190123456', wos_id: 'A-1234-2008' },
+  identifiers: { orcid: '0000-0002-1825-0097', spin: '12345678', scopus_id: '57190123456', wos_id: 'A-1234-2008', github_url: 'https://github.com/elena-orlova' },
   h_index: { rsci: 12, scopus: 9, wos: null, scholar: 15 },
   specialties: [{ code: '1.4.4', name: 'Физическая химия' }],
   skills: { research: ['ИК-спектроскопия', 'Рентгеновская дифракция'], general: ['Английский B2'] },

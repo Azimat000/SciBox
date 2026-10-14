@@ -109,6 +109,25 @@ func TestHTTPNeedsSignIn(t *testing.T) {
 
 func uuid4() string { return "6f1d2a3e-0b1c-4d5e-8f90-123456789abc" }
 
+// Срез 32: ссылку на GitHub с нулевым знаком отвергает периметр (textsafe), а не база; сохранённое не меняется.
+func TestHTTPGitHubLinkWithNulIsRefusedAndKeepsTheSavedOne(t *testing.T) {
+	a := newAPI(t)
+	p := a.user("Елена Орлова")
+	if r := a.do(&p, "PUT", "/api/profile", map[string]any{"github_url": "github.com/elena-orlova"}); r.Code != 200 {
+		t.Fatalf("save: %d %s", r.Code, r.Raw)
+	}
+	for _, bad := range []string{"github.com/elena\u0000-orlova", "github.com/\u0000", "\u0000"} {
+		r := a.do(&p, "PUT", "/api/profile", map[string]any{"github_url": bad})
+		if r.Code < 400 || r.Code >= 500 {
+			t.Errorf("github_url %q: %d %s, ждали отказ 4xx", bad, r.Code, r.Raw)
+		}
+	}
+	r := a.do(&p, "GET", "/api/profile", nil)
+	if got := r.profile(t)["identifiers"].(map[string]any)["github_url"]; got != "https://github.com/elena-orlova" {
+		t.Errorf("после отказов сохранено %v", got)
+	}
+}
+
 func TestHTTPOwnProfileCycle(t *testing.T) {
 	a := newAPI(t)
 	p := a.user("Елена Орлова")
@@ -130,7 +149,7 @@ func TestHTTPOwnProfileCycle(t *testing.T) {
 		"headline": "Старший научный сотрудник", "city": "Новосибирск", "region_code": "54", "about": "О себе",
 		"degree": "candidate", "degree_specialty_code": "1.4.4", "degree_year": 2016, "degree_institution": "Институт катализа",
 		"dissertation_title": "Тема", "academic_title": "docent", "academic_title_year": 2021,
-		"orcid": "0000-0002-1825-0097", "spin": "1234-5678", "scopus_id": "57190123456", "wos_id": "A-1234-2008",
+		"orcid": "0000-0002-1825-0097", "spin": "1234-5678", "scopus_id": "57190123456", "wos_id": "A-1234-2008", "github_url": "github.com/elena-orlova",
 		"h_rsci": 12, "h_scopus": nil, "contact_email": "orlova@example.ru", "specialties": []string{"1.4.4"},
 	}
 	r = a.do(&p, "PUT", "/api/profile", body)
@@ -141,14 +160,17 @@ func TestHTTPOwnProfileCycle(t *testing.T) {
 	if prof["headline"] != "Старший научный сотрудник" || prof["h_index"].(map[string]any)["rsci"].(float64) != 12 || prof["h_index"].(map[string]any)["scopus"] != nil {
 		t.Errorf("после сохранения: %v", prof)
 	}
+	if prof["identifiers"].(map[string]any)["github_url"] != "https://github.com/elena-orlova" {
+		t.Errorf("GitHub не нормализован: %v", prof["identifiers"])
+	}
 	if prof["identifiers"].(map[string]any)["spin"] != "12345678" {
 		t.Errorf("идентификаторы: %v", prof["identifiers"])
 	}
 
 	// Ошибки полей: 422 и поле названо.
-	bad := map[string]any{"orcid": "nope", "h_wos": 1000}
+	bad := map[string]any{"orcid": "nope", "h_wos": 1000, "github_url": "https://github.com@evil.ru"}
 	r = a.do(&p, "PUT", "/api/profile", bad)
-	if r.Code != http.StatusUnprocessableEntity || r.fields(t)["orcid"] == nil || r.fields(t)["h_wos"] == nil {
+	if r.Code != http.StatusUnprocessableEntity || r.fields(t)["orcid"] == nil || r.fields(t)["h_wos"] == nil || r.fields(t)["github_url"] == nil {
 		t.Errorf("ошибки: %d %s", r.Code, r.Raw)
 	}
 

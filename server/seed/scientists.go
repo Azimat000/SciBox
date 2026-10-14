@@ -255,7 +255,7 @@ var scientists = []scientist{
 			Headline: "Научный сотрудник, лаборатория биоинформатики", City: "Казань", RegionCode: "16",
 			About:  "Анализ геномов и транскриптомов клинических образцов. Пишу пайплайны на Nextflow и Python, читаю лекции по статистике для биологов. Открыт к предложениям из лабораторий, где работают с секвенированием.",
 			Degree: "candidate", DegreeSpecialty: "1.5.8", DegreeYear: ip(2020), DegreeInstitution: "Казанский федеральный университет", Dissertation: "Методы обнаружения структурных вариаций по данным секвенирования",
-			ORCID: orcid(105), SPIN: "7821-4410", ScopusID: "57210000111", WosID: "AAB-4411-2020", HRsci: ip(6), HScopus: ip(7), HWos: ip(5), HScholar: ip(9),
+			ORCID: orcid(105), SPIN: "7821-4410", ScopusID: "57210000111", WosID: "AAB-4411-2020", GitHubURL: "https://github.com/scibox-demo-korolev", HRsci: ip(6), HScopus: ip(7), HWos: ip(5), HScholar: ip(9),
 			ContactEmail: "dmitry.korolev@example.ru", Specialties: []string{"1.5.8", "1.5.7"},
 		},
 		items: []prof.ItemInput{
@@ -336,7 +336,7 @@ var scientists = []scientist{
 			Headline: "Научный сотрудник, микробиология", City: "Москва", RegionCode: "77",
 			About:  "Микробные сообщества почв и водоёмов, метагеномика. Ищу позицию, где можно совмещать полевые выезды и лабораторную работу.",
 			Degree: "candidate", DegreeSpecialty: "1.5.11", DegreeYear: ip(2021), DegreeInstitution: "Московский государственный университет", Dissertation: "Структура микробных сообществ термальных источников",
-			ORCID: orcid(109), SPIN: "8123-9004", ScopusID: "57220000116", WosID: "ABC-9116-2021", HRsci: ip(5), HScopus: ip(6), HWos: ip(4),
+			ORCID: orcid(109), SPIN: "8123-9004", ScopusID: "57220000116", WosID: "ABC-9116-2021", GitHubURL: "github.com/scibox-demo-guseva", HRsci: ip(5), HScopus: ip(6), HWos: ip(4),
 			ContactEmail: "alina.guseva@example.ru", Specialties: []string{"1.5.11", "1.5.15", "1.5.8"},
 		},
 		items: []prof.ItemInput{

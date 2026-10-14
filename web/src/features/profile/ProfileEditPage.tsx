@@ -35,7 +35,7 @@ function Loader() {
   return <EditForm profile={profile.data.profile} reference={reference.data} />
 }
 
-type Values = Record<'headline' | 'city' | 'region_code' | 'about' | 'degree' | 'degree_specialty_code' | 'degree_year' | 'degree_institution' | 'dissertation_title' | 'academic_title' | 'academic_title_year' | 'orcid' | 'spin' | 'scopus_id' | 'wos_id' | 'h_rsci' | 'h_scopus' | 'h_wos' | 'h_scholar' | 'contact_email' | 'specialties' | 'research_skills' | 'general_skills', string>
+type Values = Record<'headline' | 'city' | 'region_code' | 'about' | 'degree' | 'degree_specialty_code' | 'degree_year' | 'degree_institution' | 'dissertation_title' | 'academic_title' | 'academic_title_year' | 'orcid' | 'spin' | 'scopus_id' | 'wos_id' | 'github_url' | 'h_rsci' | 'h_scopus' | 'h_wos' | 'h_scholar' | 'contact_email' | 'specialties' | 'research_skills' | 'general_skills', string>
 
 const str = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n))
 const num = (s: string): number | null => (s.trim() === '' ? null : Number(s))
@@ -59,6 +59,7 @@ function initialOf(p: Profile): Values {
     spin: p.identifiers.spin,
     scopus_id: p.identifiers.scopus_id,
     wos_id: p.identifiers.wos_id,
+    github_url: p.identifiers.github_url ?? '',
     h_rsci: str(p.h_index.rsci),
     h_scopus: str(p.h_index.scopus),
     h_wos: str(p.h_index.wos),
@@ -87,6 +88,7 @@ function fieldsOf(v: Values): CoreFields {
     spin: v.spin,
     scopus_id: v.scopus_id,
     wos_id: v.wos_id,
+    github_url: v.github_url,
     h_rsci: num(v.h_rsci),
     h_scopus: num(v.h_scopus),
     h_wos: num(v.h_wos),
@@ -192,6 +194,7 @@ function EditForm({ profile, reference }: { profile: Profile; reference: NonNull
             {text('scopus_id', e.scopus, { hint: e.scopusHint, inputMode: 'numeric' })}
           </div>
           {text('wos_id', e.wos, { hint: e.wosHint })}
+          {text('github_url', e.github, { hint: e.githubHint })}
         </fieldset>
 
         <fieldset className="form-block">

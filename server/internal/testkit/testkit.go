@@ -283,6 +283,7 @@ func (w *World) FillProfile(p Person) {
 	if _, err := w.Prof.SaveCore(BG, p.User, profiles.CoreInput{
 		Headline: "Научный сотрудник, лаборатория катализа", City: "Новосибирск", RegionCode: "54",
 		About: "Изучаю активные центры катализаторов.", Specialties: []string{"1.4.4"},
+		GitHubURL: "github.com/scibox-demo-applicant",
 	}); err != nil {
 		w.T.Fatalf("fill profile: %v", err)
 	}

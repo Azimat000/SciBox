@@ -69,6 +69,7 @@
 | Открыт к предложениям | Отметка в профиле: учёный не против приглашения на вакансию | `open_to_offers` |
 | Записи профиля | Образование, опыт работы, публикации, гранты, патенты и программы, преподавание | `profile_items.kind`: `education`, `experience`, `publication`, `grant`, `patent`, `teaching` |
 | ORCID, SPIN, Scopus ID, WoS ID | Идентификаторы учёного в международных и российской базах | `orcid`, `spin`, `scopus_id`, `wos_id` |
+| Ссылка на GitHub | Адрес профиля учёного на GitHub; в базе всегда `https://github.com/<логин>`, на странице подпись `github.com/логин` | `github_url` (`identifiers.github_url`) |
 | h-index | Индекс Хирша по базе (РИНЦ, Scopus, Web of Science, Google Scholar), вводится вручную | `h_rsci`, `h_scopus`, `h_wos`, `h_scholar` |
 | DOI | Номер научной публикации; по нему Crossref отдаёт название, авторов, журнал, год | `doi` (нижний регистр) |
 | Резюме (CV) | PDF, который сервер собирает из профиля | `GET /api/profile/cv` |

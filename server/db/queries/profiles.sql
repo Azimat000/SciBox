@@ -30,7 +30,7 @@ UPDATE profiles SET
     degree = @degree, degree_specialty_code = @degree_specialty_code, degree_year = @degree_year,
     degree_institution = @degree_institution, dissertation_title = @dissertation_title,
     academic_title = @academic_title, academic_title_year = @academic_title_year,
-    orcid = @orcid, spin = @spin, scopus_id = @scopus_id, wos_id = @wos_id,
+    orcid = @orcid, spin = @spin, scopus_id = @scopus_id, wos_id = @wos_id, github_url = @github_url,
     h_rsci = @h_rsci, h_scopus = @h_scopus, h_wos = @h_wos, h_scholar = @h_scholar,
     contact_email = @contact_email, research_skills = @research_skills::text[], general_skills = @general_skills::text[],
     updated_at = @now

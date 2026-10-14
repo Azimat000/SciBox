@@ -31,6 +31,15 @@ export function publicationMeta(it: Item): string {
   return [dot(it.authors ?? ''), dot(biblio), dot(vol)].filter(Boolean).join(' ')
 }
 
+/**
+ * Логин из сохранённой ссылки на GitHub или null. Ссылку в href кладём только после этой проверки: что бы ни пришло от
+ * сервера, наружу уйдёт только https://github.com/<логин>.
+ */
+export function githubLogin(link: string): string | null {
+  const m = /^https:\/\/github\.com\/([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)$/.exec(link)
+  return m !== null && m[1].length <= 39 ? m[1] : null
+}
+
 /** Лучшее из введённых h-index (как в каталоге); null, если ничего не указано. */
 export function bestHIndex(h: { rsci: number | null; scopus: number | null; wos: number | null; scholar: number | null }): number | null {
   const values = [h.rsci, h.scopus, h.wos, h.scholar].filter((v): v is number => v !== null)

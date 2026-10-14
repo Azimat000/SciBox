@@ -4,7 +4,7 @@ import { Button, ButtonLink } from '../../ui/Button'
 import { Tag } from '../../ui/Tag'
 import { plural } from '../../lib/plural'
 import { itemKinds, sectionOf, skillsOf, type Item, type ItemKind, type ProfilePage, type Quartiles } from './api'
-import { anonymousLabel, bestHIndex, degreeLabel, titleLabel } from './labels'
+import { anonymousLabel, bestHIndex, degreeLabel, githubLogin, titleLabel } from './labels'
 import { itemTitle, sectionDefs } from './sections'
 import { mailtoHref } from '../../lib/mailto'
 
@@ -69,6 +69,7 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
     [t.profile.identifiers.spin, spinText(p.identifiers.spin), 'spin'],
     [t.profile.identifiers.scopus, p.identifiers.scopus_id, 'scopus'],
     [t.profile.identifiers.wos, p.identifiers.wos_id, 'wos'],
+    [t.profile.identifiers.github, p.identifiers.github_url ?? '', 'github'],
   ].filter((r) => r[1] !== '')
   const skills = skillsOf(p)
   // Безымянная карточка анонимного профиля (D-199): вместо имени название из научных данных
@@ -199,6 +200,10 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
                       {key === 'orcid' ? (
                         <a href={`https://orcid.org/${value}`} rel="noreferrer noopener" target="_blank" aria-label={t.profile.identifiers.orcidLink(value)}>
                           {value}
+                        </a>
+                      ) : key === 'github' && githubLogin(value) !== null ? (
+                        <a href={value} rel="noopener noreferrer nofollow" target="_blank">
+                          github.com/{githubLogin(value)}
                         </a>
                       ) : (
                         value

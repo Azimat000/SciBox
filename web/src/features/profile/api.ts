@@ -71,7 +71,8 @@ export type Profile = {
   degree: { level: string; specialty: Code | null; year: number | null; institution: string; dissertation: string }
   academic_title: string
   academic_title_year: number | null
-  identifiers: { orcid: string; spin: string; scopus_id: string; wos_id: string }
+  /** github_url нет в снимках профиля, отправленных с откликом до среза 32, и у безымянной карточки. */
+  identifiers: { orcid: string; spin: string; scopus_id: string; wos_id: string; github_url?: string }
   h_index: { rsci: number | null; scopus: number | null; wos: number | null; scholar: number | null }
   specialties: Code[]
   /** Навыки (D-136). Нет в снимках профиля, отправленных с откликом раньше; в них же списки бывают null. */
@@ -126,6 +127,7 @@ export type CoreFields = {
   spin: string
   scopus_id: string
   wos_id: string
+  github_url: string
   h_rsci: number | null
   h_scopus: number | null
   h_wos: number | null

@@ -33,6 +33,9 @@ const (
 	msgSPINInvalid     = "SPIN-код: от 4 до 8 цифр, например 1234-5678"
 	msgScopusInvalid   = "Scopus Author ID: только цифры, от 8 до 12"
 	msgWosInvalid      = "ResearcherID записывают так: A-1234-2008"
+	msgGitHubInvalid   = "Ссылка на профиль GitHub: github.com/ваш-логин"
+	msgGitHubRepo      = "Нужна ссылка на ваш профиль, а не на репозиторий: github.com/ваш-логин"
+	msgGitHubReserved  = "Это служебная страница GitHub, а не профиль: укажите github.com/ваш-логин"
 	msgHIndexInvalid   = "h-index: целое число от 0 до %d"
 	msgEmailInvalid    = "Похоже на опечатку в адресе почты"
 	msgURLInvalid      = "Ссылка должна начинаться с http:// или https://"
@@ -175,6 +178,7 @@ type coreFields struct {
 	academicTitleYear *int16
 	orcid, spin       string
 	scopusID, wosID   string
+	githubURL         string
 	hRsci, hScopus    *int16
 	hWos, hScholar    *int16
 	contactEmail      string
@@ -290,6 +294,16 @@ func validateCore(in CoreInput, now time.Time) (coreFields, fieldErrors) {
 		} else {
 			errs["wos_id"] = msgWosInvalid
 		}
+	}
+	switch link, why := normalizeGitHub(in.GitHubURL); why {
+	case githubOK:
+		f.githubURL = link
+	case githubIsRepo:
+		errs["github_url"] = msgGitHubRepo
+	case githubReserved:
+		errs["github_url"] = msgGitHubReserved
+	default:
+		errs["github_url"] = msgGitHubInvalid
 	}
 	f.hRsci = num.Int16Ptr(hIndex(errs, "h_rsci", in.HRsci))
 	f.hScopus = num.Int16Ptr(hIndex(errs, "h_scopus", in.HScopus))

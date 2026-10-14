@@ -132,7 +132,7 @@ func (q *Queries) ExistingOrgIDs(ctx context.Context, ids []uuid.UUID) ([]uuid.U
 }
 
 const getProfileByID = `-- name: GetProfileByID :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, p.q12_total, p.h_max, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, p.q12_total, p.h_max, p.github_url, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -182,6 +182,7 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 		&i.Profile.VisibilityBeforeDeletion,
 		&i.Profile.Q12Total,
 		&i.Profile.HMax,
+		&i.Profile.GithubUrl,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -190,7 +191,7 @@ func (q *Queries) GetProfileByID(ctx context.Context, id uuid.UUID) (GetProfileB
 }
 
 const getProfileByUser = `-- name: GetProfileByUser :one
-SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, p.q12_total, p.h_max, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
+SELECT p.id, p.user_id, p.visibility, p.open_to_offers, p.headline, p.city, p.region_code, p.about, p.degree, p.degree_specialty_code, p.degree_year, p.degree_institution, p.dissertation_title, p.academic_title, p.academic_title_year, p.orcid, p.spin, p.scopus_id, p.wos_id, p.h_rsci, p.h_scopus, p.h_wos, p.h_scholar, p.contact_email, p.created_at, p.updated_at, p.research_skills, p.general_skills, p.visibility_before_deletion, p.q12_total, p.h_max, p.github_url, u.display_name, r.name AS region_name, s.name AS degree_specialty_name
 FROM profiles p
 JOIN users u ON u.id = p.user_id
 LEFT JOIN regions r ON r.code = p.region_code
@@ -240,6 +241,7 @@ func (q *Queries) GetProfileByUser(ctx context.Context, userID uuid.UUID) (GetPr
 		&i.Profile.VisibilityBeforeDeletion,
 		&i.Profile.Q12Total,
 		&i.Profile.HMax,
+		&i.Profile.GithubUrl,
 		&i.DisplayName,
 		&i.RegionName,
 		&i.DegreeSpecialtyName,
@@ -775,11 +777,11 @@ UPDATE profiles SET
     degree = $5, degree_specialty_code = $6, degree_year = $7,
     degree_institution = $8, dissertation_title = $9,
     academic_title = $10, academic_title_year = $11,
-    orcid = $12, spin = $13, scopus_id = $14, wos_id = $15,
-    h_rsci = $16, h_scopus = $17, h_wos = $18, h_scholar = $19,
-    contact_email = $20, research_skills = $21::text[], general_skills = $22::text[],
-    updated_at = $23
-WHERE id = $24
+    orcid = $12, spin = $13, scopus_id = $14, wos_id = $15, github_url = $16,
+    h_rsci = $17, h_scopus = $18, h_wos = $19, h_scholar = $20,
+    contact_email = $21, research_skills = $22::text[], general_skills = $23::text[],
+    updated_at = $24
+WHERE id = $25
 `
 
 type UpdateProfileCoreParams struct {
@@ -798,6 +800,7 @@ type UpdateProfileCoreParams struct {
 	Spin                string
 	ScopusID            string
 	WosID               string
+	GithubUrl           string
 	HRsci               *int16
 	HScopus             *int16
 	HWos                *int16
@@ -826,6 +829,7 @@ func (q *Queries) UpdateProfileCore(ctx context.Context, arg UpdateProfileCorePa
 		arg.Spin,
 		arg.ScopusID,
 		arg.WosID,
+		arg.GithubUrl,
 		arg.HRsci,
 		arg.HScopus,
 		arg.HWos,

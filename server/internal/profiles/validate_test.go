@@ -47,7 +47,7 @@ func TestValidateCoreValid(t *testing.T) {
 	if len(errs) != 0 {
 		t.Fatalf("ошибки: %v", errs)
 	}
-	if f.orcid != "0000-0002-1825-0097" || f.spin != "12345678" || f.scopusID != "57190123456" || f.wosID != "A-1234-2008" {
+	if f.orcid != "0000-0002-1825-0097" || f.spin != "12345678" || f.scopusID != "57190123456" || f.wosID != "A-1234-2008" || f.githubURL != "https://github.com/Elena-Orlova" {
 		t.Errorf("идентификаторы: %+v", f)
 	}
 	if f.contactEmail != "orlova@example.ru" || *f.degreeYear != 2016 || *f.hRsci != 12 || len(f.specialties) != 2 {
@@ -109,6 +109,9 @@ func TestValidateCoreErrors(t *testing.T) {
 		{"Scopus длинный", func(c *CoreInput) { c.ScopusID = "1234567890123" }, "scopus_id", "Scopus"},
 		{"WoS", func(c *CoreInput) { c.WosID = "1234-2008" }, "wos_id", "ResearcherID"},
 		{"WoS год", func(c *CoreInput) { c.WosID = "A-1234-1850" }, "wos_id", "ResearcherID"},
+		{"GitHub чужой сайт", func(c *CoreInput) { c.GitHubURL = "https://gitlab.com/ivanov" }, "github_url", "github.com/ваш-логин"},
+		{"GitHub репозиторий", func(c *CoreInput) { c.GitHubURL = "github.com/ivanov/tools" }, "github_url", "не на репозиторий"},
+		{"GitHub служебная страница", func(c *CoreInput) { c.GitHubURL = "github.com/settings" }, "github_url", "служебная страница"},
 		{"h-index РИНЦ", func(c *CoreInput) { c.HRsci = ptr(-1) }, "h_rsci", "от 0 до 300"},
 		{"h-index Scopus", func(c *CoreInput) { c.HScopus = ptr(301) }, "h_scopus", "от 0 до 300"},
 		{"h-index WoS", func(c *CoreInput) { c.HWos = ptr(1000) }, "h_wos", "от 0 до 300"},

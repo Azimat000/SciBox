@@ -161,6 +161,7 @@ type CoreInput struct {
 	SPIN              string   `json:"spin"`
 	ScopusID          string   `json:"scopus_id"`
 	WosID             string   `json:"wos_id"`
+	GitHubURL         string   `json:"github_url"`
 	HRsci             *int     `json:"h_rsci"`
 	HScopus           *int     `json:"h_scopus"`
 	HWos              *int     `json:"h_wos"`
@@ -192,6 +193,8 @@ type Identifiers struct {
 	SPIN     string `json:"spin"`
 	ScopusID string `json:"scopus_id"`
 	WosID    string `json:"wos_id"`
+	// GitHubURL — https://github.com/<логин> или пусто (срез 32); безымянной карточке не отдаётся.
+	GitHubURL string `json:"github_url"`
 }
 
 // Skills — навыки: научные (методы, приборы, программы для исследований) и общие (компьютер, языки, работа с людьми).

@@ -73,7 +73,7 @@ func TestSaveCoreRoundTrip(t *testing.T) {
 	if v.AcademicTitle != TitleDocent || *v.AcademicTitleYear != 2021 {
 		t.Errorf("звание: %v %v", v.AcademicTitle, v.AcademicTitleYear)
 	}
-	if v.Identifiers != (Identifiers{ORCID: "0000-0002-1825-0097", SPIN: "12345678", ScopusID: "57190123456", WosID: "A-1234-2008"}) {
+	if v.Identifiers != (Identifiers{ORCID: "0000-0002-1825-0097", SPIN: "12345678", ScopusID: "57190123456", WosID: "A-1234-2008", GitHubURL: "https://github.com/Elena-Orlova"}) {
 		t.Errorf("идентификаторы: %+v", v.Identifiers)
 	}
 	if *v.HIndex.RSCI != 12 || *v.HIndex.Scopus != 9 || *v.HIndex.WoS != 7 || *v.HIndex.Scholar != 15 {

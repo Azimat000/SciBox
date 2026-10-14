@@ -218,12 +218,13 @@ func hIndexLine(h HIndex) string {
 	return strings.Join(parts, ", ")
 }
 
-// idFacts: ORCID, SPIN, Scopus ID, WoS ResearcherID, только заполненные.
+// idFacts: ORCID, SPIN, Scopus ID, WoS ResearcherID, GitHub, только заполненные.
 func idFacts(ids Identifiers) []cv.Fact {
 	var out []cv.Fact
 	for _, it := range []cv.Fact{
 		{Label: "ORCID", Value: ids.ORCID}, {Label: "SPIN", Value: spinText(ids.SPIN)},
 		{Label: "Scopus ID", Value: ids.ScopusID}, {Label: "WoS ResearcherID", Value: ids.WosID},
+		{Label: "GitHub", Value: githubText(ids.GitHubURL)},
 	} {
 		if it.Value != "" {
 			out = append(out, it)
@@ -231,6 +232,9 @@ func idFacts(ids Identifiers) []cv.Fact {
 	}
 	return out
 }
+
+// githubText: в резюме ссылка читается как github.com/логин, без схемы.
+func githubText(link string) string { return strings.TrimPrefix(link, "https://") }
 
 func degreeEntries(v View) []cv.Entry {
 	var out []cv.Entry

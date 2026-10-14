@@ -13,7 +13,7 @@ func fullPage() Page {
 			About: "Изучаю катализ.", ContactEmail: "orlova@example.ru",
 			Degree:        DegreeInfo{Level: DegreeDoctor, Specialty: &Code{Code: "1.4.4", Name: "Физическая химия"}, Year: ptr(2016), Institution: "Институт катализа", Dissertation: "Центры катализа"},
 			AcademicTitle: TitleProfessor, AcademicTitleYear: ptr(2021),
-			Identifiers: Identifiers{ORCID: "0000-0002-1825-0097", SPIN: "12345678", ScopusID: "57190123456", WosID: "A-1234-2008"},
+			Identifiers: Identifiers{ORCID: "0000-0002-1825-0097", SPIN: "12345678", ScopusID: "57190123456", WosID: "A-1234-2008", GitHubURL: "https://github.com/Elena-Orlova"},
 			HIndex:      HIndex{RSCI: ptr(12), Scopus: ptr(9), WoS: ptr(7), Scholar: ptr(15)},
 			Specialties: []Code{{"1.4.1", "Неорганическая химия"}, {"1.4.4", "Физическая химия"}},
 			Skills:      Skills{Research: []string{"ИК-спектроскопия", "XRD"}, General: []string{"Английский B2"}},
@@ -41,7 +41,7 @@ func TestCVDocumentFull(t *testing.T) {
 	for _, f := range doc.IDs {
 		ids[f.Label] = f.Value
 	}
-	if len(doc.IDs) != 5 || ids["ORCID"] != "0000-0002-1825-0097" || ids["SPIN"] != "1234-5678" || ids["Scopus ID"] != "57190123456" || ids["WoS ResearcherID"] != "A-1234-2008" {
+	if len(doc.IDs) != 6 || ids["GitHub"] != "github.com/Elena-Orlova" || ids["ORCID"] != "0000-0002-1825-0097" || ids["SPIN"] != "1234-5678" || ids["Scopus ID"] != "57190123456" || ids["WoS ResearcherID"] != "A-1234-2008" {
 		t.Errorf("идентификаторы: %+v", doc.IDs)
 	}
 	// h-index: обычная строка среди идентификаторов, последняя; отдельной полосы с числами нет (D-208).

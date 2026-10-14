@@ -252,6 +252,7 @@ type Profile struct {
 	VisibilityBeforeDeletion *string
 	Q12Total                 int16
 	HMax                     int16
+	GithubUrl                string
 }
 
 type ProfileHiddenOrg struct {

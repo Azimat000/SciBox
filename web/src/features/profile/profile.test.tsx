@@ -50,6 +50,11 @@ describe('own profile page', () => {
     expect(ids.getByText('1234-5678')).toBeInTheDocument()
     expect(ids.getByText('57190123456')).toBeInTheDocument()
     expect(ids.getByText('A-1234-2008')).toBeInTheDocument()
+    // GitHub: подпись без схемы, ссылка в новой вкладке, без передачи адреса страницы и без веса для поисковиков
+    const gh = ids.getByRole('link', { name: 'github.com/elena-orlova' })
+    expect(gh).toHaveAttribute('href', 'https://github.com/elena-orlova')
+    expect(gh).toHaveAttribute('target', '_blank')
+    expect(gh).toHaveAttribute('rel', 'noopener noreferrer nofollow')
     expect(ids.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['РИНЦ 12', 'Scopus 9', 'Google Scholar 15'])
 
     expect((await section('Образование')).getByText('2010 — 2014')).toBeInTheDocument()
@@ -62,6 +67,25 @@ describe('own profile page', () => {
     expect((await section('Гранты')).getByText('РНФ, № 24-12-00177, Руководитель')).toBeInTheDocument()
     expect((await section('Патенты и программы')).getByText('Изобретение, № RU 2 745 123, Роспатент')).toBeInTheDocument()
     expect((await section('Преподавание')).getByText('НГУ, Магистратура')).toBeInTheDocument()
+  })
+
+  it('never puts a strange GitHub value into a link, and shows no GitHub row without one', async () => {
+    const strange = { ...profile, identifiers: { ...profile.identifiers, github_url: 'javascript:alert(1)' } }
+    stubApi(own(ownPage(strange)))
+    const first = renderApp('/profile')
+    const ids = await section('Идентификаторы и метрики')
+    expect(ids.getByText('javascript:alert(1)')).toBeInTheDocument()
+    expect(ids.queryByRole('link', { name: /github/i })).not.toBeInTheDocument()
+    first.unmount()
+
+    // Снимок профиля, отправленный с откликом до среза 32, поля вовсе не содержит.
+    const { orcid, spin, scopus_id, wos_id } = profile.identifiers
+    const older = { orcid, spin, scopus_id, wos_id }
+    stubApi(own(ownPage({ ...profile, identifiers: older })))
+    renderApp('/profile')
+    const again = await section('Идентификаторы и метрики')
+    expect(again.queryByText('GitHub')).not.toBeInTheDocument()
+    expect(again.getByText('1234-5678')).toBeInTheDocument()
   })
 
   it('shows hints instead of empty sections and says a hidden profile is seen only by its owner', async () => {
@@ -433,6 +457,7 @@ describe('profile edit page', () => {
     expect(field(/Учёная степень/)).toHaveValue('candidate')
     expect(field(/Год защиты/)).toHaveValue(2016)
     expect(field(/ORCID iD/)).toHaveValue('0000-0002-1825-0097')
+    expect(field(/^GitHub/)).toHaveValue('https://github.com/elena-orlova')
     expect(field(/Контактная почта/)).toHaveValue('orlova@example.ru')
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
     expect(await screen.findByText('Профиль сохранён')).toBeInTheDocument()
@@ -441,7 +466,7 @@ describe('profile edit page', () => {
       headline: profile.headline, city: 'Новосибирск', region_code: '54', about: profile.about,
       degree: 'candidate', degree_specialty_code: '1.4.4', degree_year: 2016, degree_institution: 'Институт катализа',
       dissertation_title: 'Активные центры оксидных катализаторов', academic_title: 'docent', academic_title_year: 2021,
-      orcid: '0000-0002-1825-0097', spin: '12345678', scopus_id: '57190123456', wos_id: 'A-1234-2008',
+      orcid: '0000-0002-1825-0097', spin: '12345678', scopus_id: '57190123456', wos_id: 'A-1234-2008', github_url: 'https://github.com/elena-orlova',
       h_rsci: 12, h_scopus: 9, h_wos: null, h_scholar: 15, contact_email: 'orlova@example.ru', specialties: ['1.4.4'],
       research_skills: ['ИК-спектроскопия', 'Рентгеновская дифракция'], general_skills: ['Английский B2'],
     })
@@ -534,6 +559,19 @@ describe('profile edit page', () => {
     expect(await screen.findByText('В номере ORCID ошибка: проверьте цифры')).toBeInTheDocument()
     expect(field(/ORCID iD/)).toHaveFocus()
     expect(router.state.location.pathname).toBe('/profile/edit')
+  })
+
+  it('shows the GitHub problem under its field and sends what was typed', async () => {
+    const message = 'Нужна ссылка на ваш профиль, а не на репозиторий: github.com/ваш-логин'
+    const api = stubApi(base(ownPage(), { 'PUT /api/profile': apiError(422, 'validation_failed', 'Проверьте поля формы', { fields: { github_url: message } }) }))
+    renderApp('/profile/edit')
+    await screen.findByRole('heading', { level: 1, name: 'Основное в профиле' })
+    await userEvent.clear(field(/^GitHub/))
+    await userEvent.type(field(/^GitHub/), 'github.com/elena-orlova/tools')
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(field(/^GitHub/)).toHaveFocus()
+    expect(api.called('PUT', '/api/profile')[0].body).toMatchObject({ github_url: 'github.com/elena-orlova/tools' })
   })
 
   it('shows a general problem above the form', async () => {

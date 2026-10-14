@@ -126,12 +126,18 @@ func TestSnapshotDoesNotChangeWithTheProfile(t *testing.T) {
 	me := w.Applicant("Мария Смирнова")
 	d := w.mustApply(me, nil)
 	old := d.Profile.Headline
+	if d.Profile.Identifiers.GitHubURL != "https://github.com/scibox-demo-applicant" {
+		t.Errorf("the GitHub link did not reach the snapshot: %+v", d.Profile.Identifiers)
+	}
 	if _, err := w.Prof.SaveCore(bg, me.User, profiles.CoreInput{Headline: "Совсем другая должность", About: "Другой текст"}); err != nil {
 		t.Fatal(err)
 	}
 	staff, err := w.svc.Get(bg, w.tm.Owner.User, d.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if staff.Profile.Identifiers.GitHubURL != "https://github.com/scibox-demo-applicant" {
+		t.Errorf("the snapshot lost the GitHub link when the profile changed: %+v", staff.Profile.Identifiers)
 	}
 	if staff.Profile.Headline != old || staff.Profile.About == "Другой текст" {
 		t.Errorf("snapshot changed with the profile: %q", staff.Profile.Headline)

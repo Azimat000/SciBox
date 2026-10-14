@@ -259,6 +259,9 @@ func TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers(t *testing.T)
 	if profile["headline"] != "Научный сотрудник, лаборатория катализа" || profile["visibility"] != "public" || profile["open_to_offers"] != true {
 		t.Errorf("profile = %v", profile)
 	}
+	if profile["github_url"] != "https://github.com/scibox-demo-applicant" {
+		t.Errorf("the GitHub link is missing from the exported profile: %v", profile["github_url"])
+	}
 	if _, has := profile["user_id"]; has {
 		t.Error("the profile must not repeat the account number")
 	}
@@ -285,6 +288,9 @@ func TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers(t *testing.T)
 	got := apps[0]
 	if got.ID != b.meApp.String() || got.CoverLetter != myCover || got.ContactEmail != b.me.Email || got.Status != "rejected" || got.Decision != "Благодарим за интерес" || got.Vacancy["title"] == "" || got.Vacancy["organization"] == "" {
 		t.Errorf("application = %+v", got)
+	}
+	if ids, _ := got.Snapshot["identifiers"].(map[string]any); ids["github_url"] != "https://github.com/scibox-demo-applicant" {
+		t.Errorf("the GitHub link is missing from the snapshot sent with the application: %v", got.Snapshot["identifiers"])
 	}
 	if got.Snapshot["headline"] != "Научный сотрудник, лаборатория катализа" {
 		t.Errorf("the snapshot of the profile sent with the application is missing: %v", got.Snapshot)

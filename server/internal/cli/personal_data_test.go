@@ -58,7 +58,7 @@ func markersOf(t *testing.T, pool *pgxpool.Pool, id uuid.UUID, ip string) []stri
 	// Только то, что принадлежит одному человеку: общие фразы (шаблон письма, названия областей, должности) встречаются
 	// и в чужих данных, и остаются там по праву.
 	collect(`SELECT email::text, display_name FROM users WHERE id = $1`, 2)
-	collect(`SELECT orcid, contact_email::text, spin, scopus_id, wos_id FROM profiles WHERE user_id = $1`, 5)
+	collect(`SELECT orcid, contact_email::text, spin, scopus_id, wos_id, github_url FROM profiles WHERE user_id = $1`, 6)
 	collect(`SELECT contact_email::text FROM applications WHERE user_id = $1`, 1)
 	collect(`SELECT r.email::text FROM reference_requests r JOIN applications a ON a.id = r.application_id WHERE a.user_id = $1`, 1)
 	if ip != "" {
