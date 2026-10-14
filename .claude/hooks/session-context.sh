@@ -21,6 +21,9 @@ if [ -f "$roadmap" ]; then
     open_threats=$(grep -c '^| T-[0-9]* |.*| открыта |$' "$security")
     echo "Сервер: открытых угроз в docs/SECURITY.md: $open_threats. Срезы 18–29 читают docs/SECURITY.md и docs/SCALING.md."
   fi
+  if [ -f "$root/docs/CHAT.md" ] && [ -n "$current" ] && [ "$current" -ge 34 ] 2>/dev/null && [ "$current" -le 41 ]; then
+    echo "Чат (срезы 34–41): сначала прочитать docs/CHAT.md (правила, контракт, карта срезов) и правила «Четвёртой очереди» в ROADMAP."
+  fi
   echo
   if [ -n "$current" ]; then
     echo "--- Текущий срез по ROADMAP: $current ---"
