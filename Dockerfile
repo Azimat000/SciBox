@@ -21,6 +21,8 @@ COPY web/package.json web/package-lock.json web/
 RUN --mount=type=cache,target=/root/.npm cd web && npm ci --no-audit --no-fund
 # config/product.json читает и сайт (название продукта, D-029).
 COPY config config
+# Примеры ответов чата (contracts/chat): на них стоят типы и тесты сайта, `tsc -b` их проверяет (срез 34).
+COPY contracts contracts
 COPY web web
 RUN cd web && npm run build
 

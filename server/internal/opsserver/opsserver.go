@@ -59,6 +59,7 @@ type Server struct {
 	draining atomic.Bool
 	mu       sync.Mutex
 	srv      *http.Server
+	closed   bool         // Shutdown уже был: Serve после него не принимает соединений
 	ready    atomic.Int32 // 0 — ещё не проверялось, 1 — готов, 2 — не готов: чтобы писать в журнал только смену
 }
 
@@ -118,6 +119,12 @@ func (s *Server) Serve(ln net.Listener) error {
 		MaxHeaderBytes: 16 << 10,
 	}
 	s.mu.Lock()
+	if s.closed {
+		// Shutdown обогнал горутину с Serve (основной порт не открылся, и процесс сразу пошёл на выход): порт не
+		// запускается, иначе он принимал бы соединения вечно, а остановка ждала бы его.
+		s.mu.Unlock()
+		return ln.Close()
+	}
 	s.srv = srv
 	s.mu.Unlock()
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -126,9 +133,11 @@ func (s *Server) Serve(ln net.Listener) error {
 	return nil
 }
 
-// Shutdown останавливает порт, дожидаясь текущих запросов.
+// Shutdown останавливает порт, дожидаясь текущих запросов. Остановка окончательная: Serve после неё сразу
+// закрывает слушатель и возвращается, как у http.Server.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
+	s.closed = true
 	srv := s.srv
 	s.mu.Unlock()
 	if srv == nil {

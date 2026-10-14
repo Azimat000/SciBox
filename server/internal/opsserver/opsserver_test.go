@@ -237,11 +237,35 @@ func TestNewRejectsBrokenSetups(t *testing.T) {
 	}
 }
 
-func TestServeAndShutdownOnARealSocket(t *testing.T) {
-	s, _ := newServer(t, opsserver.Config{Token: secretToken, Metrics: metricsBody})
+// Shutdown, обогнавший горутину с Serve, не даёт порту запуститься: иначе остановка процесса ждала бы его вечно.
+func TestShutdownBeforeServeKeepsThePortClosed(t *testing.T) {
+	s, _ := newServer(t, opsserver.Config{})
 	if err := s.Shutdown(context.Background()); err != nil {
 		t.Fatalf("shutdown before serve: %v", err)
 	}
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(ln) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve after Shutdown returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		_ = ln.Close()
+		t.Fatal("Serve after Shutdown kept accepting connections")
+	}
+	if c, err := (&net.Dialer{}).DialContext(context.Background(), "tcp", ln.Addr().String()); err == nil {
+		_ = c.Close()
+		t.Fatal("the listener is still open after Serve returned")
+	}
+}
+
+func TestServeAndShutdownOnARealSocket(t *testing.T) {
+	s, _ := newServer(t, opsserver.Config{Token: secretToken, Metrics: metricsBody})
 	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
