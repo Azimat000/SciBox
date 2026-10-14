@@ -238,6 +238,7 @@ func applicationCases() []kase {
 			}},
 		{route: "GET /api/applications", kind: self},
 		{route: "GET /api/my/candidates", kind: self},
+		{route: "GET /api/my/candidates/export", kind: self},
 		{route: "GET /api/my/candidate-vacancies", kind: self},
 		{route: "GET /api/applications/{id}", kind: object, allow: staffAndSubject, deny: missing, twin: []string{"id"}, make: appOnly},
 		{route: "GET /api/applications/{id}/files/{fileId}", name: "résumé", kind: object, allow: staffAndSubject, deny: missing, twin: []string{"id", "fileId"}, make: func(f *fx, _ actor) call {

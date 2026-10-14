@@ -2,8 +2,8 @@ package applications
 
 import (
 	"context"
-	"io"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"

@@ -157,6 +157,20 @@ func reviewFaultCases() map[string]faultPrep {
 				return err
 			}
 		},
+		"export (owner)": func(t *testing.T, w *world) func(*Service) error {
+			w.mustApply(w.Applicant("Мария"), nil)
+			return func(s *Service) error {
+				_, err := s.ExportCandidates(bg, w.tm.Owner.User, CandidateFilter{})
+				return err
+			}
+		},
+		"export (head of a unit, filtered)": func(t *testing.T, w *world) func(*Service) error {
+			w.mustApply(w.Applicant("Мария"), nil)
+			return func(s *Service) error {
+				_, err := s.ExportCandidates(bg, w.tm.HeadA.User, CandidateFilter{Status: StatusSent, VacancyID: w.vacancy.ID})
+				return err
+			}
+		},
 		"candidate vacancies": func(t *testing.T, w *world) func(*Service) error {
 			w.mustApply(w.Applicant("Мария"), nil)
 			return func(s *Service) error { _, err := s.CandidateVacancies(bg, w.tm.HeadA.User); return err }

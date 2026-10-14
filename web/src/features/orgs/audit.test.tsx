@@ -73,6 +73,20 @@ describe('audit log page', () => {
     expect(within(rows[2]).getByText('00:30')).toBeInTheDocument()
   })
 
+  it('says how many applications went into an exported file', async () => {
+    const items = [
+      entry({ id: 9, action: 'vacancy.applications_exported', details: { rows: '3', scope: 'vacancy' }, target: { kind: 'vacancy', id: VACANCY, label: 'Старший научный сотрудник' } }),
+      entry({ id: 8, action: 'vacancy.applications_exported', details: { rows: '12', scope: 'list' }, target: null }),
+      entry({ id: 7, action: 'vacancy.applications_exported', details: {}, target: null }),
+    ]
+    stubApi(asOwner({ [`GET ${api}?limit=30`]: page(items) }))
+    renderApp(path)
+    expect(await screen.findAllByText('Отклики выгружены в файл')).toHaveLength(3)
+    expect(screen.getByText('3 отклика')).toBeInTheDocument()
+    expect(screen.getByText('12 откликов')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '«Старший научный сотрудник»' })).toHaveAttribute('href', `/vacancies/${VACANCY}`)
+  })
+
   it('starts a new day heading when the day changes', async () => {
     const items = [
       entry({ at: '2026-10-08T11:00:00Z' }),

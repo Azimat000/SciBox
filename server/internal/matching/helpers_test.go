@@ -236,5 +236,4 @@ func sameIDs(t *testing.T, name string, got []uuid.UUID, want ...uuid.UUID) {
 
 func intp(n int) *int { return &n }
 
-
 func dbgenOn(db testkit.DB) *dbgen.Queries { return dbgen.New(db) }

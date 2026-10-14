@@ -2,6 +2,7 @@ package applications
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,5 +163,43 @@ func TestHTTPInviteLimit(t *testing.T) {
 	}
 	if r := a.api.Do(&a.tm.Owner, "POST", "/api/applications/"+d.ID.String()+"/invitations", map[string]any{"kind": "request_contacts"}); r.Code != 409 || r.ErrCode(t) != CodeTooManyInvites {
 		t.Errorf("over the limit: %d %s", r.Code, r.Raw)
+	}
+}
+
+// Выгрузка в файл по HTTP: вход обязателен, заголовки файла, отборы те же, что у списка, ошибки полей.
+func TestHTTPExportCandidates(t *testing.T) {
+	a := newAPI(t)
+	a.svc.cfg.PublicURL = "https://scibox.example.ru"
+	d := a.mustApply(a.Applicant("Мария Смирнова"), nil)
+	if r := a.api.Do(nil, "GET", "/api/my/candidates/export", nil); r.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous: %d", r.Code)
+	}
+	r := a.api.Do(&a.tm.HR, "GET", "/api/my/candidates/export?vacancy="+a.vacancy.ID.String()+"&status=sent", nil)
+	if r.Code != 200 || r.Header.Get("Content-Type") != "text/csv; charset=utf-8" || r.Header.Get("Cache-Control") != "no-store" ||
+		!strings.HasPrefix(r.Header.Get("Content-Disposition"), `attachment; filename="otkliki-`) || r.Header.Get("X-Export-Truncated") != "" {
+		t.Fatalf("export: %d %v", r.Code, r.Header)
+	}
+	if !strings.HasPrefix(r.Raw, "\uFEFF") || !strings.Contains(r.Raw, "Мария Смирнова") || !strings.Contains(r.Raw, "https://scibox.example.ru/candidates/"+d.ID.String()) {
+		t.Errorf("body: %q", r.Raw)
+	}
+	// Другой статус: в файле только заголовок.
+	if r := a.api.Do(&a.tm.HR, "GET", "/api/my/candidates/export?status=rejected", nil); r.Code != 200 || strings.Count(r.Raw, "\r\n") != 1 {
+		t.Errorf("empty export: %d %q", r.Code, r.Raw)
+	}
+	// Посторонний получает пустой файл, а не чужие отклики.
+	if r := a.api.Do(&a.tm.Out, "GET", "/api/my/candidates/export", nil); r.Code != 200 || strings.Contains(r.Raw, "Смирнова") {
+		t.Errorf("outsider: %d %q", r.Code, r.Raw)
+	}
+	if r := a.api.Do(&a.tm.HR, "GET", "/api/my/candidates/export?vacancy=nope", nil); r.Code != 422 || r.Fields(t)["vacancy"] == nil {
+		t.Errorf("bad vacancy: %d %s", r.Code, r.Raw)
+	}
+	if r := a.api.Do(&a.tm.HR, "GET", "/api/my/candidates/export?status=done", nil); r.Code != 422 || r.Fields(t)["status"] == nil {
+		t.Errorf("bad status: %d %s", r.Code, r.Raw)
+	}
+	// Предел: заголовок сообщает, что файл неполный.
+	defer func(old int) { exportLimit = old }(exportLimit)
+	exportLimit = 0
+	if r := a.api.Do(&a.tm.HR, "GET", "/api/my/candidates/export", nil); r.Code != 200 || r.Header.Get("X-Export-Truncated") != "1" {
+		t.Errorf("truncated: %d %v", r.Code, r.Header)
 	}
 }

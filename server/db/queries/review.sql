@@ -102,3 +102,18 @@ UPDATE applications
 SET status = 'invited', updated_at = @now::timestamptz,
     status_changed_at = CASE WHEN status = 'invited' THEN status_changed_at ELSE @now::timestamptz END
 WHERE id = @id AND status = ANY(@from_statuses::text[]);
+
+-- Выгрузка откликов в файл (срез 16, D-205): те же права и отборы, что у списка откликов, но без страниц и без чисел по
+-- каждому отклику: одна строка на отклик, предел задаёт сервис (предел + 1, чтобы заметить «не поместилось»).
+-- name: ExportCandidates :many
+SELECT a.id, a.status, a.created_at, a.status_changed_at, (a.anonymized_at IS NOT NULL)::bool AS anonymized,
+       u.display_name AS applicant_name, a.contact_email, a.profile,
+       v.title AS vacancy_title, v.org_id, v.org_name, v.unit_name
+FROM applications a
+JOIN users u ON u.id = a.user_id
+JOIN vacancy_view v ON v.id = a.vacancy_id
+WHERE (v.org_id = ANY(@whole_orgs::uuid[]) OR v.unit_id = ANY(@units::uuid[]))
+  AND (@vacancy_id::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR v.id = @vacancy_id::uuid)
+  AND (@status::text = '' OR a.status = @status::text)
+ORDER BY a.created_at DESC, a.id
+LIMIT @row_limit;

@@ -40,6 +40,13 @@ var (
 		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 10, Per: time.Minute},
 	}
+	// exportFiles — выгрузка откликов в файл: до пяти тысяч строк и запись в журнал за один запрос. Человеку хватит нескольких
+	// в минуту; предел не даёт скриптом вытягивать отклики организации по кругу (срез 16, T-87).
+	exportFiles = &httpguard.Policy{
+		Name:  "export_file",
+		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 10, Per: time.Minute},
+	}
 	// linkPages — страницы по одноразовым ссылкам из писем (рекомендатель, приглашение в организацию,
 	// смена почты): человеку хватит нескольких запросов, перебор ссылок должен упираться в предел.
 	linkPages = &httpguard.Policy{
@@ -74,6 +81,7 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: get, Pattern: "/api/scientists/{id}/cv", Slow: true, Limit: pdfBuilds},
 		{Method: get, Pattern: "/api/applications/{id}/files/{fileId}", Slow: true},
 		{Method: get, Pattern: "/api/account/export", Slow: true},
+		{Method: get, Pattern: "/api/my/candidates/export", Limit: exportFiles},
 		{Method: post, Pattern: "/api/applications", Body: uploadBody, Slow: true, Limit: applyUploads},
 
 		{Method: post, Pattern: "/api/recommendations/lookup", Limit: linkPages},

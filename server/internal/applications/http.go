@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"bytes"
 	"errors"
 	"log/slog"
 	"math"
@@ -50,6 +51,7 @@ func (h *Handler) Mount(r chi.Router) {
 	r.With(h.requireUser).Post("/applications/{id}/withdraw", h.withdraw)
 	// Разбор откликов организацией (срез 9).
 	r.With(h.requireUser).Get("/my/candidates", h.candidates)
+	r.With(h.requireUser).Get("/my/candidates/export", h.exportCandidates)
 	r.With(h.requireUser).Get("/my/candidate-vacancies", h.candidateVacancies)
 	r.With(h.requireUser).Post("/applications/{id}/status", h.decide)
 	r.With(h.requireUser).Post("/applications/{id}/invitations", h.invite)
@@ -218,15 +220,53 @@ func (h *Handler) withdraw(w http.ResponseWriter, r *http.Request) {
 
 const maxSmallJSON = 16 << 10
 
-func (h *Handler) candidates(w http.ResponseWriter, r *http.Request) {
+// candidateFilter читает отборы списка откликов из адреса; ok == false, если ответ уже отправлен (ошибка поля).
+func candidateFilter(w http.ResponseWriter, r *http.Request) (CandidateFilter, bool) {
 	f := CandidateFilter{Status: r.URL.Query().Get("status"), Limit: intParam(r, "limit", 20), Offset: intParam(r, "offset", 0)}
 	if raw := r.URL.Query().Get("vacancy"); raw != "" {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			apierr.WriteFieldErrors(w, "Проверьте отбор", map[string]string{"vacancy": "Такой вакансии нет"})
-			return
+			return f, false
 		}
 		f.VacancyID = id
+	}
+	return f, true
+}
+
+// exportCandidates отдаёт файл выгрузки откликов: те же отборы, что у списка (vacancy, status), без страниц.
+func (h *Handler) exportCandidates(w http.ResponseWriter, r *http.Request) {
+	f, ok := candidateFilter(w, r)
+	if !ok {
+		return
+	}
+	out, err := h.svc.ExportCandidates(r.Context(), actor(r), f)
+	if err != nil {
+		h.fail(w, r, err)
+		return
+	}
+	var buf bytes.Buffer
+	if err := WriteCSV(&buf, out.Rows, h.svc.cfg.PublicURL); err != nil {
+		apierr.WriteInternal(w, r, h.logger, "applications", err)
+		return
+	}
+	hd := w.Header()
+	hd.Set("Content-Type", "text/csv; charset=utf-8")
+	hd.Set("Content-Disposition", `attachment; filename="otkliki-`+h.svc.now().In(moscow).Format("2006-01-02")+`.csv"`)
+	hd.Set("Cache-Control", "no-store")
+	if out.Truncated {
+		hd.Set("X-Export-Truncated", "1")
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		h.logger.InfoContext(r.Context(), "applications export: client went away", "err", err) // клиент ушёл: писать некому
+	}
+}
+
+func (h *Handler) candidates(w http.ResponseWriter, r *http.Request) {
+	f, ok := candidateFilter(w, r)
+	if !ok {
+		return
 	}
 	out, err := h.svc.Candidates(r.Context(), actor(r), f)
 	if err != nil {

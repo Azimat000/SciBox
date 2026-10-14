@@ -45,6 +45,9 @@ const (
 	VacancyArchived  Action = "vacancy.archived"
 	VacancyReopened  Action = "vacancy.reopened" // закрытая опубликована снова
 	VacancyRestored  Action = "vacancy.restored" // из архива в закрытые
+	// ApplicationsExported — отклики выгружены в файл (срез 16). target: вакансия, если выгружали одну (иначе пусто);
+	// details: rows — сколько откликов этой организации в файле, scope — vacancy|list, status — отбор по статусу.
+	ApplicationsExported Action = "vacancy.applications_exported"
 
 	ApplicationViewed             Action = "application.viewed" // организация впервые открыла отклик
 	ApplicationAccepted           Action = "application.accepted"
@@ -83,7 +86,7 @@ const (
 var registry = map[Action]scope{
 	MemberRoleChanged: scopeOrg, MemberRemoved: scopeOrg, MemberLeft: scopeOrg, MemberJoined: scopeOrg,
 	InvitationSent: scopeOrg, InvitationRevoked: scopeOrg, UnitHeadChanged: scopeOrg,
-	VacancyPublished: scopeOrg, VacancyClosed: scopeOrg, VacancyArchived: scopeOrg, VacancyReopened: scopeOrg, VacancyRestored: scopeOrg,
+	VacancyPublished: scopeOrg, VacancyClosed: scopeOrg, VacancyArchived: scopeOrg, VacancyReopened: scopeOrg, VacancyRestored: scopeOrg, ApplicationsExported: scopeOrg,
 	ApplicationViewed: scopeOrg, ApplicationAccepted: scopeOrg, ApplicationRejected: scopeOrg, ApplicationInvited: scopeOrg,
 	ApplicationInvitationCanceled: scopeOrg, ApplicationProposalAccepted: scopeOrg, ApplicationFileDownloaded: scopeOrg,
 	OfferSent: scopeOrg, OfferCanceled: scopeOrg,

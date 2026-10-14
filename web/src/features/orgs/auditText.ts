@@ -1,4 +1,5 @@
 import { t } from '../../i18n'
+import { plural } from '../../lib/plural'
 import { roleLabel } from './labels'
 import type { AuditEntry } from './api'
 
@@ -68,6 +69,10 @@ function detailOf(e: AuditEntry): string | null {
     case 'application.invitation_canceled':
     case 'application.proposal_accepted':
       return d.kind ? (a.invitationKinds[d.kind as keyof typeof a.invitationKinds] ?? d.kind) : null
+    case 'vacancy.applications_exported': {
+      const n = Number(d.rows)
+      return Number.isFinite(n) ? `${n} ${plural(n, a.exportedForms)}` : null
+    }
     case 'application.file_downloaded':
       return d.kind ? (a.fileKinds[d.kind as keyof typeof a.fileKinds] ?? d.kind) : null
     default:

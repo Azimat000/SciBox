@@ -148,6 +148,84 @@ func (q *Queries) CountInvitations(ctx context.Context, applicationID uuid.UUID)
 	return column_1, err
 }
 
+const exportCandidates = `-- name: ExportCandidates :many
+SELECT a.id, a.status, a.created_at, a.status_changed_at, (a.anonymized_at IS NOT NULL)::bool AS anonymized,
+       u.display_name AS applicant_name, a.contact_email, a.profile,
+       v.title AS vacancy_title, v.org_id, v.org_name, v.unit_name
+FROM applications a
+JOIN users u ON u.id = a.user_id
+JOIN vacancy_view v ON v.id = a.vacancy_id
+WHERE (v.org_id = ANY($1::uuid[]) OR v.unit_id = ANY($2::uuid[]))
+  AND ($3::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR v.id = $3::uuid)
+  AND ($4::text = '' OR a.status = $4::text)
+ORDER BY a.created_at DESC, a.id
+LIMIT $5
+`
+
+type ExportCandidatesParams struct {
+	WholeOrgs []uuid.UUID
+	Units     []uuid.UUID
+	VacancyID uuid.UUID
+	Status    string
+	RowLimit  int32
+}
+
+type ExportCandidatesRow struct {
+	ID              uuid.UUID
+	Status          string
+	CreatedAt       time.Time
+	StatusChangedAt time.Time
+	Anonymized      bool
+	ApplicantName   string
+	ContactEmail    string
+	Profile         []byte
+	VacancyTitle    string
+	OrgID           uuid.UUID
+	OrgName         string
+	UnitName        *string
+}
+
+// Выгрузка откликов в файл (срез 16, D-205): те же права и отборы, что у списка откликов, но без страниц и без чисел по
+// каждому отклику: одна строка на отклик, предел задаёт сервис (предел + 1, чтобы заметить «не поместилось»).
+func (q *Queries) ExportCandidates(ctx context.Context, arg ExportCandidatesParams) ([]ExportCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, exportCandidates,
+		arg.WholeOrgs,
+		arg.Units,
+		arg.VacancyID,
+		arg.Status,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExportCandidatesRow
+	for rows.Next() {
+		var i ExportCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.StatusChangedAt,
+			&i.Anonymized,
+			&i.ApplicantName,
+			&i.ContactEmail,
+			&i.Profile,
+			&i.VacancyTitle,
+			&i.OrgID,
+			&i.OrgName,
+			&i.UnitName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getInvitation = `-- name: GetInvitation :one
 SELECT id, application_id, kind, status, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone, answer_at, answer_note, answer_contact, answer_time, answered_at, created_by, created_at, updated_at FROM application_invitations WHERE id = $1 AND application_id = $2
 `

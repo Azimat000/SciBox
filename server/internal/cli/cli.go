@@ -557,6 +557,8 @@ func newServices(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logg
 	vacancySvc := vacancies.NewService(pool, vacancies.DefaultConfig())
 	matchingCfg := matching.DefaultConfig()
 	matchingCfg.Now = now
+	applicationsCfg := applications.DefaultConfig()
+	applicationsCfg.PublicURL = cfg.PublicURL
 	var searchCache, catalogCache *httpcache.Keyed
 	if cfg.SearchCacheTTL > 0 {
 		searchCache = httpcache.NewKeyed(cfg.SearchCacheTTL, searchCacheEntries)
@@ -567,7 +569,7 @@ func newServices(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logg
 		cfg: cfg, pool: pool, logger: logger, now: now, vault: vault,
 		accounts: accounts, organizations: organizations, notes: notes, outbox: outbox, queue: queue,
 		profiles: profileSvc, references: refSvc, vacancies: vacancySvc,
-		applications: applications.NewService(pool, profileSvc, refSvc, notes, vault, applications.DefaultConfig()),
+		applications: applications.NewService(pool, profileSvc, refSvc, notes, vault, applicationsCfg),
 		matching:     matching.NewService(pool, vacancySvc, notes, matchingCfg, logger),
 		// Счётчики частоты в базе: лимит общий для всех копий сервера (D-141).
 		counters:    httpguard.NewPostgresStore(pool),

@@ -342,6 +342,27 @@ func TestPerimeter(t *testing.T) {
 		}
 	})
 
+	t.Run("export of applications is limited to ten a minute per account", func(t *testing.T) {
+		// Запросы раздела «все адреса» выше уже потратили часть минутного предела, поэтому считаем, сколько прошло.
+		person := login(t, h, email, "192.0.2.13:1000", nil)
+		passed := 0
+		for ; passed < 11; passed++ {
+			rec := send(h, req{path: "/api/my/candidates/export", remote: "198.51.100.88:1", cookie: person})
+			if rec.Code == http.StatusTooManyRequests {
+				if rec.Header().Get("Retry-After") == "" {
+					t.Errorf("no Retry-After: %s", rec.Body)
+				}
+				break
+			}
+			if rec.Code != http.StatusOK {
+				t.Fatalf("export %d: %d %s", passed+1, rec.Code, rec.Body)
+			}
+		}
+		if passed < 5 || passed > 10 {
+			t.Fatalf("the limit stopped the export after %d requests, want 10 a minute", passed)
+		}
+	})
+
 	t.Run("client address behind a trusted proxy reaches sessions", func(t *testing.T) {
 		header := map[string]string{"X-Forwarded-For": "203.0.113.55"}
 		cases := []struct {
