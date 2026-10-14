@@ -195,7 +195,7 @@ function ChatList({ query, selected }: { query: ChatQuery; selected: string | un
       {list.hasNextPage && (
         <div className="chats-more">
           <Button variant="secondary" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
-            {list.isFetchNextPageError ? t.common.retry : t.chat.more}
+            {list.isFetchNextPageError ? t.chat.moreRetry : t.chat.more}
           </Button>
         </div>
       )}

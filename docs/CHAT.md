@@ -25,7 +25,7 @@
 **Кто и когда пишет.**
 - После отклика писать могут обе стороны. Первой строкой идёт сопроводительное письмо (как на hh.ru).
 - После приглашения на вакансию первым пишет текст приглашения. Учёный может ответить сразу, не нажимая «Интересно».
-- Анонимный режим (срез 15): пока учёный не откликнулся и не ответил «Интересно», организация видит в переписке «Учёный (имя скрыто)» и ничего, по чему его легко узнать. Это касается заголовка, строки списка, системных строк, писем и уведомлений.
+- Анонимный режим (срез 15): пока учёный не откликнулся и не ответил «Интересно», организация видит в переписке «Анонимный соискатель» (как в D-199; слово «учёный» в текстах сайта не используется, D-135) и ничего, по чему его легко узнать. Это касается заголовка, строки списка, системных строк, писем и уведомлений.
 - Переписка закрывается для обеих сторон при отказе, отзыве отклика, ответе «Не сейчас» и отзыве приглашения. История остаётся видна, поле ввода пропадает, вместо него строка с причиной. После «Принят» переписка открыта.
 - Вакансия закрыта или прошёл срок: уже открытые переписки продолжаются.
 
@@ -40,7 +40,7 @@
 
 **Список переписок.**
 - Вкладки «Все», «Непрочитанные», «Архив». Поиск по названию вакансии и имени (имя только там, где его вправе видеть). Организации доступен отбор по вакансии.
-- Строка списка: собеседник (у организации имя учёного или «имя скрыто», у учёного организация и вакансия), вакансия, состояние отклика, начало последнего сообщения, время, число непрочитанных.
+- Строка списка «как в почте» (D-217): собеседник и время; вакансия и состояние отклика (или «Ждёт вашего ответа»); начало последнего сообщения и число непрочитанных. У организации собеседник — соискатель или «Анонимный соискатель», у учёного — организация. Время по часам человека: сегодня «14:20», вчера «вчера», в этом году «12 окт.», раньше «12.10.2025».
 - Архив личный у каждого участника. Новое сообщение возвращает переписку из архива.
 
 **Шаблоны ответов (организация).** Общие на организацию, до 50 штук, до 4000 знаков. Править могут владелец и кадровик, вставлять все, кто ведёт отклики. Перед отправкой шаблон можно исправить.
@@ -66,38 +66,39 @@
 |---|---|
 | `/chats` | Список переписок. На компьютере слева список, справа открытая переписка; на телефоне по очереди |
 | `/chats/:id` | Открытая переписка: шапка (вакансия, собеседник, состояние, ссылка на отклик), лента по дням, системные строки с кнопками, поле ввода |
-| пункт «Сообщения» в шапке | число непрочитанных, у вошедших в обоих режимах |
+| значок «Сообщения» в шапке | число переписок с непрочитанным обеих сторон, у вошедших в обоих режимах (D-218); на странице «Сообщения» подсказка, если непрочитанное есть в другом режиме |
 | кнопка «Написать» / «Перейти к переписке» | на странице отклика у обеих сторон, в «Моих откликах», в «Откликах» организации, на страницах приглашений на вакансию |
 | шаблоны | меню «Шаблоны» у поля ввода организации и страница правки шаблонов в разделе организации |
 | настройки | переключатель писем о сообщениях, список заблокированных организаций |
 
-## Контракт API (черновик, закрепляет срез 34)
+## Контракт API (закреплён в срезе 34)
 
-Срез 34 пишет точные примеры ответов в `contracts/chat/*.json`. Тесты сайта берут из них подставные ответы, тесты сервера (срез 37 и дальше) проверяют, что настоящие ответы совпадают с ними по полям и типам. Разошлись, значит красный тест с обеих сторон.
+Точные примеры каждого адреса в `contracts/chat/*.json` (как устроен файл и как сверять «по полям и типам», в `contracts/chat/README.md`). Тесты сайта берут из них подставные ответы и сверяют с ними подставной сервер, тесты сервера (срез 37 и дальше) сверяют настоящие ответы. Разошлись, значит красный тест с обеих сторон.
 
-| Метод и адрес | Что |
-|---|---|
-| `GET /api/chats?box=all\|unread\|archive&q=&vacancy=&cursor=&limit=` | список: `{items:[chat], next_cursor, counts:{unread, archive}}`, листание по ключу |
-| `GET /api/chats/unread-count` | `{unread}` |
-| `GET /api/chats/{id}` | шапка: вакансия, организация, собеседник (с учётом анонимности), `application_id`/`offer_id`, состояние, `can_write`, `closed_reason`, `viewer{side, can_use_templates, can_block}`, `read{mine, theirs}` |
-| `GET /api/chats/{id}/messages?before=&after=&limit=` | `{items:[message], has_more}`; `message{id, kind: text\|system, author{side, name, is_me}, text, event{type, data}, created_at, edited_at, deleted}` |
-| `POST /api/chats/{id}/messages {text, client_id}` | 201 `{message}`; `client_id` защищает от двойной отправки при повторе |
-| `PATCH /api/chats/{id}/messages/{mid} {text}`, `DELETE …` | 200 / 204; 409, если прошло 24 часа или сообщение системное |
-| `POST /api/chats/{id}/read {up_to}` | 204 |
-| `POST /api/chats/{id}/archive`, `/unarchive` | 204 |
-| `POST /api/chats/{id}/typing` | 204, не чаще раза в 3 секунды |
-| `GET /api/chats/events` | живой поток событий (выбор способа в срезе 39, по умолчанию Server-Sent Events): `message.created`, `message.edited`, `message.deleted`, `chat.read`, `chat.typing`, `chat.state`, `unread.count` |
-| `GET/POST/PATCH/DELETE /api/orgs/{orgId}/chat-templates[/{id}]` | шаблоны организации |
-| `POST /api/chats/{id}/block`, `DELETE /api/chat-blocks/{orgId}`, `GET /api/chat-blocks` | блокировка организации учёным |
-| `POST /api/chats/{id}/complaints {reason, note}` | 201 |
-| `GET/PUT /api/notification-settings` | новое поле `email_messages` |
-| `GET /api/applications/{id}`, `GET /api/offers/{id}` и списки | новое поле `chat_id` |
+| Метод и адрес | Файл | Что |
+|---|---|---|
+| `GET /api/chats?side=scientist\|org&box=all\|unread\|archive&q=&vacancy=&cursor=&limit=` | `list.json` | список одной стороны, новые сверху: `{items:[chat], next_cursor, counts:{unread, archive}}`; `side` обязателен (человек бывает и учёным, и сотрудником); `vacancy` только у `org`; листание по ключу, `limit` 1–50 (30) |
+| `GET /api/chats/unread-count` | `unread-count.json` | `{total, scientist, org}`: переписки с непрочитанным вне архива; в шапке `total` |
+| `GET /api/chats/vacancies` | `vacancies.json` | вакансии с переписками для отбора у организации: `{items:[{id, title, org_name, unit_name, chats}]}` |
+| `GET /api/chats/{id}` | `chat.json` | шапка: вакансия (со статусом и сроком), собеседник `{kind, name, anonymous, profile_id}`, `application_id`/`offer_id`, `status{source, value}`, `needs_answer`, `can_write`, `closed_reason`, `archived`, `viewer{side, can_use_templates, can_edit_templates, org_id, can_block, can_complain}`, `read{mine, theirs}` (номера `seq`) |
+| `GET /api/chats/{id}/messages?before=&after=&limit=` | `messages.json` | `{items:[message], has_more}`, от старых к новым; `message{id, seq, kind: text\|system, author{side, name, is_me, anonymous, former}\|null, text, event{type, data}\|null, created_at, edited_at, deleted, editable_until, client_id}` |
+| `POST /api/chats/{id}/messages {text, client_id}` | `send.json` | 201 `{message}`; повтор с тем же `client_id` даёт 200 и то же сообщение |
+| `PATCH /api/chats/{id}/messages/{seq} {text}`, `DELETE …` | `edit.json`, `delete.json` | 200 / 204; 409 `edit_window_closed` после 24 часов, 409 `system_message`, 403 `not_author`, 409 `chat_closed` |
+| `POST /api/chats/{id}/read {up_to}` | `read.json` | 204; отметка только растёт |
+| `POST /api/chats/{id}/archive`, `/unarchive` | `archive.json`, `unarchive.json` | 204 |
+| `POST /api/chats/{id}/typing` | `typing.json` | 204, чаще раза в 3 секунды молча пропускается; 409 в закрытой |
+| `GET /api/chats/events` | `events.json` | живой поток (по умолчанию Server-Sent Events, выбор в срезе 39): `message.created`, `message.edited`, `message.deleted` (своё сообщение тоже приходит, для других вкладок), `chat.read`, `chat.typing`, `chat.state`, `unread.count`; переподключение с `Last-Event-ID` |
+| `GET/POST/PATCH/DELETE /api/orgs/{orgId}/chat-templates[/{id}]` | `templates-*.json` | шаблоны организации: `{items, can_edit, limit}`, `{template}` |
+| `POST /api/chats/{id}/block`, `DELETE /api/chat-blocks/{orgId}`, `GET /api/chat-blocks` | `block.json`, `unblock.json`, `blocks-list.json` | блокировка организации учёным; системные строки `chat.blocked` / `chat.unblocked` |
+| `POST /api/chats/{id}/complaints {reason, note}` | `complaint.json` | 201 `{complaint{id, created_at}}` |
+| `GET/PUT /api/notification-settings` | `notification-settings.json` | новое поле `email_messages` |
+| отклики и приглашения (`GET /api/applications`, `/{id}`, `/api/my/candidates`, `/api/offers`, `/{id}`, `/api/my/sent-offers`) | `links.json` | новое поле `chat{id, unread, can_write, started}\|null`: кнопка «Написать», пока `started=false` и можно писать, иначе «Перейти к переписке» |
 
-Чужая или несуществующая переписка даёт одинаковый 404, как у откликов.
+Системные строки (`event.type`): `application.sent`, `application.viewed`, `invitation.created`, `invitation.answered`, `invitation.proposal_accepted`, `invitation.cancelled`, `application.decided`, `application.withdrawn`, `offer.created`, `offer.answered`, `offer.cancelled`, `chat.blocked`, `chat.unblocked`; данные каждой в `messages.json`. Ошибки в `errors.json`. Чужая или несуществующая переписка даёт одинаковый 404, как у откликов.
 
 ## Подставной сервер (срезы 34–38)
 
-Интерфейс строится раньше сервера. В `web/src/features/chat/mock/` живёт подставной сервер в памяти браузера: те же адреса и ответы, что в `contracts/chat/`, сам присылает «входящие» сообщения, «печатает» и галочки, чтобы живое обновление можно было проверить глазами. Включается только в режиме разработки отдельным флагом и подключается динамическим импортом. Тест сборки проверяет, что в боевой сборке его нет (T-104). Срезы 37 и 38 переводят адреса на настоящий сервер по мере готовности, срез 39 удаляет подставной сервер совсем.
+Интерфейс строится раньше сервера. Запуск: `VITE_CHAT_MOCK=1 make dev`; демо-переписки у обеих сторон, наборы для проверки `?data=worst|empty|many` (переключатель внизу экрана), в консоли `__chatMock.incoming()` и `__chatMock.reset()`. Ответы настоящих откликов и приглашений подставной сервер дополняет полем `chat` сам. В `web/src/features/chat/mock/` живёт подставной сервер в памяти браузера: те же адреса и ответы, что в `contracts/chat/`, сам присылает «входящие» сообщения, «печатает» и галочки, чтобы живое обновление можно было проверить глазами. Включается только в режиме разработки отдельным флагом и подключается динамическим импортом. Тест сборки проверяет, что в боевой сборке его нет (T-104). Срезы 37 и 38 переводят адреса на настоящий сервер по мере готовности, срез 39 удаляет подставной сервер совсем.
 
 ## Срезы
 

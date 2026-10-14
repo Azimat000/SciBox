@@ -165,7 +165,18 @@
   color: var(--ink-body);
 }
 
+.chat-row-line:first-child {
+  align-items: first baseline;
+}
+
+/* Имя собеседника нужно, чтобы узнать переписку: до двух строк, длинное название организации не теряет конца */
 .chat-row-who {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-weight: 600;
 }
 

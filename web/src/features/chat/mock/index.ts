@@ -1,11 +1,15 @@
 import { demoState } from './data'
 import { decorate } from './decorate'
 import { createChatServer, type ChatServer } from './server'
+import { mountDataToggle } from './toggle'
 import type { MockReply, MockState } from './types'
+import { dataset, type Dataset } from './worst'
 
 // Подключение подставного сервера чата к сайту в разработке: VITE_CHAT_MOCK=1 make dev (main.tsx грузит этот модуль
 // динамическим импортом только при import.meta.env.DEV, поэтому в боевую сборку он не попадает: T-104, тест build.test.ts).
 // Адреса чата отвечает подставной сервер, ответы откликов и приглашений получают поле chat, остальное идёт на настоящий сервер.
+
+export { datasetFromUrl } from './toggle'
 
 /** Метка модуля: по ней тест сборки ищет подставной сервер в боевых файлах. */
 export const CHAT_MOCK_MARKER = 'scibox-chat-mock-v1'
@@ -61,6 +65,8 @@ type InstallOptions = {
   delay?: () => number
   /** Как часто «собеседник» пишет сам; 0 — не писать. */
   incomingEveryMs?: () => number
+  /** Набор данных (break-ui): не «демо» живёт только до перезагрузки и в браузере не сохраняется. */
+  data?: Dataset
 }
 
 /** Подменяет fetch: адреса чата отвечает подставной сервер. Возвращает сервер и функцию снятия подмены. */
@@ -69,11 +75,14 @@ export function installChatMock(opts: InstallOptions = {}): { server: ChatServer
   const storage = opts.storage ?? window.localStorage
   const delay = opts.delay ?? (() => 150 + Math.random() * 250)
   const every = opts.incomingEveryMs ?? (() => 40_000 + Math.random() * 30_000)
-  const saved = load(storage)
-  const server = createChatServer({ state: saved ?? demoState(new Date()), onChange: (s) => save(storage, s) })
-  if (!saved) save(storage, server.state)
+  const data = opts.data ?? 'demo'
+  const saved = data === 'demo' ? load(storage) : null
+  const state = data === 'demo' ? (saved ?? demoState(new Date())) : dataset(data, new Date())
+  const server = createChatServer({ state, onChange: (s) => data === 'demo' && save(storage, s) })
+  if (data === 'demo' && !saved) save(storage, server.state)
 
-  const realFetch = target.fetch.bind(target)
+  const original = target.fetch
+  const realFetch = original.bind(target)
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, delay()))
 
   const mocked: typeof fetch = async (input, init) => {
@@ -123,13 +132,17 @@ export function installChatMock(opts: InstallOptions = {}): { server: ChatServer
     server,
     uninstall: () => {
       clearTimeout(timer)
-      target.fetch = realFetch
+      target.fetch = original
     },
   }
 }
 
-/** Для консоли браузера: window.__chatMock.reset() возвращает демо-переписки, .incoming() присылает сообщение сейчас. */
-export function exposeForConsole(server: ChatServer, storage: Storage = window.localStorage) {
+/**
+ * Для консоли браузера: window.__chatMock.reset() возвращает демо-переписки, .incoming() присылает сообщение сейчас.
+ * Внизу экрана переключатель наборов данных: демо, худший случай, пусто, 1000 строк (?data=…).
+ */
+export function exposeForConsole(server: ChatServer, storage: Storage = window.localStorage, data: Dataset = 'demo') {
+  mountDataToggle(data)
   Object.assign(window, {
     __chatMock: {
       marker: CHAT_MOCK_MARKER,

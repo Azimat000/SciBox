@@ -63,6 +63,9 @@ export default defineConfig({
         'src/features/offers/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
         // Избранное, подбор, сохранённые поиски, сроки и настройки писем: что видит и меняет человек в своём разделе (срез 11).
         'src/features/matching/**': { lines: 97, statements: 97, branches: 95, functions: 97 },
+        // Чат (зона 8, срезы 34–41): кто что видит в переписке и какие кнопки показаны. Подставной сервер (mock/) в зону
+        // не входит (удаляется в срезе 39), но считается в общем пороге.
+        'src/features/chat/*.{ts,tsx}': { lines: 97, statements: 97, branches: 95, functions: 97 },
       },
     },
   },
