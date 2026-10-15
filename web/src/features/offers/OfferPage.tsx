@@ -108,7 +108,7 @@ function Page({ offer }: { offer: Offer }) {
 
       <section className="application-section" aria-labelledby="offer-answer">
         <h2 id="offer-answer">{o.answerTitle}</h2>
-        {offer.can_answer ? <AnswerForm offer={offer} /> : <Answered offer={offer} />}
+        {offer.can_answer ? <AnswerForm offerId={offer.id} /> : <Answered offer={offer} />}
       </section>
     </article>
   )
@@ -132,16 +132,18 @@ function Answered({ offer }: { offer: Offer }) {
   )
 }
 
-function AnswerForm({ offer }: { offer: Offer }) {
+/** Ответ «Интересно» или «Не сейчас» с необязательной запиской; те же поля и тексты в переписке (срез 35). */
+export function AnswerForm({ offerId, onDone }: { offerId: string; onDone?: () => void }) {
   const o = t.offers.one
   const client = useQueryClient()
   const toast = useToast()
   const formRef = useRef<HTMLFormElement>(null)
   const send = useMutation({
-    mutationFn: (fields: { action: 'interested' | 'declined'; note: string }) => answerOffer(offer.id, fields),
+    mutationFn: (fields: { action: 'interested' | 'declined'; note: string }) => answerOffer(offerId, fields),
     onSuccess: async () => {
       await Promise.all([refreshOffers(client), refreshNotifications(client)])
       toast.show({ kind: 'success', title: o.sent })
+      onDone?.()
     },
   })
   // Анонимному профилю ответ «Интересно» открывает имя этой организации (D-199): человек должен знать об этом заранее

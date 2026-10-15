@@ -408,8 +408,8 @@ export function createChatServer(opts: ServerOptions) {
         x.can_write = false
         x.closed_reason = 'blocked'
       }
-      push(x, systemLine('chat.blocked', {}, 'scientist', at))
-      emit('chat.state', { chat_id: x.id, side: x.side, status: x.status, needs_answer: x.needs_answer, can_write: x.can_write, closed_reason: x.closed_reason })
+      line(x, 'chat.blocked', {}, 'scientist', at)
+      patchState(x, {})
     }
     changed()
     return { status: 201, body: { block: b } }
@@ -425,8 +425,8 @@ export function createChatServer(opts: ServerOptions) {
         x.can_write = true
         x.closed_reason = null
       }
-      push(x, systemLine('chat.unblocked', {}, 'scientist', at))
-      emit('chat.state', { chat_id: x.id, side: x.side, status: x.status, needs_answer: x.needs_answer, can_write: x.can_write, closed_reason: x.closed_reason })
+      line(x, 'chat.unblocked', {}, 'scientist', at)
+      patchState(x, {})
     }
     changed()
     return { status: 204 }
@@ -446,6 +446,23 @@ export function createChatServer(opts: ServerOptions) {
     state.complaints.push(complaint)
     changed()
     return { status: 201, body: { complaint: { id: complaint.id, created_at: complaint.created_at } } }
+  }
+
+  /** Системная строка в переписку: у того, чьё это действие, она прочитана, у другой стороны нет. Приходит и событием потока. */
+  function line(c: MockChat, type: string, data: Record<string, unknown>, from: Side, at: string = now().toISOString()): MockMessage {
+    const m = push(c, systemLine(type, data, from, at))
+    if (from === c.side) c.read_mine = m.seq
+    changed()
+    emit('message.created', { chat_id: c.id, side: c.side, message: publicMessage(m) })
+    emit('unread.count', unreadCount())
+    return m
+  }
+
+  /** Состояние переписки изменилось (статус, нужен ли ответ, можно ли писать): шапка и списки обновятся по событию. */
+  function patchState(c: MockChat, patch: Partial<Pick<MockChat, 'status' | 'needs_answer' | 'can_write' | 'closed_reason'>>) {
+    Object.assign(c, patch)
+    changed()
+    emit('chat.state', { chat_id: c.id, side: c.side, status: c.status, needs_answer: c.needs_answer, can_write: c.can_write, closed_reason: c.closed_reason })
   }
 
   function systemLine(type: string, data: Record<string, unknown>, from: Side, at: string): Omit<MockMessage, 'seq' | 'id'> {
@@ -536,7 +553,7 @@ export function createChatServer(opts: ServerOptions) {
     started: c.messages.some((m) => m.kind === 'text'),
   })
 
-  return { state, handle, simulateIncoming, linked, chatRef, nextId, viewers: { scientist: scientistViewer, org: orgViewer } }
+  return { state, handle, simulateIncoming, linked, chatRef, nextId, line, patchState, viewers: { scientist: scientistViewer, org: orgViewer } }
 }
 
 export type ChatServer = ReturnType<typeof createChatServer>

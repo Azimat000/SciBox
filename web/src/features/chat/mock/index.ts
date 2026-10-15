@@ -1,3 +1,4 @@
+import { mirror, parseAction, tryDemo } from './actions'
 import { demoState } from './data'
 import { decorate } from './decorate'
 import { createChatServer, type ChatServer } from './server'
@@ -95,6 +96,21 @@ export function installChatMock(opts: InstallOptions = {}): { server: ChatServer
       return toResponse(reply)
     }
     if (url.pathname === '/api/notification-settings') return settings(method, input, init)
+    const action = parseAction(method, url.pathname)
+    if (action) {
+      // Демо-запись: отвечает подставной сервер; настоящая: настоящий сервер, затем строки в переписку (actions.ts)
+      const demo = tryDemo(server, action, bodyOf(init))
+      if (demo) {
+        await wait()
+        return toResponse(demo)
+      }
+      const real = await realFetch(input, init)
+      if (real.ok) {
+        const payload = real.headers.get('Content-Type')?.includes('json') ? ((await real.clone().json().catch(() => undefined)) as unknown) : undefined
+        mirror(server, method, url.pathname, bodyOf(init), payload)
+      }
+      return real
+    }
     const res = await realFetch(input, init)
     if (!res.ok || method !== 'GET' || !res.headers.get('Content-Type')?.includes('json')) return res
     const json = (await res.json()) as unknown

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { apiGet } from '../../api/client'
+import { apiGet, apiSend } from '../../api/client'
 import { useMe } from '../auth/api'
 
 // Типы ответов API чата. Точные примеры: contracts/chat/*.json (срез 34, D-215); правила: docs/CHAT.md.
@@ -174,3 +174,51 @@ export function useChat(id: string) {
     retry: false,
   })
 }
+
+// ---- сообщения (срез 35) ----
+
+export const MAX_TEXT = 4000
+/** Сколько сообщений читаем за раз: последние при открытии, столько же при подгрузке вверх. */
+export const MESSAGES_PAGE = 30
+
+export function fetchMessages(id: string, q: { before?: number; after?: number; limit?: number }, signal?: AbortSignal) {
+  const qs = new URLSearchParams({ limit: String(q.limit ?? MESSAGES_PAGE) })
+  if (q.before !== undefined) qs.set('before', String(q.before))
+  if (q.after !== undefined) qs.set('after', String(q.after))
+  return apiGet<MessagePage>(`/api/chats/${encodeURIComponent(id)}/messages?${qs}`, { signal })
+}
+
+export async function sendMessage(id: string, text: string, clientId: string): Promise<Message> {
+  const res = await apiSend<{ message: Message }>('POST', `/api/chats/${encodeURIComponent(id)}/messages`, { text, client_id: clientId })
+  return res.message
+}
+
+export async function editMessage(id: string, seq: number, text: string): Promise<Message> {
+  const res = await apiSend<{ message: Message }>('PATCH', `/api/chats/${encodeURIComponent(id)}/messages/${seq}`, { text })
+  return res.message
+}
+
+export function deleteMessage(id: string, seq: number) {
+  return apiSend('DELETE', `/api/chats/${encodeURIComponent(id)}/messages/${seq}`)
+}
+
+export function markRead(id: string, upTo: number) {
+  return apiSend('POST', `/api/chats/${encodeURIComponent(id)}/read`, { up_to: upTo })
+}
+
+export function sendTyping(id: string) {
+  return apiSend('POST', `/api/chats/${encodeURIComponent(id)}/typing`)
+}
+
+// ---- живой поток (срез 35, contracts/chat/events.json) ----
+
+export type StreamAuthor = { side: Side; name: string; anonymous: boolean }
+
+export type ChatStreamEvent =
+  | { type: 'message.created' | 'message.edited' | 'message.deleted'; chat_id: string; side: Side; message: Message }
+  | { type: 'chat.read'; chat_id: string; side: Side; reader_side: Side; up_to: number }
+  | { type: 'chat.typing'; chat_id: string; side: Side; author: StreamAuthor }
+  | { type: 'chat.state'; chat_id: string; side: Side; status: ChatStatus; needs_answer: boolean; can_write: boolean; closed_reason: ClosedReason | null }
+  | { type: 'unread.count'; total: number; scientist: number; org: number }
+  // Служебное: поток переподключился, пропущенное надо дочитать (не приходит с сервера).
+  | { type: 'reconnected' }

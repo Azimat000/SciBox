@@ -1,6 +1,6 @@
 {
   "endpoint": "GET /api/chats/events",
-  "about": "Живой поток событий своих переписок (Server-Sent Events, Content-Type: text/event-stream; способ закрепляет срез 39). Каждое событие: строки «id: <номер>», «event: <вид>», «data: <JSON одной строкой>», пустая строка. После обрыва сайт переподключается с заголовком Last-Event-ID и получает пропущенное; если пропущено слишком много, приходит unread.count и сайт перечитывает списки. Раз в 25 секунд строка-комментарий «: ping» держит соединение. Своё сообщение тоже приходит событием (для других вкладок того же человека; сайт узнаёт его по client_id). Примеры ниже — объекты data; event — вид события.",
+  "about": "Живой поток событий своих переписок (Server-Sent Events, Content-Type: text/event-stream; способ закрепляет срез 39). Каждое событие: строки «id: <номер>», «event: <вид>», «data: <JSON одной строкой>», пустая строка. После обрыва сайт переподключается с заголовком Last-Event-ID и получает пропущенное; если пропущено слишком много, приходит unread.count и сайт перечитывает списки. Раз в 25 секунд строка-комментарий «: ping» держит соединение. Своё сообщение тоже приходит событием (для других вкладок того же человека; сайт узнаёт его по client_id). Системная строка приходит тем же событием message.created (author пуст, event заполнен). Примеры ниже — объекты data; event — вид события.",
   "enums": {
     "event": "stream_event",
     "data.side": "side",
@@ -10,10 +10,14 @@
     "data.author.side": "author_side",
     "data.status.source": "status_source",
     "data.status.value": "status_value",
-    "data.closed_reason": "closed_reason"
+    "data.closed_reason": "closed_reason",
+    "data.message.event.type": "event_type",
+    "data.message.event.data.answer": "invitation_answer",
+    "data.message.event.data.kind": "invitation_kind"
   },
   "variants": {
-    "": "event"
+    "": "event",
+    "data.message.event": "type"
   },
   "examples": {
     "message_created_mine": {
@@ -66,6 +70,67 @@
             "text": "Отлично, ждём вас 22-го. Ссылка на встречу в приглашении.",
             "event": null,
             "created_at": "2026-10-14T10:40:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          }
+        }
+      }
+    },
+    "message_created_system": {
+      "response": {
+        "id": "110",
+        "event": "message.created",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000008-0000-4000-8000-000000000000",
+            "seq": 8,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "invitation.answered",
+              "data": {
+                "application_id": "b0000000-0000-4000-8000-000000000001",
+                "invitation_id": "f0000000-0000-4000-8000-000000000001",
+                "kind": "interview",
+                "answer": "confirmed",
+                "proposed_at": null,
+                "note": "",
+                "contact": "",
+                "time": ""
+              }
+            },
+            "created_at": "2026-10-14T10:45:00Z",
+            "edited_at": null,
+            "deleted": false,
+            "editable_until": null,
+            "client_id": null
+          }
+        }
+      }
+    },
+    "message_created_blocked": {
+      "response": {
+        "id": "111",
+        "event": "message.created",
+        "data": {
+          "chat_id": "c0000000-0000-4000-8000-000000000001",
+          "side": "scientist",
+          "message": {
+            "id": "00000008-0000-4000-8000-000000000000",
+            "seq": 9,
+            "kind": "system",
+            "author": null,
+            "text": "",
+            "event": {
+              "type": "chat.blocked",
+              "data": {}
+            },
+            "created_at": "2026-10-14T10:45:00Z",
             "edited_at": null,
             "deleted": false,
             "editable_until": null,

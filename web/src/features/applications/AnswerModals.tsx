@@ -13,10 +13,10 @@ import { refreshNotifications } from '../notifications/refresh'
 import { answerInvitation, refreshApplications, type AnswerFields } from './api'
 import { mskMoment } from './labels'
 
-type Props = { appId: string; invitationId: string; onClose: () => void }
+type Props = { appId: string; invitationId: string; onClose: () => void; /** После успешного ответа, до закрытия окна. */ onDone?: () => void }
 
 /** Общая отправка ответа: после успеха всё перечитывается, окно закрывается. */
-function useAnswer({ appId, invitationId, onClose }: Props, done: string) {
+function useAnswer({ appId, invitationId, onClose, onDone }: Props, done: string) {
   const client = useQueryClient()
   const toast = useToast()
   return useMutation({
@@ -24,6 +24,7 @@ function useAnswer({ appId, invitationId, onClose }: Props, done: string) {
     onSuccess: async () => {
       await Promise.all([refreshApplications(client), refreshNotifications(client)])
       toast.show({ kind: 'success', title: done })
+      onDone?.()
       onClose()
     },
   })

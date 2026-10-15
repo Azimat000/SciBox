@@ -260,6 +260,8 @@
   max-height: 48rem;
   padding: 0 0 0 var(--s-6);
   display: grid;
+  /* Колонка не шире панели: длинная подпись в ленте не растягивает окно за экран */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chat-choose {
@@ -282,13 +284,6 @@
   text-wrap: pretty;
 }
 
-.chat-window {
-  align-self: start;
-  display: grid;
-  gap: var(--s-4);
-  padding-top: var(--s-4);
-}
-
 .chat-back {
   display: none;
   font-size: var(--text-sm);
@@ -296,14 +291,15 @@
 
 .chat-window-head {
   display: grid;
-  gap: var(--s-2);
-  padding-bottom: var(--s-4);
+  flex: none;
+  gap: var(--s-1);
+  padding-bottom: var(--s-3);
   border-bottom: 1px solid var(--line);
 }
 
 .chat-window-title {
   font-family: var(--font-serif);
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   line-height: 1.22;
   overflow-wrap: anywhere;
 }
@@ -332,20 +328,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-3);
-}
-
-.chat-window-closed {
-  font-size: var(--text-sm);
-  color: var(--ink-body);
-}
-
-.chat-window-soon {
-  max-width: var(--measure);
-  font-family: var(--font-serif);
-  font-size: var(--text-md);
-  line-height: 1.6;
-  color: var(--ink-soft);
-  text-wrap: pretty;
 }
 
 /* ---- узкий экран: список и переписка по очереди ---- */
@@ -385,14 +367,8 @@
   .chats-page[data-open] .chats-pane {
     display: grid;
     position: static;
-    height: auto;
-    min-height: 0;
     max-height: none;
     padding: 0;
-  }
-
-  .chats-page[data-open] .chat-window {
-    padding-top: 0;
   }
 
   .chat-back {

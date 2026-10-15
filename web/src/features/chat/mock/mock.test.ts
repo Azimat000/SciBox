@@ -41,6 +41,46 @@ function setup(real: (input: RequestInfo | URL, init?: RequestInit) => Promise<R
 
 afterEach(() => vi.useRealTimers())
 
+describe('mock actions on records', () => {
+  const APP = 'b0000000-0000-4000-8000-000000000001'
+  const INV = 'f0000000-0000-4000-8000-000000000001'
+  const path = `/api/applications/${APP}/invitations/${INV}/answer`
+  const chatOf = (server: ReturnType<typeof setup>['server']) => server.state.chats.find((c) => c.application_id === APP && c.side === 'scientist')!
+
+  it('answers a demo invitation itself and leaves a line in the conversation', async () => {
+    const { target, realFetch, server } = setup(async () => json(200, {}))
+    const res = await target.fetch(path, { method: 'POST', body: JSON.stringify({ action: 'confirm' }) })
+    expect(res.status).toBe(204)
+    expect(realFetch).not.toHaveBeenCalled()
+    expect(chatOf(server).messages.at(-1)?.event?.type).toBe('invitation.answered')
+  })
+
+  it('lets the real server answer a real record and then writes the line', async () => {
+    const { target, realFetch, server } = setup(async () => json(200, { ok: true }))
+    chatOf(server).link = 'sci-vac:real'
+    const res = await target.fetch(path, { method: 'POST', body: JSON.stringify({ action: 'propose', proposed_at: '2026-10-23T15:30:00+03:00' }) })
+    expect(res.status).toBe(200)
+    expect(realFetch).toHaveBeenCalledTimes(1)
+    expect(chatOf(server).messages.at(-1)?.event).toMatchObject({ type: 'invitation.answered', data: { answer: 'proposed' } })
+  })
+
+  it('writes nothing when the real server refused', async () => {
+    const { target, server } = setup(async () => json(409, { error: { code: 'invalid_state', message: 'нет' } }))
+    chatOf(server).link = 'sci-vac:real'
+    const before = chatOf(server).messages.length
+    const res = await target.fetch(path, { method: 'POST', body: JSON.stringify({ action: 'confirm' }) })
+    expect(res.status).toBe(409)
+    expect(chatOf(server).messages.length).toBe(before)
+  })
+
+  it('takes a real answer that is not JSON', async () => {
+    const { target, server } = setup(async () => new Response(null, { status: 204 }))
+    chatOf(server).link = 'sci-vac:real'
+    expect((await target.fetch(path, { method: 'POST', body: JSON.stringify({ action: 'confirm' }) })).status).toBe(204)
+    expect(chatOf(server).messages.at(-1)?.event?.type).toBe('invitation.answered')
+  })
+})
+
 describe('mock install', () => {
   it('answers chat addresses itself and passes the rest to the real server', async () => {
     const { target, realFetch, uninstall } = setup(async () => json(200, { ok: true }))

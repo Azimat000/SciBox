@@ -7,6 +7,7 @@ import { BookmarkIcon, CloseIcon, MenuIcon } from '../../ui/icons'
 import { useMe } from '../auth/api'
 import { AccountBlock, UserMenu } from '../auth/UserMenu'
 import { useSignOut } from '../auth/useSignOut'
+import { ChatLive } from '../chat/ChatLive'
 import { MessagesLink } from '../chat/MessagesLink'
 import { NotificationBell } from '../notifications/NotificationBell'
 import { favoritesNav, isCurrent, navFor, publicNav } from './nav'
@@ -79,6 +80,7 @@ export function SiteHeader() {
                     <BookmarkIcon size={22} filled={favoritesCurrent} />
                   </Link>
                 )}
+                <ChatLive />
                 <MessagesLink />
                 <NotificationBell />
               </div>
