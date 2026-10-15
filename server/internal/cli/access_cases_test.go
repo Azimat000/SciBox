@@ -441,6 +441,18 @@ func chatCases() []kase {
 		}
 	}
 	outsiders := of(guest, stranger, headB, foreign)
+	// Блокировка организации (срез 38): блокирует и жалуется только учёный; сотрудник знает о переписке, но действие ему
+	// не положено (403), посторонний получает тот же 404, что и на выдуманный номер.
+	// templates — шаблоны организации: читают все, кто ведёт отклики (владелец, кадровик, руководители подразделений),
+	// правят владелец и кадровик; остальным организации «нет».
+	staffOfOrg := of(owner, hr, headA, headB)
+	editors := of(owner, hr)
+	orgOnly := func(f *fx, _ actor) call { return call{params: P{"orgId": f.tm().OrgID.String()}} }
+	withTemplate := func(f *fx, _ actor) call {
+		r := f.must(f.tm().Owner, "POST", "/api/orgs/{orgId}/chat-templates", P{"orgId": f.tm().OrgID.String()}, map[string]any{"title": "Шаблон", "text": "Текст шаблона"})
+		id := r["template"].(map[string]any)["id"].(string)
+		return call{params: P{"orgId": f.tm().OrgID.String(), "id": id}, body: map[string]any{"title": "Другое название", "text": "Другой текст"}}
+	}
 	return []kase{
 		{route: "GET /api/chats", kind: self, make: func(*fx, actor) call { return call{query: "?side=scientist"} }},
 		{route: "GET /api/chats/unread-count", kind: self},
@@ -453,6 +465,37 @@ func chatCases() []kase {
 		{route: "POST /api/chats/{id}/archive", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
 		{route: "POST /api/chats/{id}/unarchive", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
 		{route: "POST /api/chats/{id}/typing", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
+
+		{route: "POST /api/chats/{id}/block", name: "scientist", kind: object, only: outsiders | of(subject, stranger), allow: of(subject), deny: missing,
+			twin: []string{"id"}, make: chatOnly},
+		{route: "POST /api/chats/{id}/block", name: "organization", kind: object, only: of(owner, hr, headA), deny: forbidden,
+			why: "сотрудник знает о переписке, блокирует организацию только учёный", make: chatOnly},
+		{route: "POST /api/chats/{id}/complaints", name: "scientist", kind: object, only: outsiders | of(subject, stranger), allow: of(subject), deny: missing,
+			twin: []string{"id"}, make: withBody(map[string]any{"reason": "spam", "note": "Пишут не по делу"})},
+		{route: "POST /api/chats/{id}/complaints", name: "organization", kind: object, only: of(owner, hr, headA), deny: forbidden,
+			why: "сотрудник знает о переписке, жалуется на организацию только учёный", make: withBody(map[string]any{"reason": "spam", "note": ""})},
+		{route: "GET /api/chat-blocks", kind: self},
+		{route: "DELETE /api/chat-blocks/{orgId}", kind: object, allow: of(subject), deny: missing, twin: []string{"orgId"}, make: func(f *fx, _ actor) call {
+			f.must(f.Subject(), "POST", "/api/chats/{id}/block", P{"id": f.chat().String()}, nil)
+			return call{params: P{"orgId": f.tm().OrgID.String()}}
+		}},
+		{route: "GET /api/orgs/{orgId}/chat-templates", kind: object, allow: staffOfOrg, deny: missing, twin: []string{"orgId"}, make: orgOnly},
+		{route: "POST /api/orgs/{orgId}/chat-templates", name: "editor", kind: object, only: editors | of(guest, stranger, subject, foreign), allow: editors, deny: missing,
+			twin: []string{"orgId"}, make: func(f *fx, _ actor) call {
+				return call{params: P{"orgId": f.tm().OrgID.String()}, body: map[string]any{"title": "Шаблон", "text": "Текст шаблона"}}
+			}},
+		{route: "POST /api/orgs/{orgId}/chat-templates", name: "reader", kind: object, only: of(headA, headB), deny: forbidden,
+			why: "руководитель подразделения ведёт отклики и видит шаблоны, но правят их владелец и кадровик", make: func(f *fx, _ actor) call {
+				return call{params: P{"orgId": f.tm().OrgID.String()}, body: map[string]any{"title": "Шаблон", "text": "Текст шаблона"}}
+			}},
+		{route: "PATCH /api/orgs/{orgId}/chat-templates/{id}", name: "editor", kind: object, only: editors | of(guest, stranger, subject, foreign), allow: editors, deny: missing,
+			twin: []string{"orgId"}, make: withTemplate},
+		{route: "PATCH /api/orgs/{orgId}/chat-templates/{id}", name: "reader", kind: object, only: of(headA, headB), deny: forbidden,
+			why: "руководитель подразделения видит шаблоны, но правят их владелец и кадровик", make: withTemplate},
+		{route: "DELETE /api/orgs/{orgId}/chat-templates/{id}", name: "editor", kind: object, only: editors | of(guest, stranger, subject, foreign), allow: editors, deny: missing,
+			twin: []string{"orgId"}, make: withTemplate},
+		{route: "DELETE /api/orgs/{orgId}/chat-templates/{id}", name: "reader", kind: object, only: of(headA, headB), deny: forbidden,
+			why: "руководитель подразделения видит шаблоны, но удаляют их владелец и кадровик", make: withTemplate},
 
 		{route: "PATCH /api/chats/{id}/messages/{seq}", name: "message of the organization", kind: object, only: outsiders | of(owner), allow: of(owner), deny: missing,
 			twin: []string{"id"}, make: message(owner, map[string]any{"text": "Исправлено"})},

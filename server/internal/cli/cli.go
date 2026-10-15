@@ -67,10 +67,11 @@ const usage = `Использование: scibox <команда>
   worker                     запустить только фоновые задачи (письма, подбор, напоминания, чистка, файлы)
   error-test                 отправить пробный отчёт в GlitchTip (проверка SCIBOX_ERROR_DSN)
   migrate up|down|reset|status   миграции базы данных (down и reset в боевом режиме только с SCIBOX_ALLOW_DESTRUCTIVE=on)
-  release                    шаг выкладки: накатить миграции и загрузить справочники журналов и навыков (все шаги повторяемы)
+  release                    шаг выкладки: накатить миграции, загрузить справочники журналов и навыков, перенести прежние отклики в переписки (все шаги повторяемы)
   seed                       загрузить демо-данные (в боевом режиме только с SCIBOX_ALLOW_DESTRUCTIVE=on)
   journals load [--force] [файл]  загрузить справочник журналов SCImago (без файла — встроенный в сервер)
   skills load [--force] [файл]    загрузить справочник навыков для подсказок в профиле (без файла — встроенный в сервер)
+  chats backfill             завести переписки для прежних откликов и приглашений (повторяемо, шаг release делает это сам)
   healthcheck [serve|worker] спросить внутренний порт процесса, готов ли он (для проверки контейнера)
   version                    показать версию
 `
@@ -108,7 +109,7 @@ func Run(ctx context.Context, args []string, env Env) int {
 		return 0
 	case "healthcheck":
 		return runHealthcheck(ctx, args, env)
-	case "serve", "worker", "migrate", "release", "seed", "journals", "skills", "error-test":
+	case "serve", "worker", "migrate", "release", "seed", "journals", "skills", "chats", "error-test":
 	default:
 		fmt.Fprintf(env.Stderr, "неизвестная команда %q\n\n%s", cmd, usage)
 		return 2
@@ -156,7 +157,12 @@ func Run(ctx context.Context, args []string, env Env) int {
 		if code := runJournals(ctx, cfg.DatabaseURL, []string{"load"}, env, logger); code != 0 {
 			return code
 		}
-		return runSkills(ctx, cfg.DatabaseURL, []string{"load"}, env, logger)
+		if code := runSkills(ctx, cfg.DatabaseURL, []string{"load"}, env, logger); code != 0 {
+			return code
+		}
+		return runChats(ctx, cfg.DatabaseURL, []string{"backfill"}, env, logger)
+	case "chats":
+		return runChats(ctx, cfg.DatabaseURL, args, env, logger)
 	case "journals":
 		return runJournals(ctx, cfg.DatabaseURL, args, env, logger)
 	case "skills":
@@ -337,6 +343,28 @@ func runSkills(ctx context.Context, databaseURL string, args []string, env Env, 
 	return 0
 }
 
+// runChats: `chats backfill`. Заводит переписки для откликов и приглашений, которые появились до чата (срез 38, D-240).
+// Пара, у которой переписка уже есть, пропускается: команду можно запускать сколько угодно раз.
+func runChats(ctx context.Context, databaseURL string, args []string, env Env, logger *slog.Logger) int {
+	if len(args) != 1 || args[0] != "backfill" {
+		fmt.Fprint(env.Stderr, usage)
+		return 2
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		logger.Error("chats", "err", fmt.Errorf("connect database: %w", err))
+		return 1
+	}
+	defer pool.Close()
+	res, err := chat.Backfill(ctx, pool)
+	if err != nil {
+		logger.Error("chats", "err", err)
+		return 1
+	}
+	fmt.Fprintf(env.Stdout, "Переписки перенесены: заведено %d, строк о событиях %d.\n", res.Pairs, res.Lines)
+	return 0
+}
+
 func runSeed(ctx context.Context, databaseURL string, vault *files.Vault, out io.Writer) error {
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -347,7 +375,7 @@ func runSeed(ctx context.Context, databaseURL string, vault *files.Vault, out io
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей соискателей %d, откликов %d, приглашений %d, избранных вакансий %d, сохранённых поисков %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications, res.Offers, res.Favorites, res.Searches)
+	fmt.Fprintf(out, "Демо-данные загружены: новых людей %d, организаций %d, вакансий %d, профилей соискателей %d, откликов %d, приглашений %d, переписок с сообщениями %d, избранных вакансий %d, сохранённых поисков %d.\n", res.People, res.Organizations, res.Vacancies, res.Profiles, res.Applications, res.Offers, res.Chats, res.Favorites, res.Searches)
 	fmt.Fprintf(out, "Вход для проверки: %s (пароль записан в server/seed/seed.go).\n", seed.Logins()[0])
 	return nil
 }

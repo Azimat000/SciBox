@@ -32,8 +32,32 @@ func TestStateOf(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := StateOf(c.app, c.offer)
+			got := StateOf(c.app, c.offer, false)
 			if got.Source != c.source || got.Value != c.val || got.Closed != c.closed || got.Reason != c.reason {
+				t.Errorf("StateOf = %+v", got)
+			}
+		})
+	}
+}
+
+// Блокировка закрывает открытую переписку; закрытая решением остаётся закрытой по прежней причине (D-237).
+func TestStateOfBlocked(t *testing.T) {
+	cases := []struct {
+		name       string
+		app, offer *string
+		closed     bool
+		reason     string
+	}{
+		{"open application", str("viewed"), nil, true, ClosedBlocked},
+		{"accepted application", str("accepted"), nil, true, ClosedBlocked},
+		{"pending offer", nil, str("pending"), true, ClosedBlocked},
+		{"rejected stays rejected", str("rejected"), nil, true, ClosedRejected},
+		{"declined offer stays declined", nil, str("declined"), true, ClosedOfferDeclined},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := StateOf(c.app, c.offer, true)
+			if got.Closed != c.closed || got.Reason != c.reason {
 				t.Errorf("StateOf = %+v", got)
 			}
 		})

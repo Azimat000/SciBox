@@ -13,9 +13,19 @@ type State struct {
 	Reason string
 }
 
-// StateOf определяет состояние по статусу отклика и статусу приглашения; nil значит «такого нет».
+// StateOf определяет состояние по статусу отклика и статусу приглашения; nil значит «такого нет». blocked — учёный
+// заблокировал организацию вакансии (срез 38, D-237): переписка закрывается, если её не закрыло что-то из состояния
+// отклика или приглашения (решение организации остаётся причиной, раз оно было раньше).
 // Отклик главнее приглашения: если учёный после приглашения откликнулся, переписка живёт по отклику.
-func StateOf(application, offer *string) State {
+func StateOf(application, offer *string, blocked bool) State {
+	st := stateByStatus(application, offer)
+	if blocked && !st.Closed {
+		st.Closed, st.Reason = true, ClosedBlocked
+	}
+	return st
+}
+
+func stateByStatus(application, offer *string) State {
 	switch {
 	case application != nil:
 		st := State{Source: sourceApplication, Value: *application}

@@ -17,6 +17,7 @@ import (
 
 	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/chat"
 	"scibox/server/internal/dataexport"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
@@ -728,5 +729,126 @@ func TestArchiveListsOrganizationsTheProfileIsHiddenFrom(t *testing.T) {
 	a.section(t, "profile_hidden_organizations", &hidden)
 	if len(hidden) != 1 || !strings.HasPrefix(hidden[0]["organization"], "Институт набора") || hidden[0]["hidden_at"] == "" {
 		t.Errorf("profile_hidden_organizations = %v", hidden)
+	}
+}
+
+// Срез 38 (T-103): в архиве свои переписки, свои слова в чужих, свои блокировки и жалобы; имён сотрудников и других
+// людей нет, чужие переписки не входят.
+func TestArchiveHoldsTheChatsOfThePersonAndNothingOfOthers(t *testing.T) {
+	w := newWorld(t)
+	b := build(t, w)
+	chats := chat.NewService(testkit.Pool)
+	var mine, theirs uuid.UUID
+	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM chats WHERE application_id = $1`, b.meApp).Scan(&mine); err != nil {
+		t.Fatal(err)
+	}
+	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM chats WHERE application_id = $1`, b.otherID).Scan(&theirs); err != nil {
+		t.Fatal(err)
+	}
+	say := func(who testkit.Person, c uuid.UUID, text string) uuid.UUID {
+		t.Helper()
+		_, _, err := chats.Send(bg, who.User, c, chat.SendInput{Text: text, ClientID: uuid.NewString()})
+		if err != nil {
+			t.Fatalf("send: %v", err)
+		}
+		return c
+	}
+	// Переписка человека по его отклику закрыта отказом (build); снимаем отказ, чтобы в ней можно было писать.
+	exec(t, `UPDATE applications SET status = 'viewed' WHERE id = $1`, b.meApp)
+	say(w.tm.Owner, mine, "Слово организации для Марии")
+	say(b.me, mine, "Мой ответ организации")
+	deleted := uuid.NewString()
+	if _, _, err := chats.Send(bg, b.me.User, mine, chat.SendInput{Text: "Лишнее, потом удалю", ClientID: deleted}); err != nil {
+		t.Fatal(err)
+	}
+	if err := chats.Delete(bg, b.me.User, mine, 4); err != nil {
+		t.Fatal(err)
+	}
+	// Как сотрудник организации человек написал в чужой переписке.
+	say(b.me, theirs, "Моё письмо Петру от имени организации")
+	say(w.tm.Owner, theirs, "Слово коллеги Петру")
+	if _, err := chats.Complain(bg, b.me.User, mine, chat.ComplaintInput{Reason: "other", Note: "Моя жалоба на организацию"}); err != nil {
+		t.Fatal(err)
+	}
+	other := w.Applicant("Третий Человек")
+	otherChat := w.apply(other, "Чужое письмо третьего", "ref-third@example.ru")
+	var thirdChat uuid.UUID
+	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM chats WHERE application_id = $1`, otherChat.ID).Scan(&thirdChat); err != nil {
+		t.Fatal(err)
+	}
+	say(w.tm.Owner, thirdChat, "Слово третьему")
+	if _, err := chats.Block(bg, b.me.User, mine); err != nil {
+		t.Fatal(err)
+	}
+
+	a := export(t, w.service(), fresh(t, w.World, b.me.Email))
+	var got []struct {
+		ID       string `json:"id"`
+		Vacancy  struct{ Organization string }
+		Messages []struct {
+			Seq     int
+			Kind    string
+			From    *string
+			Text    string
+			Event   map[string]any
+			Deleted *time.Time `json:"deleted_at"`
+		}
+	}
+	a.section(t, "chats", &got)
+	if len(got) != 1 || got[0].ID != mine.String() {
+		t.Fatalf("chats = %+v", got)
+	}
+	var texts, from []string
+	var systems int
+	for _, m := range got[0].Messages {
+		switch m.Kind {
+		case "system":
+			systems++
+			if m.Event["type"] == nil || m.From != nil {
+				t.Errorf("system line: %+v", m)
+			}
+		default:
+			texts = append(texts, m.Text)
+			from = append(from, *m.From)
+		}
+	}
+	if !slices.Contains(texts, "Слово организации для Марии") || !slices.Contains(texts, "Мой ответ организации") {
+		t.Errorf("texts = %v", texts)
+	}
+	if !slices.Contains(from, "you") || !slices.Contains(from, "organization") {
+		t.Errorf("authors = %v", from)
+	}
+	if systems < 2 { // отклик отправлен, блокировка
+		t.Errorf("system lines = %d", systems)
+	}
+	if strings.Contains(string(a.entries["data.json"]), "Лишнее, потом удалю") {
+		t.Error("the text of a deleted message is in the archive")
+	}
+
+	var written []struct {
+		Text    string
+		Vacancy struct{ Title string }
+	}
+	a.section(t, "chat_messages_written_for_organizations", &written)
+	if len(written) != 1 || written[0].Text != "Моё письмо Петру от имени организации" {
+		t.Errorf("written for organizations = %+v", written)
+	}
+	var blocks []map[string]any
+	a.section(t, "chat_blocked_organizations", &blocks)
+	if len(blocks) != 1 {
+		t.Errorf("blocks = %v", blocks)
+	}
+	var complaints []map[string]any
+	a.section(t, "chat_complaints", &complaints)
+	if len(complaints) != 1 || complaints[0]["note"] != "Моя жалоба на организацию" || complaints[0]["reason"] != "other" {
+		t.Errorf("complaints = %v", complaints)
+	}
+
+	// Чужое в архив не попадает: имя Петра и третьего, их письма, слова коллег, имена сотрудников.
+	whole := string(a.entries["data.json"])
+	for _, s := range []string{"Слово коллеги Петру", "Слово третьему", "Чужое письмо третьего", w.tm.Owner.Name, w.tm.HR.Name} {
+		if strings.Contains(whole, s) {
+			t.Errorf("the archive holds %q", s)
+		}
 	}
 }

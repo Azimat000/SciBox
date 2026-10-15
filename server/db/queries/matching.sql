@@ -150,10 +150,11 @@ SELECT vacancy_id, specialty_code FROM vacancy_specialties WHERE vacancy_id = AN
 -- ---- настройки писем ----
 
 -- name: GetNotificationSettings :one
-SELECT email_new_vacancies, email_deadlines FROM notification_settings WHERE user_id = $1;
+SELECT email_new_vacancies, email_deadlines, email_messages FROM notification_settings WHERE user_id = $1;
 
 -- name: UpsertNotificationSettings :exec
-INSERT INTO notification_settings (user_id, email_new_vacancies, email_deadlines, updated_at)
-VALUES (@user_id, @email_new_vacancies, @email_deadlines, @now)
+INSERT INTO notification_settings (user_id, email_new_vacancies, email_deadlines, email_messages, updated_at)
+VALUES (@user_id, @email_new_vacancies, @email_deadlines, @email_messages, @now)
 ON CONFLICT (user_id) DO UPDATE SET
-    email_new_vacancies = EXCLUDED.email_new_vacancies, email_deadlines = EXCLUDED.email_deadlines, updated_at = EXCLUDED.updated_at;
+    email_new_vacancies = EXCLUDED.email_new_vacancies, email_deadlines = EXCLUDED.email_deadlines,
+    email_messages = EXCLUDED.email_messages, updated_at = EXCLUDED.updated_at;

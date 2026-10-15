@@ -7,7 +7,12 @@ INSERT INTO chats (vacancy_id, org_id, user_id, application_id, offer_id, create
 SELECT v.id, v.org_id, @user_id, sqlc.narg(application_id), sqlc.narg(offer_id), @now::timestamptz, @now::timestamptz
 FROM vacancies v WHERE v.id = @vacancy_id
 ON CONFLICT (vacancy_id, user_id) DO UPDATE SET
-    application_id = COALESCE(EXCLUDED.application_id, chats.application_id),
+    -- Новое приглашение после отозванного отклика становится главным в переписке: переписка следует за ним, а не за
+    -- отзывом (иначе она осталась бы закрытой, пока приглашение ждёт ответа).
+    application_id = CASE
+        WHEN EXCLUDED.application_id IS NOT NULL THEN EXCLUDED.application_id
+        WHEN EXCLUDED.offer_id IS NOT NULL AND EXISTS (SELECT 1 FROM applications wa WHERE wa.id = chats.application_id AND wa.status = 'withdrawn') THEN NULL
+        ELSE chats.application_id END,
     offer_id       = COALESCE(EXCLUDED.offer_id, chats.offer_id)
 RETURNING id;
 
@@ -22,7 +27,7 @@ SELECT c.id, c.vacancy_id, c.user_id, c.application_id, c.offer_id,
        o.name AS org_name, o.slug AS org_slug, un.name AS unit_name,
        a.status AS application_status, ofr.status AS offer_status,
        u.display_name AS scientist_name, p.id AS profile_id, p.visibility,
-       rel.hidden_from, rel.revealed, rel.has_pending_invitation,
+       rel.hidden_from, rel.revealed, rel.has_pending_invitation, rel.blocked,
        COALESCE(cp.read_seq, 0)::int AS read_seq, COALESCE(cp.archived, false)::boolean AS archived
 FROM chats c
 JOIN vacancies v ON v.id = c.vacancy_id
@@ -39,7 +44,8 @@ CROSS JOIN LATERAL (
                      WHERE ra.user_id = c.user_id AND ra.status <> 'withdrawn' AND rv.org_id = v.org_id)
             OR EXISTS (SELECT 1 FROM vacancy_offers ro JOIN vacancies rv ON rv.id = ro.vacancy_id
                         WHERE ro.user_id = c.user_id AND ro.status = 'interested' AND rv.org_id = v.org_id))::boolean AS revealed,
-           (a.id IS NOT NULL AND EXISTS (SELECT 1 FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending'))::boolean AS has_pending_invitation
+           (a.id IS NOT NULL AND EXISTS (SELECT 1 FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending'))::boolean AS has_pending_invitation,
+           EXISTS (SELECT 1 FROM chat_blocks b WHERE b.user_id = c.user_id AND b.org_id = v.org_id)::boolean AS blocked
 ) rel
 WHERE c.id = @id;
 
@@ -54,6 +60,12 @@ SELECT status FROM vacancy_offers WHERE id = $1 FOR SHARE;
 -- Замок строки переписки: отправка в одну переписку идёт по очереди, номера не повторяются.
 -- name: LockChat :one
 SELECT application_id, offer_id, last_seq FROM chats WHERE id = $1 FOR UPDATE;
+
+-- Заблокирована ли организация учёным этой переписки. Читается отдельным запросом после замка переписки: блокировка и
+-- закрытие берут тот же замок, и запрос видит всё, что зафиксировано до его снятия (T-105, T-106).
+-- name: IsChatBlocked :one
+SELECT EXISTS (SELECT 1 FROM chat_blocks b WHERE b.user_id = c.user_id AND b.org_id = c.org_id)::boolean
+FROM chats c WHERE c.id = $1;
 
 -- Следующий номер: счётчики растут вместе с сообщением. to_side — кому оно адресовано.
 -- name: BumpChat :one
@@ -183,7 +195,7 @@ SELECT c.id, c.vacancy_id, c.user_id, c.application_id, c.offer_id, c.last_seq, 
        o.name AS org_name, o.slug AS org_slug, un.name AS unit_name,
        a.status AS application_status, ofr.status AS offer_status,
        u.display_name AS scientist_name, p.id AS profile_id, p.visibility,
-       rel.hidden_from, rel.revealed, rel.has_pending_invitation,
+       rel.hidden_from, rel.revealed, rel.has_pending_invitation, rel.blocked,
        COALESCE(cp.read_seq, 0)::int AS read_seq, COALESCE(cp.archived, false)::boolean AS archived,
        (SELECT count(*) FROM (SELECT 1 FROM chat_messages x
                                WHERE x.chat_id = c.id AND x.seq > COALESCE(cp.read_seq, 0) AND x.to_side = @side::text
@@ -210,7 +222,8 @@ CROSS JOIN LATERAL (
                      WHERE ra.user_id = c.user_id AND ra.status <> 'withdrawn' AND rv.org_id = c.org_id)
             OR EXISTS (SELECT 1 FROM vacancy_offers ro JOIN vacancies rv ON rv.id = ro.vacancy_id
                         WHERE ro.user_id = c.user_id AND ro.status = 'interested' AND rv.org_id = c.org_id))::boolean AS revealed,
-           (a.id IS NOT NULL AND EXISTS (SELECT 1 FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending'))::boolean AS has_pending_invitation
+           (a.id IS NOT NULL AND EXISTS (SELECT 1 FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending'))::boolean AS has_pending_invitation,
+           EXISTS (SELECT 1 FROM chat_blocks b WHERE b.user_id = c.user_id AND b.org_id = c.org_id)::boolean AS blocked
 ) rel
 ORDER BY c.updated_at DESC, c.id DESC;
 

@@ -12,8 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"scibox/server/internal/auth"
-	"scibox/server/internal/chat"
-	"scibox/server/internal/dbgen"
 	"scibox/server/internal/orgs"
 	"scibox/server/internal/testkit"
 	"scibox/server/internal/vacancies"
@@ -279,17 +277,13 @@ func (f *fx) vacancyBody(withOrg bool) map[string]any {
 	return b
 }
 
-// chat — переписка субъекта с организацией по новому отклику на вакансию подразделения A: одна строка о событии.
+// chat — переписка субъекта с организацией по новому отклику на вакансию подразделения A. Настоящий отклик сам заводит
+// переписку и пишет в неё строку «отклик отправлен» (срез 38): одна строка о событии.
 func (f *fx) chat() uuid.UUID {
 	f.t.Helper()
 	a := f.application()
-	now := time.Now().UTC()
-	q := dbgen.New(f.w.pool)
-	id, err := chat.Open(bgctx, q, chat.OpenInput{VacancyID: a.vacancy, UserID: f.Subject().ID, ApplicationID: &a.id}, now)
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	if _, err := chat.AppendSystem(bgctx, q, id, chat.EventApplicationSent, map[string]any{"application_id": a.id, "cover_letter": coverLetter}, now); err != nil {
+	var id uuid.UUID
+	if err := f.w.pool.QueryRow(bgctx, `SELECT id FROM chats WHERE application_id = $1`, a.id).Scan(&id); err != nil {
 		f.t.Fatal(err)
 	}
 	return id

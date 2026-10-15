@@ -62,7 +62,7 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Chat, 
 	if err != nil {
 		return Chat{}, err
 	}
-	st := StateOf(row.ApplicationStatus, row.OfferStatus)
+	st := StateOf(row.ApplicationStatus, row.OfferStatus, row.Blocked)
 	out := Chat{
 		ID: row.ID, Side: w.side,
 		Vacancy: VacancyHeader{
@@ -385,7 +385,7 @@ func (s *Service) Typing(ctx context.Context, user auth.User, id uuid.UUID) erro
 	if err != nil {
 		return err
 	}
-	if StateOf(row.ApplicationStatus, row.OfferStatus).Closed {
+	if StateOf(row.ApplicationStatus, row.OfferStatus, row.Blocked).Closed {
 		return ErrClosed
 	}
 	return nil

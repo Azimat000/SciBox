@@ -114,7 +114,10 @@ func TestUpDownUp(t *testing.T) {
 	skillTables := append(slices.Clone(hiddenTables), "skill_terms", "skills")
 	slices.Sort(skillTables)
 	// Чат: переписки, сообщения, личные отметки (00031).
-	allTables := append(slices.Clone(skillTables), "chat_messages", "chat_participants", "chats")
+	chatTables := append(slices.Clone(skillTables), "chat_messages", "chat_participants", "chats")
+	slices.Sort(chatTables)
+	// Инструменты чата: шаблоны, блокировки, жалобы (00032).
+	allTables := append(slices.Clone(chatTables), "chat_blocks", "chat_complaints", "chat_templates")
 	slices.Sort(allTables)
 	steps := []struct {
 		cmd        string
@@ -123,12 +126,13 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00031_chat.sql", 2, allTables},
+		{"up", "00032_chat_tools.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
 		// Столбцы привязки ссылки (00025) и неактивности (00026), индексы для чисел главной (00024) и метрики очереди
 		// писем (00023) таблиц не добавляют; 00027 добавляет таблицу скрытых от организаций; 00028 (условия вакансии)
-		// только столбцы; 00029 (ссылка на GitHub) тоже один столбец; 00030 добавляет справочник навыков; 00031 чат.
+		// только столбцы; 00029 (ссылка на GitHub) тоже один столбец; 00030 добавляет справочник навыков; 00031 чат; 00032 инструменты чата.
+		{"down", "00032_chat_tools.sql", 2, chatTables},
 		{"down", "00031_chat.sql", 2, skillTables},
 		{"down", "00030_skills.sql", 2, hiddenTables},
 		{"down", "00029_profile_github.sql", 2, hiddenTables},
@@ -162,7 +166,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00031_chat.sql", 2, allTables},
+		{"up", "00032_chat_tools.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

@@ -33,6 +33,7 @@ type Result struct {
 	Profiles      int
 	Applications  int
 	Offers        int
+	Chats         int
 	Favorites     int
 	Searches      int
 }
@@ -226,6 +227,11 @@ func Run(ctx context.Context, pool *pgxpool.Pool, vault *files.Vault, now time.T
 	}
 	// Приглашения из каталога идут последними: им нужны и профили, и открытые вакансии.
 	if res.Offers, err = seedOffers(ctx, pool, ids, now); err != nil {
+		return Result{}, err
+	}
+	// Переписки строятся по итоговому состоянию откликов и приглашений, поэтому после них; в часть переписок вплетены
+	// сообщения людей (срез 38).
+	if res.Chats, err = seedChats(ctx, pool, ids, now); err != nil {
 		return Result{}, err
 	}
 	// Избранное и сохранённые поиски: избранное берётся из «подходящих» вакансий, поэтому после профилей и откликов.

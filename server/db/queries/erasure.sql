@@ -165,3 +165,13 @@ UPDATE chat_messages SET author_user_id = NULL WHERE author_user_id = $1;
 -- Личные отметки человека в переписках: что прочитал и что убрал в архив.
 -- name: EraseChatParticipation :exec
 DELETE FROM chat_participants WHERE user_id = $1;
+
+-- Блокировки и жалобы человека уходят с аккаунтом (срез 38, T-103); автор шаблона организации очищается: шаблон общий.
+-- name: EraseChatBlocks :exec
+DELETE FROM chat_blocks WHERE user_id = $1;
+
+-- name: EraseChatComplaints :exec
+DELETE FROM chat_complaints WHERE user_id = $1;
+
+-- name: EraseChatTemplateAuthor :exec
+UPDATE chat_templates SET created_by = NULL WHERE created_by = $1;

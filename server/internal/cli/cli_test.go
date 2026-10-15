@@ -244,6 +244,37 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 			t.Errorf("no %s vacancies", status)
 		}
 	}
+	// Демо-переписки (срез 38): у каждого демо-отклика и приглашения есть переписка; есть переписка с анонимным учёным,
+	// закрытая отказом (с сообщениями до решения) и переписка с непрочитанным; повторная загрузка ничего не дублирует.
+	if n := count("SELECT count(*) FROM applications a WHERE NOT EXISTS (SELECT 1 FROM chats c WHERE c.application_id = a.id)"); n != 0 {
+		t.Errorf("%d applications without a chat", n)
+	}
+	if n := count("SELECT count(*) FROM vacancy_offers o WHERE NOT EXISTS (SELECT 1 FROM chats c WHERE c.offer_id = o.id)"); n != 0 {
+		t.Errorf("%d offers without a chat", n)
+	}
+	if n := count("SELECT count(DISTINCT chat_id) FROM chat_messages WHERE kind = 'text'"); n < 5 {
+		t.Errorf("%d chats with messages, want at least 5", n)
+	}
+	if n := count(`SELECT count(*) FROM chats c JOIN profiles p ON p.user_id = c.user_id JOIN chat_messages m ON m.chat_id = c.id AND m.kind = 'text'
+		WHERE p.visibility = 'anon' AND c.offer_id IS NOT NULL`); n == 0 {
+		t.Error("no chat with a hidden scientist")
+	}
+	if n := count(`SELECT count(*) FROM chats c JOIN applications a ON a.id = c.application_id
+		WHERE a.status = 'rejected' AND EXISTS (SELECT 1 FROM chat_messages m WHERE m.chat_id = c.id AND m.kind = 'text')`); n == 0 {
+		t.Error("no chat closed by a rejection with its history")
+	}
+	if n := count("SELECT count(*) FROM chats c WHERE c.last_for_scientist > c.scientist_read OR c.last_for_org > c.org_read"); n == 0 {
+		t.Error("no chat with something unread")
+	}
+	// Тексты стоят перед решением: в закрытой отказом переписке после строки решения людей не пишут.
+	if n := count(`SELECT count(*) FROM chat_messages d JOIN chat_messages t ON t.chat_id = d.chat_id AND t.seq > d.seq AND t.kind = 'text'
+		JOIN chats c ON c.id = d.chat_id JOIN applications a ON a.id = c.application_id
+		WHERE d.event_type = 'application.decided' AND a.status = 'rejected'`); n != 0 {
+		t.Errorf("%d messages after a rejection", n)
+	}
+	if n := count("SELECT count(*) FROM (SELECT chat_id, seq FROM chat_messages GROUP BY 1, 2 HAVING count(*) > 1) d"); n != 0 {
+		t.Errorf("%d repeated message numbers", n)
+	}
 	// Все семь видов вакансий (D-134).
 	if n := count("SELECT count(DISTINCT p.position_type) FROM vacancies v JOIN positions p ON p.code = v.position_code"); n != 7 {
 		t.Errorf("%d position types among vacancies, want 7", n)
@@ -525,4 +556,42 @@ func productName(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return p.Name
+}
+
+// chats backfill (срез 38): переносит прежние отклики и приглашения в переписки; повторный запуск ничего не меняет.
+func TestChatsBackfillCommand(t *testing.T) {
+	dbURL := testdb.Create(t, true)
+	env := map[string]string{"DATABASE_URL": dbURL}
+	if seeded := run(context.Background(), []string{"seed"}, env, nil); seeded.code != 0 {
+		t.Fatalf("seed: %+v", seeded)
+	}
+	pool, err := pgxpool.New(context.Background(), dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if _, err := pool.Exec(context.Background(), `DELETE FROM chats`); err != nil {
+		t.Fatal(err)
+	}
+	first := run(context.Background(), []string{"chats", "backfill"}, env, nil)
+	if first.code != 0 || !strings.Contains(first.stdout, "Переписки перенесены") || strings.Contains(first.stdout, "заведено 0,") {
+		t.Fatalf("first run: %+v", first)
+	}
+	var chats int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM chats`).Scan(&chats); err != nil || chats == 0 {
+		t.Fatalf("chats = %d, %v", chats, err)
+	}
+	second := run(context.Background(), []string{"chats", "backfill"}, env, nil)
+	if second.code != 0 || !strings.Contains(second.stdout, "заведено 0, строк о событиях 0") {
+		t.Fatalf("second run: %+v", second)
+	}
+	for _, args := range [][]string{{"chats"}, {"chats", "rebuild"}, {"chats", "backfill", "now"}} {
+		if bad := run(context.Background(), args, env, nil); bad.code != 2 {
+			t.Errorf("%v: %+v", args, bad)
+		}
+	}
+	// Ошибка подключения к базе не молчит.
+	if dead := run(context.Background(), []string{"chats", "backfill"}, map[string]string{"DATABASE_URL": "postgres://nobody@127.0.0.1:1/none?connect_timeout=1"}, nil); dead.code != 1 {
+		t.Errorf("an unreachable database: %+v", dead)
+	}
 }

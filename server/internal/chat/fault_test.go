@@ -1,7 +1,9 @@
 package chat
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -152,6 +154,102 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 			setup(w)
 			return func(_ testkit.DB, s *Service) error { _, err := s.Vacancies(bg, w.tm.Owner.User); return err }
 		},
+		"block": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci, chat := setup(w)
+			return func(_ testkit.DB, s *Service) error { _, err := s.Block(bg, sci.User, chat); return err }
+		},
+		"unblock": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci, chat := setup(w)
+			if _, err := w.svc.Block(bg, sci.User, chat); err != nil {
+				t.Fatal(err)
+			}
+			return func(_ testkit.DB, s *Service) error { return s.Unblock(bg, sci.User, w.tm.OrgID) }
+		},
+		"blocks": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci, chat := setup(w)
+			if _, err := w.svc.Block(bg, sci.User, chat); err != nil {
+				t.Fatal(err)
+			}
+			return func(_ testkit.DB, s *Service) error { _, err := s.Blocks(bg, sci.User); return err }
+		},
+		"complaint": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci, chat := setup(w)
+			return func(_ testkit.DB, s *Service) error {
+				_, err := s.Complain(bg, sci.User, chat, ComplaintInput{Reason: "spam", Note: "Пишут не по делу"})
+				return err
+			}
+		},
+		"templates": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			return func(_ testkit.DB, s *Service) error {
+				_, err := s.Templates(bg, w.tm.HeadA.User, w.tm.OrgID)
+				return err
+			}
+		},
+		"template create": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			return func(_ testkit.DB, s *Service) error {
+				_, err := s.CreateTemplate(bg, w.tm.Owner.User, w.tm.OrgID, TemplateInput{Title: "Шаблон", Text: "Текст"})
+				return err
+			}
+		},
+		"template update": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			tpl, err := w.svc.CreateTemplate(bg, w.tm.Owner.User, w.tm.OrgID, TemplateInput{Title: "Шаблон", Text: "Текст"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return func(_ testkit.DB, s *Service) error {
+				_, err := s.UpdateTemplate(bg, w.tm.HR.User, w.tm.OrgID, tpl.ID, TemplateInput{Title: "Новое", Text: "Новый текст"})
+				return err
+			}
+		},
+		"template delete": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			tpl, err := w.svc.CreateTemplate(bg, w.tm.Owner.User, w.tm.OrgID, TemplateInput{Title: "Шаблон", Text: "Текст"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return func(_ testkit.DB, s *Service) error { return s.DeleteTemplate(bg, w.tm.Owner.User, w.tm.OrgID, tpl.ID) }
+		},
+		"links": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci := w.Applicant("Анна Ильина")
+			app := w.application(sci, w.vacancy.ID, "sent")
+			offer := w.offer(sci, w.other.ID, "pending")
+			w.open(sci, w.vacancy.ID, &app, nil)
+			return func(db testkit.DB, _ *Service) error {
+				_, err := LinksOf(bg, dbgen.New(db), SideOrg, w.tm.Owner.ID, []uuid.UUID{app}, []uuid.UUID{offer})
+				return err
+			}
+		},
+		"record into a new chat": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci := w.Applicant("Борис Сомов")
+			app := w.application(sci, w.vacancy.ID, "sent")
+			return func(db testkit.DB, _ *Service) error {
+				_, err := Record(bg, dbgen.New(db), Entry{VacancyID: w.vacancy.ID, UserID: sci.ID, ApplicationID: &app,
+					Type: EventApplicationSent, Data: ApplicationSentData{ApplicationID: app}, At: w.clock.Now()})
+				return err
+			}
+		},
+		"record into an offer chat": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci := w.Applicant("Борис Сомов")
+			offer := w.offer(sci, w.vacancy.ID, "pending")
+			w.open(sci, w.vacancy.ID, nil, &offer)
+			return func(db testkit.DB, _ *Service) error {
+				_, err := Record(bg, dbgen.New(db), Entry{VacancyID: w.vacancy.ID, UserID: sci.ID, OfferID: &offer,
+					Type: EventOfferCancelled, Data: OfferData{OfferID: offer}, At: w.clock.Now()})
+				return err
+			}
+		},
+		"backfill of a pair": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
+			sci := w.Applicant("Борис Сомов")
+			app := w.application(sci, w.vacancy.ID, "invited")
+			at := w.clock.Now().Add(-time.Hour)
+			ans := at.Add(10 * time.Minute)
+			w.legacyInvitation(app, "interview", "confirmed", at, &ans, &ans, "")
+			offer := w.offer(sci, w.vacancy.ID, "interested")
+			_ = offer
+			return func(db testkit.DB, _ *Service) error {
+				_, err := backfillPair(bg, db, w.vacancy.ID, sci.ID)
+				return err
+			}
+		},
 		"open": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
 			sci := w.Applicant("Борис Сомов")
 			app := w.application(sci, w.vacancy.ID, "sent")
@@ -183,5 +281,14 @@ func (w *world) svcSend(who testkit.Person, chat uuid.UUID, client string) {
 	w.T.Helper()
 	if _, _, err := w.svc.Send(bg, who.User, chat, SendInput{Text: "Привет", ClientID: client}); err != nil {
 		w.T.Fatal(err)
+	}
+}
+
+// Сбой на первом же обращении к базе при переносе не молчит.
+func TestBackfillReportsDatabaseFailures(t *testing.T) {
+	newWorld(t)
+	db, _ := testkit.Faulty(testkit.Pool, 1)
+	if _, err := Backfill(bg, db); !errors.Is(err, testkit.ErrFault) {
+		t.Fatalf("Backfill = %v", err)
 	}
 }

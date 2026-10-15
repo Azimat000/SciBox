@@ -171,7 +171,7 @@ func (s *Service) List(ctx context.Context, user auth.User, q ListQuery) (List, 
 }
 
 func listItem(side Side, viewer uuid.UUID, r dbgen.ListChatsRow) ListItem {
-	st := StateOf(r.ApplicationStatus, r.OfferStatus)
+	st := StateOf(r.ApplicationStatus, r.OfferStatus, r.Blocked)
 	seen := side == SideScientist || nameSeen(r.Visibility, r.HiddenFrom, r.Revealed)
 	item := ListItem{
 		ID: r.ID, Side: side,

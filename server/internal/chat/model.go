@@ -77,6 +77,7 @@ const (
 	ClosedWithdrawn      = "withdrawn"
 	ClosedOfferDeclined  = "offer_declined"
 	ClosedOfferCancelled = "offer_cancelled"
+	ClosedBlocked        = "blocked"
 )
 
 // Пределы.

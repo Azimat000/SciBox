@@ -18,6 +18,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/chat"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
@@ -336,6 +337,13 @@ func (s *Service) apply(ctx context.Context, user auth.User, in Input, ups []fil
 		if err := s.refs.CreateInTx(ctx, q, references.AppInfo{ID: id, ApplicantName: user.Name, VacancyTitle: v.Title, OrgName: v.OrgName}, refs); err != nil {
 			return err
 		}
+		// Строка в переписке пишется в той же транзакции, что и отклик: откатился отклик, откатилась и она (срез 38).
+		if _, err := chat.Record(ctx, q, chat.Entry{
+			VacancyID: v.ID, UserID: user.ID, ApplicationID: &id, Type: chat.EventApplicationSent, At: now,
+			Data: chat.ApplicationSentData{ApplicationID: id, CoverLetter: cover},
+		}); err != nil {
+			return err
+		}
 		return s.announce(ctx, q, user, id, v)
 	})
 	if err != nil {
@@ -408,8 +416,16 @@ func (s *Service) Mine(ctx context.Context, user auth.User, limit, offset int) (
 		return List{}, fmt.Errorf("applications: count: %w", err)
 	}
 	out := List{Items: make([]Summary, 0, len(rows)), Total: total}
+	ids := make([]uuid.UUID, 0, len(rows))
 	for _, r := range rows {
-		out.Items = append(out.Items, Summary{
+		ids = append(ids, r.ID)
+	}
+	links, err := chat.LinksOf(ctx, s.q, chat.SideScientist, user.ID, ids, nil)
+	if err != nil {
+		return List{}, err
+	}
+	for _, r := range rows {
+		out.Items = append(out.Items, Summary{Chat: links.Application(r.ID),
 			ID: r.ID, Status: r.Status, CreatedAt: r.CreatedAt, StatusChangedAt: r.StatusChangedAt,
 			Vacancy:    VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug, Deadline: dateStr(r.Deadline)},
 			References: RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)}, PendingInvitations: int(r.InvitesPending),
@@ -495,6 +511,15 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 			d.Files = append(d.Files, ref)
 		}
 	}
+	side := chat.SideScientist
+	if reader == files.Staff {
+		side = chat.SideOrg
+	}
+	links, err := chat.LinksOf(ctx, s.q, side, user.ID, []uuid.UUID{a.ID}, nil)
+	if err != nil {
+		return Detail{}, err
+	}
+	d.Chat = links.Application(a.ID)
 	switch reader {
 	case files.Applicant:
 		d.Viewer = ViewerInfo{Role: RoleApplicant, CanWithdraw: CanWithdraw(a.Status), Decisions: []string{}}
@@ -574,15 +599,22 @@ func (s *Service) Withdraw(ctx context.Context, user auth.User, id uuid.UUID) er
 		if a.UserID != user.ID {
 			return ErrNotFound
 		}
-		n, err := q.SetApplicationStatusFrom(ctx, dbgen.SetApplicationStatusFromParams{ID: id, ToStatus: StatusWithdrawn, FromStatuses: withdrawable, Now: s.now()})
+		now := s.now()
+		n, err := q.SetApplicationStatusFrom(ctx, dbgen.SetApplicationStatusFromParams{ID: id, ToStatus: StatusWithdrawn, FromStatuses: withdrawable, Now: now})
 		if err != nil {
 			return fmt.Errorf("applications: withdraw: %w", err)
 		}
 		if n == 0 {
 			return ErrBadStatus
 		}
-		if err := q.CancelOpenInvitations(ctx, dbgen.CancelOpenInvitationsParams{ApplicationID: id, Now: s.now()}); err != nil {
-			return fmt.Errorf("applications: cancel invitations: %w", err)
+		if _, err := chat.Record(ctx, q, chat.Entry{
+			VacancyID: a.VacancyID, UserID: a.UserID, ApplicationID: &id, Type: chat.EventApplicationWithdrawn, At: now,
+			Data: chat.ApplicationData{ApplicationID: id},
+		}); err != nil {
+			return err
+		}
+		if err := s.cancelOpenInvitations(ctx, q, a, now); err != nil {
+			return err
 		}
 		staff, err := orgs.UsersWhoCan(ctx, q, a.OrgID, access.ViewApplications, unitOf(a.UnitID))
 		if err != nil {

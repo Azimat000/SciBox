@@ -97,6 +97,25 @@ func (q *Queries) EraseChatAuthorship(ctx context.Context, authorUserID *uuid.UU
 	return err
 }
 
+const eraseChatBlocks = `-- name: EraseChatBlocks :exec
+DELETE FROM chat_blocks WHERE user_id = $1
+`
+
+// Блокировки и жалобы человека уходят с аккаунтом (срез 38, T-103); автор шаблона организации очищается: шаблон общий.
+func (q *Queries) EraseChatBlocks(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatBlocks, userID)
+	return err
+}
+
+const eraseChatComplaints = `-- name: EraseChatComplaints :exec
+DELETE FROM chat_complaints WHERE user_id = $1
+`
+
+func (q *Queries) EraseChatComplaints(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatComplaints, userID)
+	return err
+}
+
 const eraseChatParticipation = `-- name: EraseChatParticipation :exec
 DELETE FROM chat_participants WHERE user_id = $1
 `
@@ -104,6 +123,15 @@ DELETE FROM chat_participants WHERE user_id = $1
 // Личные отметки человека в переписках: что прочитал и что убрал в архив.
 func (q *Queries) EraseChatParticipation(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, eraseChatParticipation, userID)
+	return err
+}
+
+const eraseChatTemplateAuthor = `-- name: EraseChatTemplateAuthor :exec
+UPDATE chat_templates SET created_by = NULL WHERE created_by = $1
+`
+
+func (q *Queries) EraseChatTemplateAuthor(ctx context.Context, createdBy *uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatTemplateAuthor, createdBy)
 	return err
 }
 

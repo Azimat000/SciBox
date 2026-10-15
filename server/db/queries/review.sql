@@ -34,14 +34,17 @@ UPDATE application_invitations SET status = 'confirmed', starts_at = answer_at, 
 WHERE id = @id AND status = 'proposed' AND answer_at > @now::timestamptz;
 
 -- Все открытые приглашения отклика закрываются (отказ, отзыв отклика).
--- name: CancelOpenInvitations :exec
+-- Возвращает закрытые приглашения: о каждом переписка дописывает строку (срез 38).
+-- name: CancelOpenInvitations :many
 UPDATE application_invitations SET status = 'cancelled', updated_at = @now::timestamptz
-WHERE application_id = @application_id AND status IN ('pending', 'proposed', 'confirmed');
+WHERE application_id = @application_id AND status IN ('pending', 'proposed', 'confirmed')
+RETURNING id, kind;
 
 -- Новое собеседование заменяет прежние открытые.
--- name: CancelOpenInterviews :exec
+-- name: CancelOpenInterviews :many
 UPDATE application_invitations SET status = 'cancelled', updated_at = @now::timestamptz
-WHERE application_id = @application_id AND kind = 'interview' AND status IN ('pending', 'proposed', 'confirmed');
+WHERE application_id = @application_id AND kind = 'interview' AND status IN ('pending', 'proposed', 'confirmed')
+RETURNING id, kind;
 
 -- Решение организации ----------------------------------------------------------------------------------------------
 

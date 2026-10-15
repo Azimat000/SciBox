@@ -26,6 +26,7 @@ const (
 	CodeInvalidStatusCh = "invalid_status_change"
 	CodeInvalidInvite   = "invalid_invitation_state"
 	CodeTooManyInvites  = "too_many_invitations"
+	CodeBlocked         = "blocked_by_person"
 )
 
 // Handler — HTTP-часть откликов.
@@ -103,6 +104,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusConflict, CodeInvalidStatusCh, "Для отклика в таком состоянии это действие недоступно. Обновите страницу")
 	case errors.Is(err, ErrBadInvitation):
 		apierr.WriteError(w, http.StatusConflict, CodeInvalidInvite, "С этим приглашением это действие уже невозможно: оно изменилось. Обновите страницу")
+	case errors.Is(err, ErrBlocked):
+		apierr.WriteError(w, http.StatusConflict, CodeBlocked, "Этот человек заблокировал вашу организацию, поэтому отправить ему приглашение нельзя")
 	case errors.Is(err, ErrTooManyInvitations):
 		apierr.WriteError(w, http.StatusConflict, CodeTooManyInvites, "На один отклик можно отправить не больше десяти приглашений")
 	default:

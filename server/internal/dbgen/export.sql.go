@@ -87,6 +87,91 @@ func (q *Queries) ExportAudit(ctx context.Context, userID *uuid.UUID) ([]byte, e
 	return doc, err
 }
 
+const exportChatBlocks = `-- name: ExportChatBlocks :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('organization', jsonb_build_object('slug', o.slug, 'name', o.name), 'blocked_at', b.created_at)
+    ORDER BY b.created_at, o.id), '[]'::jsonb)::jsonb AS doc
+FROM chat_blocks b JOIN organizations o ON o.id = b.org_id
+WHERE b.user_id = $1
+`
+
+func (q *Queries) ExportChatBlocks(ctx context.Context, userID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportChatBlocks, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
+const exportChatComplaints = `-- name: ExportChatComplaints :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('id', k.id, 'organization', o.name, 'vacancy', v.title, 'reason', k.reason,
+    'note', k.note, 'created_at', k.created_at) ORDER BY k.created_at, k.id), '[]'::jsonb)::jsonb AS doc
+FROM chat_complaints k
+JOIN organizations o ON o.id = k.org_id
+LEFT JOIN vacancies v ON v.id = k.vacancy_id
+WHERE k.user_id = $1
+`
+
+func (q *Queries) ExportChatComplaints(ctx context.Context, userID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportChatComplaints, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
+const exportChatMessagesWritten = `-- name: ExportChatMessagesWritten :one
+SELECT COALESCE(jsonb_agg(e.doc ORDER BY e.created_at, e.chat_id, e.seq), '[]'::jsonb)::jsonb AS doc FROM (
+    SELECT m.chat_id, m.seq, m.created_at, jsonb_build_object(
+        'vacancy', jsonb_build_object('id', v.id, 'title', v.title, 'organization', o.name),
+        'text', m.body, 'sent_at', m.created_at, 'edited_at', m.edited_at, 'deleted_at', m.deleted_at) AS doc
+    FROM chat_messages m
+    JOIN chats c ON c.id = m.chat_id
+    JOIN vacancies v ON v.id = c.vacancy_id
+    JOIN organizations o ON o.id = c.org_id
+    WHERE m.author_user_id = $1 AND m.author_side = 'org'
+    ORDER BY m.created_at DESC, m.chat_id, m.seq LIMIT 20000
+) e
+`
+
+// Сообщения, которые человек написал как сотрудник организации: его слова, без имён собеседников. Не больше 20 000 последних.
+func (q *Queries) ExportChatMessagesWritten(ctx context.Context, userID *uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportChatMessagesWritten, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
+const exportChats = `-- name: ExportChats :one
+
+SELECT COALESCE(jsonb_agg(e.doc ORDER BY e.created_at, e.id), '[]'::jsonb)::jsonb AS doc FROM (
+    SELECT c.id, c.created_at, jsonb_build_object(
+        'id', c.id, 'created_at', c.created_at,
+        'vacancy', jsonb_build_object('id', v.id, 'title', v.title, 'organization', o.name),
+        'messages', (SELECT COALESCE(jsonb_agg(m.doc ORDER BY m.seq), '[]'::jsonb) FROM (
+            SELECT x.seq, jsonb_build_object(
+                'seq', x.seq, 'kind', x.kind,
+                'from', CASE WHEN x.kind = 'system' THEN NULL WHEN x.author_user_id = $1 THEN 'you' ELSE 'organization' END,
+                'text', x.body,
+                'event', CASE WHEN x.kind = 'system' THEN jsonb_build_object('type', x.event_type, 'data', x.event_data) END,
+                'sent_at', x.created_at, 'edited_at', x.edited_at, 'deleted_at', x.deleted_at) AS doc
+            FROM chat_messages x WHERE x.chat_id = c.id ORDER BY x.seq DESC LIMIT 5000) m)
+    ) AS doc
+    FROM chats c
+    JOIN vacancies v ON v.id = c.vacancy_id
+    JOIN organizations o ON o.id = c.org_id
+    WHERE c.user_id = $1
+    ORDER BY c.created_at DESC, c.id DESC LIMIT 2000
+) e
+`
+
+// ---- чат (срез 38, T-103) ----
+// Переписки человека как учёного: с сообщениями (до 5000 последних в каждой), строками о событиях и пометками удаления.
+// Организация называется, сотрудники нет: чужие имена в выгрузку не входят (D-082). Не больше 2000 последних переписок.
+func (q *Queries) ExportChats(ctx context.Context, userID *uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, exportChats, userID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
 const exportDeadlineReminders = `-- name: ExportDeadlineReminders :one
 SELECT COALESCE(jsonb_agg(to_jsonb(r) - 'user_id' ORDER BY r.sent_at, r.vacancy_id), '[]'::jsonb)::jsonb AS doc
 FROM deadline_reminders r WHERE r.user_id = $1

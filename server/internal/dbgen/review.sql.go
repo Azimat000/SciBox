@@ -65,9 +65,10 @@ func (q *Queries) AnswerInvitation(ctx context.Context, arg AnswerInvitationPara
 	return result.RowsAffected(), nil
 }
 
-const cancelOpenInterviews = `-- name: CancelOpenInterviews :exec
+const cancelOpenInterviews = `-- name: CancelOpenInterviews :many
 UPDATE application_invitations SET status = 'cancelled', updated_at = $1::timestamptz
 WHERE application_id = $2 AND kind = 'interview' AND status IN ('pending', 'proposed', 'confirmed')
+RETURNING id, kind
 `
 
 type CancelOpenInterviewsParams struct {
@@ -75,15 +76,36 @@ type CancelOpenInterviewsParams struct {
 	ApplicationID uuid.UUID
 }
 
-// Новое собеседование заменяет прежние открытые.
-func (q *Queries) CancelOpenInterviews(ctx context.Context, arg CancelOpenInterviewsParams) error {
-	_, err := q.db.Exec(ctx, cancelOpenInterviews, arg.Now, arg.ApplicationID)
-	return err
+type CancelOpenInterviewsRow struct {
+	ID   uuid.UUID
+	Kind string
 }
 
-const cancelOpenInvitations = `-- name: CancelOpenInvitations :exec
+// Новое собеседование заменяет прежние открытые.
+func (q *Queries) CancelOpenInterviews(ctx context.Context, arg CancelOpenInterviewsParams) ([]CancelOpenInterviewsRow, error) {
+	rows, err := q.db.Query(ctx, cancelOpenInterviews, arg.Now, arg.ApplicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CancelOpenInterviewsRow
+	for rows.Next() {
+		var i CancelOpenInterviewsRow
+		if err := rows.Scan(&i.ID, &i.Kind); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cancelOpenInvitations = `-- name: CancelOpenInvitations :many
 UPDATE application_invitations SET status = 'cancelled', updated_at = $1::timestamptz
 WHERE application_id = $2 AND status IN ('pending', 'proposed', 'confirmed')
+RETURNING id, kind
 `
 
 type CancelOpenInvitationsParams struct {
@@ -91,10 +113,31 @@ type CancelOpenInvitationsParams struct {
 	ApplicationID uuid.UUID
 }
 
+type CancelOpenInvitationsRow struct {
+	ID   uuid.UUID
+	Kind string
+}
+
 // Все открытые приглашения отклика закрываются (отказ, отзыв отклика).
-func (q *Queries) CancelOpenInvitations(ctx context.Context, arg CancelOpenInvitationsParams) error {
-	_, err := q.db.Exec(ctx, cancelOpenInvitations, arg.Now, arg.ApplicationID)
-	return err
+// Возвращает закрытые приглашения: о каждом переписка дописывает строку (срез 38).
+func (q *Queries) CancelOpenInvitations(ctx context.Context, arg CancelOpenInvitationsParams) ([]CancelOpenInvitationsRow, error) {
+	rows, err := q.db.Query(ctx, cancelOpenInvitations, arg.Now, arg.ApplicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CancelOpenInvitationsRow
+	for rows.Next() {
+		var i CancelOpenInvitationsRow
+		if err := rows.Scan(&i.ID, &i.Kind); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countCandidatesByStatus = `-- name: CountCandidatesByStatus :many

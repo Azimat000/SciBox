@@ -151,6 +151,18 @@ func sections() []section {
 		{"offers", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
 			return q.ExportOffers(ctx, u.ID)
 		}},
+		{"chats", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
+			return q.ExportChats(ctx, &u.ID)
+		}},
+		{"chat_messages_written_for_organizations", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
+			return q.ExportChatMessagesWritten(ctx, &u.ID)
+		}},
+		{"chat_blocked_organizations", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
+			return q.ExportChatBlocks(ctx, u.ID)
+		}},
+		{"chat_complaints", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
+			return q.ExportChatComplaints(ctx, u.ID)
+		}},
 		{"favorites", false, func(ctx context.Context, q *dbgen.Queries, u auth.User) ([]byte, error) {
 			return q.ExportFavorites(ctx, u.ID)
 		}},

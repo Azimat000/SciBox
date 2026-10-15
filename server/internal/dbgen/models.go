@@ -115,6 +115,23 @@ type Chat struct {
 	UpdatedAt        time.Time
 }
 
+type ChatBlock struct {
+	UserID    uuid.UUID
+	OrgID     uuid.UUID
+	CreatedAt time.Time
+}
+
+type ChatComplaint struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	ChatID    *uuid.UUID
+	OrgID     uuid.UUID
+	VacancyID *uuid.UUID
+	Reason    string
+	Note      string
+	CreatedAt time.Time
+}
+
 type ChatMessage struct {
 	ChatID       uuid.UUID
 	Seq          int32
@@ -136,6 +153,16 @@ type ChatParticipant struct {
 	UserID    uuid.UUID
 	ReadSeq   int32
 	Archived  bool
+	UpdatedAt time.Time
+}
+
+type ChatTemplate struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Title     string
+	Body      string
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
@@ -204,6 +231,7 @@ type NotificationSetting struct {
 	EmailNewVacancies bool
 	EmailDeadlines    bool
 	UpdatedAt         time.Time
+	EmailMessages     bool
 }
 
 type OrgInvitation struct {

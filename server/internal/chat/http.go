@@ -19,6 +19,8 @@ const (
 	CodeEditWindowClosed = "edit_window_closed"
 	CodeSystemMessage    = "system_message"
 	CodeNotAuthor        = "not_author"
+	CodeAlreadyBlocked   = "already_blocked"
+	CodeLimitReached     = "limit_reached"
 	messageNoSuchChat    = "Такой переписки нет"
 	messageNoSuchMessage = "Такого сообщения нет"
 	messageCheckFields   = "Проверьте поля"
@@ -26,6 +28,10 @@ const (
 	messageEditWindow    = "Сообщение можно исправить или удалить только в течение суток"
 	messageSystemMessage = "Это сообщение нельзя изменить"
 	messageNotAuthor     = "Изменить можно только своё сообщение"
+	messageForbidden     = "Недостаточно прав"
+	messageAlreadyBlock  = "Эта организация уже заблокирована"
+	messageTemplateLimit = "У организации уже 50 шаблонов"
+	messageNoTemplate    = "Такого шаблона нет"
 )
 
 // Handler — HTTP-часть чата.
@@ -54,6 +60,14 @@ func (h *Handler) Mount(r chi.Router) {
 	r.With(h.requireUser).Post("/chats/{id}/archive", h.archive)
 	r.With(h.requireUser).Post("/chats/{id}/unarchive", h.unarchive)
 	r.With(h.requireUser).Post("/chats/{id}/typing", h.typing)
+	r.With(h.requireUser).Post("/chats/{id}/block", h.block)
+	r.With(h.requireUser).Post("/chats/{id}/complaints", h.complain)
+	r.With(h.requireUser).Get("/chat-blocks", h.blocks)
+	r.With(h.requireUser).Delete("/chat-blocks/{orgId}", h.unblock)
+	r.With(h.requireUser).Get("/orgs/{orgId}/chat-templates", h.templates)
+	r.With(h.requireUser).Post("/orgs/{orgId}/chat-templates", h.createTemplate)
+	r.With(h.requireUser).Patch("/orgs/{orgId}/chat-templates/{id}", h.updateTemplate)
+	r.With(h.requireUser).Delete("/orgs/{orgId}/chat-templates/{id}", h.deleteTemplate)
 }
 
 func actor(r *http.Request) auth.User {
@@ -89,6 +103,14 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusConflict, CodeSystemMessage, messageSystemMessage)
 	case errors.Is(err, ErrNotAuthor):
 		apierr.WriteError(w, http.StatusForbidden, CodeNotAuthor, messageNotAuthor)
+	case errors.Is(err, ErrForbidden):
+		apierr.WriteError(w, http.StatusForbidden, apierr.CodeForbidden, messageForbidden)
+	case errors.Is(err, ErrAlreadyBlocked):
+		apierr.WriteError(w, http.StatusConflict, CodeAlreadyBlocked, messageAlreadyBlock)
+	case errors.Is(err, ErrTemplateLimit):
+		apierr.WriteError(w, http.StatusConflict, CodeLimitReached, messageTemplateLimit)
+	case errors.Is(err, ErrTemplateNotFound):
+		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, messageNoTemplate)
 	default:
 		apierr.WriteInternal(w, r, h.logger, "chat", err)
 	}

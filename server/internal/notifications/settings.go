@@ -17,24 +17,26 @@ type Settings struct {
 	EmailNewVacancies bool `json:"email_new_vacancies"`
 	// EmailDeadlines — напоминания о сроках подачи вакансий из избранного.
 	EmailDeadlines bool `json:"email_deadlines"`
+	// EmailMessages — письма о непрочитанных сообщениях в переписках (рассылку запускает срез 39, D-241).
+	EmailMessages bool `json:"email_messages"`
 }
 
 // Settings отдаёт настройки писем человека; пока он их не менял, включено всё.
 func (s *Service) Settings(ctx context.Context, user auth.User) (Settings, error) {
 	row, err := s.q.GetNotificationSettings(ctx, user.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Settings{EmailNewVacancies: true, EmailDeadlines: true}, nil
+		return Settings{EmailNewVacancies: true, EmailDeadlines: true, EmailMessages: true}, nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("notifications: load settings: %w", err)
 	}
-	return Settings{EmailNewVacancies: row.EmailNewVacancies, EmailDeadlines: row.EmailDeadlines}, nil
+	return Settings{EmailNewVacancies: row.EmailNewVacancies, EmailDeadlines: row.EmailDeadlines, EmailMessages: row.EmailMessages}, nil
 }
 
 // SaveSettings запоминает настройки целиком.
 func (s *Service) SaveSettings(ctx context.Context, user auth.User, in Settings) (Settings, error) {
 	err := s.q.UpsertNotificationSettings(ctx, dbgen.UpsertNotificationSettingsParams{
-		UserID: user.ID, EmailNewVacancies: in.EmailNewVacancies, EmailDeadlines: in.EmailDeadlines, Now: s.now(),
+		UserID: user.ID, EmailNewVacancies: in.EmailNewVacancies, EmailDeadlines: in.EmailDeadlines, EmailMessages: in.EmailMessages, Now: s.now(),
 	})
 	if err != nil {
 		return Settings{}, fmt.Errorf("notifications: save settings: %w", err)

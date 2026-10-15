@@ -75,6 +75,13 @@ var (
 		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 180, Per: time.Minute},
 	}
+	// chatComplaints — жалобы на организацию в переписке (срез 38): человеку хватит нескольких в час; предел не даёт
+	// засыпать модерацию (срез 30). Общий предел по человеку и организации ужесточит срез 40 (T-99).
+	chatComplaints = &httpguard.Policy{
+		Name:  "chat_complaint",
+		Guest: httpguard.Rate{Requests: 5, Per: time.Hour},
+		User:  httpguard.Rate{Requests: 10, Per: time.Hour},
+	}
 	// linkPages — страницы по одноразовым ссылкам из писем (рекомендатель, приглашение в организацию,
 	// смена почты): человеку хватит нескольких запросов, перебор ссылок должен упираться в предел.
 	linkPages = &httpguard.Policy{
@@ -126,6 +133,14 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: post, Pattern: "/api/chats/{id}/archive", Limit: chatSignals},
 		{Method: post, Pattern: "/api/chats/{id}/unarchive", Limit: chatSignals},
 		{Method: post, Pattern: "/api/chats/{id}/typing", Limit: chatSignals},
+		{Method: post, Pattern: "/api/chats/{id}/block", Limit: chatSignals},
+		{Method: post, Pattern: "/api/chats/{id}/complaints", Limit: chatComplaints},
+		{Method: get, Pattern: "/api/chat-blocks", Limit: chatReads},
+		{Method: del, Pattern: "/api/chat-blocks/{orgId}", Limit: chatSignals},
+		{Method: get, Pattern: "/api/orgs/{orgId}/chat-templates", Limit: chatReads},
+		{Method: post, Pattern: "/api/orgs/{orgId}/chat-templates", Limit: chatSignals},
+		{Method: patch, Pattern: "/api/orgs/{orgId}/chat-templates/{id}", Limit: chatSignals},
+		{Method: del, Pattern: "/api/orgs/{orgId}/chat-templates/{id}", Limit: chatSignals},
 
 		{Method: post, Pattern: "/api/recommendations/lookup", Limit: linkPages},
 		{Method: post, Pattern: "/api/recommendations/submit", Body: uploadBody, Slow: true, Limit: linkPages},

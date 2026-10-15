@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"scibox/server/internal/chat"
 	"scibox/server/internal/profiles"
 	"scibox/server/internal/references"
 )
@@ -74,6 +75,8 @@ var (
 	ErrBadInvitation = errors.New("applications: invalid invitation state")
 	// ErrTooManyInvitations — на отклик уже отправлено предельное число приглашений.
 	ErrTooManyInvitations = errors.New("applications: too many invitations")
+	// ErrBlocked — соискатель заблокировал организацию: новых приглашений он не получает (срез 38, D-237).
+	ErrBlocked = errors.New("applications: the person blocked the organization")
 )
 
 // VacancyRef — вакансия, на которую пришёл отклик.
@@ -111,6 +114,8 @@ type Summary struct {
 	References      RefsCount  `json:"references"`
 	// PendingInvitations — приглашения, которые ждут ответа соискателя.
 	PendingInvitations int `json:"pending_invitations"`
+	// Chat — переписка по отклику глазами смотрящего; null, если её нет (срез 38).
+	Chat *chat.Link `json:"chat"`
 }
 
 // List — страница откликов.
@@ -137,6 +142,8 @@ type Base struct {
 	// DecisionNote — записка организации к решению (принят, отказ); её видят обе стороны.
 	DecisionNote string       `json:"decision_note"`
 	Invitations  []Invitation `json:"invitations"`
+	// Chat — переписка по отклику глазами смотрящего; null, если её нет (срез 38).
+	Chat *chat.Link `json:"chat"`
 }
 
 // ViewerInfo — кто смотрит и что ему можно. Сайт показывает кнопки по этим полям, но проверяет всё сервер.
@@ -230,6 +237,8 @@ type Candidate struct {
 	// PendingInvitations ждут ответа соискателя, ProposedInvitations ждут решения организации.
 	PendingInvitations  int `json:"pending_invitations"`
 	ProposedInvitations int `json:"proposed_invitations"`
+	// Chat — переписка по отклику глазами организации; null, если её нет (срез 38).
+	Chat *chat.Link `json:"chat"`
 }
 
 // CandidateList — страница откликов организации и число откликов по каждому статусу (при выбранной вакансии — на неё).

@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"scibox/server/internal/chat"
 	"scibox/server/internal/privacy"
 )
 
@@ -48,6 +49,8 @@ var (
 	ErrStaffInvitee = errors.New("offers: the person runs this vacancy")
 	// ErrBadState — приглашение уже не ждёт ответа: ответили, отозвали.
 	ErrBadState = errors.New("offers: offer is not pending")
+	// ErrBlocked — учёный заблокировал организацию: звать его на вакансии она больше не вправе (срез 38, D-237).
+	ErrBlocked = errors.New("offers: the person blocked the organization")
 )
 
 // Пределы.
@@ -115,6 +118,8 @@ type Offer struct {
 	// CanAnswer — учёный ещё может ответить; CanCancel — организация ещё может отозвать приглашение.
 	CanAnswer bool `json:"can_answer"`
 	CanCancel bool `json:"can_cancel"`
+	// Chat — переписка по приглашению глазами смотрящего; null, если её нет (срез 38).
+	Chat *chat.Link `json:"chat"`
 }
 
 // MineList — «Приглашения» учёного: новые сверху; отозванные ему не показываются.

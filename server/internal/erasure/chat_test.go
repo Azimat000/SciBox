@@ -2,12 +2,10 @@ package erasure_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
 	"scibox/server/internal/chat"
-	"scibox/server/internal/dbgen"
 	"scibox/server/internal/testkit"
 )
 
@@ -18,17 +16,12 @@ func TestEraseHandlesChats(t *testing.T) {
 	svc := chat.NewService(testkit.Pool)
 	who := w.Applicant("Удаляемый Учёный")
 	other := w.Applicant("Другой Учёный")
-	q := dbgen.New(testkit.Pool)
-	now := time.Now().UTC()
-
 	open := func(p testkit.Person) uuid.UUID {
 		t.Helper()
+		// Настоящий отклик сам заводит переписку и пишет в неё строку «отклик отправлен» (срез 38).
 		app := w.apply(p, w.vac.ID)
-		id, err := chat.Open(bg, q, chat.OpenInput{VacancyID: w.vac.ID, UserID: p.ID, ApplicationID: &app.ID}, now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := chat.AppendSystem(bg, q, id, chat.EventApplicationSent, map[string]any{"application_id": app.ID}, now); err != nil {
+		var id uuid.UUID
+		if err := testkit.Pool.QueryRow(bg, `SELECT id FROM chats WHERE application_id = $1`, app.ID).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
 		return id
@@ -109,5 +102,60 @@ func TestEraseHandlesChats(t *testing.T) {
 	// Текст сообщений в базе не хранит ни имени, ни почты стёртого: тело писал сам человек, оно ушло вместе с перепиской.
 	if n := testkit.Count(t, `SELECT count(*) FROM chat_messages WHERE body LIKE '%Ответ учёного%'`); n != 0 {
 		t.Errorf("text of the erased scientist = %d", n)
+	}
+}
+
+// Блокировки и жалобы человека уходят с аккаунтом; автор шаблона очищается, сам шаблон остаётся организации (T-103).
+func TestEraseHandlesChatTools(t *testing.T) {
+	w := newWorld(t)
+	svc := chat.NewService(testkit.Pool)
+	who := w.Applicant("Жалобщик")
+	app := w.apply(who, w.vac.ID)
+	var c uuid.UUID
+	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM chats WHERE application_id = $1`, app.ID).Scan(&c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Complain(bg, who.User, c, chat.ComplaintInput{Reason: "spam", Note: "Пишут не по делу"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Block(bg, who.User, c); err != nil {
+		t.Fatal(err)
+	}
+	// Блокировка и жалоба другого человека не затрагиваются.
+	bystander := w.Applicant("Сторонний")
+	other := w.apply(bystander, w.vac.ID)
+	var oc uuid.UUID
+	if err := testkit.Pool.QueryRow(bg, `SELECT id FROM chats WHERE application_id = $1`, other.ID).Scan(&oc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Block(bg, bystander.User, oc); err != nil {
+		t.Fatal(err)
+	}
+	tpl, err := svc.CreateTemplate(bg, w.tm.HR.User, w.tm.OrgID, chat.TemplateInput{Title: "Шаблон кадровика", Text: "Добрый день!"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := erase(t, who.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM chat_blocks WHERE user_id = $1`, who.ID); n != 0 {
+		t.Errorf("blocks of the erased person = %d", n)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM chat_complaints WHERE user_id = $1`, who.ID); n != 0 {
+		t.Errorf("complaints of the erased person = %d", n)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM chat_blocks WHERE user_id = $1`, bystander.ID); n != 1 {
+		t.Errorf("block of another person = %d", n)
+	}
+	if err := erase(t, w.tm.HR.ID); err != nil {
+		t.Fatal(err)
+	}
+	var author *uuid.UUID
+	if err := testkit.Pool.QueryRow(bg, `SELECT created_by FROM chat_templates WHERE id = $1`, tpl.ID).Scan(&author); err != nil {
+		t.Fatalf("the template went with its author: %v", err)
+	}
+	if author != nil {
+		t.Errorf("author of the template = %v", author)
 	}
 }

@@ -193,7 +193,13 @@ func (s *Service) lockOnce(ctx context.Context, q *dbgen.Queries, chatID uuid.UU
 	if err != nil {
 		return State{}, nil, nil, fmt.Errorf("chat: lock chat: %w", err)
 	}
-	return StateOf(appStatus, offerStatus), lk.ApplicationID, lk.OfferID, nil
+	// Блокировка читается после замка отдельным запросом: блокировка организации берёт тот же замок и фиксируется до его
+	// снятия (T-105, T-106).
+	blocked, err := q.IsChatBlocked(ctx, chatID)
+	if err != nil {
+		return State{}, nil, nil, fmt.Errorf("chat: check block: %w", err)
+	}
+	return StateOf(appStatus, offerStatus, blocked), lk.ApplicationID, lk.OfferID, nil
 }
 
 func sameID(a, b *uuid.UUID) bool {

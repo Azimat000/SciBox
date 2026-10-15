@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/chat"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/files"
 	"scibox/server/internal/notifications"
@@ -65,6 +67,32 @@ func (s *Service) notifyStaff(ctx context.Context, q *dbgen.Queries, a dbgen.Get
 	return nil
 }
 
+// chatLine дописывает в переписку по отклику строку о событии (срез 38). Вызывается после того, как событие записано, в
+// той же транзакции: сначала отклик, потом переписка (D-230).
+func (s *Service) chatLine(ctx context.Context, q *dbgen.Queries, a dbgen.GetApplicationRow, event string, data any, at time.Time) error {
+	id := a.ID
+	_, err := chat.Record(ctx, q, chat.Entry{VacancyID: a.VacancyID, UserID: a.UserID, ApplicationID: &id, Type: event, Data: data, At: at})
+	return err
+}
+
+// cancelOpenInvitations закрывает открытые приглашения отклика (отказ, отзыв) и пишет о каждом строку в переписку.
+func (s *Service) cancelOpenInvitations(ctx context.Context, q *dbgen.Queries, a dbgen.GetApplicationRow, now time.Time) error {
+	closed, err := q.CancelOpenInvitations(ctx, dbgen.CancelOpenInvitationsParams{ApplicationID: a.ID, Now: now})
+	if err != nil {
+		return fmt.Errorf("applications: cancel invitations: %w", err)
+	}
+	return s.cancelLines(ctx, q, a, closed, now)
+}
+
+func (s *Service) cancelLines(ctx context.Context, q *dbgen.Queries, a dbgen.GetApplicationRow, closed []dbgen.CancelOpenInvitationsRow, now time.Time) error {
+	for _, c := range closed {
+		if err := s.chatLine(ctx, q, a, chat.EventInvitationCancelled, chat.InvitationCancelledData{ApplicationID: a.ID, InvitationID: c.ID, Kind: c.Kind}, now); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // record пишет в журнал действие сотрудника над откликом. Подпись объекта — название вакансии, имя соискателя берётся
 // из его аккаунта при показе (у стёртого аккаунта в журнале «Аккаунт удалён»).
 func record(ctx context.Context, q *dbgen.Queries, action audit.Action, a dbgen.GetApplicationRow, user auth.User, details map[string]string) error {
@@ -88,6 +116,9 @@ func (s *Service) markViewed(ctx context.Context, user auth.User, a *dbgen.GetAp
 		}
 		a.Status, a.StatusChangedAt = StatusViewed, now
 		if err := record(ctx, q, audit.ApplicationViewed, *a, user, nil); err != nil {
+			return err
+		}
+		if err := s.chatLine(ctx, q, *a, chat.EventApplicationViewed, chat.ApplicationData{ApplicationID: a.ID}, now); err != nil {
 			return err
 		}
 		return s.notifyApplicant(ctx, q, *a, "application_viewed", "Ваш отклик просмотрен",
@@ -130,9 +161,13 @@ func (s *Service) Decide(ctx context.Context, user auth.User, id uuid.UUID, to, 
 			return err
 		}
 		title, body := decisionNotice(a, to, note)
+		if err := s.chatLine(ctx, q, a, chat.EventApplicationDecided, chat.ApplicationDecidedData{ApplicationID: id, Decision: to, Note: note}, now); err != nil {
+			return err
+		}
+
 		if to == StatusRejected {
-			if err := q.CancelOpenInvitations(ctx, dbgen.CancelOpenInvitationsParams{ApplicationID: id, Now: now}); err != nil {
-				return fmt.Errorf("applications: cancel invitations: %w", err)
+			if err := s.cancelOpenInvitations(ctx, q, a, now); err != nil {
+				return err
 			}
 		}
 		return s.notifyApplicant(ctx, q, a, "application_"+to, title, body)
@@ -157,6 +192,12 @@ func (s *Service) Invite(ctx context.Context, user auth.User, id uuid.UUID, in I
 		if err != nil {
 			return err
 		}
+		// Учёный, заблокировавший организацию, приглашений от неё больше не получает (срез 38, D-237, T-105).
+		if blocked, err := chat.Blocked(ctx, q, a.UserID, a.OrgID); err != nil {
+			return err
+		} else if blocked {
+			return ErrBlocked
+		}
 		now := s.now()
 		v, errs := validateInvitation(in, now)
 		if len(errs) > 0 {
@@ -179,8 +220,17 @@ func (s *Service) Invite(ctx context.Context, user auth.User, id uuid.UUID, in I
 			return ErrTooManyInvitations
 		}
 		if v.Kind == InvInterview {
-			if err := q.CancelOpenInterviews(ctx, dbgen.CancelOpenInterviewsParams{ApplicationID: id, Now: now}); err != nil {
+			replaced, err := q.CancelOpenInterviews(ctx, dbgen.CancelOpenInterviewsParams{ApplicationID: id, Now: now})
+			if err != nil {
 				return fmt.Errorf("applications: replace interviews: %w", err)
+			}
+			// Заменённое собеседование в переписке закрывается строкой: иначе его карточка осталась бы с кнопками.
+			closed := make([]dbgen.CancelOpenInvitationsRow, 0, len(replaced))
+			for _, r := range replaced {
+				closed = append(closed, dbgen.CancelOpenInvitationsRow(r))
+			}
+			if err := s.cancelLines(ctx, q, a, closed, now); err != nil {
+				return err
 			}
 		}
 		invID, err := q.InsertInvitation(ctx, dbgen.InsertInvitationParams{
@@ -197,6 +247,15 @@ func (s *Service) Invite(ctx context.Context, user auth.User, id uuid.UUID, in I
 		out = invitationFrom(row, files.Staff)
 		if err := record(ctx, q, audit.ApplicationInvited, a, user, map[string]string{"kind": v.Kind}); err != nil {
 			return err
+		}
+		if err := s.chatLine(ctx, q, a, chat.EventInvitationCreated, chat.InvitationCreated(row), now); err != nil {
+			return err
+		}
+		// Блокировка могла появиться, пока шла проверка: после замка переписки читается заново (см. offers.Invite, T-105).
+		if blocked, err := chat.Blocked(ctx, q, a.UserID, a.OrgID); err != nil {
+			return err
+		} else if blocked {
+			return ErrBlocked
 		}
 		title, body := invitationNotice(a.VacancyTitle, a.OrgName, v)
 		return s.notifyApplicant(ctx, q, a, "invitation_"+v.Kind, title, body)
@@ -237,6 +296,9 @@ func (s *Service) CancelInvitation(ctx context.Context, user auth.User, appID, i
 		if err := record(ctx, q, audit.ApplicationInvitationCanceled, a, user, map[string]string{"kind": inv.Kind}); err != nil {
 			return err
 		}
+		if err := s.chatLine(ctx, q, a, chat.EventInvitationCancelled, chat.InvitationCancelledData{ApplicationID: appID, InvitationID: invID, Kind: inv.Kind}, s.now()); err != nil {
+			return err
+		}
 		return s.notifyApplicant(ctx, q, a, "invitation_cancelled", "Приглашение отменено",
 			lines(vacancyLine(a.VacancyTitle, a.OrgName), "Организация отменила приглашение: "+kindWord(inv.Kind)+"."))
 	})
@@ -264,6 +326,9 @@ func (s *Service) AcceptProposal(ctx context.Context, user auth.User, appID, inv
 			return ErrBadInvitation // предложенное время уже прошло или приглашение изменили
 		}
 		if err := record(ctx, q, audit.ApplicationProposalAccepted, a, user, map[string]string{"kind": inv.Kind}); err != nil {
+			return err
+		}
+		if err := s.chatLine(ctx, q, a, chat.EventInvitationAccepted, chat.InvitationAcceptedData{ApplicationID: appID, InvitationID: invID, StartsAt: inv.AnswerAt}, s.now()); err != nil {
 			return err
 		}
 		return s.notifyApplicant(ctx, q, a, "invitation_confirmed", "Время собеседования согласовано",
@@ -306,6 +371,13 @@ func (s *Service) Answer(ctx context.Context, user auth.User, appID, invID uuid.
 		}
 		if n == 0 {
 			return ErrBadInvitation
+		}
+		answered, err := loadInvitation(ctx, q, appID, invID)
+		if err != nil {
+			return err
+		}
+		if err := s.chatLine(ctx, q, a, chat.EventInvitationAnswered, chat.InvitationAnswered(answered, v.Status), now); err != nil {
+			return err
 		}
 		title, body := answerNotice(a.ApplicantName, a.VacancyTitle, inv, v)
 		return s.notifyStaff(ctx, q, a, "invitation_"+v.Status, title, body)
@@ -384,6 +456,14 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 		return CandidateList{}, fmt.Errorf("applications: list candidates: %w", err)
 	}
 	out := CandidateList{Items: make([]Candidate, 0, len(list)), Total: total, Counts: counts}
+	ids := make([]uuid.UUID, 0, len(list))
+	for _, r := range list {
+		ids = append(ids, r.ID)
+	}
+	links, err := chat.LinksOf(ctx, s.q, chat.SideOrg, user.ID, ids, nil)
+	if err != nil {
+		return CandidateList{}, err
+	}
 	for _, r := range list {
 		unit := ""
 		if r.UnitName != nil {
@@ -395,6 +475,7 @@ func (s *Service) Candidates(ctx context.Context, user auth.User, f CandidateFil
 			UnitName:           unit,
 			References:         RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)},
 			PendingInvitations: int(r.InvitesPending), ProposedInvitations: int(r.InvitesProposed),
+			Chat: links.Application(r.ID),
 		})
 	}
 	return out, nil

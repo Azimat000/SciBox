@@ -136,19 +136,20 @@ func (q *Queries) GetMatchProfile(ctx context.Context, userID uuid.UUID) (GetMat
 
 const getNotificationSettings = `-- name: GetNotificationSettings :one
 
-SELECT email_new_vacancies, email_deadlines FROM notification_settings WHERE user_id = $1
+SELECT email_new_vacancies, email_deadlines, email_messages FROM notification_settings WHERE user_id = $1
 `
 
 type GetNotificationSettingsRow struct {
 	EmailNewVacancies bool
 	EmailDeadlines    bool
+	EmailMessages     bool
 }
 
 // ---- настройки писем ----
 func (q *Queries) GetNotificationSettings(ctx context.Context, userID uuid.UUID) (GetNotificationSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getNotificationSettings, userID)
 	var i GetNotificationSettingsRow
-	err := row.Scan(&i.EmailNewVacancies, &i.EmailDeadlines)
+	err := row.Scan(&i.EmailNewVacancies, &i.EmailDeadlines, &i.EmailMessages)
 	return i, err
 }
 
@@ -836,16 +837,18 @@ func (q *Queries) UpdateSavedSearch(ctx context.Context, arg UpdateSavedSearchPa
 }
 
 const upsertNotificationSettings = `-- name: UpsertNotificationSettings :exec
-INSERT INTO notification_settings (user_id, email_new_vacancies, email_deadlines, updated_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO notification_settings (user_id, email_new_vacancies, email_deadlines, email_messages, updated_at)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (user_id) DO UPDATE SET
-    email_new_vacancies = EXCLUDED.email_new_vacancies, email_deadlines = EXCLUDED.email_deadlines, updated_at = EXCLUDED.updated_at
+    email_new_vacancies = EXCLUDED.email_new_vacancies, email_deadlines = EXCLUDED.email_deadlines,
+    email_messages = EXCLUDED.email_messages, updated_at = EXCLUDED.updated_at
 `
 
 type UpsertNotificationSettingsParams struct {
 	UserID            uuid.UUID
 	EmailNewVacancies bool
 	EmailDeadlines    bool
+	EmailMessages     bool
 	Now               time.Time
 }
 
@@ -854,6 +857,7 @@ func (q *Queries) UpsertNotificationSettings(ctx context.Context, arg UpsertNoti
 		arg.UserID,
 		arg.EmailNewVacancies,
 		arg.EmailDeadlines,
+		arg.EmailMessages,
 		arg.Now,
 	)
 	return err

@@ -1,0 +1,220 @@
+package chat
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
+	"scibox/server/internal/dbgen"
+)
+
+// Строки о событиях откликов и приглашений (срез 38, D-236). Отклики и приглашения вызывают Record в транзакции самого
+// события, после того как оно записано: откат события откатывает переписку и строку, повтор события строки не плодит
+// (повторов у событий нет: каждое проходит один раз, дважды оно упирается в состояние отклика).
+//
+// Данные строк показываются обеим сторонам и лежат в базе как есть. В них нет имени, почты и ничего, по чему узнают
+// анонимного учёного (T-97): только номера, виды, статусы и тексты, которые человек написал в самом событии (письмо к
+// отклику, записка к ответу, сообщение приглашения). Формы данных заданы типами ниже и сверяются с
+// contracts/chat/messages.json тестом `TestEventDataFollowsTheContract`.
+
+// Entry — событие, о котором переписка дописывает строку.
+type Entry struct {
+	// VacancyID и UserID — пара «вакансия × учёный», которой принадлежит переписка: нужны, если переписки ещё нет.
+	VacancyID uuid.UUID
+	UserID    uuid.UUID
+	// ApplicationID или OfferID — отклик или приглашение на вакансию, к которым относится событие.
+	ApplicationID *uuid.UUID
+	OfferID       *uuid.UUID
+	// Type — вид строки (Event…), Data — её данные (типы *Data ниже), At — время события.
+	Type string
+	Data any
+	At   time.Time
+}
+
+// Record пишет строку о событии в переписку пары «вакансия × учёный» и возвращает её номер в переписке. Если переписки ещё
+// нет (отклик, приглашение, прежние записи до переноса), она заводится здесь же.
+func Record(ctx context.Context, q *dbgen.Queries, e Entry) (int, error) {
+	id, err := locate(ctx, q, e)
+	if err != nil {
+		return 0, err
+	}
+	return AppendSystem(ctx, q, id, e.Type, e.Data, e.At)
+}
+
+// locate находит переписку по отклику или приглашению, а если её нет, заводит. Пара «учёный × вакансия» одна: приглашение
+// и отклик одного человека на одну вакансию живут в одной переписке.
+func locate(ctx context.Context, q *dbgen.Queries, e Entry) (uuid.UUID, error) {
+	var (
+		id  uuid.UUID
+		err error
+	)
+	switch {
+	case e.ApplicationID != nil:
+		id, err = q.FindChatByApplication(ctx, e.ApplicationID)
+	case e.OfferID != nil:
+		id, err = q.FindChatByOffer(ctx, e.OfferID)
+	default:
+		return uuid.Nil, errors.New("chat: event has neither application nor offer")
+	}
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("chat: find by link: %w", err)
+	}
+	return Open(ctx, q, OpenInput{VacancyID: e.VacancyID, UserID: e.UserID, ApplicationID: e.ApplicationID, OfferID: e.OfferID}, e.At)
+}
+
+// ---- данные строк ----
+
+// ApplicationSentData — отклик отправлен (application.sent).
+type ApplicationSentData struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+	CoverLetter   string    `json:"cover_letter"`
+}
+
+// ApplicationData — события, у которых из данных только отклик: просмотрен (пустые данные), отозван.
+type ApplicationData struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+}
+
+// ApplicationDecidedData — решение организации (application.decided).
+type ApplicationDecidedData struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+	Decision      string    `json:"decision"`
+	Note          string    `json:"note"`
+}
+
+// InvitationAnswerSnapshot — ответ учёного в снимке приглашения.
+type InvitationAnswerSnapshot struct {
+	ProposedAt *time.Time `json:"proposed_at"`
+	Note       string     `json:"note"`
+	Contact    string     `json:"contact"`
+	Time       string     `json:"time"`
+	AnsweredAt time.Time  `json:"answered_at"`
+}
+
+// InvitationSnapshot — приглашение так, как оно было создано. Состояние потом меняют следующие строки, а права
+// (can_*) сайт считает сам по стороне и состоянию, поэтому здесь они всегда ложны (D-223).
+type InvitationSnapshot struct {
+	ID                uuid.UUID                 `json:"id"`
+	Kind              string                    `json:"kind"`
+	Status            string                    `json:"status"`
+	Message           string                    `json:"message"`
+	StartsAt          *time.Time                `json:"starts_at"`
+	PlaceKind         string                    `json:"place_kind"`
+	Place             string                    `json:"place"`
+	ContactName       string                    `json:"contact_name"`
+	ContactEmail      string                    `json:"contact_email"`
+	ContactPhone      string                    `json:"contact_phone"`
+	Answer            *InvitationAnswerSnapshot `json:"answer"`
+	CreatedAt         time.Time                 `json:"created_at"`
+	CanAnswer         bool                      `json:"can_answer"`
+	CanCancel         bool                      `json:"can_cancel"`
+	CanAcceptProposal bool                      `json:"can_accept_proposal"`
+}
+
+// InvitationCreatedData — приглашение отклика создано (invitation.created).
+type InvitationCreatedData struct {
+	ApplicationID uuid.UUID          `json:"application_id"`
+	Invitation    InvitationSnapshot `json:"invitation"`
+}
+
+// InvitationAnsweredData — ответ учёного (invitation.answered); Answer — confirmed, proposed или answered.
+type InvitationAnsweredData struct {
+	ApplicationID uuid.UUID  `json:"application_id"`
+	InvitationID  uuid.UUID  `json:"invitation_id"`
+	Kind          string     `json:"kind"`
+	Answer        string     `json:"answer"`
+	ProposedAt    *time.Time `json:"proposed_at"`
+	Note          string     `json:"note"`
+	Contact       string     `json:"contact"`
+	Time          string     `json:"time"`
+}
+
+// InvitationAcceptedData — организация приняла предложенное время (invitation.proposal_accepted).
+type InvitationAcceptedData struct {
+	ApplicationID uuid.UUID  `json:"application_id"`
+	InvitationID  uuid.UUID  `json:"invitation_id"`
+	StartsAt      *time.Time `json:"starts_at"`
+}
+
+// InvitationCancelledData — приглашение отменено, заменено новым или закрыто решением (invitation.cancelled).
+type InvitationCancelledData struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+	InvitationID  uuid.UUID `json:"invitation_id"`
+	Kind          string    `json:"kind"`
+}
+
+// OfferCreatedData — приглашение на вакансию (offer.created). Status при создании всегда pending, дальше его меняют
+// следующие строки.
+type OfferCreatedData struct {
+	OfferID   uuid.UUID `json:"offer_id"`
+	Message   string    `json:"message"`
+	Status    string    `json:"status"`
+	CanAnswer bool      `json:"can_answer"`
+}
+
+// OfferAnsweredData — ответ учёного: interested или declined (offer.answered).
+type OfferAnsweredData struct {
+	OfferID uuid.UUID `json:"offer_id"`
+	Answer  string    `json:"answer"`
+	Note    string    `json:"note"`
+}
+
+// OfferData — события, у которых из данных только приглашение: отозвано (offer.cancelled).
+type OfferData struct {
+	OfferID uuid.UUID `json:"offer_id"`
+}
+
+// Состояния приглашения отклика, которые знает пакет: ровно те, что лежат в базе.
+const (
+	invitationPending   = "pending"
+	invitationConfirmed = "confirmed"
+	invitationProposed  = "proposed"
+	invitationAnswered  = "answered"
+	invitationShared    = "shared"
+)
+
+// InvitationCreated собирает данные строки «приглашение создано» по строке таблицы application_invitations так, как
+// оно выглядело в момент создания (состояние начальное, ответа нет).
+func InvitationCreated(inv dbgen.ApplicationInvitation) InvitationCreatedData {
+	status := invitationPending
+	if inv.Kind == "contacts" {
+		status = invitationShared
+	}
+	return InvitationCreatedData{
+		ApplicationID: inv.ApplicationID,
+		Invitation: InvitationSnapshot{
+			ID: inv.ID, Kind: inv.Kind, Status: status, Message: inv.Message, StartsAt: inv.StartsAt,
+			PlaceKind: deref(inv.PlaceKind), Place: inv.Place,
+			ContactName: inv.ContactName, ContactEmail: inv.ContactEmail, ContactPhone: inv.ContactPhone,
+			CreatedAt: inv.CreatedAt.UTC(),
+		},
+	}
+}
+
+// InvitationAnswered собирает данные ответа по строке приглашения, в которую ответ уже записан; answer — к какому
+// состоянию ответ привёл (confirmed, proposed, answered).
+func InvitationAnswered(inv dbgen.ApplicationInvitation, answer string) InvitationAnsweredData {
+	return InvitationAnsweredData{
+		ApplicationID: inv.ApplicationID, InvitationID: inv.ID, Kind: inv.Kind, Answer: answer,
+		ProposedAt: inv.AnswerAt, Note: inv.AnswerNote, Contact: inv.AnswerContact, Time: inv.AnswerTime,
+	}
+}
+
+// answerOf выводит вид ответа по строке приглашения, когда он неизвестен (перенос прежних записей): время даёт
+// «предложил», контакты «оставил контакты», иначе «подтвердил».
+func answerOf(inv dbgen.ApplicationInvitation) string {
+	switch {
+	case inv.AnswerAt != nil:
+		return invitationProposed
+	case inv.AnswerContact != "" || inv.AnswerTime != "" || inv.Kind == "request_contacts":
+		return invitationAnswered
+	}
+	return invitationConfirmed
+}

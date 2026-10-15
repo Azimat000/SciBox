@@ -145,3 +145,56 @@ ORDER BY a.created_at, a.id, f.position, f.id;
 SELECT f.storage_key FROM application_files f JOIN applications a ON a.id = f.application_id
 WHERE f.id = sqlc.arg(id) AND a.user_id = sqlc.arg(user_id) AND f.kind IN ('cv', 'attachment')
   AND f.scan_status = 'clean' AND f.storage_key IS NOT NULL;
+
+-- ---- чат (срез 38, T-103) ----
+
+-- Переписки человека как учёного: с сообщениями (до 5000 последних в каждой), строками о событиях и пометками удаления.
+-- Организация называется, сотрудники нет: чужие имена в выгрузку не входят (D-082). Не больше 2000 последних переписок.
+-- name: ExportChats :one
+SELECT COALESCE(jsonb_agg(e.doc ORDER BY e.created_at, e.id), '[]'::jsonb)::jsonb AS doc FROM (
+    SELECT c.id, c.created_at, jsonb_build_object(
+        'id', c.id, 'created_at', c.created_at,
+        'vacancy', jsonb_build_object('id', v.id, 'title', v.title, 'organization', o.name),
+        'messages', (SELECT COALESCE(jsonb_agg(m.doc ORDER BY m.seq), '[]'::jsonb) FROM (
+            SELECT x.seq, jsonb_build_object(
+                'seq', x.seq, 'kind', x.kind,
+                'from', CASE WHEN x.kind = 'system' THEN NULL WHEN x.author_user_id = sqlc.arg(user_id) THEN 'you' ELSE 'organization' END,
+                'text', x.body,
+                'event', CASE WHEN x.kind = 'system' THEN jsonb_build_object('type', x.event_type, 'data', x.event_data) END,
+                'sent_at', x.created_at, 'edited_at', x.edited_at, 'deleted_at', x.deleted_at) AS doc
+            FROM chat_messages x WHERE x.chat_id = c.id ORDER BY x.seq DESC LIMIT 5000) m)
+    ) AS doc
+    FROM chats c
+    JOIN vacancies v ON v.id = c.vacancy_id
+    JOIN organizations o ON o.id = c.org_id
+    WHERE c.user_id = sqlc.arg(user_id)
+    ORDER BY c.created_at DESC, c.id DESC LIMIT 2000
+) e;
+
+-- Сообщения, которые человек написал как сотрудник организации: его слова, без имён собеседников. Не больше 20 000 последних.
+-- name: ExportChatMessagesWritten :one
+SELECT COALESCE(jsonb_agg(e.doc ORDER BY e.created_at, e.chat_id, e.seq), '[]'::jsonb)::jsonb AS doc FROM (
+    SELECT m.chat_id, m.seq, m.created_at, jsonb_build_object(
+        'vacancy', jsonb_build_object('id', v.id, 'title', v.title, 'organization', o.name),
+        'text', m.body, 'sent_at', m.created_at, 'edited_at', m.edited_at, 'deleted_at', m.deleted_at) AS doc
+    FROM chat_messages m
+    JOIN chats c ON c.id = m.chat_id
+    JOIN vacancies v ON v.id = c.vacancy_id
+    JOIN organizations o ON o.id = c.org_id
+    WHERE m.author_user_id = sqlc.arg(user_id) AND m.author_side = 'org'
+    ORDER BY m.created_at DESC, m.chat_id, m.seq LIMIT 20000
+) e;
+
+-- name: ExportChatBlocks :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('organization', jsonb_build_object('slug', o.slug, 'name', o.name), 'blocked_at', b.created_at)
+    ORDER BY b.created_at, o.id), '[]'::jsonb)::jsonb AS doc
+FROM chat_blocks b JOIN organizations o ON o.id = b.org_id
+WHERE b.user_id = sqlc.arg(user_id);
+
+-- name: ExportChatComplaints :one
+SELECT COALESCE(jsonb_agg(jsonb_build_object('id', k.id, 'organization', o.name, 'vacancy', v.title, 'reason', k.reason,
+    'note', k.note, 'created_at', k.created_at) ORDER BY k.created_at, k.id), '[]'::jsonb)::jsonb AS doc
+FROM chat_complaints k
+JOIN organizations o ON o.id = k.org_id
+LEFT JOIN vacancies v ON v.id = k.vacancy_id
+WHERE k.user_id = sqlc.arg(user_id);

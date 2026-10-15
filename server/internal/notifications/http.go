@@ -115,6 +115,8 @@ func (h *Handler) saveSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		EmailNewVacancies *bool `json:"email_new_vacancies"`
 		EmailDeadlines    *bool `json:"email_deadlines"`
+		// EmailMessages необязателен: сайт, который о нём не знает, его не присылает, и прежнее значение остаётся.
+		EmailMessages *bool `json:"email_messages"`
 	}
 	if !apierr.DecodeJSON(w, r, &in, maxBody) {
 		return
@@ -130,7 +132,18 @@ func (h *Handler) saveSettings(w http.ResponseWriter, r *http.Request) {
 		apierr.WriteFieldErrors(w, "Проверьте настройки", fields)
 		return
 	}
-	out, err := h.svc.SaveSettings(r.Context(), actor(r), Settings{EmailNewVacancies: *in.EmailNewVacancies, EmailDeadlines: *in.EmailDeadlines})
+	next := Settings{EmailNewVacancies: *in.EmailNewVacancies, EmailDeadlines: *in.EmailDeadlines}
+	if in.EmailMessages != nil {
+		next.EmailMessages = *in.EmailMessages
+	} else {
+		cur, err := h.svc.Settings(r.Context(), actor(r))
+		if err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		next.EmailMessages = cur.EmailMessages
+	}
+	out, err := h.svc.SaveSettings(r.Context(), actor(r), next)
 	if err != nil {
 		h.fail(w, r, err)
 		return

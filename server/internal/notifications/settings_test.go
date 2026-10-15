@@ -61,14 +61,14 @@ func TestEmitHonoursEmailSettings(t *testing.T) {
 		kind     string
 		mail     bool
 	}{
-		{"всё включено: о новых вакансиях", Settings{true, true}, KindSavedSearch, true},
-		{"всё включено: о сроках", Settings{true, true}, KindDeadlineReminder, true},
-		{"выключены новые вакансии: письма нет", Settings{false, true}, KindSavedSearch, false},
-		{"выключены новые вакансии: о сроках идёт", Settings{false, true}, KindDeadlineReminder, true},
-		{"выключены сроки: письма нет", Settings{true, false}, KindDeadlineReminder, false},
-		{"выключены сроки: о новых вакансиях идёт", Settings{true, false}, KindSavedSearch, true},
-		{"всё выключено: отклик всё равно приходит письмом", Settings{false, false}, "application_received", true},
-		{"всё выключено: приглашение тоже", Settings{false, false}, "offer_received", true},
+		{"всё включено: о новых вакансиях", Settings{true, true, true}, KindSavedSearch, true},
+		{"всё включено: о сроках", Settings{true, true, true}, KindDeadlineReminder, true},
+		{"выключены новые вакансии: письма нет", Settings{false, true, true}, KindSavedSearch, false},
+		{"выключены новые вакансии: о сроках идёт", Settings{false, true, true}, KindDeadlineReminder, true},
+		{"выключены сроки: письма нет", Settings{true, false, true}, KindDeadlineReminder, false},
+		{"выключены сроки: о новых вакансиях идёт", Settings{true, false, true}, KindSavedSearch, true},
+		{"всё выключено: отклик всё равно приходит письмом", Settings{false, false, true}, "application_received", true},
+		{"всё выключено: приглашение тоже", Settings{false, false, true}, "offer_received", true},
 	} {
 		p := w.User("Получатель")
 		if _, err := s.SaveSettings(bg, p.User, c.settings); err != nil {
@@ -97,6 +97,9 @@ func TestHTTPSettings(t *testing.T) {
 	if j := r.JSON(t); r.Code != 200 || j["email_new_vacancies"] != true || j["email_deadlines"] != true {
 		t.Errorf("по умолчанию: %d %s", r.Code, r.Raw)
 	}
+	if j := r.JSON(t); j["email_messages"] != true {
+		t.Errorf("по умолчанию письма о сообщениях включены: %v", j["email_messages"])
+	}
 	r = a.Do(&me, "PUT", "/api/notification-settings", map[string]any{"email_new_vacancies": false, "email_deadlines": true})
 	if j := r.JSON(t); r.Code != 200 || j["email_new_vacancies"] != false || j["email_deadlines"] != true {
 		t.Errorf("сохранение: %d %s", r.Code, r.Raw)
@@ -104,6 +107,19 @@ func TestHTTPSettings(t *testing.T) {
 	r = a.Do(&me, "GET", "/api/notification-settings", nil)
 	if j := r.JSON(t); j["email_new_vacancies"] != false {
 		t.Errorf("прочитано обратно: %s", r.Raw)
+	}
+	// Письма о сообщениях (срез 38): выключаются отдельно; сохранение без этого поля прежнее значение не трогает.
+	r = a.Do(&me, "PUT", "/api/notification-settings", map[string]any{"email_new_vacancies": true, "email_deadlines": true, "email_messages": false})
+	if j := r.JSON(t); r.Code != 200 || j["email_messages"] != false {
+		t.Errorf("выключение писем о сообщениях: %d %s", r.Code, r.Raw)
+	}
+	r = a.Do(&me, "PUT", "/api/notification-settings", map[string]any{"email_new_vacancies": false, "email_deadlines": true})
+	if j := r.JSON(t); r.Code != 200 || j["email_messages"] != false || j["email_new_vacancies"] != false {
+		t.Errorf("сохранение без поля о сообщениях: %d %s", r.Code, r.Raw)
+	}
+	r = a.Do(&me, "PUT", "/api/notification-settings", map[string]any{"email_new_vacancies": false, "email_deadlines": true, "email_messages": "да"})
+	if r.Code != http.StatusBadRequest && r.Code != http.StatusUnprocessableEntity {
+		t.Errorf("не логическое значение: %d", r.Code)
 	}
 	for name, body := range map[string]any{
 		"пусто": map[string]any{}, "одно поле": map[string]any{"email_deadlines": true}, "другое поле": map[string]any{"email_new_vacancies": true},

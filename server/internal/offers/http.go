@@ -25,6 +25,7 @@ const (
 	CodeAlreadyApplied = "already_applied"
 	CodeStaffInvitee   = "invitee_is_staff"
 	CodeInvalidState   = "invalid_offer_state"
+	CodeBlocked        = "blocked_by_person"
 )
 
 // Handler — HTTP-часть приглашений.
@@ -80,6 +81,8 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusConflict, CodeVacancyClosed, "Вакансия не опубликована или закрыта: приглашать на неё нельзя")
 	case errors.Is(err, ErrDeadlinePassed):
 		apierr.WriteError(w, http.StatusConflict, CodeDeadlinePassed, "Срок подачи заявок прошёл: приглашать на вакансию уже поздно")
+	case errors.Is(err, ErrBlocked):
+		apierr.WriteError(w, http.StatusConflict, CodeBlocked, "Этот человек заблокировал вашу организацию, поэтому пригласить его нельзя")
 	case errors.Is(err, ErrAlreadyOffered):
 		apierr.WriteError(w, http.StatusConflict, CodeAlreadyOffered, "Этого человека уже приглашали на эту вакансию")
 	case errors.Is(err, ErrAlreadyApplied):

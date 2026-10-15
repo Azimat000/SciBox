@@ -17,6 +17,7 @@ import (
 	"scibox/server/internal/access"
 	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/chat"
 	"scibox/server/internal/dbgen"
 	"scibox/server/internal/notifications"
 	"scibox/server/internal/num"
@@ -193,6 +194,12 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 		if invitee.Can(access.ViewApplications, unitOf(v.UnitID)) {
 			return ErrStaffInvitee
 		}
+		// Учёный, заблокировавший организацию, приглашений от неё больше не получает (срез 38, D-237, T-105).
+		if blocked, err := chat.Blocked(ctx, q, p.UserID, v.OrgID); err != nil {
+			return err
+		} else if blocked {
+			return ErrBlocked
+		}
 		if v.Status != "published" {
 			return ErrVacancyClosed
 		}
@@ -207,13 +214,29 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 		if err := s.spend(ctx, q, user.ID); err != nil {
 			return err
 		}
-		id, err := q.InsertOffer(ctx, dbgen.InsertOfferParams{VacancyID: v.ID, UserID: p.UserID, InvitedBy: &user.ID, Message: message, Now: s.now()})
+		now := s.now()
+		id, err := q.InsertOffer(ctx, dbgen.InsertOfferParams{VacancyID: v.ID, UserID: p.UserID, InvitedBy: &user.ID, Message: message, Now: now})
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
 			return ErrAlreadyOffered
 		}
 		if err != nil {
 			return fmt.Errorf("offers: insert offer: %w", err)
+		}
+		// Строка в переписке пишется в той же транзакции, что и приглашение (срез 38).
+		if _, err := chat.Record(ctx, q, chat.Entry{
+			VacancyID: v.ID, UserID: p.UserID, OfferID: &id, Type: chat.EventOfferCreated, At: now,
+			Data: chat.OfferCreatedData{OfferID: id, Message: message, Status: StatusPending},
+		}); err != nil {
+			return err
+		}
+		// Блокировка могла появиться, пока шла проверка: после замка переписки читается заново. Блокировка берёт тот же
+		// замок, поэтому либо она уже видна здесь (приглашение откатывается), либо строка блокировки встанет после
+		// приглашения (T-105).
+		if blocked, err := chat.Blocked(ctx, q, p.UserID, v.OrgID); err != nil {
+			return err
+		} else if blocked {
+			return ErrBlocked
 		}
 		title, body := receivedNotice(v.Title, v.OrgName, message)
 		if err := s.notes.Emit(ctx, q, notifications.Notice{UserID: p.UserID, Kind: "offer_received", Title: title, Body: body, Link: "/offers/" + id.String()}); err != nil {
@@ -224,6 +247,11 @@ func (s *Service) Invite(ctx context.Context, user auth.User, in InviteInput) (O
 			return fmt.Errorf("offers: load offer: %w", err)
 		}
 		out = offerFromRow(row, true)
+		links, err := chat.LinksOf(ctx, q, chat.SideOrg, user.ID, nil, []uuid.UUID{id})
+		if err != nil {
+			return err
+		}
+		out.Chat = links.Offer(id)
 		return audit.Record(ctx, q, audit.Event{
 			Action: audit.OfferSent, OrgID: v.OrgID, Actor: user.ID, Subject: p.UserID,
 			TargetKind: "offer", TargetID: id, TargetLabel: v.Title,
@@ -277,12 +305,19 @@ func (s *Service) Cancel(ctx context.Context, user auth.User, id uuid.UUID) erro
 		if err != nil {
 			return err
 		}
-		n, err := q.CancelOffer(ctx, dbgen.CancelOfferParams{ID: id, Now: s.now()})
+		now := s.now()
+		n, err := q.CancelOffer(ctx, dbgen.CancelOfferParams{ID: id, Now: now})
 		if err != nil {
 			return fmt.Errorf("offers: cancel offer: %w", err)
 		}
 		if n == 0 {
 			return ErrBadState
+		}
+		if _, err := chat.Record(ctx, q, chat.Entry{
+			VacancyID: o.VacancyID, UserID: o.UserID, OfferID: &id, Type: chat.EventOfferCancelled, At: now,
+			Data: chat.OfferData{OfferID: id},
+		}); err != nil {
+			return err
 		}
 		if err := audit.Record(ctx, q, audit.Event{
 			Action: audit.OfferCanceled, OrgID: o.OrgID, Actor: user.ID, Subject: o.UserID,
@@ -313,12 +348,19 @@ func (s *Service) Answer(ctx context.Context, user auth.User, id uuid.UUID, in A
 		case noteErr != "":
 			return &auth.ValidationError{Fields: map[string]string{"note": noteErr}}
 		}
-		n, err := q.AnswerOffer(ctx, dbgen.AnswerOfferParams{ID: id, UserID: user.ID, Status: in.Action, Note: note, Now: s.now()})
+		now := s.now()
+		n, err := q.AnswerOffer(ctx, dbgen.AnswerOfferParams{ID: id, UserID: user.ID, Status: in.Action, Note: note, Now: now})
 		if err != nil {
 			return fmt.Errorf("offers: answer offer: %w", err)
 		}
 		if n == 0 {
 			return ErrBadState
+		}
+		if _, err := chat.Record(ctx, q, chat.Entry{
+			VacancyID: o.VacancyID, UserID: o.UserID, OfferID: &id, Type: chat.EventOfferAnswered, At: now,
+			Data: chat.OfferAnsweredData{OfferID: id, Answer: in.Action, Note: note},
+		}); err != nil {
+			return err
 		}
 		staff, err := orgs.UsersWhoCan(ctx, q, o.OrgID, access.ManageVacancies, unitOf(o.UnitID))
 		if err != nil {
@@ -353,7 +395,13 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Offer,
 	if err != nil {
 		return Offer{}, fmt.Errorf("offers: load offer: %w", err)
 	}
-	return offerFromRow(o, false), nil
+	out := offerFromRow(o, false)
+	links, err := chat.LinksOf(ctx, s.q, chat.SideScientist, user.ID, nil, []uuid.UUID{id})
+	if err != nil {
+		return Offer{}, err
+	}
+	out.Chat = links.Offer(id)
+	return out, nil
 }
 
 func offerFromRow(o dbgen.GetOfferRow, forStaff bool) Offer {
@@ -412,12 +460,20 @@ func (s *Service) Mine(ctx context.Context, user auth.User, status string, limit
 		return MineList{}, fmt.Errorf("offers: list offers: %w", err)
 	}
 	out := MineList{Items: make([]Offer, 0, len(list)), Total: total, Counts: counts, Pending: counts[StatusPending]}
+	ids := make([]uuid.UUID, 0, len(list))
+	for _, r := range list {
+		ids = append(ids, r.ID)
+	}
+	links, err := chat.LinksOf(ctx, s.q, chat.SideScientist, user.ID, nil, ids)
+	if err != nil {
+		return MineList{}, err
+	}
 	for _, r := range list {
 		out.Items = append(out.Items, Offer{
 			ID: r.ID, Status: r.Status, Message: r.Message, AnswerNote: r.AnswerNote, AnsweredAt: r.AnsweredAt, CreatedAt: r.CreatedAt,
 			Vacancy: VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug,
 				City: r.VacancyCity, Deadline: dateStr(r.Deadline)},
-			ApplicationID: r.ApplicationID, CanAnswer: r.Status == StatusPending,
+			ApplicationID: r.ApplicationID, CanAnswer: r.Status == StatusPending, Chat: links.Offer(r.ID),
 		})
 	}
 	return out, nil
@@ -457,11 +513,20 @@ func (s *Service) Sent(ctx context.Context, user auth.User, f SentFilter) (SentL
 		return SentList{}, fmt.Errorf("offers: list sent offers: %w", err)
 	}
 	out := SentList{Items: make([]Offer, 0, len(list)), Total: total, Counts: counts}
+	ids := make([]uuid.UUID, 0, len(list))
+	for _, r := range list {
+		ids = append(ids, r.ID)
+	}
+	links, err := chat.LinksOf(ctx, s.q, chat.SideOrg, user.ID, nil, ids)
+	if err != nil {
+		return SentList{}, err
+	}
 	for _, r := range list {
 		out.Items = append(out.Items, Offer{
 			ID: r.ID, Status: r.Status, Message: r.Message, AnswerNote: r.AnswerNote, AnsweredAt: r.AnsweredAt, CreatedAt: r.CreatedAt,
 			Vacancy:   VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug, UnitName: deref(r.UnitName)},
 			Scientist: scientistRef(r.ProfileID, r.ScientistName, r.Concealed, r.Revealed), CanCancel: r.Status == StatusPending,
+			Chat: links.Offer(r.ID),
 		})
 	}
 	return out, nil
