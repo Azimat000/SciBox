@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { apiGet, apiSend } from '../../api/client'
+import { ApiError, apiGet, apiSend } from '../../api/client'
 import { useMe } from '../auth/api'
 
 // Типы ответов API чата. Точные примеры: contracts/chat/*.json (срез 34, D-215); правила: docs/CHAT.md.
@@ -116,6 +116,8 @@ export const keys = {
   list: (userId: string | null | undefined, q: ChatQuery) => ['chats', 'list', who(userId), q.side, q.box, q.q, q.vacancy] as const,
   vacancies: (userId: string | null | undefined) => ['chats', 'vacancies', who(userId)] as const,
   one: (userId: string | null | undefined, id: string) => ['chats', 'one', who(userId), id] as const,
+  templates: (userId: string | null | undefined, orgId: string) => ['chats', 'templates', who(userId), orgId] as const,
+  blocks: (userId: string | null | undefined) => ['chats', 'blocks', who(userId)] as const,
 }
 
 export function listPath(q: ChatQuery, cursor: string | null) {
@@ -222,3 +224,42 @@ export type ChatStreamEvent =
   | { type: 'unread.count'; total: number; scientist: number; org: number }
   // Служебное: поток переподключился, пропущенное надо дочитать (не приходит с сервера).
   | { type: 'reconnected' }
+
+// ---- архив, блокировка, жалоба (срез 36, contracts/chat/archive|block|unblock|blocks-list|complaint.json) ----
+
+export function setArchived(id: string, archived: boolean) {
+  return apiSend('POST', `/api/chats/${encodeURIComponent(id)}/${archived ? 'archive' : 'unarchive'}`)
+}
+
+export type ChatBlock = { org_id: string; org_name: string; org_slug: string; created_at: string }
+
+export async function blockOrganization(chatId: string): Promise<ChatBlock> {
+  const res = await apiSend<{ block: ChatBlock }>('POST', `/api/chats/${encodeURIComponent(chatId)}/block`)
+  return res.block
+}
+
+export function unblockOrganization(orgId: string) {
+  return apiSend('DELETE', `/api/chat-blocks/${encodeURIComponent(orgId)}`)
+}
+
+export const complaintReasons = ['spam', 'fraud', 'abuse', 'other'] as const
+export type ComplaintReason = (typeof complaintReasons)[number]
+export const MAX_COMPLAINT_NOTE = 2000
+
+export function sendComplaint(chatId: string, reason: ComplaintReason, note: string) {
+  return apiSend<{ complaint: { id: string; created_at: string } }>('POST', `/api/chats/${encodeURIComponent(chatId)}/complaints`, { reason, note })
+}
+
+/** Заблокированные организации. Пока сервера чата нет (404), раздела в настройках нет: список считается недоступным, а не пустым. */
+export function useChatBlocks() {
+  const { user } = useMe()
+  return useQuery({
+    queryKey: keys.blocks(user?.id),
+    queryFn: async ({ signal }) => (await apiGet<{ items: ChatBlock[] }>('/api/chat-blocks', { signal })).items,
+    enabled: user !== undefined && user !== null,
+    retry: false,
+  })
+}
+
+/** Сервер ответил «такого адреса или переписки нет»: у открытого окна это значит, что доступ пропал. */
+export const isGone = (err: unknown) => err instanceof ApiError && (err.status === 404 || err.status === 403)

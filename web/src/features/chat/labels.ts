@@ -26,7 +26,13 @@ export function statusText(s: ChatStatus): string {
  */
 export function previewText(m: LastMessage | null, mySide: string): string {
   if (!m) return t.chat.previewEmpty
-  if (m.kind === 'system') return (t.chat.events as Record<string, string>)[m.event_type ?? ''] ?? t.chat.eventFallback
+  if (m.kind === 'system') {
+    // Блокировку глазами того, кто смотрит: соискателю «Вы заблокировали…», организации «Соискатель ограничил…»
+    const own = mySide === 'scientist' ? 'scientist' : 'org'
+    if (m.event_type === 'chat.blocked') return t.chat.line.blocked[own]
+    if (m.event_type === 'chat.unblocked') return t.chat.line.unblocked[own]
+    return (t.chat.events as Record<string, string>)[m.event_type ?? ''] ?? t.chat.eventFallback
+  }
   if (m.deleted) return t.chat.previewDeleted
   const text = m.text.replace(/\s+/g, ' ').trim()
   if (m.author?.is_me) return t.chat.previewMine(text)

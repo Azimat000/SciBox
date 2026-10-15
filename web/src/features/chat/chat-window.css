@@ -271,6 +271,13 @@
   outline-offset: 1px;
 }
 
+/* Палец крупнее мыши: запас под значок «…» до 44 пикселей */
+@media (pointer: coarse) {
+  .chat-msg-menu::after {
+    inset: -0.75rem -0.625rem;
+  }
+}
+
 /* С мышью значок действий виден при наведении и фокусе, на сенсорном экране всегда */
 @media (hover: hover) and (pointer: fine) {
   .chat-msg-menu {

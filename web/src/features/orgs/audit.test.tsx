@@ -30,7 +30,7 @@ describe('audit log page', () => {
     stubApi(asOwner({ [`GET ${api}?limit=30`]: page([]) }))
     renderApp(`/my-organization/${SLUG}`)
     const tabs = within(await screen.findByRole('navigation', { name: 'Разделы управления' }))
-    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Данные', 'Подразделения', 'Сотрудники', 'Журнал'])
+    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Данные', 'Подразделения', 'Сотрудники', 'Шаблоны ответов', 'Журнал'])
   })
 
   it('hides the tab from other staff and explains when they open the address', async () => {

@@ -9,6 +9,7 @@ import { Skeleton } from '../../ui/Skeleton'
 import { Tag } from '../../ui/Tag'
 import { TextField } from '../../ui/TextField'
 import { useToast } from '../../ui/useToast'
+import { BlockedOrganizations } from '../chat/BlockedOrganizations'
 import { MailSettings } from '../matching/MailSettings'
 import { setMe, updateName, useMe, type User } from './api'
 import { AuthPage } from './AuthPage'
@@ -94,6 +95,7 @@ function Account({ user }: { user: User }) {
     <>
       <ProfileSection user={user} />
       <MailSettings />
+      <BlockedOrganizations />
       <section className="account-section">
         <SocialSoon title={t.auth.account.linked} note={t.auth.account.linkedText} />
       </section>

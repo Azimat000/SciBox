@@ -484,7 +484,7 @@ describe('live updates', () => {
     await open([textMessage(1)])
     act(() => chatHub.emit({ type: 'message.created', chat_id: ID, side: 'scientist', message: textMessage(2, { text: 'Свежее сообщение' }) }))
     expect(await within(feed()).findByText('Свежее сообщение')).toBeInTheDocument()
-    expect(screen.getByText('Новое сообщение от Елена Орлова: Свежее сообщение')).toBeInTheDocument()
+    expect(await screen.findByText('Новое сообщение от Елена Орлова: Свежее сообщение')).toBeInTheDocument()
   })
 
   it('ignores events of other conversations and shows edits and deletions', async () => {

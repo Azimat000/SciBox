@@ -160,7 +160,7 @@ function SearchField({ side, initial, onSearch }: { side: Side; initial: string;
         {t.chat.searchLabel}
       </label>
       <SearchIcon className="chats-search-icon" size={18} />
-      <input id="chats-q" className="control chats-search-input" type="search" maxLength={100} value={value} placeholder={t.chat.searchPlaceholder[side]} onChange={(e) => setValue(e.target.value)} />
+      <input id="chats-q" name="q" autoComplete="off" className="control chats-search-input" type="search" maxLength={100} value={value} placeholder={t.chat.searchPlaceholder[side]} onChange={(e) => setValue(e.target.value)} />
     </form>
   )
 }

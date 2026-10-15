@@ -297,6 +297,10 @@
   border-bottom: 1px solid var(--line);
 }
 
+.chat-window-title:focus {
+  outline: none;
+}
+
 .chat-window-title {
   font-family: var(--font-serif);
   font-size: var(--text-xl);

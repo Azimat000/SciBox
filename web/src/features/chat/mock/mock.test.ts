@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { application, candidate, staffApplication, summary } from '../../../test/applications'
 import { offer, sentOffer } from '../../../test/offers'
-import { demoState } from './data'
+import { demoState, MOCK_ORG_ID } from './data'
 import { decorate } from './decorate'
 import { CHAT_MOCK_MARKER, exposeForConsole, installChatMock, toResponse } from './index'
 import { createChatServer } from './server'
@@ -149,6 +149,31 @@ describe('mock install', () => {
     expect(setup(async () => json(200, {}), storage).server.state.version).toBe(1)
   })
 
+  it('seeds demo templates and keeps one shared store for any organization number', async () => {
+    const { target, server: s } = setup(async () => json(200, {}))
+    expect(s.state.templates[MOCK_ORG_ID]).toHaveLength(4)
+    const list = (id: string) => target.fetch(`/api/orgs/${id}/chat-templates`).then((r) => r.json() as Promise<{ items: { title: string }[] }>)
+    const header = await list(MOCK_ORG_ID)
+    const page = await list('44444444-4444-4444-8444-444444444444')
+    expect(page.items.map((i) => i.title)).toEqual(header.items.map((i) => i.title))
+    const created = await target.fetch('/api/orgs/44444444-4444-4444-8444-444444444444/chat-templates', { method: 'POST', body: JSON.stringify({ title: 'Новый', text: 'Текст' }) })
+    expect(created.status).toBe(201)
+    expect((await list(MOCK_ORG_ID)).items.map((i) => i.title)).toContain('Новый')
+  })
+
+  it('gives demo templates to a state saved before they existed', async () => {
+    const storage = memoryStorage()
+    const old = demoState(NOW) as unknown as { templates?: unknown }
+    delete old.templates
+    storage.setItem('scibox.chatMock.v1', JSON.stringify(old))
+    const { server: s } = setup(async () => json(200, {}), storage)
+    expect(s.state.templates[MOCK_ORG_ID]).toHaveLength(4)
+    // Если шаблонов нет совсем, потому что их удалили, они не возвращаются
+    s.state.templates[MOCK_ORG_ID] = []
+    storage.setItem('scibox.chatMock.v1', JSON.stringify(s.state))
+    expect(setup(async () => json(200, {}), storage).server.state.templates[MOCK_ORG_ID]).toEqual([])
+  })
+
   it('works without browser storage', async () => {
     const { target } = setup(async () => json(200, {}), memoryStorage(true))
     expect((await target.fetch('/api/chats/c0000000-0000-4000-8000-000000000001/archive', { method: 'POST' })).status).toBe(204)
@@ -258,6 +283,14 @@ describe('datasets for break-ui', () => {
     expect(org.items[0].unread).toBe(12345)
     expect(org.items.find((c) => c.counterpart.anonymous)?.counterpart.name).toBe('')
     expect(s.state.chats.some((c) => c.closed_reason === 'offer_declined')).toBe(true)
+    // Шаблоны на пределе (50, название до 120, текст до 4000) и блокировки с длинными названиями
+    const templates = s.state.templates[MOCK_ORG_ID]
+    expect(templates).toHaveLength(50)
+    expect(Math.max(...templates.map((t) => [...t.title].length))).toBeLessThanOrEqual(120)
+    expect(templates.some((t) => [...t.text].length === 4000)).toBe(true)
+    expect(s.state.blocks.length).toBeGreaterThanOrEqual(3)
+    const blocks = s.handle({ method: 'GET', url: new URL('http://x/api/chat-blocks'), body: undefined })!.body as { items: { org_name: string }[] }
+    expect(blocks.items.some((b) => b.org_name.length > 100)).toBe(true)
   })
 
   it('does not keep a non-demo dataset in the browser', () => {

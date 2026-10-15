@@ -31,6 +31,7 @@ import { CandidatesPage } from '../features/applications/CandidatesPage'
 import { MyApplicationsPage } from '../features/applications/MyApplicationsPage'
 import { RecommendPage } from '../features/applications/RecommendPage'
 import { ChatsPage } from '../features/chat/ChatsPage'
+import { ChatTemplatesPage } from '../features/chat/ChatTemplatesPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
 import { DeadlinesPage } from '../features/matching/DeadlinesPage'
 import { FavoritesPage } from '../features/matching/FavoritesPage'
@@ -85,6 +86,7 @@ export const routes: RouteObject[] = [
           { path: 'units/:unitId', element: <UnitEditPage /> },
           { path: 'members', element: <ManageMembersPage /> },
           { path: 'audit', element: <AuditPage /> },
+          { path: 'chat-templates', element: <ChatTemplatesPage /> },
         ],
       },
       { path: 'my-vacancies', handle: { title: t.pageTitles.myVacancies }, element: <MyVacanciesPage /> },

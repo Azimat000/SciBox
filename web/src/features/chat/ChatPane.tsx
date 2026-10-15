@@ -10,7 +10,9 @@ import { Tag } from '../../ui/Tag'
 import { describeError } from '../auth/errors'
 import { useMe } from '../auth/api'
 import { isNotFound } from '../orgs/api'
-import { keys, markRead, useChat, type ChatHeader, type Message } from './api'
+import { ApiError } from '../../api/client'
+import { isGone, keys, markRead, useChat, type ChatHeader, type Message } from './api'
+import { ChatHeaderActions } from './ChatActions'
 import { Composer } from './Composer'
 import { buildRows } from './conversation'
 import { useChatEvents } from './hub'
@@ -66,11 +68,15 @@ export function ChatPane({ id }: { id: string }) {
       </div>
     )
   }
-  if (chat.isError) {
+  // Перечитывание шапки споткнулось о сеть, а прежняя есть: окно остаётся, ошибка не стирает переписку.
+  // Пропавший доступ (404, 403) окно закрывает всегда: чужое показывать нельзя.
+  if (chat.isError && (!chat.data || isGone(chat.error))) {
     return (
       <div className="chat-window">
         {back}
-        {isNotFound(chat.error) ? (
+        {chat.data ? (
+          <EmptyState title={t.chat.pane.accessLost} text={t.chat.pane.accessLostText} />
+        ) : isNotFound(chat.error) ? (
           <EmptyState title={t.chat.pane.notFound} text={t.chat.pane.notFoundText} />
         ) : (
           <EmptyState tone="error" title={t.chat.pane.loadError} text={describeError(chat.error)} action={<Button onClick={() => void chat.refetch()}>{t.common.retry}</Button>} />
@@ -87,15 +93,30 @@ export function ChatPane({ id }: { id: string }) {
   )
 }
 
+/** Переписка открыта поверх списка (узкий экран) или список недоступен: фокус не должен остаться на скрытом. */
+const listHidden = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 62rem)').matches
+
 function Header({ chat }: { chat: ChatHeader }) {
   const name = counterpartName(chat.counterpart)
   usePageTitle(`${name} — ${t.chat.title}`)
   const link = sourceLink(chat)
+  const title = useRef<HTMLHeadingElement>(null)
+  // Открыли переписку: фокус на заголовок, чтобы чтение с экрана начало с неё, а клавиатура продолжила отсюда.
+  // На компьютере, пока человек листает список клавишей, фокус остаётся в списке.
+  useEffect(() => {
+    const active = document.activeElement
+    if (!active || active === document.body || listHidden()) title.current?.focus({ preventScroll: true })
+  }, [chat.id])
   return (
     <header className="chat-window-head">
-      <h2 className="chat-window-title" data-anonymous={chat.counterpart.anonymous ? 'true' : undefined}>
-        {name}
-      </h2>
+      <div className="chat-window-top">
+        <h2 className="chat-window-title" ref={title} tabIndex={-1} data-anonymous={chat.counterpart.anonymous ? 'true' : undefined}>
+          {name}
+        </h2>
+        <div className="chat-window-actions">
+          <ChatHeaderActions chat={chat} />
+        </div>
+      </div>
       <p className="chat-window-vacancy">
         <Link to={`/vacancies/${encodeURIComponent(chat.vacancy.id)}`}>{chat.vacancy.title}</Link>
         {chat.vacancy.unit_name && <span className="chat-window-unit">{chat.vacancy.unit_name}</span>}
@@ -116,6 +137,8 @@ const NEAR_BOTTOM_PX = 72
 const NEAR_TOP_PX = 160
 const TYPING_SHOWN_MS = 5000
 const SEEN_DELAY_MS = 250
+/** Несколько сообщений подряд читаются с экрана одной фразой: каждое по отдельности было бы шумом. */
+const ANNOUNCE_DELAY_MS = 400
 
 const nearBottom = (el: HTMLElement) => el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX
 
@@ -163,14 +186,30 @@ function Thread({ chat }: { chat: ChatHeader }) {
   const [atBottom, setAtBottom] = useState(true)
   const [below, setBelow] = useState(0)
   const [announce, setAnnounce] = useState('')
+  const incoming = useRef<{ who: string; text: string }[]>([])
+  const announceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const typing = useTyping(chat.id)
   const now = useNow()
 
   const refreshHeader = useCallback(() => client.invalidateQueries({ queryKey: keys.one(userId, chat.id) }), [client, userId, chat.id])
+  /** Сервер сказал «переписки нет» или «закрыта»: шапка перечитывается и окно показывает, что случилось (потеря прав, закрытие). */
+  const afterFailure = useCallback(
+    (error: unknown) => {
+      if (isGone(error) || (error instanceof ApiError && error.code === 'chat_closed')) void refreshHeader()
+    },
+    [refreshHeader],
+  )
   const conv = useConversation(chat.id, chat.read.mine, {
     onIncoming: (m: Message) => {
       const who = m.author ? (m.author.anonymous || !m.author.name ? t.chat.anonymous : m.author.name) : ''
-      setAnnounce(t.chat.msg.incoming(who, m.text.slice(0, 160)))
+      incoming.current.push({ who, text: m.text.slice(0, 160) })
+      if (announceTimer.current === undefined) {
+        announceTimer.current = setTimeout(() => {
+          announceTimer.current = undefined
+          const batch = incoming.current.splice(0)
+          setAnnounce(batch.length === 1 ? t.chat.msg.incoming(batch[0].who, batch[0].text) : t.chat.msg.incomingMany(batch.length))
+        }, ANNOUNCE_DELAY_MS)
+      }
       if (!stuck.current) setBelow((n) => n + 1)
     },
     onSendFailed: () => void refreshHeader(),
@@ -202,14 +241,21 @@ function Thread({ chat }: { chat: ChatHeader }) {
           void client.invalidateQueries({ queryKey: ['chats', 'list'] })
           void client.invalidateQueries({ queryKey: keys.unread(userId) })
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           // Не дошло: в следующий раз отметим заново
           seen.current = Math.min(seen.current, chat.read.mine)
+          afterFailure(error)
         })
     }, SEEN_DELAY_MS)
-  }, [chat.id, chat.read.mine, client, state.status, userId])
+  }, [afterFailure, chat.id, chat.read.mine, client, state.status, userId])
 
-  useEffect(() => () => clearTimeout(seenTimer.current), [])
+  useEffect(
+    () => () => {
+      clearTimeout(seenTimer.current)
+      clearTimeout(announceTimer.current)
+    },
+    [],
+  )
 
   // Положение ленты после каждого изменения сообщений: подгрузка вверх держит место, своё и «у нижнего края» едет вниз.
   useLayoutEffect(() => {
@@ -295,8 +341,30 @@ function Thread({ chat }: { chat: ChatHeader }) {
     void conv.loadOlder()
   }
 
-  const actions = { onEdit: conv.edit, onRemove: conv.remove, onRetry: conv.retry, onDiscard: conv.discard }
-
+  const actions = {
+    onEdit: async (seq: number, text: string) => {
+      try {
+        await conv.edit(seq, text)
+      } catch (error) {
+        afterFailure(error)
+        throw error
+      }
+    },
+    onRemove: async (seq: number) => {
+      try {
+        await conv.remove(seq)
+      } catch (error) {
+        afterFailure(error)
+        throw error
+      }
+    },
+    onRetry: conv.retry,
+    onDiscard: conv.discard,
+  }
+  const templates =
+    chat.viewer.can_use_templates && chat.viewer.org_id
+      ? { orgId: chat.viewer.org_id, manageTo: chat.viewer.can_edit_templates ? `/my-organization/${encodeURIComponent(chat.vacancy.org_slug)}/chat-templates` : null }
+      : null
   return (
     <>
       <div className="chat-feed-wrap">
@@ -345,7 +413,7 @@ function Thread({ chat }: { chat: ChatHeader }) {
                   case 'pending':
                     return (
                       <li key={r.key} className="chat-item">
-                        <PendingBubble pending={r.pending} actions={actions} fresh />
+                        <PendingBubble pending={r.pending} actions={actions} fresh canRetry={chat.can_write} />
                       </li>
                     )
                   case 'message': {
@@ -390,7 +458,7 @@ function Thread({ chat }: { chat: ChatHeader }) {
       <p className="visually-hidden" role="status" aria-live="polite">
         {announce}
       </p>
-      <Composer chatId={chat.id} canWrite={chat.can_write} closedReason={chat.closed_reason} onSend={conv.send} />
+      <Composer chatId={chat.id} side={chat.side} canWrite={chat.can_write} closedReason={chat.closed_reason} templates={templates} onSend={conv.send} />
     </>
   )
 }

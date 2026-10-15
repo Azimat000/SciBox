@@ -48,7 +48,8 @@ export type SavedSearch = {
 
 // ---- письма ----
 
-export type MailSettings = { email_new_vacancies: boolean; email_deadlines: boolean }
+/** `email_messages` приходит, когда сервер знает чат (срез 38); до того переключателя нет, а поле при сохранении не добавляется. */
+export type MailSettings = { email_new_vacancies: boolean; email_deadlines: boolean; email_messages?: boolean }
 
 // Что видно, зависит от того, кто смотрит: кеш лежит под ключом с номером человека.
 const who = (userId: string | null | undefined) => userId ?? 'anonymous'

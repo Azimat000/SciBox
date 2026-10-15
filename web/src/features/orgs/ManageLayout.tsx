@@ -67,6 +67,9 @@ function Manage() {
             {t.orgs.manage.tabMembers}
           </NavLink>
         )}
+        <NavLink className="manage-tab" to={`/my-organization/${org.slug}/chat-templates`}>
+          {t.orgs.manage.tabTemplates}
+        </NavLink>
         {viewer.can_view_audit && (
           <NavLink className="manage-tab" to={`/my-organization/${org.slug}/audit`}>
             {t.orgs.manage.tabAudit}

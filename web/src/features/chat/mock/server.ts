@@ -1,5 +1,5 @@
 import type { ChatHeader, ChatSummary, LastMessage, Message, Side } from '../api'
-import { author, incomingPhrases, orgViewer, scientistViewer } from './data'
+import { author, incomingPhrases, MOCK_ORG_ID, orgViewer, scientistViewer } from './data'
 import type { MockChat, MockMessage, MockReply, MockRequest, MockState, StreamEvent } from './types'
 
 // Подставной сервер чата в памяти браузера (срез 34, CHAT.md «Подставной сервер»). Отвечает строго по contracts/chat/*.json
@@ -366,8 +366,10 @@ export function createChatServer(opts: ServerOptions) {
     return { ok: true, title: (title as string).trim(), text: checked as string }
   }
 
-  function templates(method: string, orgId: string, id: string | undefined, body: unknown): MockReply {
-    const list = (state.templates[orgId] ??= [])
+  function templates(method: string, _orgId: string, id: string | undefined, body: unknown): MockReply {
+    // Одна общая корзина на всех: у демо-организации номер из шапки переписки один, у страницы правки (настоящий номер из
+    // демо-данных сайта) другой, а шаблоны должны быть теми же. Настоящий сервер различает организации по номеру.
+    const list = (state.templates[MOCK_ORG_ID] ??= [])
     if (id === undefined) {
       if (method === 'GET') return { status: 200, body: { items: [...list].sort((a, b) => a.title.localeCompare(b.title, 'ru')), can_edit: true, limit: 50 } }
       if (method !== 'POST') return notFound()

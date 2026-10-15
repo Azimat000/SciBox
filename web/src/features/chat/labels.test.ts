@@ -41,6 +41,14 @@ describe('chat labels', () => {
     expect(previewText({ ...base, kind: 'system', author: null, event_type: null }, 'org')).toBe('Новое событие по отклику')
   })
 
+  it('tells a block in the words of the one who looks', () => {
+    const line = (event_type: string) => ({ seq: 1, kind: 'system' as const, author: null, text: '', event_type, deleted: false, created_at: '2026-10-14T09:00:00Z' })
+    expect(previewText(line('chat.blocked'), 'scientist')).toBe('Вы заблокировали организацию')
+    expect(previewText(line('chat.blocked'), 'org')).toBe('Соискатель ограничил переписку с организацией')
+    expect(previewText(line('chat.unblocked'), 'scientist')).toBe('Вы сняли блокировку с организации')
+    expect(previewText(line('chat.unblocked'), 'org')).toBe('Переписка снова открыта')
+  })
+
   it('writes time like a mail list: today, yesterday, this year, earlier', () => {
     const now = new Date(2026, 9, 14, 15, 0)
     expect(chatTime(new Date(2026, 9, 14, 9, 5).toISOString(), now)).toBe('09:05')

@@ -76,6 +76,19 @@ export function MailSettings() {
               </>
             }
           />
+          {typeof shown.email_messages === 'boolean' && (
+            <Checkbox
+              checked={shown.email_messages}
+              disabled={save.isPending}
+              onChange={(ev) => save.mutate({ ...shown, email_messages: ev.target.checked })}
+              label={
+                <>
+                  {m.messages}
+                  <span className="mail-hint">{m.messagesHint}</span>
+                </>
+              }
+            />
+          )}
           <p className="auth-note">{m.fixed}</p>
         </div>
       )}

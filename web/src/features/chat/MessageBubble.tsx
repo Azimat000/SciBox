@@ -215,7 +215,7 @@ function Editor({ initial, onSave, onCancel }: { initial: string; onSave: (text:
 }
 
 /** Своё сообщение, которое сервер ещё не подтвердил: «Отправляется» или «Не отправлено» с повтором. */
-export function PendingBubble({ pending, actions, fresh }: { pending: PendingMessage; actions: Pick<Actions, 'onRetry' | 'onDiscard'>; fresh: boolean }) {
+export function PendingBubble({ pending, actions, fresh, canRetry }: { pending: PendingMessage; actions: Pick<Actions, 'onRetry' | 'onDiscard'>; fresh: boolean; canRetry: boolean }) {
   const m = t.chat.msg
   const failed = pending.status === 'failed'
   return (
@@ -233,9 +233,11 @@ export function PendingBubble({ pending, actions, fresh }: { pending: PendingMes
       {failed && (
         <div className="chat-msg-actions" role="group" aria-label={m.failed}>
           {pending.error && <p className="chat-msg-error">{pending.error}</p>}
-          <Button size="sm" onClick={() => actions.onRetry(pending)}>
-            {m.retry}
-          </Button>
+          {canRetry && (
+            <Button size="sm" onClick={() => actions.onRetry(pending)}>
+              {m.retry}
+            </Button>
+          )}
           <Button size="sm" variant="quiet" onClick={() => actions.onDiscard(pending.client_id)}>
             {m.discard}
           </Button>

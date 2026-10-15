@@ -1,6 +1,6 @@
 import type { Side } from '../api'
-import { author, demoState, orgViewer, scientistViewer } from './data'
-import type { MockChat, MockMessage, MockState } from './types'
+import { author, demoState, MOCK_ORG_ID, orgViewer, scientistViewer } from './data'
+import type { MockBlock, MockChat, MockMessage, MockState, MockTemplate } from './types'
 
 // Худшие правдоподобные данные для списка переписок (break-ui, срез 34). Пределы из сервера: название вакансии и организации
 // до 200 знаков (vacancies.MaxTitleLen, orgs.MaxNameLen), имя человека до 120 (auth.MaxNameLen), сообщение до 4000 (CHAT.md),
@@ -192,13 +192,45 @@ function build(rows: Row[], side: Side, now: number, offset: number): MockChat[]
   })
 }
 
+/** Шаблоны на самом пределе: 50 штук, название на 120 знаков, текст на 4000, один в одно слово (break-ui, срез 36). */
+function worstTemplates(now: number): MockTemplate[] {
+  const out: MockTemplate[] = []
+  for (let i = 0; i < 50; i++) {
+    const long = i % 7 === 0
+    out.push({
+      id: `90000000-0000-4000-8000-${String(100 + i).padStart(12, '0')}`,
+      title: long
+        ? `Приглашение на собеседование в лабораторию молекулярной генетики и биоинформатики, группа ${i + 1}, второй этап отбора`.slice(0, 120)
+        : i % 11 === 0
+          ? 'Да'
+          : `Шаблон ${i + 1}`,
+      text: i === 0 ? 'Щ'.repeat(4000) : i % 5 === 0 ? `Добрый день!\n\nПришлите, пожалуйста, ссылку: https://example.org/${'a'.repeat(300)}` : `Спасибо за отклик на вакансию. Вариант ${i + 1}: ${'пришлите документы. '.repeat(i % 4 + 1)}`,
+      updated_at: new Date(now - i * 3 * 60 * MIN).toISOString(),
+    })
+  }
+  return out
+}
+
+const worstBlocks = (now: number): MockBlock[] => [
+  { org_id: 'org-worst-1', org_name: 'Федеральное государственное бюджетное учреждение науки Институт химической биологии и фундаментальной медицины Сибирского отделения РАН', org_slug: 'worst-1', created_at: new Date(now - 2 * DAY).toISOString() },
+  { org_id: 'org-worst-2', org_name: 'ИОФ', org_slug: 'worst-2', created_at: new Date(now - 40 * DAY).toISOString() },
+  { org_id: 'org-worst-3', org_name: 'Технопарк «Академ-Север» — инновационный кластер высоких технологий и биомедицины', org_slug: 'worst-3', created_at: new Date(now - 500 * DAY).toISOString() },
+]
+
 /** Набор переписок для переключателя: демо, худший случай, пусто, 1000 строк у каждой стороны. */
 export function dataset(kind: Dataset, nowDate: Date): MockState {
   const now = nowDate.getTime()
   const base = demoState(nowDate)
   if (kind === 'demo') return base
   if (kind === 'empty') return { ...base, chats: [] }
-  if (kind === 'worst') return { ...base, chats: [worstChat('scientist', now), worstChat('org', now), ...build(sciRows, 'scientist', now, 1), ...build(orgRows, 'org', now, 100)] }
+  if (kind === 'worst') {
+    return {
+      ...base,
+      chats: [worstChat('scientist', now), worstChat('org', now), ...build(sciRows, 'scientist', now, 1), ...build(orgRows, 'org', now, 100)],
+      templates: { [MOCK_ORG_ID]: worstTemplates(now) },
+      blocks: worstBlocks(now),
+    }
+  }
   const many = Array.from({ length: 1000 }, (_, i) => ({ ...sciRows[i % sciRows.length], at: i * 7 * MIN, unread: i % 4 === 0 ? (i % 17) + 1 : 0 }))
   const manyOrg = Array.from({ length: 1000 }, (_, i) => ({ ...orgRows[i % orgRows.length], at: i * 7 * MIN, unread: i % 5 === 0 ? 2 : 0 }))
   return { ...base, chats: [...build(many, 'scientist', now, 1000), ...build(manyOrg, 'org', now, 5000)] }

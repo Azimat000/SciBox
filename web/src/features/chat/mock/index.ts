@@ -1,5 +1,5 @@
 import { mirror, parseAction, tryDemo } from './actions'
-import { demoState } from './data'
+import { demoState, demoTemplates, MOCK_ORG_ID } from './data'
 import { decorate } from './decorate'
 import { createChatServer, type ChatServer } from './server'
 import { mountDataToggle } from './toggle'
@@ -22,7 +22,11 @@ function load(storage: Storage): MockState | null {
     const raw = storage.getItem(STORAGE_KEY)
     if (!raw) return null
     const state = JSON.parse(raw) as MockState
-    return state.version === 1 && Array.isArray(state.chats) ? state : null
+    if (state.version !== 1 || !Array.isArray(state.chats)) return null
+    // Состояние, сохранённое до среза 36, шаблонов не знало: корзина создаётся с демо-шаблонами один раз
+    state.templates ??= {}
+    state.templates[MOCK_ORG_ID] ??= demoTemplates(new Date())
+    return state
   } catch {
     return null
   }

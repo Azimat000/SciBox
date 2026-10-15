@@ -1,5 +1,5 @@
 import type { Author, ChatEvent, Side, Viewer } from '../api'
-import type { MockChat, MockMessage, MockState } from './types'
+import type { MockChat, MockMessage, MockState, MockTemplate } from './types'
 
 // Демо-переписки подставного сервера (срез 34): вымышленные организации и люди из демо-данных сайта, реальные города.
 // Время считается от «сейчас», поэтому переписки всегда свежие.
@@ -88,6 +88,17 @@ function chat(fields: Omit<MockChat, 'read_mine' | 'read_theirs' | 'updated_at'>
     read_theirs: fields.read_theirs ?? lastMine?.seq ?? 0,
     updated_at: last ? last.created_at : new Date().toISOString(),
   }
+}
+
+/** Шаблоны ответов демо-организации: типичные просьбы и приглашения. */
+export function demoTemplates(nowDate: Date): MockTemplate[] {
+  const at = (days: number) => new Date(nowDate.getTime() - days * DAY).toISOString()
+  return [
+    { id: uuid('9', 1), title: 'Приглашение на собеседование', text: 'Добрый день! Спасибо за отклик. Предлагаем встретиться онлайн, приглашение со временем пришлём отдельно.', updated_at: at(5) },
+    { id: uuid('9', 2), title: 'Нужны документы', text: 'Пришлите, пожалуйста, скан диплома и список публикаций за последние пять лет.', updated_at: at(4) },
+    { id: uuid('9', 3), title: 'Отказ без обидных слов', text: 'Спасибо, что откликнулись. К сожалению, сейчас мы выбрали другого кандидата. Будем рады вашему отклику на следующие вакансии.', updated_at: at(3) },
+    { id: uuid('9', 4), title: 'Условия работы', text: 'Ставка 1,0, оформление по ТК РФ, гибкий график. Работа в лаборатории, часть задач можно выполнять удалённо.', updated_at: at(2) },
+  ]
 }
 
 /** Пять переписок учёного и пять организации: разговор, приглашение ждёт ответа, отказ, анонимный соискатель, архив. */
@@ -305,7 +316,7 @@ export function demoState(nowDate: Date): MockState {
     }),
   ]
 
-  return { version: 1, chats: [...sciChats, ...orgChats], templates: {}, blocks: [], complaints: [], email_messages: true, next_id: 1000 }
+  return { version: 1, chats: [...sciChats, ...orgChats], templates: { [MOCK_ORG_ID]: demoTemplates(nowDate) }, blocks: [], complaints: [], email_messages: true, next_id: 1000 }
 }
 
 /** Что «собеседник» пишет сам, пока открыт сайт: по фразе на сторону. */

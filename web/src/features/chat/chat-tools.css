@@ -1,0 +1,517 @@
+/* Инструменты чата (срез 36): шаблоны у поля ввода и страница их правки, архив, «Ещё», окна блокировки и жалобы, настройки. */
+
+/* ---- нижняя строка поля ввода: «Шаблоны» и подсказка ---- */
+
+.chat-composer {
+  position: relative;
+}
+
+.chat-composer-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 1.5rem;
+}
+
+.chat-composer-foot .chat-composer-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-templates-trigger {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+
+/* Запас под палец: сама подпись остаётся в одну строку */
+.chat-templates-trigger::after {
+  content: '';
+  position: absolute;
+  inset: -0.625rem -0.5rem;
+}
+
+.chat-templates-trigger:hover,
+.chat-templates-trigger[aria-expanded='true'] {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.chat-templates-trigger:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+/* ---- меню шаблонов: панель над полем ввода, не окно ---- */
+
+.chat-templates {
+  position: absolute;
+  inset: auto 0 100% 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--s-2);
+  max-height: min(24rem, 55dvh);
+  /* Под липкой шапкой сайта (4.25rem) панель не прячется */
+  scroll-margin-top: 5rem;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  box-shadow: var(--lift);
+  overflow: hidden;
+}
+
+.chat-templates:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chat-templates {
+    transition:
+      opacity 140ms var(--ease),
+      transform 140ms var(--ease);
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+}
+
+.chat-templates-search {
+  flex: none;
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-templates-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-templates-item {
+  display: grid;
+  gap: 0.125rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chat-templates-list li:last-child .chat-templates-item {
+  border-bottom: 0;
+}
+
+.chat-templates-item:hover {
+  background: var(--wash);
+}
+
+.chat-templates-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.chat-templates-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chat-templates-name,
+.chat-templates-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.chat-templates-text {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.chat-templates-note,
+.chat-templates-skeleton {
+  margin: 0;
+  padding: var(--s-3);
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+}
+
+.chat-templates-skeleton {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.chat-templates-foot {
+  flex: none;
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+
+/* ---- переписка закрыта, пока человек печатал ---- */
+
+.chat-closed-wrap {
+  flex: none;
+  border-top: 1px solid var(--line);
+}
+
+.chat-closed-wrap .chat-closed {
+  border-top: 0;
+}
+
+.chat-unsent {
+  display: grid;
+  gap: var(--s-1);
+  padding-bottom: var(--s-3);
+}
+
+.chat-unsent label {
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+}
+
+.chat-unsent textarea {
+  max-height: 8rem;
+  resize: none;
+  line-height: 1.5;
+}
+
+/* ---- «Ещё» в шапке переписки ---- */
+
+/* Название и действия в одной строке: на телефоне шапка не растёт лишним рядом кнопок.
+   Список действий привязан к этой строке и растёт влево от её правого края, на экране остаётся при любой ширине. */
+.chat-window-top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.chat-window-top .chat-window-title {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.chat-window-actions {
+  flex: none;
+  margin-top: -0.125rem;
+}
+
+.chat-more-list {
+  position: absolute;
+  top: calc(100% + var(--s-1));
+  right: 0;
+  z-index: 6;
+  max-width: 100%;
+  min-width: 15rem;
+  margin: 0;
+  padding: var(--s-1) 0;
+  list-style: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  box-shadow: var(--lift);
+}
+
+.chat-more-list button {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 var(--s-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chat-more-list button:hover {
+  background: var(--wash);
+}
+
+.chat-more-list button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.chat-more-danger {
+  color: var(--fail);
+}
+
+/* ---- окна блокировки и жалобы ---- */
+
+.chat-dialog {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.chat-dialog-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: var(--text-sm);
+  color: var(--ink-body);
+}
+
+.chat-dialog-count {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+/* ---- «В архив» у строки списка ---- */
+
+.chat-row-item {
+  position: relative;
+}
+
+/* Последняя строка оставляет место под кнопку архива */
+.chat-row-item .chat-row-line:last-child {
+  padding-right: 2rem;
+}
+
+.chat-row-archive {
+  position: absolute;
+  right: var(--s-2);
+  bottom: 0.375rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
+}
+
+/* Невидимый запас до 44 пикселей */
+.chat-row-archive::after {
+  content: '';
+  position: absolute;
+  inset: -0.375rem;
+}
+
+.chat-row-archive:hover {
+  background: var(--wash-deep);
+  color: var(--ink);
+}
+
+.chat-row-archive:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.chat-row-archive:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* С мышью кнопка видна у строки под курсором или с фокусом, на сенсорном экране всегда */
+@media (hover: hover) and (pointer: fine) {
+  .chat-row-archive {
+    opacity: 0;
+  }
+
+  .chat-row-item:hover .chat-row-archive,
+  .chat-row-item:focus-within .chat-row-archive {
+    opacity: 1;
+  }
+}
+
+/* ---- страница правки шаблонов ---- */
+
+.tpl-skeleton {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+.tpl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-4) 0 var(--s-3);
+}
+
+.tpl-count {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.tpl-list {
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ink);
+}
+
+.tpl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s-4);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tpl-row:has(.tpl-form) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tpl-main {
+  display: grid;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.tpl-title {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.tpl-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  margin: 0;
+  max-width: var(--measure);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-body);
+}
+
+.tpl-date {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.tpl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  justify-content: flex-end;
+}
+
+.tpl-form {
+  display: grid;
+  gap: var(--s-4);
+  max-width: 40rem;
+  margin-bottom: var(--s-4);
+}
+
+.tpl-counter {
+  margin: calc(var(--s-2) * -1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.tpl-counter[data-over] {
+  color: var(--fail);
+  font-weight: 600;
+}
+
+.tpl-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+@media (max-width: 40rem) {
+  .tpl-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tpl-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ---- заблокированные организации в настройках ---- */
+
+.blocked-empty {
+  margin: var(--s-3) 0 0;
+  color: var(--ink-body);
+}
+
+.blocked-list {
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.blocked-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.blocked-info {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+
+.blocked-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.blocked-since {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.blocked-row .btn {
+  flex: none;
+}
