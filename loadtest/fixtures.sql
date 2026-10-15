@@ -66,10 +66,19 @@ SELECT json_build_object(
   'vacancies', (SELECT json_agg(id) FROM (SELECT id FROM vacancies WHERE status = 'published' ORDER BY random() LIMIT 2000) x),
   'profiles',  (SELECT json_agg(id) FROM (SELECT id FROM profiles WHERE visibility = 'public' AND headline <> '' ORDER BY random() LIMIT 2000) x),
   'orgs',      (SELECT json_agg(slug) FROM (SELECT slug FROM organizations ORDER BY random() LIMIT 300) x),
-  'applicants', (SELECT json_agg(json_build_object('t', 'lt-a-' || n, 'e', email) ORDER BY n) FROM lt_applicants),
+  -- c — переписки учёного (до трёх, новые сверху): для чтения, отправки и отметок «прочитано» (срез 39).
+  'applicants', (
+    SELECT json_agg(json_build_object('t', 'lt-a-' || a.n, 'e', a.email, 'c', coalesce(ch.ids, '[]'::json)) ORDER BY a.n)
+    FROM lt_applicants a
+    LEFT JOIN LATERAL (
+      SELECT json_agg(x.id) AS ids FROM (SELECT c.id FROM chats c WHERE c.user_id = a.user_id ORDER BY c.updated_at DESC LIMIT 3) x
+    ) ch ON true),
   'staff', (
-    SELECT json_agg(json_build_object('t', 'lt-s-' || s.n, 'apps', coalesce(ap.ids, '[]'::json)) ORDER BY s.n)
+    SELECT json_agg(json_build_object('t', 'lt-s-' || s.n, 'apps', coalesce(ap.ids, '[]'::json), 'chats', coalesce(ch.ids, '[]'::json)) ORDER BY s.n)
     FROM lt_staff s
+    LEFT JOIN LATERAL (
+      SELECT json_agg(x.id) AS ids FROM (SELECT c.id FROM chats c WHERE c.org_id = s.org_id ORDER BY c.updated_at DESC LIMIT 20) x
+    ) ch ON true
     LEFT JOIN LATERAL (
       SELECT json_agg(x.id) AS ids FROM (
         SELECT a.id FROM applications a JOIN vacancies v ON v.id = a.vacancy_id

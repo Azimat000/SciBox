@@ -27,16 +27,18 @@ type DB interface {
 
 // Service — вся логика переписок.
 type Service struct {
-	db  DB
-	q   *dbgen.Queries
-	now func() time.Time
+	db     DB
+	q      *dbgen.Queries
+	now    func() time.Time
+	typing *typingGate
+	mail   MailConfig
 }
 
 // NewService собирает сервис.
 func NewService(pool *pgxpool.Pool) *Service { return newService(pool) }
 
 func newService(db DB) *Service {
-	return &Service{db: db, q: dbgen.New(db), now: func() time.Time { return time.Now().UTC() }}
+	return &Service{db: db, q: dbgen.New(db), now: func() time.Time { return time.Now().UTC() }, typing: newTypingGate()}
 }
 
 func (s *Service) inTx(ctx context.Context, fn func(q *dbgen.Queries) error) error {
@@ -81,6 +83,12 @@ func Open(ctx context.Context, q *dbgen.Queries, in OpenInput, now time.Time) (u
 // события кладутся как есть и показываются обеим сторонам: имён, почт и всего, по чему узнают анонимного учёного, в них
 // быть не должно (T-97). Вызывается в той же транзакции, что и само событие.
 func AppendSystem(ctx context.Context, q *dbgen.Queries, chatID uuid.UUID, eventType string, data any, at time.Time) (int, error) {
+	return appendSystem(ctx, q, chatID, eventType, data, at, true)
+}
+
+// appendSystem — AppendSystem; announce false не объявляет строку живому потоку (перенос прежних записей: поток о
+// прошлых событиях никому не нужен, а миллионы уведомлений забили бы общий замок фиксации).
+func appendSystem(ctx context.Context, q *dbgen.Queries, chatID uuid.UUID, eventType string, data any, at time.Time, announce bool) (int, error) {
 	to, ok := audience[eventType]
 	if !ok {
 		return 0, fmt.Errorf("%w: %q", ErrUnknownEvent, eventType)
@@ -103,6 +111,11 @@ func AppendSystem(ctx context.Context, q *dbgen.Queries, chatID uuid.UUID, event
 	}
 	if err := q.UnarchiveChat(ctx, dbgen.UnarchiveChatParams{ChatID: chatID, Now: at}); err != nil {
 		return 0, fmt.Errorf("chat: unarchive: %w", err)
+	}
+	if announce {
+		if err := publish(ctx, q, dbgen.PublishChatEventParams{Kind: evCreated, Seq: seq, Now: at, ChatID: chatID}); err != nil {
+			return 0, err
+		}
 	}
 	return int(seq), nil
 }

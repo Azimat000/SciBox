@@ -41,6 +41,13 @@ type FileQueues struct {
 	Deletions, Legacy int64
 }
 
+// ChatMailQueue — очередь писем о непрочитанных сообщениях чата (срез 39): строки, ждущие письма.
+type ChatMailQueue struct {
+	// Waiting — сколько строк ждёт (включая те, которым ещё не пора); Oldest — как давно ждёт самая старая.
+	Waiting int64
+	Oldest  time.Duration
+}
+
 // DatabaseStats — база глазами сервера.
 type DatabaseStats struct {
 	SizeBytes, Connections, MaxConnections int64
@@ -62,6 +69,8 @@ type Sources struct {
 	Mail func(ctx context.Context) (notifications.QueueStats, error)
 	// Files — очереди файловой работы.
 	Files func(ctx context.Context) (FileQueues, error)
+	// ChatMail — очередь писем о непрочитанных сообщениях чата.
+	ChatMail func(ctx context.Context) (ChatMailQueue, error)
 	// Database — размер базы и соединения.
 	Database func(ctx context.Context) (DatabaseStats, error)
 	// Cluster — общее расписание задач из базы.
@@ -98,6 +107,7 @@ func Register(reg prometheus.Registerer, src Sources) error {
 	c := &collector{src: src}
 	c.mail = newCached(src, src.Mail)
 	c.files = newCached(src, src.Files)
+	c.chatMail = newCached(src, src.ChatMail)
 	c.database = newCached(src, src.Database)
 	c.cluster = newCached(src, src.Cluster)
 	return reg.Register(c)
@@ -145,6 +155,7 @@ type collector struct {
 	src      Sources
 	mail     *cached[notifications.QueueStats]
 	files    *cached[FileQueues]
+	chatMail *cached[ChatMailQueue]
 	database *cached[DatabaseStats]
 	cluster  *cached[[]ClusterJob]
 }
@@ -161,6 +172,8 @@ var (
 	descDBMaxConns     = desc("db_server_max_connections", "Предел соединений базы (max_connections).")
 	descMailQueue      = desc("mail_queue_messages", "Письма в очереди по состоянию: waiting (ждут, включая повторяемые), retrying (из них пробовали), undelivered (окончательно не доставлены, хранятся 30 дней).", "state")
 	descMailOldest     = desc("mail_queue_oldest_waiting_seconds", "Сколько ждёт самое старое письмо из ждущих; 0 — очередь пуста.")
+	descChatMail       = desc("chat_unread_mail_waiting", "Переписки, по которым ждёт письмо о непрочитанном сообщении (включая те, которым ещё не пора).")
+	descChatMailOldest = desc("chat_unread_mail_oldest_waiting_seconds", "Сколько ждёт самая старая строка очереди писем о сообщениях; письмо уходит через 15 минут, поэтому заметно больше значит, что задача стоит; 0 — очередь пуста.")
 	descFilesPending   = desc("files_pending_scan", "Файлы, ждущие проверки на вирусы.")
 	descFilesOldest    = desc("files_oldest_pending_scan_seconds", "Сколько ждёт проверки самый старый файл; 0 — никто не ждёт.")
 	descFilesDeletions = desc("files_blob_deletions_queued", "Объекты, ждущие удаления из хранилища файлов.")
@@ -233,6 +246,12 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 		gauge(descMailQueue, float64(v.Retrying), "retrying")
 		gauge(descMailQueue, float64(v.Undelivered), "undelivered")
 		gauge(descMailOldest, v.OldestWaiting.Seconds())
+	}
+	if c.chatMail != nil {
+		v, ok := c.chatMail.get(ctx)
+		up("chat_mail", ok)
+		gauge(descChatMail, float64(v.Waiting))
+		gauge(descChatMailOldest, v.Oldest.Seconds())
 	}
 	if c.files != nil {
 		v, ok := c.files.get(ctx)

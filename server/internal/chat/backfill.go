@@ -123,7 +123,7 @@ func backfillOne(ctx context.Context, q *dbgen.Queries, vacancyID, userID uuid.U
 		return 0, err
 	}
 	for _, l := range lines {
-		if _, err := AppendSystem(ctx, q, chatID, l.kind, l.data, l.at); err != nil {
+		if _, err := appendSystem(ctx, q, chatID, l.kind, l.data, l.at, false); err != nil {
 			return 0, err
 		}
 	}
@@ -160,7 +160,7 @@ func markHistoryRead(ctx context.Context, q *dbgen.Queries, chatID, vacancyID, u
 		}
 	}
 	for _, uid := range append([]uuid.UUID{userID}, staff...) {
-		if err := q.MarkChatRead(ctx, dbgen.MarkChatReadParams{ChatID: chatID, UserID: uid, UpTo: 1 << 30, Now: at}); err != nil {
+		if _, err := q.MarkChatRead(ctx, dbgen.MarkChatReadParams{ChatID: chatID, UserID: uid, UpTo: 1 << 30, Now: at}); err != nil {
 			return fmt.Errorf("chat: backfill mark read: %w", err)
 		}
 	}

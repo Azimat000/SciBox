@@ -242,6 +242,55 @@ groups:
           summary: "Очередь удаления объектов из хранилища выросла (больше 1000)"
           description: "Хранилище файлов недоступно или удаление не успевает (T-44)."
 
+  - name: scibox-chat
+    # Живой поток и письма о сообщениях (срез 39, T-100, T-102). Потоки есть только у `serve`: у воркера метрики потока
+    # нулевые и ничего не значат.
+    rules:
+      - alert: ChatListenerDown
+        # Копия без соединения LISTEN узнаёт о новых сообщениях только страховочным опросом раз в 2 секунды; при открытых
+        # потоках это заметно. Без открытых потоков тревога не нужна (поток может быть выключен настройкой).
+        expr: |
+          scibox_chat_listener_up{job="scibox-serve"} == 0 and scibox_chat_streams_open{job="scibox-serve"} > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Копия не получает события чата от базы"
+          description: "Соединение LISTEN у {{ $labels.instance }} не поднято больше 2 минут. Сообщения доходят до потоков с задержкой опроса; смотрите журнал сервера (`chat listener lost`)."
+
+      - alert: ChatDeliverySlow
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m]))) > 2
+          and sum(rate(scibox_chat_delivery_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Сообщения чата доходят до собеседника дольше 2 секунд"
+          description: "p95 доставки: {{ $value | humanizeDuration }} (цель из docs/SCALING.md: не больше 2 секунд). Смотрите нагрузку базы и очередь раздачи на панели «Чат»."
+
+      - alert: ChatStreamsCopyFull
+        expr: sum by (instance) (increase(scibox_chat_streams_rejected_total{reason="copy_limit"}[10m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "Копия сервера отказывает в живом обновлении: потоков больше предела"
+          description: "Отказов за 10 минут: {{ $value | humanize }}. Поднимите SCIBOX_CHAT_STREAMS или добавьте копию сервера (предел по умолчанию 3000)."
+
+      - alert: ChatStreamsClosedAsSlow
+        expr: sum(increase(scibox_chat_streams_closed_total{reason="slow"}[10m])) > 50
+        labels: { severity: warning }
+        annotations:
+          summary: "Потоки чата закрываются как медленные"
+          description: "За 10 минут закрыто {{ $value | humanize }}: клиенты не успевают читать события или раздача отстаёт. Сайт переподключается и добирает пропущенное."
+
+      - alert: ChatUnreadMailStale
+        # Письмо уходит через 15 минут, задача идёт раз в минуту: строка, которая ждёт дольше получаса, означает, что задача
+        # не справляется (JobNotRunning ловит остановку задачи, эта тревога ловит отставание).
+        expr: max(scibox_chat_unread_mail_oldest_waiting_seconds) > 1800
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Письма о непрочитанных сообщениях запаздывают"
+          description: "Самая старая переписка ждёт письма {{ $value | humanizeDuration }}, а срок 15 минут. Проверьте задачу chat.unread_mail и очередь писем."
+
   - name: scibox-host
     rules:
       - alert: DiskSpaceLow

@@ -179,6 +179,8 @@ func (w *accessWorld) app(extra map[string]string) http.Handler {
 	env := map[string]string{
 		"DATABASE_URL": w.dbURL, "SCIBOX_PRODUCT_CONFIG": productConfig,
 		"SCIBOX_CROSSREF_URL": "http://127.0.0.1:1", // Crossref в тестах недоступен
+		// Живой поток чата в таблице доступа завершается сам: запрос ответил 200 и закрылся (срез 39).
+		"SCIBOX_CHAT_STREAM_MAX_AGE": "100ms",
 	}
 	maps.Copy(env, extra)
 	cfg, err := config.Load(func(k string) string { return env[k] })

@@ -1974,7 +1974,7 @@
   },
   {
    "type": "row",
-   "title": "Фоновые задачи",
+   "title": "Чат: живой поток и письма",
    "collapsed": false,
    "gridPos": {
     "h": 1,
@@ -1986,10 +1986,749 @@
    "panels": []
   },
   {
+   "type": "stat",
+   "title": "Потоки открыто",
+   "description": "Живые потоки чата на всех копиях. Цель среза 39: 5000 на две копии.",
+   "id": 37,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 0,
+    "y": 73
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(scibox_chat_streams_open{job=\"scibox-serve\"})",
+     "legendFormat": "",
+     "refId": "A",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "mappings": [],
+     "noValue": "нет данных"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Доставка p95",
+   "description": "От записи события до записи в поток собеседника. Цель: не больше 2 секунд.",
+   "id": 38,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 4,
+    "y": 73
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "histogram_quantile(0.95, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))",
+     "legendFormat": "",
+     "refId": "A",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": 3,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 2
+       }
+      ]
+     },
+     "mappings": [],
+     "noValue": "нет данных"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Слушатель",
+   "description": "Соединение LISTEN каждой копии с базой.",
+   "id": 39,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 8,
+    "y": 73
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "min(scibox_chat_listener_up{job=\"scibox-serve\"})",
+     "legendFormat": "",
+     "refId": "A",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": null,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "green",
+        "value": 1
+       }
+      ]
+     },
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "ОБОРВАН",
+         "color": "red"
+        },
+        "1": {
+         "text": "работает",
+         "color": "green"
+        }
+       }
+      }
+     ],
+     "noValue": "нет данных"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Писем о сообщениях ждёт",
+   "description": "Переписки, по которым ещё не ушло письмо о непрочитанном (включая тех, кому ещё не пора).",
+   "id": 40,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 12,
+    "y": 73
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "max(scibox_chat_unread_mail_waiting)",
+     "legendFormat": "",
+     "refId": "A",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "mappings": [],
+     "noValue": "нет данных"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Старейшее ждёт",
+   "description": "Письмо уходит через 15 минут; заметно больше значит, что задача отстаёт.",
+   "id": 41,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 16,
+    "y": 73
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "max(scibox_chat_unread_mail_oldest_waiting_seconds)",
+     "legendFormat": "",
+     "refId": "A",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": null,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 900
+       },
+       {
+        "color": "red",
+        "value": 1800
+       }
+      ]
+     },
+     "mappings": [],
+     "noValue": "нет данных"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto"
+   }
+  },
+  {
+   "type": "stat",
+   "title": "Отказов в потоке",
+   "description": "За 10 минут: предел потоков на человека или на копию.",
+   "id": 42,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 4,
+    "w": 4,
+    "x": 20,
+    "y": 73
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(increase(scibox_chat_streams_rejected_total[10m]))",
+     "legendFormat": "",
+     "refId": "A",
+     "instant": true,
+     "range": false
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "decimals": 0,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 50
+       }
+      ]
+     },
+     "mappings": [],
+     "noValue": "нет данных"
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "auto"
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Открытые потоки по копиям",
+   "description": "Предел на копию 3000 (SCIBOX_CHAT_STREAMS).",
+   "id": 43,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 77
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (instance) (scibox_chat_streams_open{job=\"scibox-serve\"})",
+     "legendFormat": "{{instance}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Задержка доставки",
+   "description": "От записи события в журнал до записи в поток получателя.",
+   "id": 44,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 77
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "histogram_quantile(0.50, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))",
+     "legendFormat": "p50",
+     "refId": "A"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "histogram_quantile(0.95, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))",
+     "legendFormat": "p95",
+     "refId": "B"
+    },
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "histogram_quantile(0.99, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))",
+     "legendFormat": "p99",
+     "refId": "C"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "События в секунду по виду",
+   "description": "dispatched — обработано копией, delivered — записано в поток получателя.",
+   "id": 45,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 77
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (kind, stage) (rate(scibox_chat_events_total[5m]))",
+     "legendFormat": "{{kind}} {{stage}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ops",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Закрытия потоков по причине",
+   "description": "client — ушёл, age — срок жизни (раз в 4 минуты), slow — не успевает читать, rights/session — потеря прав или конец сессии.",
+   "id": 46,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 0,
+    "y": 85
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (reason) (rate(scibox_chat_streams_closed_total[5m]))",
+     "legendFormat": "{{reason}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ops",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Отказы в потоке",
+   "description": "",
+   "id": 47,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 8,
+    "y": 85
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum by (reason) (rate(scibox_chat_streams_rejected_total[5m]))",
+     "legendFormat": "{{reason}}",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ops",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "type": "timeseries",
+   "title": "Добор пропущенного",
+   "description": "Не ноль, когда уведомление не пришло: обрыв соединения LISTEN или страховочный опрос.",
+   "id": 48,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "h": 7,
+    "w": 8,
+    "x": 16,
+    "y": 85
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "expr": "sum(rate(scibox_chat_catchup_events_total[5m]))",
+     "legendFormat": "добрано из журнала",
+     "refId": "A"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ops",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "type": "row",
+   "title": "Фоновые задачи",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 92
+   },
+   "id": 49,
+   "panels": []
+  },
+  {
    "type": "table",
    "title": "Когда задача последний раз завершилась успешно",
    "description": "Секунд с последнего успеха по общему расписанию. Больше трёх сроков — тревога.",
-   "id": 37,
+   "id": 50,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -1998,7 +2737,7 @@
     "h": 9,
     "w": 12,
     "x": 0,
-    "y": 73
+    "y": 93
    },
    "targets": [
     {
@@ -2041,7 +2780,7 @@
    "type": "timeseries",
    "title": "Проходы задач по итогу",
    "description": "Проходы за 10 минут: ok, failed, interrupted.",
-   "id": 38,
+   "id": 51,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2050,7 +2789,7 @@
     "h": 9,
     "w": 12,
     "x": 12,
-    "y": 73
+    "y": 93
    },
    "targets": [
     {
@@ -2093,7 +2832,7 @@
    "type": "timeseries",
    "title": "Задачи, которые падают подряд",
    "description": "",
-   "id": 39,
+   "id": 52,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2102,7 +2841,7 @@
     "h": 7,
     "w": 12,
     "x": 0,
-    "y": 82
+    "y": 102
    },
    "targets": [
     {
@@ -2145,7 +2884,7 @@
    "type": "timeseries",
    "title": "Время прохода задач",
    "description": "",
-   "id": 40,
+   "id": 53,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2154,7 +2893,7 @@
     "h": 7,
     "w": 12,
     "x": 12,
-    "y": 82
+    "y": 102
    },
    "targets": [
     {
@@ -2201,16 +2940,16 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 89
+    "y": 109
    },
-   "id": 41,
+   "id": 54,
    "panels": []
   },
   {
    "type": "timeseries",
    "title": "Записи журнала по уровню",
    "description": "",
-   "id": 42,
+   "id": 55,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2219,7 +2958,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 90
+    "y": 110
    },
    "targets": [
     {
@@ -2262,7 +3001,7 @@
    "type": "timeseries",
    "title": "Паники",
    "description": "Любая паника — ошибка в коде.",
-   "id": 43,
+   "id": 56,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2271,7 +3010,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 90
+    "y": 110
    },
    "targets": [
     {
@@ -2314,7 +3053,7 @@
    "type": "timeseries",
    "title": "Отчёты об ошибках (GlitchTip)",
    "description": "sent — отправлено; suppressed — повторы свёрнуты; dropped — не поместилось; failed — не дошло.",
-   "id": 44,
+   "id": 57,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2323,7 +3062,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 90
+    "y": 110
    },
    "targets": [
     {
@@ -2370,16 +3109,16 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 97
+    "y": 117
    },
-   "id": 45,
+   "id": 58,
    "panels": []
   },
   {
    "type": "timeseries",
    "title": "Диск: свободно",
    "description": "",
-   "id": 46,
+   "id": 59,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2388,7 +3127,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 98
+    "y": 118
    },
    "targets": [
     {
@@ -2433,7 +3172,7 @@
    "type": "timeseries",
    "title": "Память: свободно",
    "description": "",
-   "id": 47,
+   "id": 60,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2442,7 +3181,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 98
+    "y": 118
    },
    "targets": [
     {
@@ -2487,7 +3226,7 @@
    "type": "timeseries",
    "title": "Процессор (загрузка всех ядер)",
    "description": "",
-   "id": 48,
+   "id": 61,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2496,7 +3235,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 98
+    "y": 118
    },
    "targets": [
     {
@@ -2541,7 +3280,7 @@
    "type": "timeseries",
    "title": "Горутины",
    "description": "",
-   "id": 49,
+   "id": 62,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2550,7 +3289,7 @@
     "h": 7,
     "w": 8,
     "x": 0,
-    "y": 105
+    "y": 125
    },
    "targets": [
     {
@@ -2593,7 +3332,7 @@
    "type": "timeseries",
    "title": "Память процесса",
    "description": "",
-   "id": 50,
+   "id": 63,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2602,7 +3341,7 @@
     "h": 7,
     "w": 8,
     "x": 8,
-    "y": 105
+    "y": 125
    },
    "targets": [
     {
@@ -2654,7 +3393,7 @@
    "type": "timeseries",
    "title": "Сборка мусора (пауза)",
    "description": "",
-   "id": 51,
+   "id": 64,
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -2663,7 +3402,7 @@
     "h": 7,
     "w": 8,
     "x": 16,
-    "y": 105
+    "y": 125
    },
    "targets": [
     {

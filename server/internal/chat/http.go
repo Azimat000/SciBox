@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -39,6 +40,9 @@ type Handler struct {
 	svc         *Service
 	logger      *slog.Logger
 	requireUser func(http.Handler) http.Handler
+	// hub — живой поток (срез 39); nil — адрес потока отвечает 404.
+	hub      *Hub
+	onStream func(context.Context)
 }
 
 // NewHandler собирает обработчики. requireUser — проверка входа из пакета auth.
@@ -49,6 +53,7 @@ func NewHandler(svc *Service, logger *slog.Logger, requireUser func(http.Handler
 // Mount подключает адреса к роутеру, который уже живёт под /api и прошёл Authenticate.
 func (h *Handler) Mount(r chi.Router) {
 	r.With(h.requireUser).Get("/chats", h.list)
+	r.With(h.requireUser).Get("/chats/events", h.events)
 	r.With(h.requireUser).Get("/chats/unread-count", h.unreadCount)
 	r.With(h.requireUser).Get("/chats/vacancies", h.vacancies)
 	r.With(h.requireUser).Get("/chats/{id}", h.get)

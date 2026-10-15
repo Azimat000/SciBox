@@ -116,6 +116,17 @@ func (q *Queries) EraseChatComplaints(ctx context.Context, userID uuid.UUID) err
 	return err
 }
 
+const eraseChatEvents = `-- name: EraseChatEvents :exec
+DELETE FROM chat_events WHERE user_id = $1 OR actor_id = $1
+`
+
+// Служебный журнал живого потока (срез 39): строки с номером человека как учёного переписки или как читавшего уходят сразу,
+// не дожидаясь 30 минут.
+func (q *Queries) EraseChatEvents(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatEvents, userID)
+	return err
+}
+
 const eraseChatParticipation = `-- name: EraseChatParticipation :exec
 DELETE FROM chat_participants WHERE user_id = $1
 `

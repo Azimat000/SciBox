@@ -774,12 +774,13 @@ func (q *Queries) LockOfferStatus(ctx context.Context, id uuid.UUID) (string, er
 	return status, err
 }
 
-const markChatRead = `-- name: MarkChatRead :exec
+const markChatRead = `-- name: MarkChatRead :one
 INSERT INTO chat_participants (chat_id, user_id, read_seq, updated_at)
 VALUES ($1, $2, (SELECT LEAST($3::int, c.last_seq) FROM chats c WHERE c.id = $1), $4::timestamptz)
 ON CONFLICT (chat_id, user_id) DO UPDATE SET
     read_seq = GREATEST(chat_participants.read_seq, EXCLUDED.read_seq),
     updated_at = EXCLUDED.updated_at
+RETURNING read_seq
 `
 
 type MarkChatReadParams struct {
@@ -790,14 +791,17 @@ type MarkChatReadParams struct {
 }
 
 // Прочитано до номера включительно: у человека и у его стороны. Отметка только растёт и не уходит дальше последнего.
-func (q *Queries) MarkChatRead(ctx context.Context, arg MarkChatReadParams) error {
-	_, err := q.db.Exec(ctx, markChatRead,
+// Возвращает отметку человека после записи: по ней видно, выросла ли она (срез 39, chat.read).
+func (q *Queries) MarkChatRead(ctx context.Context, arg MarkChatReadParams) (int32, error) {
+	row := q.db.QueryRow(ctx, markChatRead,
 		arg.ChatID,
 		arg.UserID,
 		arg.UpTo,
 		arg.Now,
 	)
-	return err
+	var read_seq int32
+	err := row.Scan(&read_seq)
+	return read_seq, err
 }
 
 const openChat = `-- name: OpenChat :one

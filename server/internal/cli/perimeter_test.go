@@ -70,7 +70,8 @@ func newPerimeterWorldOn(t *testing.T, vault *files.Vault) *perimeterWorld {
 	return &perimeterWorld{
 		vault: vault,
 		t:     t, pool: pool,
-		env: map[string]string{"DATABASE_URL": dbURL, "SCIBOX_PRODUCT_CONFIG": productConfig},
+		// Живой поток чата завершается сам через 100 мс: проверка адресов не ждёт его настоящих четырёх минут (срез 39).
+		env: map[string]string{"DATABASE_URL": dbURL, "SCIBOX_PRODUCT_CONFIG": productConfig, "SCIBOX_CHAT_STREAM_MAX_AGE": "100ms"},
 		web: httpapi.WebHandler(os.DirFS(dir)),
 	}
 }

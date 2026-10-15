@@ -455,6 +455,7 @@ func chatCases() []kase {
 	}
 	return []kase{
 		{route: "GET /api/chats", kind: self, make: func(*fx, actor) call { return call{query: "?side=scientist"} }},
+		{route: "GET /api/chats/events", kind: self},
 		{route: "GET /api/chats/unread-count", kind: self},
 		{route: "GET /api/chats/vacancies", kind: self},
 		{route: "GET /api/chats/{id}", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},

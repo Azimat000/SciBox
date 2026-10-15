@@ -132,6 +132,20 @@ type ChatComplaint struct {
 	CreatedAt time.Time
 }
 
+type ChatEvent struct {
+	ID        int64
+	Kind      string
+	ChatID    uuid.UUID
+	UserID    uuid.UUID
+	OrgID     uuid.UUID
+	UnitID    *uuid.UUID
+	Seq       int32
+	ActorID   *uuid.UUID
+	Side      *string
+	UpTo      int32
+	CreatedAt time.Time
+}
+
 type ChatMessage struct {
 	ChatID       uuid.UUID
 	Seq          int32
@@ -164,6 +178,14 @@ type ChatTemplate struct {
 	CreatedBy *uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type ChatUnreadMail struct {
+	ChatID     uuid.UUID
+	Side       string
+	Seq        int32
+	Since      time.Time
+	NotifiedAt *time.Time
 }
 
 type DeadlineReminder struct {

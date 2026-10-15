@@ -121,12 +121,14 @@ UPDATE chat_messages SET body = @body, edited_at = @now::timestamptz WHERE chat_
 UPDATE chat_messages SET body = '', deleted_at = @now::timestamptz WHERE chat_id = @chat_id AND seq = @seq;
 
 -- Прочитано до номера включительно: у человека и у его стороны. Отметка только растёт и не уходит дальше последнего.
--- name: MarkChatRead :exec
+-- Возвращает отметку человека после записи: по ней видно, выросла ли она (срез 39, chat.read).
+-- name: MarkChatRead :one
 INSERT INTO chat_participants (chat_id, user_id, read_seq, updated_at)
 VALUES (@chat_id, @user_id, (SELECT LEAST(@up_to::int, c.last_seq) FROM chats c WHERE c.id = @chat_id), @now::timestamptz)
 ON CONFLICT (chat_id, user_id) DO UPDATE SET
     read_seq = GREATEST(chat_participants.read_seq, EXCLUDED.read_seq),
-    updated_at = EXCLUDED.updated_at;
+    updated_at = EXCLUDED.updated_at
+RETURNING read_seq;
 
 -- name: RaiseSideRead :exec
 UPDATE chats SET

@@ -196,6 +196,10 @@ func (s *services) registerSources(obs observability, runner *jobs.Runner, defs 
 			}
 			return out, nil
 		},
+		ChatMail: func(ctx context.Context) (opsmetrics.ChatMailQueue, error) {
+			st, err := s.chat.UnreadMailStats(ctx)
+			return opsmetrics.ChatMailQueue{Waiting: st.Waiting, Oldest: st.OldestWaiting}, err
+		},
 		Database: func(ctx context.Context) (opsmetrics.DatabaseStats, error) {
 			row, err := q.DatabaseStats(ctx)
 			if err != nil {

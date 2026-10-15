@@ -355,3 +355,80 @@ func BenchmarkBare(b *testing.B) {
 		r.ServeHTTP(httptest.NewRecorder(), req)
 	}
 }
+
+// Поток, который сообщил о себе через MarkStreaming, не считается «обрабатываемым» и не портит гистограмму времени ответа,
+// а в числе запросов остаётся (срез 39).
+func TestStreamingRequestIsNotAnOrdinaryOne(t *testing.T) {
+	m := metrics.New("serve", "test")
+	started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/stream" {
+			metrics.MarkStreaming(r.Context())
+			metrics.MarkStreaming(r.Context()) // повтор безвреден
+		}
+		close(started)
+		<-release
+		w.WriteHeader(http.StatusOK)
+	}))
+	go func() {
+		defer close(done)
+		do(h, http.MethodGet, "/api/stream")
+	}()
+	<-started
+	if got := gaugeValue(t, m, "scibox_http_requests_in_flight"); got != 0 {
+		t.Errorf("in flight with an open stream = %v, want 0", got)
+	}
+	close(release)
+	<-done
+	if got := gaugeValue(t, m, "scibox_http_requests_in_flight"); got != 0 {
+		t.Errorf("in flight after = %v, want 0 (not negative)", got)
+	}
+	if got := series(t, m, "scibox_http_request_duration_seconds"); len(got) != 0 {
+		t.Errorf("the stream is in the response time histogram: %v", got)
+	}
+	if got := series(t, m, "scibox_http_requests_total"); got["method=GET,route=api_unknown,status=200"] != 1 && len(got) != 1 {
+		t.Errorf("requests = %v", got)
+	}
+	// Без middleware (тесты, фоновые задачи) вызов ничего не делает.
+	metrics.MarkStreaming(context.Background())
+}
+
+// Наблюдения за потоком чата попадают в метрики с конечными метками.
+func TestChatStreamObserver(t *testing.T) {
+	m := metrics.New("serve", "test")
+	m.StreamOpened()
+	m.StreamOpened()
+	m.StreamClosed("slow", 30*time.Second)
+	m.StreamRejected("user_limit")
+	m.EventDispatched("message.created")
+	m.EventDelivered("message.created", 40*time.Millisecond)
+	m.EventDelivered("chat.read", time.Second)
+	m.ListenerState(true)
+	m.CatchUp(3)
+	if got := gaugeValue(t, m, "scibox_chat_streams_open"); got != 1 {
+		t.Errorf("open streams = %v", got)
+	}
+	if got := gaugeValue(t, m, "scibox_chat_listener_up"); got != 1 {
+		t.Errorf("listener = %v", got)
+	}
+	if got := series(t, m, "scibox_chat_streams_closed_total"); got["reason=slow"] != 1 || got["reason=client"] != 0 {
+		t.Errorf("closed = %v", got)
+	}
+	if got := series(t, m, "scibox_chat_streams_rejected_total"); got["reason=user_limit"] != 1 {
+		t.Errorf("rejected = %v", got)
+	}
+	ev := series(t, m, "scibox_chat_events_total")
+	if ev["kind=message.created,stage=dispatched"] != 1 || ev["kind=message.created,stage=delivered"] != 1 || ev["kind=chat.read,stage=delivered"] != 1 {
+		t.Errorf("events = %v", ev)
+	}
+	if got := series(t, m, "scibox_chat_delivery_seconds"); got[""] != 2 {
+		t.Errorf("delivery = %v", got)
+	}
+	if got := series(t, m, "scibox_chat_catchup_events_total"); got[""] != 3 {
+		t.Errorf("catchup = %v", got)
+	}
+	m.ListenerState(false)
+	if got := gaugeValue(t, m, "scibox_chat_listener_up"); got != 0 {
+		t.Errorf("listener after loss = %v", got)
+	}
+}

@@ -91,6 +91,23 @@ P.append(ts("Очередь проверки файлов на вирусы",[('
 P.append(ts("Как давно ждёт самый старый файл",[('max(scibox_files_oldest_pending_scan_seconds)',"ждёт")],12,y,12,8,unit="s",desc="Растёт, если антивирус недоступен."))
 y+=8
 
+P.append(row("Чат: живой поток и письма",y)); y+=1
+P.append(stat("Потоки открыто",'sum(scibox_chat_streams_open{job="scibox-serve"})',0,y,4,4,decimals=0,desc="Живые потоки чата на всех копиях. Цель среза 39: 5000 на две копии."))
+P.append(stat("Доставка p95",'histogram_quantile(0.95, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))',4,y,4,4,unit="s",decimals=3,thresholds=yel(1,2),desc="От записи события до записи в поток собеседника. Цель: не больше 2 секунд."))
+P.append(stat("Слушатель",'min(scibox_chat_listener_up{job="scibox-serve"})',8,y,4,4,mappings=[{"type":"value","options":{"0":{"text":"ОБОРВАН","color":"red"},"1":{"text":"работает","color":"green"}}}],thresholds=[{"color":"red","value":None},{"color":"green","value":1}],desc="Соединение LISTEN каждой копии с базой."))
+P.append(stat("Писем о сообщениях ждёт",'max(scibox_chat_unread_mail_waiting)',12,y,4,4,decimals=0,desc="Переписки, по которым ещё не ушло письмо о непрочитанном (включая тех, кому ещё не пора)."))
+P.append(stat("Старейшее ждёт",'max(scibox_chat_unread_mail_oldest_waiting_seconds)',16,y,4,4,unit="s",thresholds=yel(900,1800),desc="Письмо уходит через 15 минут; заметно больше значит, что задача отстаёт."))
+P.append(stat("Отказов в потоке",'sum(increase(scibox_chat_streams_rejected_total[10m]))',20,y,4,4,decimals=0,thresholds=yel(1,50),desc="За 10 минут: предел потоков на человека или на копию."))
+y+=4
+P.append(ts("Открытые потоки по копиям",[('sum by (instance) (scibox_chat_streams_open{job="scibox-serve"})',"{{instance}}")],0,y,8,8,desc="Предел на копию 3000 (SCIBOX_CHAT_STREAMS)."))
+P.append(ts("Задержка доставки",[('histogram_quantile(0.50, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))',"p50"),('histogram_quantile(0.95, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))',"p95"),('histogram_quantile(0.99, sum by (le) (rate(scibox_chat_delivery_seconds_bucket[5m])))',"p99")],8,y,8,8,unit="s",desc="От записи события в журнал до записи в поток получателя."))
+P.append(ts("События в секунду по виду",[('sum by (kind, stage) (rate(scibox_chat_events_total[5m]))',"{{kind}} {{stage}}")],16,y,8,8,unit="ops",desc="dispatched — обработано копией, delivered — записано в поток получателя."))
+y+=8
+P.append(ts("Закрытия потоков по причине",[('sum by (reason) (rate(scibox_chat_streams_closed_total[5m]))',"{{reason}}")],0,y,8,7,unit="ops",desc="client — ушёл, age — срок жизни (раз в 4 минуты), slow — не успевает читать, rights/session — потеря прав или конец сессии."))
+P.append(ts("Отказы в потоке",[('sum by (reason) (rate(scibox_chat_streams_rejected_total[5m]))',"{{reason}}")],8,y,8,7,unit="ops"))
+P.append(ts("Добор пропущенного",[('sum(rate(scibox_chat_catchup_events_total[5m]))',"добрано из журнала")],16,y,8,7,unit="ops",desc="Не ноль, когда уведомление не пришло: обрыв соединения LISTEN или страховочный опрос."))
+y+=7
+
 P.append(row("Фоновые задачи",y)); y+=1
 P.append(table("Когда задача последний раз завершилась успешно",'time() - max by (task) (scibox_job_last_success_timestamp_seconds)',0,y,12,9,desc="Секунд с последнего успеха по общему расписанию. Больше трёх сроков — тревога.",
   transform=[{"id":"organize","options":{"excludeByName":{"Time":True,"__name__":True},"renameByName":{"task":"Задача","Value":"Секунд назад"}}}]))

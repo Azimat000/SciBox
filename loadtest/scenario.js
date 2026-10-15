@@ -54,6 +54,18 @@ const unexpected = new Counter('unexpected_status'); // не тот код, ко
 function pick(arr, i) {
   return arr[i % arr.length];
 }
+// Номер отправки сообщения: случайный UUID версии 4 (в k6 нет встроенного).
+function uuidv4() {
+  const h = '0123456789abcdef';
+  let out = '';
+  for (let i = 0; i < 36; i++) {
+    if (i === 8 || i === 13 || i === 18 || i === 23) out += '-';
+    else if (i === 14) out += '4';
+    else if (i === 19) out += h[8 + rnd(4)];
+    else out += h[rnd(16)];
+  }
+  return out;
+}
 function rnd(n) {
   return Math.floor(Math.random() * n);
 }
@@ -104,10 +116,23 @@ const KINDS = [
   { name: 'staff.vacancies', weight: 5, who: 'staff', budget: 200, req: () => ['GET', '/api/my/vacancies'] },
   { name: 'staff.scientists', weight: 10, who: 'staff', budget: 200, req: () => ['GET', '/api/scientists?q=' + q(word()) + '&open=1'] },
 
+  // Чат (срез 39): значок в шапке и список читаются часто, окно переписки открывает шапку и ленту, запись идёт редко.
+  { name: 'chats.unread', weight: 30, who: 'applicant', budget: 200, req: () => ['GET', '/api/chats/unread-count'] },
+  { name: 'chats.list', weight: 15, who: 'applicant', budget: 200, req: () => ['GET', '/api/chats?side=scientist&limit=30'] },
+  { name: 'staff.chats.unread', weight: 10, who: 'staff', budget: 200, req: () => ['GET', '/api/chats/unread-count'] },
+  { name: 'staff.chats.list', weight: 8, who: 'staff', budget: 200, req: () => ['GET', '/api/chats?side=org&limit=30'] },
+  { name: 'chat.header', weight: 10, who: 'applicant', budget: 200, special: 'chat-header' },
+  { name: 'chat.messages', weight: 10, who: 'applicant', budget: 200, special: 'chat-messages' },
+  { name: 'staff.chat.messages', weight: 5, who: 'staff', budget: 200, special: 'chat-messages' },
+
   // Запись (бюджет 400): вход, избранное, решение по отклику, отклик без файла.
   { name: 'login', weight: 10, who: 'applicant', budget: 400, special: 'login' },
   { name: 'favorite.add', weight: 5, who: 'applicant', budget: 400, req: () => ['PUT', '/api/favorites/' + pick(vacancies, rnd(1e9)), null, [200, 204]] },
   { name: 'staff.decide', weight: 5, who: 'staff', budget: 400, special: 'decide' },
+  // Чат: отправка и отметка «прочитано» (срез 39). Закрытая переписка отвечает 409, это ожидаемо.
+  { name: 'chat.send', weight: 4, who: 'applicant', budget: 400, special: 'chat-send' },
+  { name: 'staff.chat.send', weight: 2, who: 'staff', budget: 400, special: 'chat-send' },
+  { name: 'chat.read', weight: 4, who: 'applicant', budget: 400, special: 'chat-read' },
   { name: 'apply', weight: 10, who: 'applicant', budget: 400, special: 'apply' },
   // Отклик с файлом: проходит хранилище и антивирус, бюджет шире (D-159: файлы вне бюджета записи).
   { name: 'apply.file', weight: 3, who: 'applicant', budget: 1500, special: 'apply-file' },
@@ -196,6 +221,20 @@ export default function () {
     case 'login': {
       const a = pick(applicants, rnd(1e9));
       send(kind, 'POST', '/api/auth/login', JSON.stringify({ email: a.e, password: PASSWORD }), '', [200]);
+      return;
+    }
+    case 'chat-header':
+    case 'chat-messages':
+    case 'chat-send':
+    case 'chat-read': {
+      const who = kind.who === 'staff' ? pick(staff, rnd(1e9)) : pick(applicants, rnd(1e9));
+      const ids = kind.who === 'staff' ? who.chats : who.c;
+      if (!ids || !ids.length) return;
+      const chat = pick(ids, rnd(1e9));
+      if (kind.special === 'chat-header') send(kind, 'GET', `/api/chats/${chat}`, null, who.t, [200, 404]);
+      else if (kind.special === 'chat-messages') send(kind, 'GET', `/api/chats/${chat}/messages?limit=30`, null, who.t, [200, 404]);
+      else if (kind.special === 'chat-read') send(kind, 'POST', `/api/chats/${chat}/read`, JSON.stringify({ up_to: 1000000 }), who.t, [204, 404]);
+      else send(kind, 'POST', `/api/chats/${chat}/messages`, JSON.stringify({ text: 'Нагрузка: ' + i, client_id: uuidv4() }), who.t, [200, 201, 404, 409]);
       return;
     }
     case 'decide': {

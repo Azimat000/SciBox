@@ -62,6 +62,14 @@ var (
 		Guest: httpguard.Rate{Requests: 30, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 240, Per: time.Minute},
 	}
+	// chatStreams — открытие живого потока чата (срез 39): сайт держит один поток и переподключается раз в 4 минуты или
+	// после обрыва с нарастающей паузой; предел не даёт зациклившейся вкладке открывать соединения без счёта. Число одновременных
+	// потоков ограничивает сам поток (на человека и на копию, D-244).
+	chatStreams = &httpguard.Policy{
+		Name:  "chat_stream",
+		Guest: httpguard.Rate{Requests: 5, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 30, Per: time.Minute},
+	}
 	// chatSends — отправка сообщения: живой человек пишет не чаще пары сообщений в минуту подряд; 30 в минуту дают запас
 	// на быстрый диалог и не дают засыпать собеседника потоком (T-99, предел уточняется в срезе 40).
 	chatSends = &httpguard.Policy{
@@ -122,6 +130,7 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: post, Pattern: "/api/applications", Body: uploadBody, Slow: true, Limit: applyUploads},
 
 		{Method: get, Pattern: "/api/chats", Limit: chatReads},
+		{Method: get, Pattern: "/api/chats/events", Limit: chatStreams},
 		{Method: get, Pattern: "/api/chats/unread-count", Limit: chatReads},
 		{Method: get, Pattern: "/api/chats/vacancies", Limit: chatReads},
 		{Method: get, Pattern: "/api/chats/{id}", Limit: chatReads},

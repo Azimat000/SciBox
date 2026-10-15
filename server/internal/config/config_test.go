@@ -443,6 +443,44 @@ func TestLoadSearchCacheTTL(t *testing.T) {
 	}
 }
 
+// Потоки чата (срез 39, D-244): по умолчанию 3000 на копию и 5 на человека, off и 0 выключают поток, ошибка называет настройку.
+func TestLoadChatStreams(t *testing.T) {
+	p := writeFile(t, `{"name":"SciBox"}`)
+	load := func(key, value string) (Config, error) {
+		env := map[string]string{"SCIBOX_PRODUCT_CONFIG": p}
+		if value != "" {
+			env[key] = value
+		}
+		return Load(envMap(env))
+	}
+	for _, tc := range []struct {
+		value string
+		want  int
+	}{{"", DefaultChatStreams}, {"10", 10}, {" 5000 ", 5000}, {"off", 0}, {"OFF", 0}, {"0", 0}} {
+		cfg, err := load("SCIBOX_CHAT_STREAMS", tc.value)
+		if err != nil || cfg.ChatStreams != tc.want {
+			t.Errorf("streams %q: got %d err=%v, want %d", tc.value, cfg.ChatStreams, err, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		value string
+		want  int
+	}{{"", DefaultChatStreamsPerUser}, {"1", 1}, {"50", 50}} {
+		cfg, err := load("SCIBOX_CHAT_STREAMS_PER_USER", tc.value)
+		if err != nil || cfg.ChatStreamsPerUser != tc.want {
+			t.Errorf("per user %q: got %d err=%v, want %d", tc.value, cfg.ChatStreamsPerUser, err, tc.want)
+		}
+	}
+	for _, bad := range []struct{ key, value string }{
+		{"SCIBOX_CHAT_STREAMS", "-1"}, {"SCIBOX_CHAT_STREAMS", "много"}, {"SCIBOX_CHAT_STREAMS", "100001"},
+		{"SCIBOX_CHAT_STREAMS_PER_USER", "0"}, {"SCIBOX_CHAT_STREAMS_PER_USER", "51"}, {"SCIBOX_CHAT_STREAMS_PER_USER", "off"},
+	} {
+		if _, err := load(bad.key, bad.value); err == nil || !strings.Contains(err.Error(), bad.key) {
+			t.Errorf("%s=%q: err = %v, want one naming the setting", bad.key, bad.value, err)
+		}
+	}
+}
+
 func TestLoadObservability(t *testing.T) {
 	p := writeFile(t, `{"name":"SciBox"}`)
 	load := func(m map[string]string) (Config, error) {

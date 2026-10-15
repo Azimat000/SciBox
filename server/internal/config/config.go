@@ -93,6 +93,13 @@ type Config struct {
 	// SearchCacheTTL — сколько копия сервера помнит ответ поиска вакансий и каталога учёных (для гостя) на один и тот же
 	// запрос (SCIBOX_SEARCH_CACHE_TTL, срез 27, D-179). 0 — кеш выключен.
 	SearchCacheTTL time.Duration
+	// ChatStreams — сколько живых потоков чата копия держит одновременно (SCIBOX_CHAT_STREAMS, срез 39, D-244);
+	// ChatStreamsPerUser — сколько из них на одного человека (SCIBOX_CHAT_STREAMS_PER_USER). 0 у первого — поток выключен.
+	ChatStreams        int
+	ChatStreamsPerUser int
+	// ChatStreamMaxAge — самое долгое время жизни одного потока (SCIBOX_CHAT_STREAM_MAX_AGE): сайт переподключается сам.
+	// Должно быть короче общего срока записи Caddy (5 минут, D-242).
+	ChatStreamMaxAge time.Duration
 	// Log — формат и уровень журнала (SCIBOX_LOG_FORMAT, SCIBOX_LOG_LEVEL, срез 26).
 	Log Log
 	// Ops — внутренний порт: проверки живости, метрики, pprof (SCIBOX_OPS_*, срез 26, T-25).
@@ -136,6 +143,11 @@ const minOpsToken = 24
 const (
 	DefaultShutdownTimeout       = 20 * time.Second
 	DefaultSearchCacheTTL        = 15 * time.Second
+	DefaultChatStreams           = 3000
+	DefaultChatStreamsPerUser    = 5
+	DefaultChatStreamMaxAge      = 4 * time.Minute
+	maxChatStreams               = 100000
+	maxChatStreamsPerUser        = 50
 	maxSearchCacheTTL            = 5 * time.Minute
 	DefaultCrossrefMaxConcurrent = 1
 	maxCrossrefMaxConcurrent     = 10
@@ -235,6 +247,34 @@ func Load(getenv func(string) string) (Config, error) {
 			}
 			cfg.SearchCacheTTL = d
 		}
+	}
+	cfg.ChatStreams = DefaultChatStreams
+	if v := strings.ToLower(strings.TrimSpace(getenv("SCIBOX_CHAT_STREAMS"))); v != "" {
+		if v == "off" || v == "0" {
+			cfg.ChatStreams = 0
+		} else {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 1 || n > maxChatStreams {
+				return Config{}, fmt.Errorf("SCIBOX_CHAT_STREAMS: want off or a number from 1 to %d, got %q", maxChatStreams, v)
+			}
+			cfg.ChatStreams = n
+		}
+	}
+	cfg.ChatStreamsPerUser = DefaultChatStreamsPerUser
+	if v := strings.TrimSpace(getenv("SCIBOX_CHAT_STREAMS_PER_USER")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxChatStreamsPerUser {
+			return Config{}, fmt.Errorf("SCIBOX_CHAT_STREAMS_PER_USER: want a number from 1 to %d, got %q", maxChatStreamsPerUser, v)
+		}
+		cfg.ChatStreamsPerUser = n
+	}
+	cfg.ChatStreamMaxAge = DefaultChatStreamMaxAge
+	if v := strings.TrimSpace(getenv("SCIBOX_CHAT_STREAM_MAX_AGE")); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 100*time.Millisecond || d > 10*time.Minute {
+			return Config{}, fmt.Errorf("SCIBOX_CHAT_STREAM_MAX_AGE: want a duration from 100ms to 10m like 4m, got %q", v)
+		}
+		cfg.ChatStreamMaxAge = d
 	}
 	if cfg.AllowDestructive, err = envBool(getenv, "SCIBOX_ALLOW_DESTRUCTIVE", false); err != nil {
 		return Config{}, err

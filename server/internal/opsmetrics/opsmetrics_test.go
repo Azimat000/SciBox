@@ -91,6 +91,9 @@ func TestEverySourceIsExported(t *testing.T) {
 		Files: func(context.Context) (opsmetrics.FileQueues, error) {
 			return opsmetrics.FileQueues{Pending: 3, OldestPending: now.Add(-10 * time.Minute), Deletions: 4, Legacy: 5}, nil
 		},
+		ChatMail: func(context.Context) (opsmetrics.ChatMailQueue, error) {
+			return opsmetrics.ChatMailQueue{Waiting: 6, Oldest: 20 * time.Minute}, nil
+		},
 		Database: func(context.Context) (opsmetrics.DatabaseStats, error) {
 			return opsmetrics.DatabaseStats{SizeBytes: 1 << 20, Connections: 12, MaxConnections: 100}, nil
 		},
@@ -117,6 +120,9 @@ func TestEverySourceIsExported(t *testing.T) {
 		"scibox_mail_queue_messages{state=retrying}":                 2,
 		"scibox_mail_queue_messages{state=undelivered}":              1,
 		"scibox_mail_queue_oldest_waiting_seconds":                   90,
+		"scibox_chat_unread_mail_waiting":                            6,
+		"scibox_chat_unread_mail_oldest_waiting_seconds":             1200,
+		"scibox_source_up{source=chat_mail}":                         1,
 		"scibox_files_pending_scan":                                  3,
 		"scibox_files_oldest_pending_scan_seconds":                   600,
 		"scibox_files_blob_deletions_queued":                         4,

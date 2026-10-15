@@ -239,6 +239,13 @@ func (s *Service) Send(ctx context.Context, user auth.User, id uuid.UUID, in Sen
 		if err := q.UnarchiveChat(ctx, dbgen.UnarchiveChatParams{ChatID: id, Now: now}); err != nil {
 			return fmt.Errorf("chat: unarchive: %w", err)
 		}
+		// Письмо о непрочитанном (D-245): сторона, которой адресован текст, получит его, если не прочитает за 15 минут.
+		if err := q.UpsertChatUnreadMail(ctx, dbgen.UpsertChatUnreadMailParams{ChatID: id, Side: string(to), Seq: seq, Now: now}); err != nil {
+			return fmt.Errorf("chat: unread mail: %w", err)
+		}
+		if err := publish(ctx, q, dbgen.PublishChatEventParams{Kind: evCreated, Seq: seq, ActorID: &user.ID, Now: now, ChatID: id}); err != nil {
+			return err
+		}
 		out, err = s.one(ctx, q, row, w, user, m)
 		return err
 	})
@@ -302,6 +309,9 @@ func (s *Service) Edit(ctx context.Context, user auth.User, id uuid.UUID, seq in
 				return fmt.Errorf("chat: edit message: %w", err)
 			}
 			m.Body, m.EditedAt = text, &now
+			if err := publish(ctx, q, dbgen.PublishChatEventParams{Kind: evEdited, Seq: m.Seq, ActorID: &user.ID, Now: now, ChatID: id}); err != nil {
+				return err
+			}
 		}
 		out, err = s.one(ctx, q, row, w, user, m)
 		return err
@@ -338,18 +348,19 @@ func (s *Service) Delete(ctx context.Context, user auth.User, id uuid.UUID, seq 
 		if err := q.DeleteChatMessage(ctx, dbgen.DeleteChatMessageParams{Now: now, ChatID: id, Seq: m.Seq}); err != nil {
 			return fmt.Errorf("chat: delete message: %w", err)
 		}
-		return nil
+		return publish(ctx, q, dbgen.PublishChatEventParams{Kind: evDeleted, Seq: m.Seq, ActorID: &user.ID, Now: now, ChatID: id})
 	})
 }
 
 // MarkRead отмечает прочитанным всё до номера upTo включительно. Отметка только растёт и не уходит дальше последнего
-// сообщения. У стороны организации «прочитано» значит, что прочитал хоть один сотрудник.
+// сообщения. У стороны организации «прочитано» значит, что прочитал хоть один сотрудник. Если отметка человека выросла,
+// об этом узнают его другие вкладки и собеседник (chat.read).
 func (s *Service) MarkRead(ctx context.Context, user auth.User, id uuid.UUID, upTo int) error {
 	if upTo < 0 {
 		return &BadParamError{Param: "up_to"}
 	}
 	return s.inTx(ctx, func(q *dbgen.Queries) error {
-		_, w, err := s.load(ctx, q, user, id)
+		row, w, err := s.load(ctx, q, user, id)
 		if err != nil {
 			return err
 		}
@@ -358,10 +369,19 @@ func (s *Service) MarkRead(ctx context.Context, user auth.User, id uuid.UUID, up
 		if err := q.RaiseSideRead(ctx, dbgen.RaiseSideReadParams{Side: string(w.side), UpTo: num.Int32(upTo), ID: id}); err != nil {
 			return fmt.Errorf("chat: raise side read: %w", err)
 		}
-		if err := q.MarkChatRead(ctx, dbgen.MarkChatReadParams{ChatID: id, UserID: user.ID, UpTo: num.Int32(upTo), Now: s.now()}); err != nil {
+		now := s.now()
+		mine, err := q.MarkChatRead(ctx, dbgen.MarkChatReadParams{ChatID: id, UserID: user.ID, UpTo: num.Int32(upTo), Now: now})
+		if err != nil {
 			return fmt.Errorf("chat: mark read: %w", err)
 		}
-		return nil
+		if err := q.ClearChatUnreadMail(ctx, dbgen.ClearChatUnreadMailParams{ChatID: id, Side: string(w.side)}); err != nil {
+			return fmt.Errorf("chat: clear unread mail: %w", err)
+		}
+		if mine <= row.ReadSeq {
+			return nil // отметка не выросла: рассказывать нечего
+		}
+		side := string(w.side)
+		return publish(ctx, q, dbgen.PublishChatEventParams{Kind: evRead, ActorID: &user.ID, Side: &side, UpTo: mine, Now: now, ChatID: id})
 	})
 }
 
@@ -371,22 +391,36 @@ func (s *Service) Archive(ctx context.Context, user auth.User, id uuid.UUID, arc
 		if _, _, err := s.load(ctx, q, user, id); err != nil {
 			return err
 		}
-		if err := q.SetChatArchived(ctx, dbgen.SetChatArchivedParams{ChatID: id, UserID: user.ID, Archived: archived, Now: s.now()}); err != nil {
+		now := s.now()
+		if err := q.SetChatArchived(ctx, dbgen.SetChatArchivedParams{ChatID: id, UserID: user.ID, Archived: archived, Now: now}); err != nil {
 			return fmt.Errorf("chat: set archived: %w", err)
 		}
-		return nil
+		return publish(ctx, q, dbgen.PublishChatEventParams{Kind: evArchived, ActorID: &user.ID, Now: now, ChatID: id})
 	})
 }
 
-// Typing проверяет, что человеку можно печатать в этой переписке. Рассылка «печатает» собеседнику появится вместе с живым
-// потоком (срез 39), здесь только права и закрытие.
+// Typing сообщает собеседнику, что человек печатает (chat.typing). Права и закрытие проверяются так же, как при отправке;
+// в базу событие не пишется, а чаще раза в TypingEvery на человека и переписку молча пропускается (D-243).
 func (s *Service) Typing(ctx context.Context, user auth.User, id uuid.UUID) error {
-	row, _, err := s.load(ctx, s.q, user, id)
+	row, w, err := s.load(ctx, s.q, user, id)
 	if err != nil {
 		return err
 	}
 	if StateOf(row.ApplicationStatus, row.OfferStatus, row.Blocked).Closed {
 		return ErrClosed
+	}
+	if !s.typing.allow(id, user.ID, s.now()) {
+		return nil
+	}
+	note := typingNote{
+		ChatID: id, UserID: user.ID, Side: w.side, Scientist: row.UserID, OrgID: row.OrgID, UnitID: row.UnitID,
+		Name: user.Name, Anonymous: w.side == SideScientist && !nameSeen(row.Visibility, row.HiddenFrom, row.Revealed),
+	}
+	if note.Anonymous {
+		note.Name = ""
+	}
+	if err := s.q.NotifyChatTyping(ctx, note.payload()); err != nil {
+		return fmt.Errorf("chat: notify typing: %w", err)
 	}
 	return nil
 }

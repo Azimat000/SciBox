@@ -109,5 +109,20 @@ for rps in $(echo "$steps" | tr ',' ' '); do
   sleep 10
 done
 
+# Живой поток чата (срез 39): тысячи потоков на двух копиях, сообщения с заданной скоростью, время отправки и доставки.
+# CHAT_STREAMS=0 пропускает этот шаг; по умолчанию 5000 потоков (цель среза 39) и 50 сообщений в секунду на 60 секунд.
+chat_streams=${CHAT_STREAMS:-5000}
+if [ "$chat_streams" -gt 0 ]; then
+  echo
+  echo "=== живой поток чата: $chat_streams потоков, ${CHAT_RATE:-50} сообщений/с, ${CHAT_DURATION:-60s} ==="
+  for p in 9100 9102; do curl -fsS "http://127.0.0.1:$p/metrics" -o "$out/chat-metrics-before-$p.txt" 2>/dev/null || true; done
+  (cd server && ulimit -n 65536 2>/dev/null; go run ./cmd/chatload \
+    -db "$DATABASE_URL" -bases http://127.0.0.1:8091,http://127.0.0.1:8092 \
+    -streams "$chat_streams" -tabs "${CHAT_TABS:-3}" -rate "${CHAT_RATE:-50}" -duration "${CHAT_DURATION:-60s}" \
+    -out "$root/$out/chat.json") 2>&1 | tee "$out/chat.txt" || true
+  for p in 9100 9102; do curl -fsS "http://127.0.0.1:$p/metrics" -o "$out/chat-metrics-after-$p.txt" 2>/dev/null || true; done
+  for p in 9100 9102; do ps -o rss= -p "$(lsof -ti tcp:$p -sTCP:LISTEN 2>/dev/null | head -1)" 2>/dev/null | sed "s/^/память копии :$p, КБ: /" | tee -a "$out/chat.txt" || true; done
+fi
+
 echo
 echo "Готово. Таблицы: $out/step-*.txt; профили: go tool pprof -top -nodecount=25 server/bin/scibox $out/cpu-<зап/с>-<порт>.pprof"

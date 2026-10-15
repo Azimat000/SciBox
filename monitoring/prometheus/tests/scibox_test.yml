@@ -412,3 +412,104 @@ tests:
             exp_annotations:
               summary: "База не может отправить журнал изменений в архив"
               description: "Журнал копится на диске сервера, пока архив недоступен: он заполнит диск, а при аварии потеряются все изменения с последней отправки."
+
+  - name: chat listener down
+    interval: 1m
+    input_series:
+      - series: 'scibox_chat_listener_up{job="scibox-serve",instance="s:9100"}'
+        values: '1 1 0 0 0 0 0'
+      - series: 'scibox_chat_streams_open{job="scibox-serve",instance="s:9100"}'
+        values: '40 40 40 40 40 40 40'
+      # У воркера потоков нет: нулевое соединение там норма и тревоги не даёт.
+      - series: 'scibox_chat_listener_up{job="scibox-worker",instance="w:9101"}'
+        values: '0 0 0 0 0 0 0'
+      - series: 'scibox_chat_streams_open{job="scibox-worker",instance="w:9101"}'
+        values: '0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ChatListenerDown
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: ChatListenerDown
+        exp_alerts:
+          - exp_labels: { severity: warning, job: scibox-serve, instance: "s:9100" }
+            exp_annotations:
+              summary: "Копия не получает события чата от базы"
+              description: "Соединение LISTEN у s:9100 не поднято больше 2 минут. Сообщения доходят до потоков с задержкой опроса; смотрите журнал сервера (`chat listener lost`)."
+
+  - name: chat delivery slow
+    interval: 1m
+    input_series:
+      # До 5-й минуты все события укладываются в 0,25 с, потом половина идёт дольше 5 секунд.
+      - series: 'scibox_chat_delivery_seconds_bucket{le="0.25"}'
+        values: '0+10x4 40+5x15'
+      - series: 'scibox_chat_delivery_seconds_bucket{le="5"}'
+        values: '0+10x4 40+10x15'
+      - series: 'scibox_chat_delivery_seconds_bucket{le="+Inf"}'
+        values: '0+10x4 40+20x15'
+      - series: 'scibox_chat_delivery_seconds_count'
+        values: '0+10x4 40+20x15'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ChatDeliverySlow
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: ChatDeliverySlow
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "Сообщения чата доходят до собеседника дольше 2 секунд"
+              description: "p95 доставки: 5s (цель из docs/SCALING.md: не больше 2 секунд). Смотрите нагрузку базы и очередь раздачи на панели «Чат»."
+
+  - name: chat streams rejected
+    interval: 1m
+    input_series:
+      - series: 'scibox_chat_streams_rejected_total{reason="copy_limit",instance="s:9100"}'
+        values: '0 0 0 3 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5'
+      - series: 'scibox_chat_streams_rejected_total{reason="user_limit",instance="s:9100"}'
+        values: '0 4 9 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ChatStreamsCopyFull
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ChatStreamsCopyFull
+        exp_alerts:
+          - exp_labels: { severity: warning, instance: "s:9100" }
+            exp_annotations:
+              summary: "Копия сервера отказывает в живом обновлении: потоков больше предела"
+              description: "Отказов за 10 минут: 5. Поднимите SCIBOX_CHAT_STREAMS или добавьте копию сервера (предел по умолчанию 3000)."
+
+  - name: chat unread mail stale
+    interval: 1m
+    input_series:
+      - series: 'scibox_chat_unread_mail_oldest_waiting_seconds{instance="s:9100"}'
+        values: '0 300 900 1000 1100 2000 2100 2200 2300 2400 2500 2600 2700'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ChatUnreadMailStale
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ChatUnreadMailStale
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "Письма о непрочитанных сообщениях запаздывают"
+              description: "Самая старая переписка ждёт письма 45m 0s, а срок 15 минут. Проверьте задачу chat.unread_mail и очередь писем."
+
+  - name: chat streams closed as slow
+    interval: 1m
+    input_series:
+      - series: 'scibox_chat_streams_closed_total{reason="slow",instance="s:9100"}'
+        values: '0 0 10 30 60 90 120 120 120 120 120'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ChatStreamsClosedAsSlow
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: ChatStreamsClosedAsSlow
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "Потоки чата закрываются как медленные"
+              description: "За 10 минут закрыто 120: клиенты не успевают читать события или раздача отстаёт. Сайт переподключается и добирает пропущенное."

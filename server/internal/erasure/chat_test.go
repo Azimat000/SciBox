@@ -99,6 +99,13 @@ func TestEraseHandlesChats(t *testing.T) {
 	if n := testkit.Count(t, `SELECT count(*) FROM chat_participants WHERE chat_id = $1 AND user_id = $2`, theirs, w.tm.Owner.ID); n != 1 {
 		t.Errorf("marks of another chat = %d", n)
 	}
+	// Журнал живого потока (срез 39) не хранит номер стёртого ни как учёного переписки, ни как читавшего.
+	if n := testkit.Count(t, `SELECT count(*) FROM chat_events WHERE user_id = $1 OR actor_id = $1`, who.ID); n != 0 {
+		t.Errorf("journal rows of the erased scientist = %d", n)
+	}
+	if n := testkit.Count(t, `SELECT count(*) FROM chat_events WHERE chat_id = $1`, theirs); n == 0 {
+		t.Error("journal rows of another chat must stay")
+	}
 	// Текст сообщений в базе не хранит ни имени, ни почты стёртого: тело писал сам человек, оно ушло вместе с перепиской.
 	if n := testkit.Count(t, `SELECT count(*) FROM chat_messages WHERE body LIKE '%Ответ учёного%'`); n != 0 {
 		t.Errorf("text of the erased scientist = %d", n)

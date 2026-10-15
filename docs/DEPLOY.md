@@ -238,6 +238,7 @@ ssh -L 3100:localhost:3100 -L 9190:localhost:9190 scibox@сервер
 | Симптом | Что смотреть |
 |---|---|
 | Сайт не открывается | `./compose ps`; `./compose logs caddy` (сертификат: DNS указывает на сервер? порты 80 и 443 открыты?) |
+| Живое обновление чата не работает или приходит с задержкой | в `site.caddy` адрес `/api/chats/events` без сжатия и `flush_interval -1`; общий `write 5m` Caddy оставлен, сервер сам завершает поток через 4 минуты (`SCIBOX_CHAT_STREAM_MAX_AGE`); метрика `scibox_chat_listener_up` равна 1 (D-242) |
 | «502» от Caddy | `./compose logs app1 app2`; готовность: `./compose exec app1 /app/scibox healthcheck` |
 | Выкладка встала на `release` | `./compose logs release`; чаще всего миграция ждёт блокировку (повторить) или нет доступа к базе |
 | Письма не приходят | `./compose logs worker`; тревоги `MailQueueStale`, `MailQueueVeryStale`; проверьте `SMTP_*` и `smtp_password` |

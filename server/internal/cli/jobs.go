@@ -27,6 +27,11 @@ const (
 	fileSweepInterval = 6 * time.Hour
 	// fileSweepLease — сколько отводится одному проходу чистки осиротевших; упавшая копия не держит её дольше.
 	fileSweepLease = time.Hour
+	// unreadMailInterval — как часто смотрим, не пора ли слать письма о непрочитанных сообщениях (срез 39, D-245).
+	unreadMailInterval = time.Minute
+	// chatEventsInterval — как часто чистится журнал событий чата; chatEventsKeep — сколько он хранится (D-243).
+	chatEventsInterval = 5 * time.Minute
+	chatEventsKeep     = 30 * time.Minute
 	// staleQueue — с какого возраста самое старое письмо в очереди считается признаком неполадки.
 	staleQueue = 15 * time.Minute
 )
@@ -72,6 +77,20 @@ func (s *services) jobs() []jobs.Job {
 			if rep.Total() > 0 {
 				s.logger.Info("retention pass", "read_notifications", rep.ReadNotifications, "unread_notifications", rep.UnreadNotifications,
 					"audit_log", rep.AuditLog, "audit_addresses", rep.AuditAddresses, "unconfirmed_accounts", rep.UnconfirmedAccounts)
+			}
+			return err
+		}),
+		cluster("chat.unread_mail", unreadMailInterval, func(ctx context.Context) error {
+			n, err := s.chat.SendUnreadMail(ctx)
+			if n > 0 {
+				s.logger.Info("unread message mail", "queued", n)
+			}
+			return err
+		}),
+		cluster("chat.events_cleanup", chatEventsInterval, func(ctx context.Context) error {
+			n, err := s.chat.PruneEvents(ctx, chatEventsKeep, 2000, 50)
+			if n > 0 {
+				s.logger.Info("chat events pruned", "rows", n)
 			}
 			return err
 		}),

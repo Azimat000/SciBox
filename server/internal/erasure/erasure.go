@@ -114,6 +114,7 @@ func Erase(ctx context.Context, q *dbgen.Queries, user dbgen.User, now time.Time
 		{"chats", func() error { return q.EraseChatsOf(ctx, id) }},
 		{"chat participation", func() error { return q.EraseChatParticipation(ctx, id) }},
 		{"chat blocks", func() error { return q.EraseChatBlocks(ctx, id) }},
+		{"chat events", func() error { return q.EraseChatEvents(ctx, id) }},
 		{"chat complaints", func() error { return q.EraseChatComplaints(ctx, id) }},
 		{"chat template authorship", func() error { return q.EraseChatTemplateAuthor(ctx, &id) }},
 		{"offers", func() error { return q.EraseOffersTo(ctx, id) }},

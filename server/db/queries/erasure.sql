@@ -170,6 +170,11 @@ DELETE FROM chat_participants WHERE user_id = $1;
 -- name: EraseChatBlocks :exec
 DELETE FROM chat_blocks WHERE user_id = $1;
 
+-- Служебный журнал живого потока (срез 39): строки с номером человека как учёного переписки или как читавшего уходят сразу,
+-- не дожидаясь 30 минут.
+-- name: EraseChatEvents :exec
+DELETE FROM chat_events WHERE user_id = $1 OR actor_id = $1;
+
 -- name: EraseChatComplaints :exec
 DELETE FROM chat_complaints WHERE user_id = $1;
 

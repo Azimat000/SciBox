@@ -438,6 +438,17 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, obs obse
 	} else {
 		logger.Info("background jobs are off in this process: run `worker` for them")
 	}
+	// Живой поток чата: раздача событий этой копии. Перед остановкой сервера потоки закрываются (hub.Close ниже), иначе
+	// srv.Shutdown ждал бы их до срока остановки.
+	hub := svc.liveHub()
+	if hub != nil {
+		defer hub.Close()
+		background.Go(func() {
+			if err := hub.Run(jobCtx); err != nil {
+				logger.Error("chat stream hub stopped", "err", err)
+			}
+		})
+	}
 	if err := svc.registerSources(obs, runner, list); err != nil {
 		return fmt.Errorf("register metrics: %w", err)
 	}
@@ -476,6 +487,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, obs obse
 	// сервер перестаёт принимать новые соединения и дожидается текущих запросов; фоновые задачи в это время тоже
 	// дописывают свою порцию (их остановка началась с той же отмены ctx).
 	ops.drain()
+	if hub != nil {
+		hub.Close()
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -586,6 +600,11 @@ type services struct {
 	vault         *files.Vault
 	authHandler   *auth.Handler
 	queue         *notifications.Queue
+	// chat — сервис переписок: общий для обработчиков, живого потока и задач писем.
+	chat *chat.Service
+	// hub — раздача живых событий чата (только в serve); создаётся при первом обращении, когда метрики уже подключены.
+	hub     *chat.Hub
+	hubOnce sync.Once
 
 	// metrics считает запросы роутера; nil — без метрик (тесты). Задаётся после сборки (serve, worker).
 	metrics *metrics.Metrics
@@ -648,6 +667,7 @@ func newServices(cfg config.Config, pool *pgxpool.Pool, vault *files.Vault, logg
 		cfg: cfg, pool: pool, logger: logger, now: now, vault: vault,
 		accounts: accounts, organizations: organizations, notes: notes, outbox: outbox, queue: queue,
 		profiles: profileSvc, references: refSvc, vacancies: vacancySvc,
+		chat: chat.NewService(pool).WithMail(chat.MailConfig{ProductName: cfg.Product.Name, PublicURL: cfg.PublicURL}),
 		applications: applications.NewService(pool, profileSvc, refSvc, notes, vault, applicationsCfg),
 		matching:     matching.NewService(pool, vacancySvc, notes, matchingCfg, logger),
 		// Счётчики частоты в базе: лимит общий для всех копий сервера (D-141).
@@ -675,7 +695,7 @@ func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.
 		References:    references.NewHandler(s.references, logger, requireUser),
 		Notifications: notifications.NewHandler(s.notes, logger, requireUser),
 		Offers:        offers.NewHandler(offers.NewService(pool, s.notes, offers.DefaultConfig()), logger, requireUser),
-		Chat:          chat.NewHandler(chat.NewService(pool), logger, requireUser),
+		Chat:          s.chatHandler(requireUser),
 		Matching:      matching.NewHandler(s.matching, logger, requireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),
@@ -686,6 +706,32 @@ func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.
 		Perimeter:     httpapi.Perimeter{Proxies: cfg.TrustedProxies, HTTPS: cfg.HTTPS(), Store: s.counters, Now: s.now},
 		Metrics:       s.metrics,
 	})
+}
+
+// chatHandler собирает обработчики чата; живой поток подключается, если он не выключен (SCIBOX_CHAT_STREAMS=off).
+func (s *services) chatHandler(requireUser func(http.Handler) http.Handler) *chat.Handler {
+	h := chat.NewHandler(s.chat, s.logger, requireUser)
+	if hub := s.liveHub(); hub != nil {
+		h.WithHub(hub, metrics.MarkStreaming)
+	}
+	return h
+}
+
+// liveHub — раздача живых событий чата этой копии; nil, если поток выключен. Один на процесс.
+func (s *services) liveHub() *chat.Hub {
+	if s.cfg.ChatStreams <= 0 {
+		return nil
+	}
+	s.hubOnce.Do(func() {
+		var obs chat.Observer
+		if s.metrics != nil {
+			obs = s.metrics
+		}
+		cfg := chat.DefaultHubConfig()
+		cfg.MaxPerCopy, cfg.MaxPerUser, cfg.MaxAge = s.cfg.ChatStreams, s.cfg.ChatStreamsPerUser, s.cfg.ChatStreamMaxAge
+		s.hub = chat.NewHub(s.chat, s.pool.Config().ConnConfig, cfg, s.logger, obs)
+	})
+	return s.hub
 }
 
 // flushers — что дождаться перед выходом: письма, которые сервисы отправляют в очередь в фоне.

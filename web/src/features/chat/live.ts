@@ -1,7 +1,7 @@
 import type { ChatStreamEvent } from './api'
 
-// Клиент живого потока чата (срез 35, contracts/chat/events.json). EventSource подменить нельзя (подставной сервер
-// подменяет fetch), поэтому поток читается через fetch и ReadableStream; формат тот же: Server-Sent Events.
+// Клиент живого потока чата (срез 35, contracts/chat/events.json). EventSource в тестах подменить нельзя (подменяется
+// fetch), поэтому поток читается через fetch и ReadableStream; формат тот же: Server-Sent Events (D-222, D-242).
 
 export const STREAM_PATH = '/api/chats/events'
 

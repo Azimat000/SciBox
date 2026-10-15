@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -53,6 +54,17 @@ type Metrics struct {
 	slowQueries   *prometheus.CounterVec
 	timeouts      *prometheus.CounterVec
 	queryNames    *boundedSet
+
+	// Живой поток чата (срез 39): открытые потоки, закрытия и отказы по причине, события по виду и этапу, задержка
+	// доставки, состояние соединения LISTEN, добор пропущенного.
+	chatStreams  prometheus.Gauge
+	chatClosed   *prometheus.CounterVec
+	chatRejected *prometheus.CounterVec
+	chatEvents   *prometheus.CounterVec
+	chatDelivery prometheus.Histogram
+	chatLifetime prometheus.Histogram
+	chatListener prometheus.Gauge
+	chatCatchUp  prometheus.Counter
 }
 
 // New создаёт реестр с метриками Go и процесса и метриками сервера. service — имя процесса (serve, worker), version —
@@ -103,18 +115,57 @@ func New(service, version string) *Metrics {
 			Help: "Запросы, остановленные базой по сроку (statement_timeout), по имени запроса.",
 		}, []string{"query"}),
 		queryNames: newBoundedSet(maxQueryNames),
+		chatStreams: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "streams_open",
+			Help: "Открытые живые потоки чата этой копии.",
+		}),
+		chatClosed: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "streams_closed_total",
+			Help: "Закрытые потоки чата по причине: client, slow, rights, session, age, shutdown.",
+		}, []string{"reason"}),
+		chatRejected: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "streams_rejected_total",
+			Help: "Отказы в потоке чата: user_limit, copy_limit, shutdown.",
+		}, []string{"reason"}),
+		chatEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "events_total",
+			Help: "События чата по виду и этапу: dispatched (копия обработала событие), delivered (получатель получил его).",
+		}, []string{"kind", "stage"}),
+		chatDelivery: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "delivery_seconds",
+			Help: "От записи события чата в журнал до записи в поток получателя (цель среза 39: p95 не больше 2 секунд).", Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30},
+		}),
+		chatLifetime: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "stream_lifetime_seconds",
+			Help: "Сколько жил поток чата.", Buckets: []float64{1, 5, 15, 60, 120, 240, 300, 600},
+		}),
+		chatListener: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "listener_up",
+			Help: "1, пока соединение LISTEN с базой поднято: без него копия узнаёт о событиях только страховочным опросом.",
+		}),
+		chatCatchUp: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: Namespace, Subsystem: "chat", Name: "catchup_events_total",
+			Help: "События журнала, которые копия добрала, потому что уведомление не пришло (обрыв LISTEN, опрос).",
+		}),
 	}
 	build := prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: Namespace, Name: "build_info",
 		Help: "Версия сборки и процесс; значение всегда 1.",
 	}, []string{"service", "version", "go_version"})
 	build.WithLabelValues(label(service), label(version), runtime.Version()).Set(1)
-	reg.MustRegister(m.requests, m.duration, m.inFlight, m.panics, m.logs, m.queryDuration, m.slowQueries, m.timeouts, m.jobRuns, m.jobDuration, build)
+	reg.MustRegister(m.requests, m.duration, m.inFlight, m.panics, m.logs, m.queryDuration, m.slowQueries, m.timeouts, m.jobRuns, m.jobDuration, build,
+		m.chatStreams, m.chatClosed, m.chatRejected, m.chatEvents, m.chatDelivery, m.chatLifetime, m.chatListener, m.chatCatchUp)
 	// Ряды, которые должны существовать с нуля: тревога «стало больше» не видит первого события, если ряда ещё нет.
 	m.panics.WithLabelValues("http")
 	m.panics.WithLabelValues("job")
 	for _, l := range []string{"debug", "info", "warn", "error"} {
 		m.logs.WithLabelValues(l)
+	}
+	for _, r := range []string{"client", "slow", "rights", "session", "age", "shutdown"} {
+		m.chatClosed.WithLabelValues(r)
+	}
+	for _, r := range []string{"user_limit", "copy_limit", "shutdown"} {
+		m.chatRejected.WithLabelValues(r)
 	}
 	return m
 }
@@ -141,15 +192,75 @@ func (m *Metrics) MiddlewareFor(finder Finder) func(http.Handler) http.Handler {
 func (m *Metrics) middleware(next http.Handler, namer RouteNamer) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.inFlight.Inc()
-		defer m.inFlight.Dec()
+		st := &requestState{m: m}
+		defer func() {
+			if !st.streaming.Load() {
+				m.inFlight.Dec()
+			}
+		}()
 		start := time.Now()
 		rec := &statusRecorder{ResponseWriter: w}
-		next.ServeHTTP(rec, r)
+		next.ServeHTTP(rec, r.WithContext(context.WithValue(r.Context(), requestStateKey{}, st)))
 		method, route := methodLabel(r.Method), namer.Label(r)
 		m.requests.WithLabelValues(method, route, statusLabel(rec.code)).Inc()
-		m.duration.WithLabelValues(method, route).Observe(time.Since(start).Seconds())
+		if !st.streaming.Load() {
+			// Поток живёт минуты по замыслу: в задержках запросов и в числе «обрабатываемых сейчас» он только мешал бы.
+			m.duration.WithLabelValues(method, route).Observe(time.Since(start).Seconds())
+		}
 	})
 }
+
+// requestState — состояние запроса, которое обработчик может изменить через MarkStreaming.
+type requestState struct {
+	m         *Metrics
+	streaming atomic.Bool
+}
+
+type requestStateKey struct{}
+
+// MarkStreaming сообщает, что запрос стал долгим потоком (срез 39): он больше не считается «обрабатываемым сейчас» и не
+// попадает в гистограмму времени ответа (его число остаётся в `scibox_http_requests_total`). Повторный вызов безвреден.
+func MarkStreaming(ctx context.Context) {
+	if st, ok := ctx.Value(requestStateKey{}).(*requestState); ok && st.streaming.CompareAndSwap(false, true) {
+		st.m.inFlight.Dec()
+	}
+}
+
+// Наблюдения за потоком чата (chat.Observer, срез 39).
+
+// StreamOpened — поток открыт.
+func (m *Metrics) StreamOpened() { m.chatStreams.Inc() }
+
+// StreamClosed — поток закрыт по причине reason после lived.
+func (m *Metrics) StreamClosed(reason string, lived time.Duration) {
+	m.chatStreams.Dec()
+	m.chatClosed.WithLabelValues(label(reason)).Inc()
+	m.chatLifetime.Observe(lived.Seconds())
+}
+
+// StreamRejected — в потоке отказано.
+func (m *Metrics) StreamRejected(reason string) { m.chatRejected.WithLabelValues(label(reason)).Inc() }
+
+// EventDispatched — копия обработала событие чата.
+func (m *Metrics) EventDispatched(kind string) { m.chatEvents.WithLabelValues(label(kind), "dispatched").Inc() }
+
+// EventDelivered — событие записано в поток получателя через late после записи в журнал.
+func (m *Metrics) EventDelivered(kind string, late time.Duration) {
+	m.chatEvents.WithLabelValues(label(kind), "delivered").Inc()
+	m.chatDelivery.Observe(late.Seconds())
+}
+
+// ListenerState — соединение LISTEN поднято (true) или упало.
+func (m *Metrics) ListenerState(up bool) {
+	if up {
+		m.chatListener.Set(1)
+		return
+	}
+	m.chatListener.Set(0)
+}
+
+// CatchUp — добрано n событий журнала.
+func (m *Metrics) CatchUp(n int) { m.chatCatchUp.Add(float64(n)) }
 
 // JobFinished принимает итог прохода фоновой задачи (jobs.Observer).
 func (m *Metrics) JobFinished(name string, _ bool, took time.Duration, err error) {
