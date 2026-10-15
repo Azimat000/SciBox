@@ -111,6 +111,18 @@ func TestCan(t *testing.T) {
 		{"unknown role", unknownRole, ManageVacancies, ownUnit, false},
 		{"unknown role", unknownRole, ViewApplications, ownUnit, false},
 
+		// Шаблоны ответов в чате: владелец и кадровик, руководитель подразделения не правит общий шаблон организации.
+		{"owner", owner, EditChatTemplates, NoUnit, true},
+		{"owner", owner, EditChatTemplates, ownUnit, true},
+		{"hr", hr, EditChatTemplates, NoUnit, true},
+		{"hr", hr, EditChatTemplates, otherUnit, true},
+		{"hr with units", hrWithUnits, EditChatTemplates, ownUnit, true},
+		{"head", head, EditChatTemplates, ownUnit, false},
+		{"head", head, EditChatTemplates, NoUnit, false},
+		{"head of nothing", headOfNothing, EditChatTemplates, NoUnit, false},
+		{"stranger", stranger, EditChatTemplates, NoUnit, false},
+		{"unknown role", unknownRole, EditChatTemplates, ownUnit, false},
+
 		// Несуществующее действие запрещено всем.
 		{"owner", owner, Permission(0), ownUnit, false},
 		{"owner", owner, Permission(99), ownUnit, false},

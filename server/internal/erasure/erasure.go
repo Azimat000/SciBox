@@ -108,6 +108,11 @@ func Erase(ctx context.Context, q *dbgen.Queries, user dbgen.User, now time.Time
 		{"anonymize applications", func() error {
 			return q.AnonymizeApplications(ctx, dbgen.AnonymizeApplicationsParams{UserID: id, Now: now})
 		}},
+		// Переписки учёного уходят вместе с откликами и приглашениями; сообщения сотрудника в чужих переписках остаются
+		// без автора (подпись «Сотрудник организации»), его личные отметки стираются (срез 37, T-103).
+		{"chat authorship", func() error { return q.EraseChatAuthorship(ctx, &id) }},
+		{"chats", func() error { return q.EraseChatsOf(ctx, id) }},
+		{"chat participation", func() error { return q.EraseChatParticipation(ctx, id) }},
 		{"offers", func() error { return q.EraseOffersTo(ctx, id) }},
 		{"profile", func() error { return q.EraseProfile(ctx, id) }},
 		{"favorites", func() error { return q.EraseFavorites(ctx, id) }},

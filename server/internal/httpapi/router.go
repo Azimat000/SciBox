@@ -16,6 +16,7 @@ import (
 	"scibox/server/internal/applications"
 	"scibox/server/internal/audit"
 	"scibox/server/internal/auth"
+	"scibox/server/internal/chat"
 	"scibox/server/internal/dataexport"
 	"scibox/server/internal/health"
 	"scibox/server/internal/httpguard"
@@ -61,6 +62,8 @@ type Deps struct {
 	Notifications *notifications.Handler
 	// Offers подключает приглашения учёных на вакансии (/api/offers, /api/my/sent-offers). Нужен вместе с Auth.
 	Offers *offers.Handler
+	// Chat подключает переписки учёных и организаций (/api/chats). Нужен вместе с Auth.
+	Chat *chat.Handler
 	// Matching подключает избранное, сохранённые поиски, подбор и сроки (/api/favorites, /api/saved-searches, /api/matches,
 	// /api/deadlines). Нужен вместе с Auth.
 	Matching *matching.Handler
@@ -148,6 +151,9 @@ func NewRouter(d Deps) http.Handler {
 		}
 		if d.Offers != nil {
 			d.Offers.Mount(r)
+		}
+		if d.Chat != nil {
+			d.Chat.Mount(r)
 		}
 		if d.Matching != nil {
 			d.Matching.Mount(r)

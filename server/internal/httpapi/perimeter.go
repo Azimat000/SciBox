@@ -55,6 +55,26 @@ var (
 		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
 		User:  httpguard.Rate{Requests: 10, Per: time.Minute},
 	}
+	// chatReads — список переписок, шапка, лента, число в шапке (срез 37). Окно переписки открывает несколько запросов
+	// сразу, список обновляется при событиях; человеку больше четырёх в секунду не нужно.
+	chatReads = &httpguard.Policy{
+		Name:  "chat_read",
+		Guest: httpguard.Rate{Requests: 30, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 240, Per: time.Minute},
+	}
+	// chatSends — отправка сообщения: живой человек пишет не чаще пары сообщений в минуту подряд; 30 в минуту дают запас
+	// на быстрый диалог и не дают засыпать собеседника потоком (T-99, предел уточняется в срезе 40).
+	chatSends = &httpguard.Policy{
+		Name:  "chat_send",
+		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 30, Per: time.Minute},
+	}
+	// chatSignals — мелкие действия в переписке: «прочитано», «печатает», архив, правка и удаление своего сообщения.
+	chatSignals = &httpguard.Policy{
+		Name:  "chat_signal",
+		Guest: httpguard.Rate{Requests: 10, Per: time.Minute},
+		User:  httpguard.Rate{Requests: 180, Per: time.Minute},
+	}
 	// linkPages — страницы по одноразовым ссылкам из писем (рекомендатель, приглашение в организацию,
 	// смена почты): человеку хватит нескольких запросов, перебор ссылок должен упираться в предел.
 	linkPages = &httpguard.Policy{
@@ -72,6 +92,7 @@ const uploadBody = 64 << 20
 // и без ограничения частоты. Каждый шаблон проверяется по настоящему роутеру (cli: TestPerimeter).
 func PerimeterRoutes() []httpguard.Route {
 	get, post := http.MethodGet, http.MethodPost
+	patch, del := http.MethodPatch, http.MethodDelete
 	return []httpguard.Route{
 		{Method: get, Pattern: "/api/health", Limit: publicReads},
 		{Method: get, Pattern: "/api/landing", Limit: publicReads},
@@ -92,6 +113,19 @@ func PerimeterRoutes() []httpguard.Route {
 		{Method: get, Pattern: "/api/account/export", Slow: true},
 		{Method: get, Pattern: "/api/my/candidates/export", Limit: exportFiles},
 		{Method: post, Pattern: "/api/applications", Body: uploadBody, Slow: true, Limit: applyUploads},
+
+		{Method: get, Pattern: "/api/chats", Limit: chatReads},
+		{Method: get, Pattern: "/api/chats/unread-count", Limit: chatReads},
+		{Method: get, Pattern: "/api/chats/vacancies", Limit: chatReads},
+		{Method: get, Pattern: "/api/chats/{id}", Limit: chatReads},
+		{Method: get, Pattern: "/api/chats/{id}/messages", Limit: chatReads},
+		{Method: post, Pattern: "/api/chats/{id}/messages", Limit: chatSends},
+		{Method: patch, Pattern: "/api/chats/{id}/messages/{seq}", Limit: chatSignals},
+		{Method: del, Pattern: "/api/chats/{id}/messages/{seq}", Limit: chatSignals},
+		{Method: post, Pattern: "/api/chats/{id}/read", Limit: chatSignals},
+		{Method: post, Pattern: "/api/chats/{id}/archive", Limit: chatSignals},
+		{Method: post, Pattern: "/api/chats/{id}/unarchive", Limit: chatSignals},
+		{Method: post, Pattern: "/api/chats/{id}/typing", Limit: chatSignals},
 
 		{Method: post, Pattern: "/api/recommendations/lookup", Limit: linkPages},
 		{Method: post, Pattern: "/api/recommendations/submit", Body: uploadBody, Slow: true, Limit: linkPages},

@@ -21,7 +21,7 @@ const (
 
 func accessCases() []kase {
 	var all []kase
-	for _, group := range [][]kase{publicCases(), accountCases(), orgCases(), vacancyCases(), applicationCases(), offerCases(), profileCases(), personalCases()} {
+	for _, group := range [][]kase{publicCases(), accountCases(), orgCases(), vacancyCases(), applicationCases(), offerCases(), chatCases(), profileCases(), personalCases()} {
 		all = append(all, group...)
 	}
 	return all
@@ -418,5 +418,53 @@ func personalCases() []kase {
 		{route: "POST /api/notifications/{id}/read", kind: object, allow: of(subject), deny: missing, twin: []string{"id"}, make: func(f *fx, _ actor) call {
 			return call{params: P{"id": f.notification().String()}}
 		}},
+	}
+}
+
+// ---- чат (срез 37, T-95, T-96) ----
+
+// chatCases: переписку видят учёный и те, кто ведёт отклики подразделения A. Остальным она «не существует»: ответ
+// совпадает с ответом на выдуманный номер. Свои сообщения правит и удаляет только автор; участник, который не автор,
+// получает 403 (переписка ему известна), посторонний 404.
+func chatCases() []kase {
+	participants := of(subject, owner, hr, headA)
+	chatOnly := func(f *fx, _ actor) call { return call{params: P{"id": f.chat().String()}} }
+	withBody := func(body map[string]any) func(*fx, actor) call {
+		return func(f *fx, _ actor) call { return call{params: P{"id": f.chat().String()}, body: body} }
+	}
+	// message — сообщение в новой переписке от заданного автора; возвращает адрес его номера.
+	message := func(author actor, body map[string]any) func(*fx, actor) call {
+		return func(f *fx, _ actor) call {
+			chat := f.chat()
+			f.must(*f.person(author), "POST", "/api/chats/{id}/messages", P{"id": chat.String()}, map[string]any{"text": "Моё сообщение", "client_id": uuid.NewString()})
+			return call{params: P{"id": chat.String(), "seq": "2"}, body: body}
+		}
+	}
+	outsiders := of(guest, stranger, headB, foreign)
+	return []kase{
+		{route: "GET /api/chats", kind: self, make: func(*fx, actor) call { return call{query: "?side=scientist"} }},
+		{route: "GET /api/chats/unread-count", kind: self},
+		{route: "GET /api/chats/vacancies", kind: self},
+		{route: "GET /api/chats/{id}", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
+		{route: "GET /api/chats/{id}/messages", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
+		{route: "POST /api/chats/{id}/messages", kind: object, allow: participants, deny: missing, twin: []string{"id"},
+			make: withBody(map[string]any{"text": "Здравствуйте!", "client_id": "9a3c6e1f-4b2d-4f8a-b7c1-2e5d8f0a6c93"})},
+		{route: "POST /api/chats/{id}/read", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: withBody(map[string]any{"up_to": 1})},
+		{route: "POST /api/chats/{id}/archive", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
+		{route: "POST /api/chats/{id}/unarchive", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
+		{route: "POST /api/chats/{id}/typing", kind: object, allow: participants, deny: missing, twin: []string{"id"}, make: chatOnly},
+
+		{route: "PATCH /api/chats/{id}/messages/{seq}", name: "message of the organization", kind: object, only: outsiders | of(owner), allow: of(owner), deny: missing,
+			twin: []string{"id"}, make: message(owner, map[string]any{"text": "Исправлено"})},
+		{route: "PATCH /api/chats/{id}/messages/{seq}", name: "message of the scientist", kind: object, only: outsiders | of(subject), allow: of(subject), deny: missing,
+			twin: []string{"id"}, make: message(subject, map[string]any{"text": "Исправлено"})},
+		{route: "PATCH /api/chats/{id}/messages/{seq}", name: "participant who is not the author", kind: object, only: of(subject, hr, headA), deny: forbidden,
+			why: "участник переписки знает о ней, чужое сообщение ему править нельзя (not_author)", make: message(owner, map[string]any{"text": "Чужое"})},
+		{route: "DELETE /api/chats/{id}/messages/{seq}", name: "message of the organization", kind: object, only: outsiders | of(owner), allow: of(owner), deny: missing,
+			twin: []string{"id"}, make: message(owner, nil)},
+		{route: "DELETE /api/chats/{id}/messages/{seq}", name: "message of the scientist", kind: object, only: outsiders | of(subject), allow: of(subject), deny: missing,
+			twin: []string{"id"}, make: message(subject, nil)},
+		{route: "DELETE /api/chats/{id}/messages/{seq}", name: "participant who is not the author", kind: object, only: of(subject, hr, headA), deny: forbidden,
+			why: "участник переписки знает о ней, чужое сообщение ему удалять нельзя (not_author)", make: message(owner, nil)},
 	}
 }

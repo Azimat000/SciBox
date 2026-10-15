@@ -99,6 +99,46 @@ type BlobDeletion struct {
 	QueuedAt   time.Time
 }
 
+type Chat struct {
+	ID               uuid.UUID
+	VacancyID        uuid.UUID
+	OrgID            uuid.UUID
+	UserID           uuid.UUID
+	ApplicationID    *uuid.UUID
+	OfferID          *uuid.UUID
+	LastSeq          int32
+	LastForScientist int32
+	LastForOrg       int32
+	ScientistRead    int32
+	OrgRead          int32
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type ChatMessage struct {
+	ChatID       uuid.UUID
+	Seq          int32
+	Kind         string
+	AuthorSide   *string
+	AuthorUserID *uuid.UUID
+	ToSide       string
+	Body         string
+	EventType    string
+	EventData    []byte
+	ClientID     *uuid.UUID
+	CreatedAt    time.Time
+	EditedAt     *time.Time
+	DeletedAt    *time.Time
+}
+
+type ChatParticipant struct {
+	ChatID    uuid.UUID
+	UserID    uuid.UUID
+	ReadSeq   int32
+	Archived  bool
+	UpdatedAt time.Time
+}
+
 type DeadlineReminder struct {
 	UserID    uuid.UUID
 	VacancyID uuid.UUID

@@ -23,6 +23,7 @@ import (
 	"scibox/server/internal/applications"
 	"scibox/server/internal/auth"
 	"scibox/server/internal/blobstore"
+	"scibox/server/internal/chat"
 	"scibox/server/internal/config"
 	"scibox/server/internal/crossref"
 	"scibox/server/internal/dataexport"
@@ -646,6 +647,7 @@ func (s *services) router(checker httpapi.HealthChecker, web http.Handler) http.
 		References:    references.NewHandler(s.references, logger, requireUser),
 		Notifications: notifications.NewHandler(s.notes, logger, requireUser),
 		Offers:        offers.NewHandler(offers.NewService(pool, s.notes, offers.DefaultConfig()), logger, requireUser),
+		Chat:          chat.NewHandler(chat.NewService(pool), logger, requireUser),
 		Matching:      matching.NewHandler(s.matching, logger, requireUser),
 		Reference:     refdata.NewHandler(refdata.NewService(pool), logger),
 		Landing:       landing.NewHandler(landing.NewService(pool), logger),

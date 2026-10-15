@@ -334,6 +334,9 @@ func (w *accessWorld) fingerprint() string {
 			(SELECT md5(coalesce(string_agg(id::text || name || city, ',' ORDER BY id), '')) FROM organizations),
 			(SELECT md5(coalesce(string_agg(id::text || status, ',' ORDER BY id), '')) FROM vacancy_offers),
 			(SELECT md5(coalesce(string_agg(id::text || status, ',' ORDER BY id), '')) FROM reference_requests),
+			(SELECT md5(coalesce(string_agg(id::text || last_seq::text || scientist_read::text || org_read::text, ',' ORDER BY id), '')) FROM chats),
+			(SELECT md5(coalesce(string_agg(chat_id::text || seq::text || body || coalesce(deleted_at::text, '') || coalesce(edited_at::text, ''), ',' ORDER BY chat_id, seq), '')) FROM chat_messages),
+			(SELECT md5(coalesce(string_agg(chat_id::text || user_id::text || read_seq::text || archived::text, ',' ORDER BY chat_id, user_id), '')) FROM chat_participants),
 			(SELECT count(*) FROM favorites), (SELECT count(*) FROM saved_searches), (SELECT count(*) FROM profile_items),
 			(SELECT count(*) FROM sessions), (SELECT count(*) FROM users WHERE deletion_due_at IS NOT NULL),
 			(SELECT md5(coalesce(string_agg(id::text || visibility || headline, ',' ORDER BY id), '')) FROM profiles))`).Scan(&fp)

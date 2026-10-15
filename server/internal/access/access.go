@@ -48,6 +48,9 @@ const (
 	ViewApplications
 	// ViewAudit — читать журнал действий организации (срез 21): в нём действия и имена всех сотрудников.
 	ViewAudit
+	// EditChatTemplates — править шаблоны ответов организации в чате (срез 37, D-215). Вставлять шаблон в переписку вправе
+	// каждый, кто ведёт отклики (ViewApplications), править только владелец и кадровик: шаблон общий на организацию.
+	EditChatTemplates
 )
 
 // Actor — человек в организации: роль и подразделения, которыми он руководит.
@@ -72,6 +75,8 @@ func (a Actor) Can(p Permission, unit uuid.UUID) bool {
 		return a.Role == RoleOwner || a.heads(unit)
 	case ManageVacancies, ViewApplications:
 		return a.Role == RoleOwner || a.Role == RoleHR || a.heads(unit)
+	case EditChatTemplates:
+		return a.Role == RoleOwner || a.Role == RoleHR
 	}
 	return false
 }

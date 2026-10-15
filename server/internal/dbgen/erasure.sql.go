@@ -87,6 +87,36 @@ func (q *Queries) EraseCandidateNotifications(ctx context.Context, userID uuid.U
 	return err
 }
 
+const eraseChatAuthorship = `-- name: EraseChatAuthorship :exec
+UPDATE chat_messages SET author_user_id = NULL WHERE author_user_id = $1
+`
+
+// Сообщения сотрудника в чужих переписках остаются без имени: подпись «Сотрудник организации».
+func (q *Queries) EraseChatAuthorship(ctx context.Context, authorUserID *uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatAuthorship, authorUserID)
+	return err
+}
+
+const eraseChatParticipation = `-- name: EraseChatParticipation :exec
+DELETE FROM chat_participants WHERE user_id = $1
+`
+
+// Личные отметки человека в переписках: что прочитал и что убрал в архив.
+func (q *Queries) EraseChatParticipation(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatParticipation, userID)
+	return err
+}
+
+const eraseChatsOf = `-- name: EraseChatsOf :exec
+DELETE FROM chats WHERE user_id = $1
+`
+
+// Переписки учёного стираются вместе с откликами и приглашениями: сообщения и отметки уходят каскадом (срез 37, T-103).
+func (q *Queries) EraseChatsOf(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, eraseChatsOf, userID)
+	return err
+}
+
 const eraseDeadlineReminders = `-- name: EraseDeadlineReminders :exec
 DELETE FROM deadline_reminders WHERE user_id = $1
 `

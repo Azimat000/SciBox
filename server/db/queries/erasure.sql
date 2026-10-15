@@ -153,3 +153,15 @@ UPDATE users SET
     deleted_at = sqlc.arg(now)::timestamptz,
     updated_at = sqlc.arg(now)::timestamptz
 WHERE id = sqlc.arg(id);
+
+-- Переписки учёного стираются вместе с откликами и приглашениями: сообщения и отметки уходят каскадом (срез 37, T-103).
+-- name: EraseChatsOf :exec
+DELETE FROM chats WHERE user_id = $1;
+
+-- Сообщения сотрудника в чужих переписках остаются без имени: подпись «Сотрудник организации».
+-- name: EraseChatAuthorship :exec
+UPDATE chat_messages SET author_user_id = NULL WHERE author_user_id = $1;
+
+-- Личные отметки человека в переписках: что прочитал и что убрал в архив.
+-- name: EraseChatParticipation :exec
+DELETE FROM chat_participants WHERE user_id = $1;

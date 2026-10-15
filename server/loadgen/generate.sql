@@ -236,6 +236,55 @@ SELECT md5('of' || i)::uuid, md5('v' || (1 + floor(:nv * power(random(), 1.5))::
 FROM generate_series(1, :noff) i CROSS JOIN LATERAL (SELECT (ARRAY['pending','interested','declined','cancelled'])[1 + i % 4] AS st) s
 ON CONFLICT DO NOTHING;
 
+-- Переписки (срез 37, D-214): по одной на каждый живой отклик и на каждое приглашение, по которому отклика нет. В среднем 10
+-- сообщений на переписку (при scale = 1 около 10 млн, docs/SCALING.md): первая строка о событии, дальше тексты сторон. У каждой
+-- пятой переписки есть непрочитанное, у каждой десятой личный архив одного сотрудника.
+INSERT INTO chats (id, vacancy_id, org_id, user_id, application_id, last_seq, last_for_scientist, last_for_org, scientist_read, org_read, created_at, updated_at)
+SELECT md5('c' || a.id)::uuid, a.vacancy_id, v.org_id, a.user_id, a.id, n.n,
+       n.n - n.n % 2, n.n - 1 + n.n % 2,
+       CASE WHEN get_byte(decode(md5(a.id::text), 'hex'), 2) % 5 = 0 THEN 0 ELSE n.n END,
+       CASE WHEN get_byte(decode(md5(a.id::text), 'hex'), 3) % 5 = 0 THEN 0 ELSE n.n END,
+       a.created_at, a.created_at + interval '1 minute' * n.n
+FROM applications a
+JOIN vacancies v ON v.id = a.vacancy_id
+CROSS JOIN LATERAL (SELECT 1 + get_byte(decode(md5(a.id::text || 'm'), 'hex'), 0) % 19 AS n) n
+WHERE a.status <> 'withdrawn'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO chats (id, vacancy_id, org_id, user_id, offer_id, last_seq, last_for_scientist, last_for_org, scientist_read, org_read, created_at, updated_at)
+SELECT md5('c' || o.id)::uuid, o.vacancy_id, v.org_id, o.user_id, o.id, 1, 1, 0, 0, 0, o.created_at, o.created_at
+FROM vacancy_offers o
+JOIN vacancies v ON v.id = o.vacancy_id
+WHERE o.status <> 'cancelled'
+ON CONFLICT DO NOTHING;
+
+-- Нормировка: ни одна отметка не больше последнего номера (CHECK не проверяется при загрузке).
+UPDATE chats SET last_for_org = least(last_for_org, last_seq), last_for_scientist = least(last_for_scientist, last_seq),
+                 scientist_read = least(scientist_read, last_seq), org_read = least(org_read, last_seq);
+
+CREATE TEMP TABLE msg_pool AS SELECT g AS k, pg_temp.words(15) AS body FROM generate_series(0, 199) g;
+
+INSERT INTO chat_messages (chat_id, seq, kind, author_side, author_user_id, to_side, body, event_type, event_data, client_id, created_at)
+SELECT c.id, g.seq,
+       CASE WHEN g.seq = 1 THEN 'system' ELSE 'text' END,
+       CASE WHEN g.seq = 1 THEN NULL WHEN g.seq % 2 = 0 THEN 'org' ELSE 'scientist' END,
+       CASE WHEN g.seq = 1 THEN NULL WHEN g.seq % 2 = 0 THEN md5('u' || (1 + (g.seq + length(c.id::text)) % :nu))::uuid ELSE c.user_id END,
+       CASE WHEN g.seq = 1 THEN 'org' WHEN g.seq % 2 = 0 THEN 'scientist' ELSE 'org' END,
+       CASE WHEN g.seq = 1 THEN '' ELSE p.body END,
+       CASE WHEN g.seq = 1 THEN 'application.sent' ELSE '' END,
+       CASE WHEN g.seq = 1 THEN jsonb_build_object('application_id', c.application_id) ELSE '{}'::jsonb END,
+       CASE WHEN g.seq = 1 THEN NULL ELSE md5('cm' || c.id || g.seq)::uuid END,
+       c.created_at + interval '1 minute' * g.seq
+FROM chats c
+CROSS JOIN LATERAL generate_series(1, c.last_seq) g(seq)
+JOIN msg_pool p ON p.k = (get_byte(decode(md5(c.id::text), 'hex'), 4) + g.seq) % 200;
+
+-- Личный архив: у каждой десятой переписки один сотрудник (владелец организации вакансии) убрал её в архив.
+INSERT INTO chat_participants (chat_id, user_id, read_seq, archived, updated_at)
+SELECT c.id, md5('u' || (1 + (get_byte(decode(md5(c.id::text), 'hex'), 5) * 997) % :nu))::uuid, c.org_read, true, c.updated_at
+FROM chats c WHERE get_byte(decode(md5(c.id::text), 'hex'), 6) % 10 = 0
+ON CONFLICT DO NOTHING;
+
 RESET session_replication_role;
 
 -- Тексты поиска вакансий пересобираются функцией самой базы (триггеры на время загрузки были выключены).
