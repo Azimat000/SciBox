@@ -780,6 +780,9 @@ describe('header and layout', () => {
     await open([textMessage(1, { author: colleague }), textMessage(2, { author: former })], chatHeaders.orgApplication())
     expect(screen.getByText('Иван Петров')).toBeInTheDocument()
     expect(screen.getByText('Сотрудник организации')).toBeInTheDocument()
+    // Коллега на своей стороне ленты, не рядом с соискателем
+    expect(screen.getByText('Иван Петров').closest('.chat-msg')).toHaveAttribute('data-ours', 'true')
+    expect(screen.getByText('Иван Петров').closest('.chat-msg')).not.toHaveAttribute('data-mine')
   })
 })
 

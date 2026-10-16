@@ -19,6 +19,7 @@ import { dateText, statusLabel, statusTone } from './labels'
 import './applications.css'
 import './review.css'
 import { ChatButton } from '../chat/ChatButton'
+import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 /** Порядок вкладок: сначала то, до чего ещё не дошли руки. */
 const tabs: readonly AppStatus[] = ['sent', 'viewed', 'invited', 'accepted', 'rejected', 'withdrawn']
@@ -29,6 +30,7 @@ export function CandidatesPage() {
 }
 
 function List() {
+  const tabsRef = useActiveTabInView<HTMLElement>()
   const c = t.applications.candidates
   const [params, setParams] = useSearchParams()
   const rawStatus = params.get('status') ?? ''
@@ -128,7 +130,7 @@ function List() {
         />
       )}
 
-      <nav className="manage-tabs cand-tabs" aria-label={c.tabs}>
+      <nav ref={tabsRef} className="manage-tabs cand-tabs" aria-label={c.tabs}>
         {['', ...tabs].map((s) => {
           const label = s ? t.applications.statusTabs[s as AppStatus] : t.applications.statusTabs.all
           const count = s ? counts[s as AppStatus] : everything

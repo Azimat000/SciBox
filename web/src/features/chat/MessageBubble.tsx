@@ -26,7 +26,10 @@ function Check({ double }: { double: boolean }) {
   )
 }
 
-/** Сообщение глазами смотрящего: своё справа, чужое слева; у чужого над первым в серии имя автора и организация. */
+/**
+ * Сообщение глазами смотрящего: своя сторона справа (своё и коллег по организации), собеседник слева.
+ * У чужого и у коллеги над первым в серии имя автора и организация.
+ */
 export function MessageBubble({ message, chat, now, fresh, actions }: { message: Message; chat: ChatHeader; now: number; fresh: boolean; actions: Actions }) {
   const m = t.chat.msg
   const mine = message.author?.is_me === true
@@ -56,7 +59,7 @@ export function MessageBubble({ message, chat, now, fresh, actions }: { message:
   }
 
   return (
-    <div className="chat-msg" data-mine={mine || undefined} data-deleted={message.deleted || undefined} data-fresh={fresh || undefined} data-seq={message.seq}>
+    <div className="chat-msg" data-mine={mine || undefined} data-ours={colleague || undefined} data-deleted={message.deleted || undefined} data-fresh={fresh || undefined} data-seq={message.seq}>
       {(!mine || colleague) && name && (
         <p className="chat-msg-author">
           <span className="chat-msg-name">{name}</span>

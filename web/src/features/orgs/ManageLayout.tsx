@@ -9,6 +9,7 @@ import { RequireUser } from './RequireUser'
 import { LoadFailed, PageSkeleton } from './states'
 import { Tag } from '../../ui/Tag'
 import './orgs.css'
+import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 /** Рамка управления организацией: название, роль и разделы. Пускает только сотрудников. */
 export function ManageLayout() {
@@ -16,6 +17,7 @@ export function ManageLayout() {
 }
 
 function Manage() {
+  const tabsRef = useActiveTabInView<HTMLElement>()
   const { slug = '' } = useParams()
   const query = useOrganization(slug)
 
@@ -55,7 +57,7 @@ function Manage() {
           <NavLink to={`/organizations/${org.slug}`}>{t.orgs.manage.viewPublic}</NavLink>
         </p>
       </header>
-      <nav className="manage-tabs" aria-label={t.orgs.manage.tabs}>
+      <nav ref={tabsRef} className="manage-tabs" aria-label={t.orgs.manage.tabs}>
         <NavLink className="manage-tab" to={`/my-organization/${org.slug}`} end>
           {t.orgs.manage.tabData}
         </NavLink>

@@ -169,6 +169,11 @@
   margin-top: var(--s-1);
 }
 
+/* Тихая кнопка первой в ряду: текст встаёт по левому краю строк выше, как в колонке решения */
+.inv-actions > .btn-quiet.btn-sm:first-child {
+  margin-left: -0.875rem;
+}
+
 .inv-when-fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));

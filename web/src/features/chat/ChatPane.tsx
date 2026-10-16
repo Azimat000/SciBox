@@ -118,8 +118,14 @@ function Header({ chat }: { chat: ChatHeader }) {
         </div>
       </div>
       <p className="chat-window-vacancy">
-        <Link to={`/vacancies/${encodeURIComponent(chat.vacancy.id)}`}>{chat.vacancy.title}</Link>
-        {chat.vacancy.unit_name && <span className="chat-window-unit">{chat.vacancy.unit_name}</span>}
+        <Link to={`/vacancies/${encodeURIComponent(chat.vacancy.id)}`} title={chat.vacancy.title}>
+          {chat.vacancy.title}
+        </Link>
+        {chat.vacancy.unit_name && (
+          <span className="chat-window-unit" title={chat.vacancy.unit_name}>
+            {chat.vacancy.unit_name}
+          </span>
+        )}
       </p>
       <div className="chat-window-meta">
         {chat.needs_answer ? <Tag tone="accent">{t.chat.needsAnswer}</Tag> : <Tag>{statusText(chat.status)}</Tag>}
@@ -216,7 +222,7 @@ function Thread({ chat }: { chat: ChatHeader }) {
   })
   const { state } = conv
 
-  const rows = useMemo(() => buildRows(state, new Date(now), { today: f.today, yesterday: f.yesterday }), [state, now, f.today, f.yesterday])
+  const rows = useMemo(() => buildRows(state, new Date(now), { today: f.today, yesterday: f.yesterday }, chat.side), [state, now, f.today, f.yesterday, chat.side])
 
   /** Что человек увидел, о том и говорим серверу: по нижнему краю ленты; вкладка в фоне ничего не читает. */
   const checkSeen = useCallback(() => {

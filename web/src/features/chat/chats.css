@@ -159,9 +159,17 @@
   white-space: nowrap;
 }
 
+/* Вакансия отличает переписки с одним и тем же человеком: до двух строк, а не обрыв на середине названия */
 .chat-row-vacancy {
   flex-basis: 12rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-size: var(--text-sm);
+  line-height: 1.4;
   color: var(--ink-body);
 }
 
@@ -324,6 +332,24 @@
 .chat-window-unit {
   flex-basis: 100%;
   color: var(--ink-soft);
+}
+
+/* Длинное название вакансии и подразделения не съедают ленту: до двух строк и одна строка, полностью во всплывающей подсказке */
+@media (min-width: 62.0625rem) {
+  .chat-window-vacancy a {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .chat-window-unit {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .chat-window-meta {

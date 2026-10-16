@@ -111,6 +111,8 @@ describe('chats page', () => {
     renderApp('/chats')
     expect(await screen.findByText('Переписка появляется, когда вы откликаетесь на вакансию или организация приглашает вас на неё.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Найти вакансии' })).toHaveAttribute('href', '/vacancies')
+    // Выбирать не из чего: подсказки «Выберите переписку» справа нет
+    expect(screen.queryByText(/Выберите переписку/)).not.toBeInTheDocument()
   })
 
   it('tells an organization where chats come from', async () => {

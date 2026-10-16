@@ -116,11 +116,15 @@
 
 .chat-msg {
   display: grid;
+  /* Колонка не шире ленты: подпись автора в одну строку (nowrap) иначе растягивает её и пузырь уезжает за край на телефоне */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   min-width: 0;
 }
 
-.chat-msg[data-mine] {
+/* Своя сторона справа: свои сообщения и сообщения коллег по организации, чтобы с первого взгляда было видно, кто пишет от кого */
+.chat-msg[data-mine],
+.chat-msg[data-ours] {
   justify-items: end;
 }
 
@@ -139,11 +143,15 @@
 .chat-msg-name {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 70%;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
   color: var(--ink);
+}
+
+/* Рядом с организацией имя занимает не больше 70%; одно имя (у соискателя) не усекается без нужды */
+.chat-msg-name:has(+ .chat-msg-org) {
+  max-width: 70%;
 }
 
 .chat-msg-org {
@@ -167,6 +175,11 @@
 .chat-msg[data-mine] .chat-bubble {
   border-color: var(--blue-wash);
   background: var(--blue-wash);
+}
+
+/* Коллега: та же сторона, но не я — белый лист с голубой кромкой, светлее своего */
+.chat-msg[data-ours] .chat-bubble {
+  border-color: var(--blue-wash);
 }
 
 .chat-msg-text {

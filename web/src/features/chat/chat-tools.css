@@ -209,7 +209,8 @@
 .chat-window-top {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  /* Подпись кнопки на одной линии с первой строкой имени, какой бы высоты ни была кнопка (на сенсорном экране она выше) */
+  align-items: first baseline;
   justify-content: space-between;
   gap: var(--s-3);
 }
@@ -221,7 +222,6 @@
 
 .chat-window-actions {
   flex: none;
-  margin-top: -0.125rem;
 }
 
 .chat-more-list {

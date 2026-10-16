@@ -18,6 +18,7 @@ import { SocialSoon } from './SocialSoon'
 import { useForm } from './useForm'
 import { useSignOut } from './useSignOut'
 import { checkName, compact } from './validation'
+import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 export type AccountTab = 'account' | 'security'
 
@@ -25,8 +26,9 @@ const tabPaths: Record<AccountTab, string> = { account: '/account', security: '/
 
 /** Две вкладки настроек: «Аккаунт» (имя, письма) и «Безопасность» (пароль, почта, устройства, удаление). */
 export function AccountTabs({ current }: { current: AccountTab }) {
+  const tabsRef = useActiveTabInView<HTMLElement>()
   return (
-    <nav className="manage-tabs account-tabs" aria-label={t.auth.account.tabs.label}>
+    <nav ref={tabsRef} className="manage-tabs account-tabs" aria-label={t.auth.account.tabs.label}>
       {(Object.keys(tabPaths) as AccountTab[]).map((tab) => (
         <Link key={tab} className="manage-tab" to={tabPaths[tab]} aria-current={current === tab ? 'page' : undefined}>
           {t.auth.account.tabs[tab]}

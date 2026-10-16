@@ -1,4 +1,4 @@
-import type { Message } from './api'
+import type { Message, Side } from './api'
 
 // Состояние ленты одной переписки и чистые правила вокруг неё (срез 35). Хук useConversation.ts только подключает это к сети.
 
@@ -112,11 +112,39 @@ function dropAcked(pending: PendingMessage[], items: readonly Message[]): Pendin
 }
 
 /**
- * Первое сообщение, пришедшее после того, как окно открыли с прочитанным до readAtOpen, и не своё: перед ним линия
- * «Новые сообщения». Системные строки считаются: это события по отклику, которые стоит заметить.
+ * Кому адресована строка о событии: та же таблица, что у сервера (`audience` в internal/chat/closure.go), по ней он
+ * считает непрочитанное. Строка о том, что сделал сам смотрящий («Вы отправили отклик», «Вы заблокировали»), ему не новость.
  */
-export function firstUnreadSeq(items: readonly Message[], readAtOpen: number): number | null {
-  const m = items.find((x) => x.seq > readAtOpen && !x.author?.is_me)
+const eventAudience: Record<string, Side> = {
+  'application.sent': 'org',
+  'application.viewed': 'scientist',
+  'invitation.created': 'scientist',
+  'invitation.answered': 'org',
+  'invitation.proposal_accepted': 'scientist',
+  'invitation.cancelled': 'scientist',
+  'application.decided': 'scientist',
+  'application.withdrawn': 'org',
+  'offer.created': 'scientist',
+  'offer.answered': 'org',
+  'offer.cancelled': 'scientist',
+  'chat.blocked': 'org',
+  'chat.unblocked': 'org',
+}
+
+/** Новость ли сообщение для смотрящего: не своё, а строка о событии адресована его стороне (неизвестная считается новостью). */
+function newsFor(m: Message, side: Side | undefined): boolean {
+  if (m.author?.is_me) return false
+  if (m.kind !== 'system' || !side) return true
+  const to = eventAudience[m.event?.type ?? '']
+  return to === undefined || to === side
+}
+
+/**
+ * Первое сообщение, пришедшее после того, как окно открыли с прочитанным до readAtOpen, и не своё: перед ним линия
+ * «Новые сообщения». Системные строки считаются, если адресованы стороне смотрящего: это события, которые стоит заметить.
+ */
+export function firstUnreadSeq(items: readonly Message[], readAtOpen: number, side?: Side): number | null {
+  const m = items.find((x) => x.seq > readAtOpen && newsFor(x, side))
   return m ? m.seq : null
 }
 
@@ -164,9 +192,9 @@ function startsRun(prev: Message | null, m: Message, sameDay: boolean): boolean 
 }
 
 /** Строки ленты: разделители дней, линия непрочитанного, сообщения сервера и неподтверждённые свои. */
-export function buildRows(state: Pick<ConvState, 'items' | 'pending' | 'readAtOpen'>, now: Date, labels: { today: string; yesterday: string }): Row[] {
+export function buildRows(state: Pick<ConvState, 'items' | 'pending' | 'readAtOpen'>, now: Date, labels: { today: string; yesterday: string }, side?: Side): Row[] {
   const rows: Row[] = []
-  const unread = firstUnreadSeq(state.items, state.readAtOpen)
+  const unread = firstUnreadSeq(state.items, state.readAtOpen, side)
   let prev: Message | null = null
   let prevDay = ''
   for (const m of state.items) {

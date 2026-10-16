@@ -124,8 +124,8 @@ describe('templates menu', () => {
     await open(orgHeader(), [textMessage(1)], { [TEMPLATES_URL]: reply(200, { items: [], can_edit: true, limit: 50 }) })
     await user.click(screen.getByRole('button', { name: 'Шаблоны' }))
     const menu = await screen.findByRole('dialog', { name: 'Шаблоны ответов' })
-    expect(await within(menu).findByText('Шаблонов пока нет.')).toBeInTheDocument()
-    expect(within(menu).getByRole('link', { name: 'Править шаблоны' })).toHaveAttribute('href', '/my-organization/tsentr-izucheniya-arktiki/chat-templates')
+    expect(await within(menu).findByText(/^Шаблонов пока нет\. Сохраните ответы/)).toBeInTheDocument()
+    expect(within(menu).getByRole('link', { name: 'Добавить шаблон' })).toHaveAttribute('href', '/my-organization/tsentr-izucheniya-arktiki/chat-templates')
   })
 
   it('tells a reader that others add templates', async () => {

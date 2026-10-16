@@ -14,6 +14,7 @@ import { ChatPane, ChoosePane } from './ChatPane'
 import { ChatRow } from './ChatRow'
 import '../orgs/orgs.css'
 import './chats.css'
+import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 const boxes: readonly Box[] = ['all', 'unread', 'archive']
 const SEARCH_DELAY_MS = 300
@@ -44,10 +45,17 @@ function Chats() {
           {/* Ключ по стороне: при смене режима поле поиска начинается заново */}
           <ChatList key={side} query={query} selected={id} />
         </section>
-        <section className="chats-pane">{id ? <ChatPane key={id} id={id} /> : <ChoosePane />}</section>
+        <section className="chats-pane">{id ? <ChatPane key={id} id={id} /> : <Choose query={query} />}</section>
       </div>
     </div>
   )
+}
+
+/** «Выберите переписку» только когда есть из чего выбирать: при пустом списке справа ничего, пустое состояние слева всё объясняет. */
+function Choose({ query }: { query: ChatQuery }) {
+  const list = useChatList(query)
+  const empty = list.data !== undefined && list.data.pages.every((p) => p.items.length === 0)
+  return empty ? null : <ChoosePane />
 }
 
 /** Непрочитанные в другом режиме: человек мог их пропустить, пока смотрит другую сторону. */
@@ -79,6 +87,7 @@ function useParamsPatch() {
 }
 
 function ListControls({ query }: { query: ChatQuery }) {
+  const tabsRef = useActiveTabInView<HTMLElement>()
   const [params] = useSearchParams()
   const patch = useParamsPatch()
   const list = useChatList(query)
@@ -94,7 +103,7 @@ function ListControls({ query }: { query: ChatQuery }) {
 
   return (
     <div className="chats-controls">
-      <nav className="manage-tabs chats-boxes" aria-label={t.chat.boxesLabel}>
+      <nav ref={tabsRef} className="manage-tabs chats-boxes" aria-label={t.chat.boxesLabel}>
         {boxes.map((b) => {
           const count = b === 'unread' ? counts?.unread : b === 'archive' ? counts?.archive : undefined
           return (

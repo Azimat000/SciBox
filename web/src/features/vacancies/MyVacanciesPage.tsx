@@ -12,6 +12,7 @@ import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { PAGE_SIZE, statuses, useMyVacancies, useTargets, type Card, type Status } from './api'
 import { statusLabel } from './labels'
 import './vacancies.css'
+import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 export function MyVacanciesPage() {
   return <RequireUser>{() => <MyVacancies />}</RequireUser>
@@ -21,6 +22,7 @@ export function MyVacanciesPage() {
 const tabSearch = (status: string) => (status ? `?status=${status}` : '')
 
 function MyVacancies() {
+  const tabsRef = useActiveTabInView<HTMLElement>()
   const [params, setParams] = useSearchParams()
   const rawStatus = params.get('status') ?? ''
   const status = (statuses as readonly string[]).includes(rawStatus) ? rawStatus : ''
@@ -70,7 +72,7 @@ function MyVacancies() {
         </div>
       )}
 
-      <nav className="manage-tabs" aria-label={t.vacancies.mine.tabs}>
+      <nav ref={tabsRef} className="manage-tabs" aria-label={t.vacancies.mine.tabs}>
         {['', ...statuses].map((s) => {
           const label = s ? t.vacancies.statusTabs[s as Status] : t.vacancies.statusTabs.all
           const count = s ? counts[s as Status] : everything

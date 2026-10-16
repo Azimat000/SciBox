@@ -131,7 +131,7 @@ export function TemplateMenu({ orgId, manageTo, onPick, onClose }: Props) {
       )}
       {manageTo && (
         <p className="chat-templates-foot">
-          <Link to={manageTo}>{m.manage}</Link>
+          <Link to={manageTo}>{query.isSuccess && all.length === 0 ? m.add : m.manage}</Link>
         </p>
       )}
     </div>

@@ -7,6 +7,11 @@
   gap: var(--s-2) var(--s-3);
 }
 
+/* Тихая кнопка первой в ряду: текст встаёт по левому краю строк выше */
+.offer-actions > .btn-quiet.btn-sm:first-child {
+  margin-left: -0.875rem;
+}
+
 .offer-answer {
   display: flex;
   flex-direction: column;

@@ -117,6 +117,14 @@ describe('firstUnreadSeq', () => {
   it('counts system lines, which have no author', () => {
     expect(firstUnreadSeq([msg(1), system(2)], 1)).toBe(2)
   })
+
+  it('skips a system line about what the viewer did, as the server does for the unread count', () => {
+    const items = [msg(1), system(2, 'chat.blocked'), system(3, 'chat.unblocked'), system(4, 'application.viewed')]
+    expect(firstUnreadSeq(items, 1, 'scientist')).toBe(4)
+    expect(firstUnreadSeq(items, 1, 'org')).toBe(2)
+    expect(firstUnreadSeq([msg(1), system(2, 'application.sent')], 1, 'scientist')).toBeNull()
+    expect(firstUnreadSeq([msg(1), system(2, 'something.new')], 1, 'scientist')).toBe(2)
+  })
 })
 
 describe('canModify', () => {

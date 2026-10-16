@@ -22,6 +22,7 @@ import '../applications/review.css'
 import '../orgs/orgs.css'
 import './offers.css'
 import { ChatButton } from '../chat/ChatButton'
+import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 /** Порядок вкладок: сначала то, что ждёт ответа. */
 const tabs: readonly OfferStatus[] = ['pending', 'interested', 'declined', 'cancelled']
@@ -32,6 +33,7 @@ export function SentOffersPage() {
 }
 
 function List() {
+  const tabsRef = useActiveTabInView<HTMLElement>()
   const s = t.offers.sent
   const [params, setParams] = useSearchParams()
   const rawStatus = params.get('status') ?? ''
@@ -78,7 +80,7 @@ function List() {
       <p className="lead">{s.lead}</p>
       <OffersTabs side="employer" current="offers" />
 
-      <nav className="manage-tabs cand-tabs" aria-label={s.tabs}>
+      <nav ref={tabsRef} className="manage-tabs cand-tabs" aria-label={s.tabs}>
         {['', ...tabs].map((st) => {
           const label = st ? s.tabNames[st as OfferStatus] : s.all
           const count = st ? counts[st as OfferStatus] : everything
