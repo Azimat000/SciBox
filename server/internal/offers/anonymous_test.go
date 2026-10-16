@@ -247,6 +247,29 @@ func TestHidingAfterAnOfferConcealsTheNameInOrganizationLists(t *testing.T) {
 	}
 }
 
+// T-117: анонимный профиль, ставший «скрытым», остаётся безымянным для организации, которой он не открывался: имя не
+// появляется ни в списке отправленных, ни в журнале. Открытое «организациям» имя видно.
+func TestAnonymousThenHiddenStaysNamelessInOrganizationLists(t *testing.T) {
+	w := newWorld(t)
+	sci, profile := w.anonScientist()
+	o := w.mustInvite(w.tm.HR, w.vacancy.ID, profile, "")
+	if _, err := w.Prof.SetPrivacy(bg, sci.User, "hidden", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.sent(); !got[0].Scientist.Anonymous || got[0].Scientist.Name != "" {
+		t.Errorf("после перехода на «скрыт»: %+v", got[0].Scientist)
+	}
+	if subj := w.auditSubject("offer.sent"); subj == nil || !subj.Anonymous {
+		t.Errorf("журнал после перехода на «скрыт»: %+v", subj)
+	}
+	if err := w.svc.Answer(bg, sci.User, o.ID, AnswerInput{Action: ActionInterested}); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.sent(); got[0].Scientist.Anonymous || got[0].Scientist.Name == "" {
+		t.Errorf("после «Интересно» имя открыто: %+v", got[0].Scientist)
+	}
+}
+
 // В ответе организации нет сведений, по которым анонимный профиль узнают: проверка по всему JSON.
 func TestAnonymousOfferJSONHasNoName(t *testing.T) {
 	w := newWorld(t)

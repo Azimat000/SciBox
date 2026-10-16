@@ -17,7 +17,7 @@ SELECT o.id, o.vacancy_id, o.user_id, o.status, o.message, o.answer_note, o.answ
        u.display_name AS scientist_name, p.id AS profile_id,
        -- Имя соискателя показывается организации, если профиль не анонимный и не скрыт от неё, либо человек открыл имя сам:
        -- ответил «Интересно» или откликнулся на вакансию этой организации (решает privacy.ShowsName).
-       COALESCE(p.visibility = 'anon' OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = p.id AND h.org_id = v.org_id), false)::boolean AS concealed,
+       COALESCE(p.visibility NOT IN ('orgs', 'public') OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = p.id AND h.org_id = v.org_id), false)::boolean AS concealed,
        COALESCE(o.status = 'interested' OR EXISTS (SELECT 1 FROM applications ra JOIN vacancies rv ON rv.id = ra.vacancy_id
                                             WHERE ra.user_id = o.user_id AND ra.status <> 'withdrawn' AND rv.org_id = v.org_id), false)::boolean AS revealed,
        v.title AS vacancy_title, v.status AS vacancy_status, v.org_id, v.unit_id, v.org_name, v.org_slug, v.deadline,
@@ -62,7 +62,7 @@ SELECT o.id, o.status, o.message, o.answer_note, o.answered_at, o.created_at,
        u.display_name AS scientist_name, p.id AS profile_id,
        -- Имя соискателя показывается организации, если профиль не анонимный и не скрыт от неё, либо человек открыл имя сам:
        -- ответил «Интересно» или откликнулся на вакансию этой организации (решает privacy.ShowsName).
-       COALESCE(p.visibility = 'anon' OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = p.id AND h.org_id = v.org_id), false)::boolean AS concealed,
+       COALESCE(p.visibility NOT IN ('orgs', 'public') OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = p.id AND h.org_id = v.org_id), false)::boolean AS concealed,
        COALESCE(o.status = 'interested' OR EXISTS (SELECT 1 FROM applications ra JOIN vacancies rv ON rv.id = ra.vacancy_id
                                             WHERE ra.user_id = o.user_id AND ra.status <> 'withdrawn' AND rv.org_id = v.org_id), false)::boolean AS revealed,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.unit_name,

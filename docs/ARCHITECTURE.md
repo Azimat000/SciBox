@@ -23,6 +23,7 @@ SciBox/
 │   ├── coverage-check    go vet + go test -race с покрытием + проверка порогов
 │   ├── load-test         нагрузочный тест (срез 27, D-177): две копии сервера и воркер на базе scibox_load, k6, ступени скорости, профили и метрики в `loadtest/.run/` (`make load-test`, `make load-smoke`)
 │   ├── load-data         пересоздаёт базу scibox_load и заливает объёмные данные по масштабу (срез 24; генератор `server/loadgen/generate.sql`)
+│   ├── zap-chat          OWASP ZAP по адресам чата (срез 41): строит описание адресов с настоящими номерами, заходит демо-аккаунтами организации и учёного, активная проверка, отчёты в `docs/slices/41-zap/` (только против `make dev`)
 │   └── e2e-db            пересоздаёт базу scibox_e2e и заливает демо-данные (для `make e2e`)
 ├── loadtest/             нагрузочный сценарий k6 `scenario.js` (смесь запросов, бюджеты) и `fixtures.sql` (сеансы, пары «человек — вакансия»); результаты прогонов в `.run/` не в git (срез 27)
 ├── e2e/                  сквозные тесты Playwright (свой package.json): playwright.config.ts поднимает сервер на 8090
@@ -115,7 +116,7 @@ SciBox/
         │   ├── status/   стартовая страница (проверка сервера), 404
         │   └── styleguide/  служебная страница /styleguide (вне покрытия)
         ├── i18n/         ru.ts (все тексты), index.ts (t)
-        ├── lib/          plural, deadline (срок подачи словами), normalize (поиск без регистра и ё)
+        ├── lib/          plural, deadline (срок подачи словами), normalize (поиск без регистра и ё), safeLink (`isSafeHttp`: ссылка только по честному адресу, срез 41)
         ├── styles/       tokens.css (цвета, шкалы), base.css (шрифты, сброс), layout.css
         ├── ui/           Button, Field/TextField/TextArea/Select (с группами пунктов), FilterGroup/ScienceFilter (группы фильтров и области науки; поиск и каталог), Combobox, Tag/FilterChip, FilePicker (выбор PDF), Deadline,
         │                 VacancyEntry (слот `action` под сроком: закладка), Modal, ToastProvider/useToast, EmptyState, Skeleton, icons, useLeaveGuard («Уйти без сохранения?», D-120); CSS рядом с компонентом
@@ -133,6 +134,7 @@ SciBox/
 - Для откликов и приглашений (срез 38): `chat.Record` (находит переписку по связи или заводит её через `chat.Open`, пишет строку `chat.AppendSystem`) вызывается в транзакции отклика или приглашения; `chat.LinksOf` даёт поле `chat` в ответах; `chat.Blocked` проверяют приглашения.
 - Срез 38: миграция `00032_chat_tools.sql` (`chat_templates`, `chat_blocks`, `chat_complaints`, `notification_settings.email_messages`), запросы `chat_tools.sql`, файлы `chat/events.go`, `tools.go` (блокировка, жалобы, шаблоны), `links.go`, `backfill.go`, `http_tools.go`; команда `scibox chats backfill` (и в `release`); демо-переписки `seed/chats.go`; политика периметра `chat_complaint`.
 - Срез 40: без миграций. `chat/limits.go` (`Limits`, `DefaultLimits`, `spendRate`, `checkSendLimits`, `checkComplaintLimits`, `mailRecipients`), суточные счётчики в `rate_events` (виды `chat_send`, `chat_send_org`, `chat_edit`, `chat_mail`), запросы `CountUnansweredChatText`, `CountChatComplaintsSince`, `HasChatComplaintSince`, `OldestChatComplaintSince`; тесты на множестве входных данных `chat/property_test.go` (`pgregory.net/rapid`) и `chat/fuzz_test.go`; сайт: `features/chat/text.ts` не делает ссылкой подмену адреса.
+- Срез 41: без миграций. `privacy.Visibility.NamePrivate` (имя скрыто в режимах «анонимно» и «скрыт», D-251) вместо проверки «анонимно» в `chat.nameSeen` и в SQL `offers.sql`, `audit.sql`, `chat.sql`; сайт: `lib/safeLink.ts` (`isSafeHttp`), им пользуются `features/chat/text.ts` и место собеседования в `features/applications/Invitations.tsx`; `scripts/zap-chat`.
 - Срез 39: миграция `00033_chat_live.sql`: `chat_events` (журнал событий для потока, `id bigint` по порядку записи, `kind`, `chat_id`, `user_id` учёного, `org_id`, `unit_id`, `seq`, `actor_id`, `side`, `up_to`, `created_at`; без внешних ключей, живёт 30 минут) и `chat_unread_mail` (`chat_id`, `side`, `seq`, `since`, `notified_at`; ключ `(chat_id, side)`, частичный индекс по `since` для ещё не отправленных); запросы `chat_live.sql`; шаг удаления аккаунта «chat events»; `server/cmd/chatload` (нагрузка потока: тысячи потоков, сообщения, время отправки и доставки); `scripts/load-test` запускает её после ступеней k6.
 - Удаление аккаунта (срез 38): шаги «chat blocks», «chat complaints», «chat template authorship»; выгрузка: разделы `chats`, `chat_messages_written_for_organizations`, `chat_blocked_organizations`, `chat_complaints`.
 - Удаление аккаунта (`erasure`): шаги «chat authorship», «chats», «chat participation»; карта ПДн знает три таблицы.

@@ -1,0 +1,562 @@
+{
+ "openapi": "3.0.3",
+ "info": {
+  "title": "SciBox chat",
+  "version": "1"
+ },
+ "servers": [
+  {
+   "url": "http://host.docker.internal:8080"
+  }
+ ],
+ "paths": {
+  "/api/chats": {
+   "get": {
+    "parameters": [
+     {
+      "name": "side",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "example": "org"
+      }
+     },
+     {
+      "name": "box",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "example": "all"
+      }
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "example": "а"
+      }
+     },
+     {
+      "name": "cursor",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "example": 10
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/unread-count": {
+   "get": {
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/vacancies": {
+   "get": {
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}": {
+   "get": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/messages": {
+   "get": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     },
+     {
+      "name": "before",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "example": 5
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "example": 10
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   },
+   "post": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "text": {
+          "type": "string",
+          "example": "Проверка"
+         },
+         "client_id": {
+          "type": "string",
+          "format": "uuid"
+         }
+        },
+        "required": [
+         "text",
+         "client_id"
+        ]
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/messages/{seq}": {
+   "patch": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     },
+     {
+      "name": "seq",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "example": 1
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "text": {
+          "type": "string",
+          "example": "Проверка"
+         }
+        },
+        "required": [
+         "text"
+        ]
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   },
+   "delete": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     },
+     {
+      "name": "seq",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "example": 1
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/read": {
+   "post": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "up_to": {
+          "type": "integer",
+          "example": 1
+         }
+        },
+        "required": [
+         "up_to"
+        ]
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/archive": {
+   "post": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/unarchive": {
+   "post": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/typing": {
+   "post": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chats/{id}/complaints": {
+   "post": {
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "efe24f19-1c43-4375-a77e-6ac6ae50731c"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "reason": {
+          "type": "string",
+          "example": "spam"
+         },
+         "note": {
+          "type": "string",
+          "example": "Проверка"
+         }
+        },
+        "required": [
+         "reason"
+        ]
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/chat-blocks": {
+   "get": {
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/orgs/{orgId}/chat-templates": {
+   "get": {
+    "parameters": [
+     {
+      "name": "orgId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "b28a1776-a48d-4ee0-8ccd-7dc84a47ef38"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   },
+   "post": {
+    "parameters": [
+     {
+      "name": "orgId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "b28a1776-a48d-4ee0-8ccd-7dc84a47ef38"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "title": {
+          "type": "string",
+          "example": "Шаблон"
+         },
+         "text": {
+          "type": "string",
+          "example": "Проверка"
+         }
+        },
+        "required": [
+         "title",
+         "text"
+        ]
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  },
+  "/api/orgs/{orgId}/chat-templates/{tid}": {
+   "patch": {
+    "parameters": [
+     {
+      "name": "orgId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "b28a1776-a48d-4ee0-8ccd-7dc84a47ef38"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "title": {
+          "type": "string",
+          "example": "Шаблон"
+         },
+         "text": {
+          "type": "string",
+          "example": "Проверка"
+         }
+        },
+        "required": [
+         "title",
+         "text"
+        ]
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   },
+   "delete": {
+    "parameters": [
+     {
+      "name": "orgId",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "example": "b28a1776-a48d-4ee0-8ccd-7dc84a47ef38"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "ok"
+     }
+    }
+   }
+  }
+ }
+}

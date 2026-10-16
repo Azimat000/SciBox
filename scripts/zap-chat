@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Проверка адресов чата сканером OWASP ZAP (срез 41, T-28, ASVS L2).
+
+Заходит под демо-аккаунтом (по умолчанию организация и учёный по очереди), строит описание адресов чата с настоящими
+номерами и гоняет `zap-api-scan` с боевой кукой сеанса. Пока идёт проверка, счётчики частоты в базе обнуляются каждые
+две секунды: иначе предел частоты сам прервал бы сканирование на второй минуте. Работает только против локального
+сервера разработки (`make dev`, 127.0.0.1:8080), данные в нём демонстрационные. Отчёты: `docs/slices/41-zap/`.
+
+Запуск: scripts/zap-chat [active|baseline] (по умолчанию active).
+"""
+import json, os, subprocess, sys, threading, time, urllib.request, http.cookiejar
+
+BASE = "http://127.0.0.1:8080"
+PASSWORD = "demo-password-2026"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "docs", "slices", "41-zap")
+PEOPLE = [("elena.orlova@demo.example.ru", "org"), ("dmitry.korolev@demo.example.ru", "scientist")]
+
+
+def login(email):
+    jar = http.cookiejar.CookieJar()
+    op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+    def call(method, path, body=None):
+        req = urllib.request.Request(BASE + path, method=method, headers={"Origin": BASE, "Content-Type": "application/json"},
+                                     data=json.dumps(body).encode() if body is not None else None)
+        with op.open(req, timeout=10) as r:
+            raw = r.read()
+            return json.loads(raw) if raw else None
+
+    call("POST", "/api/auth/login", {"email": email, "password": PASSWORD})
+    cookie = next(c.value for c in jar if c.name == "scibox_session")
+    return call, cookie
+
+
+def spec(chat_id, org_id, side):
+    seq = {"name": "seq", "in": "path", "required": True, "schema": {"type": "integer", "example": 1}}
+    cid = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid", "example": chat_id}}
+    tid = {"name": "tid", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+    body = lambda props, req=None: {"required": True, "content": {"application/json": {"schema": {"type": "object", "properties": props, "required": req or list(props)}}}}
+    text = {"type": "string", "example": "Проверка"}
+    cuid = {"type": "string", "format": "uuid"}
+    ok = {"responses": {"200": {"description": "ok"}}}
+    paths = {
+        "/api/chats": {"get": {"parameters": [
+            {"name": "side", "in": "query", "schema": {"type": "string", "example": side}},
+            {"name": "box", "in": "query", "schema": {"type": "string", "example": "all"}},
+            {"name": "q", "in": "query", "schema": {"type": "string", "example": "а"}},
+            {"name": "cursor", "in": "query", "schema": {"type": "string"}},
+            {"name": "limit", "in": "query", "schema": {"type": "integer", "example": 10}}], **ok}},
+        "/api/chats/unread-count": {"get": ok},
+        "/api/chats/vacancies": {"get": ok},
+        "/api/chats/{id}": {"get": {"parameters": [cid], **ok}},
+        "/api/chats/{id}/messages": {
+            "get": {"parameters": [cid, {"name": "before", "in": "query", "schema": {"type": "integer", "example": 5}},
+                                   {"name": "limit", "in": "query", "schema": {"type": "integer", "example": 10}}], **ok},
+            "post": {"parameters": [cid], "requestBody": body({"text": text, "client_id": cuid}), **ok}},
+        "/api/chats/{id}/messages/{seq}": {
+            "patch": {"parameters": [cid, seq], "requestBody": body({"text": text}), **ok},
+            "delete": {"parameters": [cid, seq], **ok}},
+        "/api/chats/{id}/read": {"post": {"parameters": [cid], "requestBody": body({"up_to": {"type": "integer", "example": 1}}), **ok}},
+        "/api/chats/{id}/archive": {"post": {"parameters": [cid], **ok}},
+        "/api/chats/{id}/unarchive": {"post": {"parameters": [cid], **ok}},
+        "/api/chats/{id}/typing": {"post": {"parameters": [cid], **ok}},
+        "/api/chats/{id}/complaints": {"post": {"parameters": [cid], "requestBody": body(
+            {"reason": {"type": "string", "example": "spam"}, "note": text}, ["reason"]), **ok}},
+        "/api/chat-blocks": {"get": ok},
+    }
+    if org_id:
+        t = {"name": "orgId", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid", "example": org_id}}
+        paths["/api/orgs/{orgId}/chat-templates"] = {
+            "get": {"parameters": [t], **ok},
+            "post": {"parameters": [t], "requestBody": body({"title": {"type": "string", "example": "Шаблон"}, "text": text}), **ok}}
+        paths["/api/orgs/{orgId}/chat-templates/{tid}"] = {
+            "patch": {"parameters": [t, tid], "requestBody": body({"title": {"type": "string", "example": "Шаблон"}, "text": text}), **ok},
+            "delete": {"parameters": [t, tid], **ok}}
+    return {"openapi": "3.0.3", "info": {"title": "SciBox chat", "version": "1"}, "servers": [{"url": "http://host.docker.internal:8080"}], "paths": paths}
+
+
+def reset_counters(stop):
+    while not stop.wait(2):
+        subprocess.run(["docker", "exec", "scibox-postgres-1", "psql", "-U", "scibox", "-d", "scibox", "-c", "truncate rate_counters"],
+                       capture_output=True)
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "active"
+    os.makedirs(OUT, exist_ok=True)
+    stop = threading.Event()
+    threading.Thread(target=reset_counters, args=(stop,), daemon=True).start()
+    try:
+        for email, side in PEOPLE:
+            call, cookie = login(email)
+            chats = call("GET", f"/api/chats?side={side}&limit=1")["items"]
+            org_id = None
+            if side == "org":
+                org_id = call("GET", f"/api/chats/{chats[0]['id']}")["chat"]["viewer"]["org_id"]
+            path = os.path.join(OUT, f"openapi-{side}.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(spec(chats[0]["id"], org_id, side), f, ensure_ascii=False, indent=1)
+            zap = ["docker", "run", "--rm", "--add-host", "host.docker.internal:host-gateway", "-v", f"{OUT}:/zap/wrk:rw", "zaproxy/zap-stable",
+                   "zap-api-scan.py", "-t", f"openapi-{side}.json", "-f", "openapi", "-r", f"report-{side}.html", "-J", f"report-{side}.json",
+                   "-I", "-z", "-config replacer.full_list(0).description=session -config replacer.full_list(0).enabled=true "
+                   "-config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=Cookie -config replacer.full_list(0).regex=false "
+                   f"-config replacer.full_list(0).replacement=scibox_session={cookie}"]
+            if mode != "active":
+                zap += ["-S"]  # только пассивная проверка
+            print(f"=== ZAP {mode}: {email} ({side})", flush=True)
+            subprocess.run(zap, check=False, timeout=45 * 60)
+    finally:
+        stop.set()
+
+
+main()

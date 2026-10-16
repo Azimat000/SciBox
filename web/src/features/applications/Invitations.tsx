@@ -12,11 +12,12 @@ import { ProposeModal, ReplyModal } from './AnswerModals'
 import { dateText, invStatusLabel, kindLabel, momentText } from './labels'
 import './review.css'
 import { mailtoHref } from '../../lib/mailto'
+import { isSafeHttp } from '../../lib/safeLink'
 
 export type Role = 'applicant' | 'staff'
 
-/** Только http и https: ссылку на встречу вставляет организация, чужую схему (javascript:) ссылкой не делаем. */
-const isHttpUrl = (s: string) => /^https?:\/\//i.test(s)
+/** Место собеседования пишет организация; ссылкой оно становится, только если по адресу видно, куда он ведёт (T-117). */
+const isHttpUrl = (s: string) => !/\s/.test(s) && isSafeHttp(s)
 
 /** Приглашения отклика. Обе стороны видят их одинаково; кнопки у каждой стороны свои. */
 export function InvitationList({ appId, invitations, role }: { appId: string; invitations: Invitation[]; role: Role }) {

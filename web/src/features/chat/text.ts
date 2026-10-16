@@ -1,6 +1,8 @@
 // Ссылки в тексте сообщения (CHAT.md «Сообщения»): кликабельны только http и https, остальное остаётся текстом.
 // Текст выводится как текст: ни HTML, ни разметки, ссылка показывается так, как её написали (адрес виден целиком).
 
+import { isSafeHttp } from '../../lib/safeLink'
+
 export type Piece = { text: string; href?: undefined } | { text: string; href: string }
 
 const URL_AT = /https?:\/\/[^\s<>"]+/gi
@@ -19,37 +21,6 @@ function trimTail(raw: string): string {
     url = url.slice(0, -1)
   }
   return url
-}
-
-const LATIN = /[a-z]/i
-const CYRILLIC = /[\u0400-\u052f]/
-const IPV4_LIKE = /^[\d.]+$/
-
-/** Адрес в том виде, как его написали: часть между «//» и первым «/», «?» или «#». */
-function writtenHost(s: string): string {
-  const rest = s.slice(s.indexOf('//') + 2)
-  const end = rest.search(/[/?#\\]/)
-  return end === -1 ? rest : rest.slice(0, end)
-}
-
-/**
- * Ссылкой становится только адрес, по которому видно, куда он ведёт (T-98): http или https, настоящее имя сайта с точкой.
- * Не ссылка: адрес с «логином» до «@» (`https://ya.ru@чужой.сайт` выглядит как ya.ru), имя, где в одной части смешаны
- * латиница и кириллица (подмена букв), адрес из цифр или в скобках (внутренняя сеть и числовые записи вроде 2130706433).
- */
-function isSafeHttp(s: string): boolean {
-  let u: URL
-  try {
-    u = new URL(s)
-  } catch {
-    return false
-  }
-  if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname.includes('.')) return false
-  if (u.username !== '' || u.password !== '' || writtenHost(s).includes('@')) return false
-  if (u.hostname.includes(':') || IPV4_LIKE.test(u.hostname) || /^\d+$/.test(u.hostname.split('.').at(-1) ?? '')) return false
-  return !writtenHost(s)
-    .split('.')
-    .some((label) => LATIN.test(label) && CYRILLIC.test(label))
 }
 
 /** Разбор текста на куски: обычный текст и ссылки. Склейка кусков всегда даёт исходный текст. */

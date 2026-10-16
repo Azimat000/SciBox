@@ -578,7 +578,7 @@ WITH page AS (
            OR ($1::text = 'org'
                AND EXISTS (SELECT 1 FROM users su LEFT JOIN profiles sp ON sp.user_id = su.id
                             WHERE su.id = c.user_id AND su.display_name ILIKE '%' || $7::text || '%'
-                              AND (NOT (COALESCE(sp.visibility = 'anon', false)
+                              AND (NOT (COALESCE(sp.visibility NOT IN ('orgs', 'public'), false)
                                         OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = sp.id AND h.org_id = c.org_id))
                                    OR EXISTS (SELECT 1 FROM applications ra JOIN vacancies rv ON rv.id = ra.vacancy_id
                                                WHERE ra.user_id = c.user_id AND ra.status <> 'withdrawn' AND rv.org_id = c.org_id)

@@ -1,0 +1,655 @@
+{
+	"@programName": "ZAP",
+	"@version": "2.17.0",
+	"@generated": "Fri, 16 Oct 2026 16:54:54",
+	"created": "2026-10-16T16:54:54.758436344Z",
+	"insights":[
+		{
+			"level": "Medium",
+			"reason": "Exceeded High",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.code.4xx",
+			"description": "Percentage of responses with status code 4xx",
+			"statistic": "98"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.code.2xx",
+			"description": "Percentage of responses with status code 2xx",
+			"statistic": "1"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.endpoint.ctype.application/json",
+			"description": "Percentage of endpoints with content type application/json",
+			"statistic": "91"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.endpoint.method.DELETE",
+			"description": "Percentage of endpoints with method DELETE",
+			"statistic": "4"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.endpoint.method.GET",
+			"description": "Percentage of endpoints with method GET",
+			"statistic": "50"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.endpoint.method.PATCH",
+			"description": "Percentage of endpoints with method PATCH",
+			"statistic": "4"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.endpoint.method.POST",
+			"description": "Percentage of endpoints with method POST",
+			"statistic": "41"
+		},
+		{
+			"level": "Info",
+			"reason": "Informational",
+			"site": "http://host.docker.internal:8080",
+			"key": "insight.endpoint.total",
+			"description": "Count of total endpoints",
+			"statistic": "46"
+		}
+	],
+	"site":[ 
+		{
+			"@name": "http://host.docker.internal:8080",
+			"@host": "host.docker.internal",
+			"@port": "8080",
+			"@ssl": "false",
+			"alerts": [ 
+				{
+					"pluginid": "100000",
+					"alertRef": "100000-1",
+					"alert": "A Client Error response code was returned by the server",
+					"name": "A Client Error response code was returned by the server",
+					"riskcode": "0",
+					"confidence": "3",
+					"riskdesc": "Informational (High)",
+					"desc": "<p>A response code of 409 was returned by the server.</p><p>This may indicate that the application is failing to handle unexpected input correctly.</p><p>Raised by the 'Alert on HTTP Response Code Error' script</p>",
+					"instances":[ 
+						{
+							"id": "2",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/1",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/1",
+							"method": "DELETE",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "1388",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/1/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/1\/",
+							"method": "DELETE",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "9",
+							"uri": "http://host.docker.internal:8080",
+							"nodeName": "http:\/\/host.docker.internal:8080",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1394",
+							"uri": "http://host.docker.internal:8080/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "4",
+							"uri": "http://host.docker.internal:8080/7206298417631921976",
+							"nodeName": "http:\/\/host.docker.internal:8080\/7206298417631921976",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "10",
+							"uri": "http://host.docker.internal:8080/api",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1397",
+							"uri": "http://host.docker.internal:8080/api/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "5",
+							"uri": "http://host.docker.internal:8080/api/5999694046123031606",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/5999694046123031606",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1396",
+							"uri": "http://host.docker.internal:8080/api/chat-blocks/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chat-blocks\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "14",
+							"uri": "http://host.docker.internal:8080/api/chats",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "627",
+							"uri": "http://host.docker.internal:8080/api/chats",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "0",
+							"uri": "http://host.docker.internal:8080/api/chats?side=scientist&box=all&q=%D0%B0&cursor=cursor&limit=10",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats (box,cursor,limit,q,side)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "538",
+							"uri": "http://host.docker.internal:8080/api/chats?side=scientist&box=all%27%29+UNION+ALL+select+NULL+--+&q=%D0%B0&cursor=cursor&limit=10",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats (box,cursor,limit,q,side)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1401",
+							"uri": "http://host.docker.internal:8080/api/chats/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "6",
+							"uri": "http://host.docker.internal:8080/api/chats/5791967563123695629",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/5791967563123695629",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1399",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "7",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/6828311331046816336",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/6828311331046816336",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1579",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/actuator/health",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/actuator\/health",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "631",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "24",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages?before=http%3A%2F%2Fwww.google.com%2F&limit=10",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages (before,limit)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "536",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages?before=5&limit=10+AND+1%3D1+--+",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages (before,limit)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1402",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "8",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/1969066434610635529",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/1969066434610635529",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "405",
+							"otherinfo": ""
+						},
+						{
+							"id": "1403",
+							"uri": "http://host.docker.internal:8080/api/chats/unread-count/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/unread-count\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1404",
+							"uri": "http://host.docker.internal:8080/api/chats/vacancies/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/vacancies\/",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "3",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/1",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/1 ()({text})",
+							"method": "PATCH",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "1274",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/1",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/1 ()({text})",
+							"method": "PATCH",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1389",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/1/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/1\/ ()({text})",
+							"method": "PATCH",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1385",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/archive/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/archive\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "81",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/complaints",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/complaints ()({reason,note})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "409",
+							"otherinfo": ""
+						},
+						{
+							"id": "15",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/complaints",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/complaints ()({reason,note})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "116",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/complaints",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/complaints ()({reason,note})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1387",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/complaints/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/complaints\/ ()({reason,note})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages ()({text,client_id})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "422",
+							"otherinfo": ""
+						},
+						{
+							"id": "228",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages ()({text,client_id})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1386",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages\/ ()({text,client_id})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "11",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/read",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/read ()({up_to})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "400",
+							"otherinfo": ""
+						},
+						{
+							"id": "1265",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/read",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/read ()({up_to})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "429",
+							"otherinfo": ""
+						},
+						{
+							"id": "1392",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/read/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/read\/ ()({up_to})",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1393",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/typing/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/typing\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1391",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/unarchive/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/unarchive\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1029",
+							"uri": "http://host.docker.internal:8080/computeMetadata/v1/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/computeMetadata\/v1\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1026",
+							"uri": "http://host.docker.internal:8080/latest/meta-data/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/latest\/meta-data\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1051",
+							"uri": "http://host.docker.internal:8080/metadata/instance",
+							"nodeName": "http:\/\/host.docker.internal:8080\/metadata\/instance",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1056",
+							"uri": "http://host.docker.internal:8080/metadata/v1",
+							"nodeName": "http:\/\/host.docker.internal:8080\/metadata\/v1",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1035",
+							"uri": "http://host.docker.internal:8080/opc/v1/instance/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/opc\/v1\/instance\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1042",
+							"uri": "http://host.docker.internal:8080/opc/v2/instance/",
+							"nodeName": "http:\/\/host.docker.internal:8080\/opc\/v2\/instance\/",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						},
+						{
+							"id": "1062",
+							"uri": "http://host.docker.internal:8080/openstack/latest/meta_data.json",
+							"nodeName": "http:\/\/host.docker.internal:8080\/openstack\/latest\/meta_data.json",
+							"method": "POST",
+							"param": "",
+							"attack": "",
+							"evidence": "404",
+							"otherinfo": ""
+						}
+					],
+					"count": "48",
+					"systemic": false,
+					"solution": "",
+					"otherinfo": "",
+					"reference": "",
+					"cweid": "388",
+					"wascid": "20",
+					"sourceid": "11"
+				},
+				{
+					"pluginid": "10049",
+					"alertRef": "10049-1",
+					"alert": "Non-Storable Content",
+					"name": "Non-Storable Content",
+					"riskcode": "0",
+					"confidence": "2",
+					"riskdesc": "Informational (Medium)",
+					"desc": "<p>The response contents are not storable by caching components such as proxy servers. If the response does not contain sensitive, personal or user-specific information, it may benefit from being stored and cached, to improve performance.</p>",
+					"instances":[ 
+						{
+							"id": "347",
+							"uri": "http://host.docker.internal:8080/api/chats?side=scientist&box=all&q=%D0%B0&cursor=cursor&limit=10",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats (box,cursor,limit,q,side)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "no-store",
+							"otherinfo": ""
+						},
+						{
+							"id": "310",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "no-store",
+							"otherinfo": ""
+						},
+						{
+							"id": "351",
+							"uri": "http://host.docker.internal:8080/api/chats/efe24f19-1c43-4375-a77e-6ac6ae50731c/messages?before=5&limit=10",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/efe24f19-1c43-4375-a77e-6ac6ae50731c\/messages (before,limit)",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "no-store",
+							"otherinfo": ""
+						},
+						{
+							"id": "336",
+							"uri": "http://host.docker.internal:8080/api/chats/unread-count",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/unread-count",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "no-store",
+							"otherinfo": ""
+						},
+						{
+							"id": "348",
+							"uri": "http://host.docker.internal:8080/api/chats/vacancies",
+							"nodeName": "http:\/\/host.docker.internal:8080\/api\/chats\/vacancies",
+							"method": "GET",
+							"param": "",
+							"attack": "",
+							"evidence": "no-store",
+							"otherinfo": ""
+						}
+					],
+					"count": "5",
+					"systemic": true,
+					"solution": "<p>The content may be marked as storable by ensuring that the following conditions are satisfied:</p><p>The request method must be understood by the cache and defined as being cacheable (\"GET\", \"HEAD\", and \"POST\" are currently defined as cacheable)</p><p>The response status code must be understood by the cache (one of the 1XX, 2XX, 3XX, 4XX, or 5XX response classes are generally understood)</p><p>The \"no-store\" cache directive must not appear in the request or response header fields</p><p>For caching by \"shared\" caches such as \"proxy\" caches, the \"private\" response directive must not appear in the response</p><p>For caching by \"shared\" caches such as \"proxy\" caches, the \"Authorization\" header field must not appear in the request, unless the response explicitly allows it (using one of the \"must-revalidate\", \"public\", or \"s-maxage\" Cache-Control response directives)</p><p>In addition to the conditions above, at least one of the following conditions must also be satisfied by the response:</p><p>It must contain an \"Expires\" header field</p><p>It must contain a \"max-age\" response directive</p><p>For \"shared\" caches such as \"proxy\" caches, it must contain a \"s-maxage\" response directive</p><p>It must contain a \"Cache Control Extension\" that allows it to be cached</p><p>It must have a status code that is defined as cacheable by default (200, 203, 204, 206, 300, 301, 404, 405, 410, 414, 501).</p>",
+					"otherinfo": "",
+					"reference": "<p>https://datatracker.ietf.org/doc/html/rfc7234</p><p>https://datatracker.ietf.org/doc/html/rfc7231</p><p>https://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html</p>",
+					"cweid": "524",
+					"wascid": "13",
+					"sourceid": "1"
+				}
+			]
+		}
+	],
+	"sequences":[
+	]
+
+}

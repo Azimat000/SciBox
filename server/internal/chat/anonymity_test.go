@@ -20,6 +20,13 @@ func TestAnonymousScientistIsNeverNamed(t *testing.T) {
 		named    bool
 	}{
 		{"anonymous mode, invited only", func(w *world, p testkit.Person) { w.privacy(p, "anon") }, true, false},
+		// T-117: перейти из «анонимно» в «скрыт» значит стать менее заметным, а не назвать себя организации.
+		{"anonymous mode, then hidden: still anonymous", func(w *world, p testkit.Person) {
+			w.privacy(p, "anon")
+			w.privacy(p, "hidden")
+		}, true, false},
+		{"hidden mode, invited only", func(w *world, p testkit.Person) { w.privacy(p, "hidden") }, true, false},
+		{"hidden but applied: the name is open (mode)", func(w *world, p testkit.Person) { w.privacy(p, "hidden") }, false, true},
 		{"hidden from the organization, invited only", func(w *world, p testkit.Person) {
 			w.privacy(p, "public")
 			w.hideFrom(p, w.tm.OrgID)

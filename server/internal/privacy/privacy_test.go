@@ -149,6 +149,14 @@ func TestCatalogModes(t *testing.T) {
 	}
 }
 
+func TestNamePrivate(t *testing.T) {
+	for v, want := range map[Visibility]bool{Hidden: true, Anonymous: true, Orgs: false, Public: false, "": true, "unknown": true} {
+		if got := v.NamePrivate(); got != want {
+			t.Errorf("%q.NamePrivate() = %v, ожидали %v", v, got, want)
+		}
+	}
+}
+
 func TestShowsName(t *testing.T) {
 	tests := []struct {
 		concealed, revealed, want bool

@@ -232,7 +232,7 @@ func messageID(chatID uuid.UUID, seq int) uuid.UUID {
 
 // nameSeen — показывается ли организации имя учёного (privacy.ShowsName).
 func nameSeen(visibility *string, hiddenFrom, revealed bool) bool {
-	concealed := hiddenFrom || (visibility != nil && privacy.Visibility(*visibility) == privacy.Anonymous)
+	concealed := hiddenFrom || (visibility != nil && privacy.Visibility(*visibility).NamePrivate())
 	return privacy.ShowsName(concealed, revealed)
 }
 

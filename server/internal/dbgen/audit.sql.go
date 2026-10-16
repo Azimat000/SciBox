@@ -60,7 +60,7 @@ SELECT a.id, a.at, a.action, a.target_kind, a.target_id, a.target_label, a.detai
        -- Приглашённый соискатель в записях об отправке и отзыве приглашения: имя анонимного (или скрывшегося от организации)
        -- профиля не показывается, пока человек не открыл его откликом или ответом «Интересно» (D-199, D-200).
        COALESCE(a.action IN ('offer.sent', 'offer.canceled') AND sp.id IS NOT NULL
-        AND (sp.visibility = 'anon' OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = sp.id AND h.org_id = a.org_id)), false)::boolean AS subject_concealed,
+        AND (sp.visibility NOT IN ('orgs', 'public') OR EXISTS (SELECT 1 FROM profile_hidden_orgs h WHERE h.profile_id = sp.id AND h.org_id = a.org_id)), false)::boolean AS subject_concealed,
        COALESCE(a.action IN ('offer.sent', 'offer.canceled') AND (
             EXISTS (SELECT 1 FROM vacancy_offers o JOIN vacancies ov ON ov.id = o.vacancy_id
                      WHERE o.user_id = a.subject_id AND o.status = 'interested' AND ov.org_id = a.org_id)
