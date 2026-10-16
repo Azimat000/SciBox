@@ -10,6 +10,8 @@
     "not_found",
     "validation_failed",
     "chat_closed",
+    "awaiting_reply",
+    "client_id_reused",
     "rate_limited"
   ],
   "examples": {

@@ -209,6 +209,10 @@ func (s *Service) Send(ctx context.Context, user auth.User, id uuid.UUID, in Sen
 		// Повтор отправки: сообщение уже есть, отдаём его, пока переписка ещё не закрыта и после закрытия тоже.
 		prev, err := q.FindChatMessageByClient(ctx, dbgen.FindChatMessageByClientParams{ChatID: id, AuthorUserID: &user.ID, ClientID: &clientID})
 		if err == nil {
+			// Тот же номер с другим текстом — не повтор, а ошибка клиента (исправленное и удалённое сравнению не подлежат).
+			if prev.EditedAt == nil && prev.DeletedAt == nil && prev.Body != text {
+				return ErrClientIDReused
+			}
 			created = false
 			out, err = s.one(ctx, q, row, w, user, prev)
 			return err
@@ -220,6 +224,10 @@ func (s *Service) Send(ctx context.Context, user auth.User, id uuid.UUID, in Sen
 			return ErrClosed
 		}
 		now := s.now()
+		// Пределы спама (срез 40): подряд без ответа, в сутки на человека и на организацию. Отказ откатывает транзакцию.
+		if err := s.checkSendLimits(ctx, q, user, id, w.side, row.OrgID, now); err != nil {
+			return err
+		}
 		to := w.side.Other()
 		seq, err := q.BumpChat(ctx, dbgen.BumpChatParams{ToSide: string(to), Now: now, ID: id})
 		if err != nil {
@@ -392,8 +400,12 @@ func (s *Service) Archive(ctx context.Context, user auth.User, id uuid.UUID, arc
 			return err
 		}
 		now := s.now()
-		if err := q.SetChatArchived(ctx, dbgen.SetChatArchivedParams{ChatID: id, UserID: user.ID, Archived: archived, Now: now}); err != nil {
+		changed, err := q.SetChatArchived(ctx, dbgen.SetChatArchivedParams{ChatID: id, UserID: user.ID, Archived: archived, Now: now})
+		if err != nil {
 			return fmt.Errorf("chat: set archived: %w", err)
+		}
+		if changed == 0 {
+			return nil // уже так и лежит: рассылать нечего
 		}
 		return publish(ctx, q, dbgen.PublishChatEventParams{Kind: evArchived, ActorID: &user.ID, Now: now, ChatID: id})
 	})

@@ -79,6 +79,7 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	pgregory.net/rapid v1.3.0 // indirect
 )
 
 tool github.com/sqlc-dev/sqlc/cmd/sqlc

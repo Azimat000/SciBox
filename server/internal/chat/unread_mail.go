@@ -3,8 +3,11 @@ package chat
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -111,10 +114,16 @@ func (s *Service) sendOneUnreadMail(ctx context.Context, now time.Time) (sent in
 			}
 		}
 		subject, body := s.unreadMailText(r.ChatID, facts.VacancyTitle, from)
+		recipients = slices.DeleteFunc(recipients, func(uid uuid.UUID) bool {
+			return side == SideOrg && uid == r.UserID // учёный, который сам работает в этой организации, читает как учёный
+		})
+		// Не больше MailPerDay писем в сутки одному получателю (срез 40, T-99): организация-спамер не засыпает почту
+		// человека письмами по сотне переписок.
+		recipients, err = s.mailRecipients(ctx, q, recipients, now)
+		if err != nil {
+			return err
+		}
 		for _, uid := range recipients {
-			if side == SideOrg && uid == r.UserID {
-				continue // учёный, который сам работает в этой организации, читает как учёный
-			}
 			n, err := q.EnqueueChatMailToUser(ctx, dbgen.EnqueueChatMailToUserParams{UserID: uid, Subject: subject, Body: body, Now: now})
 			if err != nil {
 				return fmt.Errorf("chat: enqueue unread mail: %w", err)
@@ -129,17 +138,40 @@ func (s *Service) sendOneUnreadMail(ctx context.Context, now time.Time) (sent in
 	return sent, more, err
 }
 
+// Длины чужого текста в письме: имя и название вакансии пишут люди, письмо уходит с нашего адреса.
+const (
+	mailNameMax    = 100
+	mailVacancyMax = 200
+)
+
 // oneLine сворачивает пробелы и переносы: тема письма не может быть многострочной.
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
+// mailSafe готовит чужой текст для письма (срез 40, T-99): без управляющих знаков и знаков смены направления письма
+// (ими подменяют вид строки), в одну строку и не длиннее max знаков.
+func mailSafe(s string, max int) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || isBidiControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	s = oneLine(s)
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	return string([]rune(s)[:max-1]) + "…"
+}
+
 // unreadMailText собирает тему и тело письма. Текста сообщения в нём нет: почта защищена хуже сайта (CHAT.md).
 func (s *Service) unreadMailText(chatID uuid.UUID, vacancy, from string) (subject, body string) {
-	vacancy = oneLine(vacancy)
+	vacancy = mailSafe(vacancy, mailVacancyMax)
+	from = mailSafe(from, mailNameMax)
 	subject = "Новое сообщение по вакансии «" + vacancy + "»"
 	var b strings.Builder
 	b.WriteString("У вас есть непрочитанное сообщение.\n\n")
 	b.WriteString("Вакансия: «" + vacancy + "»\n")
-	b.WriteString("От: " + oneLine(from) + "\n\n")
+	b.WriteString("От: " + from + "\n\n")
 	b.WriteString("Открыть переписку: " + s.mail.PublicURL + "/chats/" + chatID.String() + "\n\n")
 	b.WriteString("—\n" + s.mail.ProductName + ". Это письмо отправлено автоматически, отвечать на него не нужно.\n")
 	b.WriteString("Письма о новых сообщениях можно отключить в настройках аккаунта: " + s.mail.PublicURL + "/account\n")

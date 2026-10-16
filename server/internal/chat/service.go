@@ -32,13 +32,14 @@ type Service struct {
 	now    func() time.Time
 	typing *typingGate
 	mail   MailConfig
+	limits Limits
 }
 
 // NewService собирает сервис.
 func NewService(pool *pgxpool.Pool) *Service { return newService(pool) }
 
 func newService(db DB) *Service {
-	return &Service{db: db, q: dbgen.New(db), now: func() time.Time { return time.Now().UTC() }, typing: newTypingGate()}
+	return &Service{db: db, q: dbgen.New(db), now: func() time.Time { return time.Now().UTC() }, typing: newTypingGate(), limits: DefaultLimits()}
 }
 
 func (s *Service) inTx(ctx context.Context, fn func(q *dbgen.Queries) error) error {

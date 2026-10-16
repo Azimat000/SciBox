@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -22,6 +23,9 @@ const (
 	CodeNotAuthor        = "not_author"
 	CodeAlreadyBlocked   = "already_blocked"
 	CodeLimitReached     = "limit_reached"
+	CodeAwaitingReply    = "awaiting_reply"
+	CodeAlreadyComplain  = "already_complained"
+	CodeClientIDReused   = "client_id_reused"
 	messageNoSuchChat    = "Такой переписки нет"
 	messageNoSuchMessage = "Такого сообщения нет"
 	messageCheckFields   = "Проверьте поля"
@@ -33,6 +37,10 @@ const (
 	messageAlreadyBlock  = "Эта организация уже заблокирована"
 	messageTemplateLimit = "У организации уже 50 шаблонов"
 	messageNoTemplate    = "Такого шаблона нет"
+	messageAwaitingReply = "Вы написали несколько сообщений подряд. Дождитесь ответа собеседника"
+	messageComplained    = "Вы уже жаловались на эту переписку на этой неделе. Жалоба передана модерации"
+	messageClientIDUsed  = "Этот номер отправки уже использован для другого текста. Повторите отправку"
+	messageTooMany       = "Слишком много за сутки. Продолжите позже"
 )
 
 // Handler — HTTP-часть чата.
@@ -90,12 +98,25 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var (
 		verr *auth.ValidationError
 		perr *BadParamError
+		rerr *auth.RateLimitedError
 	)
 	switch {
 	case errors.As(err, &verr):
 		apierr.WriteFieldErrors(w, messageCheckFields, verr.Fields)
 	case errors.As(err, &perr):
 		apierr.WriteError(w, http.StatusBadRequest, apierr.CodeBadRequest, "Неверный параметр запроса: "+perr.Param)
+	case errors.As(err, &rerr):
+		secs := int(math.Ceil(rerr.RetryAfter.Seconds()))
+		w.Header().Set("Retry-After", strconv.Itoa(secs))
+		apierr.WriteJSON(w, http.StatusTooManyRequests, apierr.ErrorBody{Error: apierr.ErrorDetail{
+			Code: apierr.CodeRateLimited, Message: messageTooMany, RetryAfter: secs,
+		}})
+	case errors.Is(err, ErrAwaitingReply):
+		apierr.WriteError(w, http.StatusConflict, CodeAwaitingReply, messageAwaitingReply)
+	case errors.Is(err, ErrAlreadyComplained):
+		apierr.WriteError(w, http.StatusConflict, CodeAlreadyComplain, messageComplained)
+	case errors.Is(err, ErrClientIDReused):
+		apierr.WriteError(w, http.StatusConflict, CodeClientIDReused, messageClientIDUsed)
 	case errors.Is(err, ErrNotFound):
 		apierr.WriteError(w, http.StatusNotFound, apierr.CodeNotFound, messageNoSuchChat)
 	case errors.Is(err, ErrMessageNotFound):

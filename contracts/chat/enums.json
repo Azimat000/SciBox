@@ -31,5 +31,5 @@
   "offer_answer": ["interested", "declined"],
   "complaint_reason": ["spam", "fraud", "abuse", "other"],
   "stream_event": ["message.created", "message.edited", "message.deleted", "chat.read", "chat.typing", "chat.state", "unread.count"],
-  "error_code": ["not_found", "validation_failed", "bad_request", "unauthorized", "forbidden", "chat_closed", "edit_window_closed", "system_message", "not_author", "limit_reached", "already_blocked", "rate_limited"]
+  "error_code": ["not_found", "validation_failed", "bad_request", "unauthorized", "forbidden", "chat_closed", "edit_window_closed", "system_message", "not_author", "limit_reached", "already_blocked", "rate_limited", "awaiting_reply", "already_complained", "client_id_reused"]
 }

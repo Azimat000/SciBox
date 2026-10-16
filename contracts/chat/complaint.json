@@ -9,6 +9,7 @@
     "not_found",
     "forbidden",
     "validation_failed",
+    "already_complained",
     "rate_limited"
   ],
   "examples": {

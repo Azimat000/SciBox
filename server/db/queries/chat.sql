@@ -136,10 +136,12 @@ UPDATE chats SET
     org_read       = CASE WHEN @side::text = 'org' THEN GREATEST(org_read, LEAST(@up_to::int, last_seq)) ELSE org_read END
 WHERE id = @id;
 
--- name: SetChatArchived :exec
+-- Возвращает число изменённых строк: повтор того же действия ничего не меняет и событий не рассылает (срез 40).
+-- name: SetChatArchived :execrows
 INSERT INTO chat_participants (chat_id, user_id, archived, updated_at)
 VALUES (@chat_id, @user_id, @archived, @now::timestamptz)
-ON CONFLICT (chat_id, user_id) DO UPDATE SET archived = EXCLUDED.archived, updated_at = EXCLUDED.updated_at;
+ON CONFLICT (chat_id, user_id) DO UPDATE SET archived = EXCLUDED.archived, updated_at = EXCLUDED.updated_at
+WHERE chat_participants.archived IS DISTINCT FROM EXCLUDED.archived;
 
 -- Список переписок одной стороны, новые сверху, листание по ключу (updated_at, id).
 -- Сторона учёного: свои переписки. Сторона организации: переписки по вакансиям в пределах прав, кроме тех, где сам
@@ -255,3 +257,14 @@ WHERE c.user_id <> @viewer_id
        OR (sqlc.narg(units)::uuid[] IS NOT NULL AND v.unit_id = ANY(sqlc.narg(units)::uuid[])))
 GROUP BY v.id, v.title, o.name, un.name
 ORDER BY lower(v.title), v.id;
+
+-- Сколько текстовых сообщений подряд написала эта сторона после последнего текста другой стороны (срез 40, T-99).
+-- Удалённые считаются: удалить и написать снова не обнуляет счёт. Строки о событиях ответом не считаются.
+-- name: CountUnansweredChatText :one
+SELECT count(*)::bigint AS n
+FROM chat_messages m
+WHERE m.chat_id = @chat_id AND m.kind = 'text' AND m.author_side = @side::text
+  AND m.seq > COALESCE((
+      SELECT o.seq FROM chat_messages o
+      WHERE o.chat_id = @chat_id AND o.kind = 'text' AND o.author_side <> @side::text
+      ORDER BY o.seq DESC LIMIT 1), 0);

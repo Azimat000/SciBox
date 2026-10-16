@@ -166,7 +166,7 @@ func TestSendAndRepeat(t *testing.T) {
 	}
 
 	// Повтор: то же сообщение, ничего нового.
-	again, created, err := w.svc.Send(bg, w.tm.HR.User, chat, SendInput{Text: "Другой текст", ClientID: client})
+	again, created, err := w.svc.Send(bg, w.tm.HR.User, chat, SendInput{Text: "Добрый день!", ClientID: client})
 	if err != nil || created || again.Seq != 1 || again.Text != "Добрый день!" {
 		t.Errorf("repeat = %+v, created %v, err %v", again, created, err)
 	}

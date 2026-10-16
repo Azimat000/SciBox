@@ -108,3 +108,17 @@ ORDER BY created_at, id;
 -- name: GetBackfillOffer :one
 SELECT id, status, message, answer_note, answered_at, created_at, updated_at
 FROM vacancy_offers WHERE vacancy_id = @vacancy_id AND user_id = @user_id;
+
+-- Сколько жалоб подал человек после момента since (предел в сутки, срез 40, T-99).
+-- name: CountChatComplaintsSince :one
+SELECT count(*)::bigint FROM chat_complaints WHERE user_id = @user_id AND created_at > @since::timestamptz;
+
+-- Подавал ли человек жалобу на эту переписку после момента since (одна на переписку в неделю).
+-- name: HasChatComplaintSince :one
+SELECT EXISTS (
+    SELECT 1 FROM chat_complaints WHERE user_id = @user_id AND chat_id = @chat_id AND created_at > @since::timestamptz
+);
+
+-- Время самой ранней жалобы человека после момента since: от неё считается, когда предел в сутки освободится.
+-- name: OldestChatComplaintSince :one
+SELECT min(created_at)::timestamptz FROM chat_complaints WHERE user_id = @user_id AND created_at > @since::timestamptz;

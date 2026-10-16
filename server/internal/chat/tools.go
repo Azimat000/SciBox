@@ -195,11 +195,23 @@ func (s *Service) Complain(ctx context.Context, user auth.User, id uuid.UUID, in
 		return Complaint{}, &auth.ValidationError{Fields: fields}
 	}
 	now := s.now()
-	r, err := s.q.InsertChatComplaint(ctx, dbgen.InsertChatComplaintParams{
-		UserID: user.ID, ChatID: &id, OrgID: row.OrgID, VacancyID: &row.VacancyID, Reason: in.Reason, Note: note, Now: now,
+	var r dbgen.InsertChatComplaintRow
+	err = s.inTx(ctx, func(q *dbgen.Queries) error {
+		// Пределы жалоб (срез 40): под замком человека, чтобы пачка запросов не прошла проверку с одним нулём.
+		if err := s.checkComplaintLimits(ctx, q, user, id, now); err != nil {
+			return err
+		}
+		var err error
+		r, err = q.InsertChatComplaint(ctx, dbgen.InsertChatComplaintParams{
+			UserID: user.ID, ChatID: &id, OrgID: row.OrgID, VacancyID: &row.VacancyID, Reason: in.Reason, Note: note, Now: now,
+		})
+		if err != nil {
+			return fmt.Errorf("chat: insert complaint: %w", err)
+		}
+		return nil
 	})
 	if err != nil {
-		return Complaint{}, fmt.Errorf("chat: insert complaint: %w", err)
+		return Complaint{}, err
 	}
 	return Complaint{ID: r.ID, CreatedAt: r.CreatedAt.UTC()}, nil
 }

@@ -75,6 +75,30 @@ func (q *Queries) CountChatBoxes(ctx context.Context, arg CountChatBoxesParams) 
 	return i, err
 }
 
+const countUnansweredChatText = `-- name: CountUnansweredChatText :one
+SELECT count(*)::bigint AS n
+FROM chat_messages m
+WHERE m.chat_id = $1 AND m.kind = 'text' AND m.author_side = $2::text
+  AND m.seq > COALESCE((
+      SELECT o.seq FROM chat_messages o
+      WHERE o.chat_id = $1 AND o.kind = 'text' AND o.author_side <> $2::text
+      ORDER BY o.seq DESC LIMIT 1), 0)
+`
+
+type CountUnansweredChatTextParams struct {
+	ChatID uuid.UUID
+	Side   string
+}
+
+// Сколько текстовых сообщений подряд написала эта сторона после последнего текста другой стороны (срез 40, T-99).
+// Удалённые считаются: удалить и написать снова не обнуляет счёт. Строки о событиях ответом не считаются.
+func (q *Queries) CountUnansweredChatText(ctx context.Context, arg CountUnansweredChatTextParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUnansweredChatText, arg.ChatID, arg.Side)
+	var n int64
+	err := row.Scan(&n)
+	return n, err
+}
+
 const deleteChatMessage = `-- name: DeleteChatMessage :exec
 UPDATE chat_messages SET body = '', deleted_at = $1::timestamptz WHERE chat_id = $2 AND seq = $3
 `
@@ -862,10 +886,11 @@ func (q *Queries) RaiseSideRead(ctx context.Context, arg RaiseSideReadParams) er
 	return err
 }
 
-const setChatArchived = `-- name: SetChatArchived :exec
+const setChatArchived = `-- name: SetChatArchived :execrows
 INSERT INTO chat_participants (chat_id, user_id, archived, updated_at)
 VALUES ($1, $2, $3, $4::timestamptz)
 ON CONFLICT (chat_id, user_id) DO UPDATE SET archived = EXCLUDED.archived, updated_at = EXCLUDED.updated_at
+WHERE chat_participants.archived IS DISTINCT FROM EXCLUDED.archived
 `
 
 type SetChatArchivedParams struct {
@@ -875,14 +900,18 @@ type SetChatArchivedParams struct {
 	Now      time.Time
 }
 
-func (q *Queries) SetChatArchived(ctx context.Context, arg SetChatArchivedParams) error {
-	_, err := q.db.Exec(ctx, setChatArchived,
+// Возвращает число изменённых строк: повтор того же действия ничего не меняет и событий не рассылает (срез 40).
+func (q *Queries) SetChatArchived(ctx context.Context, arg SetChatArchivedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setChatArchived,
 		arg.ChatID,
 		arg.UserID,
 		arg.Archived,
 		arg.Now,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const unarchiveChat = `-- name: UnarchiveChat :exec

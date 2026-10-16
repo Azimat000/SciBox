@@ -12,6 +12,23 @@ import (
 	"github.com/google/uuid"
 )
 
+const countChatComplaintsSince = `-- name: CountChatComplaintsSince :one
+SELECT count(*)::bigint FROM chat_complaints WHERE user_id = $1 AND created_at > $2::timestamptz
+`
+
+type CountChatComplaintsSinceParams struct {
+	UserID uuid.UUID
+	Since  time.Time
+}
+
+// Сколько жалоб подал человек после момента since (предел в сутки, срез 40, T-99).
+func (q *Queries) CountChatComplaintsSince(ctx context.Context, arg CountChatComplaintsSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countChatComplaintsSince, arg.UserID, arg.Since)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countChatTemplates = `-- name: CountChatTemplates :one
 SELECT count(*)::int FROM chat_templates WHERE org_id = $1
 `
@@ -117,6 +134,26 @@ func (q *Queries) GetBackfillOffer(ctx context.Context, arg GetBackfillOfferPara
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const hasChatComplaintSince = `-- name: HasChatComplaintSince :one
+SELECT EXISTS (
+    SELECT 1 FROM chat_complaints WHERE user_id = $1 AND chat_id = $2 AND created_at > $3::timestamptz
+)
+`
+
+type HasChatComplaintSinceParams struct {
+	UserID uuid.UUID
+	ChatID *uuid.UUID
+	Since  time.Time
+}
+
+// Подавал ли человек жалобу на эту переписку после момента since (одна на переписку в неделю).
+func (q *Queries) HasChatComplaintSince(ctx context.Context, arg HasChatComplaintSinceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasChatComplaintSince, arg.UserID, arg.ChatID, arg.Since)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertChatBlock = `-- name: InsertChatBlock :execrows
@@ -519,6 +556,23 @@ func (q *Queries) ListPairChats(ctx context.Context, arg ListPairChatsParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const oldestChatComplaintSince = `-- name: OldestChatComplaintSince :one
+SELECT min(created_at)::timestamptz FROM chat_complaints WHERE user_id = $1 AND created_at > $2::timestamptz
+`
+
+type OldestChatComplaintSinceParams struct {
+	UserID uuid.UUID
+	Since  time.Time
+}
+
+// Время самой ранней жалобы человека после момента since: от неё считается, когда предел в сутки освободится.
+func (q *Queries) OldestChatComplaintSince(ctx context.Context, arg OldestChatComplaintSinceParams) (time.Time, error) {
+	row := q.db.QueryRow(ctx, oldestChatComplaintSince, arg.UserID, arg.Since)
+	var column_1 time.Time
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const updateChatTemplate = `-- name: UpdateChatTemplate :one

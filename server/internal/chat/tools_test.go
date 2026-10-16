@@ -235,8 +235,13 @@ func TestComplaint(t *testing.T) {
 	if note != "Пишут про платные курсы\nк вакансии это не относится" || reason != "spam" || org != w.tm.OrgID || vac != w.vacancy.ID {
 		t.Errorf("stored complaint: %q %q %v %v", note, reason, org, vac)
 	}
-	if _, err := w.svc.Complain(bg, sci.User, c, ComplaintInput{Reason: "other", Note: "Оскорбления"}); err != nil {
+	// Вторая жалоба на ту же переписку в ту же неделю не принимается, через неделю принимается (limits_test.go).
+	if _, err := w.svc.Complain(bg, sci.User, c, ComplaintInput{Reason: "other", Note: "Оскорбления"}); !errors.Is(err, ErrAlreadyComplained) {
 		t.Errorf("a second complaint: %v", err)
+	}
+	w.clock.Advance(8 * 24 * time.Hour)
+	if _, err := w.svc.Complain(bg, sci.User, c, ComplaintInput{Reason: "other", Note: "Оскорбления"}); err != nil {
+		t.Errorf("a complaint a week later: %v", err)
 	}
 	if h := w.header(sci, c); !h.CanWrite {
 		t.Error("a complaint must not close the chat")
