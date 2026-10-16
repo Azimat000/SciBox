@@ -274,6 +274,16 @@ groups:
           summary: "Копия сервера отказывает в живом обновлении: потоков больше предела"
           description: "Отказов за 10 минут: {{ $value | humanize }}. Поднимите SCIBOX_CHAT_STREAMS или добавьте копию сервера (предел по умолчанию 3000)."
 
+      - alert: ChatHubNotStarted
+        # При запуске копия читает голову журнала событий; пока база не ответила, живые потоки не принимаются (503), а читатель
+        # повторяет. Секунды после запуска нормальны, пять минут подряд нет (находка среза 41, T-120).
+        expr: sum by (instance) (increase(scibox_chat_streams_rejected_total{reason="starting"}[5m])) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Живое обновление чата не стартует: копия не читает журнал событий"
+          description: "Копия {{ $labels.instance }} отказывает в потоках пять минут подряд, потому что не может прочитать журнал событий чата. Смотрите журнал сервера (`chat hub cannot read the journal head`) и доступность базы."
+
       - alert: ChatStreamsClosedAsSlow
         expr: sum(increase(scibox_chat_streams_closed_total{reason="slow"}[10m])) > 50
         labels: { severity: warning }

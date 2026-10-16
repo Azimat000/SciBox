@@ -105,6 +105,8 @@ const (
 	RejectUser = "user_limit"
 	RejectCopy = "copy_limit"
 	RejectShut = "shutdown"
+	// RejectStart — раздача ещё не прочитала голову журнала (база недоступна при запуске): поток никому бы ничего не доставил.
+	RejectStart = "starting"
 )
 
 // Ошибки открытия потока.
@@ -269,6 +271,9 @@ type Hub struct {
 	high   int64 // наибольший обработанный номер журнала; пишет только диспетчер
 
 	started atomic.Bool
+	// waiting — Run уже вызван, но голова журнала ещё не прочитана: события этой копии никому не раздаются, потоки
+	// принимать нельзя (иначе человек держал бы поток, который молчит, а сайт не знал бы, что переподключаться).
+	waiting atomic.Bool
 }
 
 // NewHub собирает раздачу. connCfg — настройки соединения LISTEN (обычно из настроек пула); obs может быть nil.
@@ -344,6 +349,9 @@ func (h *Hub) admitLocked(user uuid.UUID) error {
 	case h.closing:
 		h.obs.StreamRejected(RejectShut)
 		return ErrHubClosed
+	case h.waiting.Load():
+		h.obs.StreamRejected(RejectStart)
+		return ErrHubBusy
 	case len(h.all) >= h.cfg.MaxPerCopy:
 		h.obs.StreamRejected(RejectCopy)
 		return ErrHubBusy
@@ -514,11 +522,15 @@ func (h *Hub) Run(ctx context.Context) error {
 	if !h.started.CompareAndSwap(false, true) {
 		return errors.New("chat: hub already running")
 	}
-	head, err := h.svc.q.ChatEventHead(ctx)
-	if err != nil {
-		return fmt.Errorf("chat: event head: %w", err)
+	// Голова журнала читается, пока база не ответит: сбой при запуске (база занята, перезапускается, срок запроса) не должен
+	// навсегда оставлять копию с потоками, которые ничего не получают (находка итогового аудита, T-120).
+	h.waiting.Store(true)
+	head, ok := h.readHead(ctx)
+	if !ok {
+		return nil
 	}
 	h.high = head
+	h.waiting.Store(false)
 	notes := make(chan note, 256)
 	shards := make([]chan work, h.cfg.Workers)
 	var wg sync.WaitGroup
@@ -531,6 +543,27 @@ func (h *Hub) Run(ctx context.Context) error {
 	h.dispatch(ctx, notes, shards)
 	wg.Wait()
 	return nil
+}
+
+// readHead читает наибольший номер журнала с повторами до успеха; false — остановка раньше, чем база ответила.
+func (h *Hub) readHead(ctx context.Context) (int64, bool) {
+	backoff := time.Second
+	for {
+		head, err := h.svc.q.ChatEventHead(ctx)
+		if err == nil {
+			return head, true
+		}
+		if ctx.Err() != nil {
+			return 0, false
+		}
+		h.log.Warn("chat hub cannot read the journal head, retrying", "err", err, "retry_in", backoff)
+		select {
+		case <-ctx.Done():
+			return 0, false
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, 15*time.Second)
+	}
 }
 
 // listen держит соединение LISTEN: при обрыве подключается заново и просит диспетчера добрать журнал.

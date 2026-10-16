@@ -480,6 +480,23 @@ tests:
               summary: "Копия сервера отказывает в живом обновлении: потоков больше предела"
               description: "Отказов за 10 минут: 5. Поднимите SCIBOX_CHAT_STREAMS или добавьте копию сервера (предел по умолчанию 3000)."
 
+  - name: chat hub not started
+    interval: 1m
+    input_series:
+      - series: 'scibox_chat_streams_rejected_total{reason="starting",instance="s:9100"}'
+        values: '0 2 5 9 14 20 27 35 44 54 65 77 90 104'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ChatHubNotStarted
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ChatHubNotStarted
+        exp_alerts:
+          - exp_labels: { severity: warning, instance: "s:9100" }
+            exp_annotations:
+              summary: "Живое обновление чата не стартует: копия не читает журнал событий"
+              description: "Копия s:9100 отказывает в потоках пять минут подряд, потому что не может прочитать журнал событий чата. Смотрите журнал сервера (`chat hub cannot read the journal head`) и доступность базы."
+
   - name: chat unread mail stale
     interval: 1m
     input_series:

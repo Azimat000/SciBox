@@ -125,7 +125,7 @@ func New(service, version string) *Metrics {
 		}, []string{"reason"}),
 		chatRejected: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace, Subsystem: "chat", Name: "streams_rejected_total",
-			Help: "Отказы в потоке чата: user_limit, copy_limit, shutdown.",
+			Help: "Отказы в потоке чата: user_limit, copy_limit, shutdown, starting.",
 		}, []string{"reason"}),
 		chatEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: Namespace, Subsystem: "chat", Name: "events_total",
@@ -164,7 +164,7 @@ func New(service, version string) *Metrics {
 	for _, r := range []string{"client", "slow", "rights", "session", "age", "shutdown"} {
 		m.chatClosed.WithLabelValues(r)
 	}
-	for _, r := range []string{"user_limit", "copy_limit", "shutdown"} {
+	for _, r := range []string{"user_limit", "copy_limit", "shutdown", "starting"} {
 		m.chatRejected.WithLabelValues(r)
 	}
 	return m

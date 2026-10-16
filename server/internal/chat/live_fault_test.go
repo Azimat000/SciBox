@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -81,13 +82,64 @@ func TestUnreadMailAndEventsReportDatabaseFailures(t *testing.T) {
 	}
 }
 
-// Раздача не стартует, если журнал недоступен.
-func TestHubDoesNotStartWithoutTheJournal(t *testing.T) {
+// Журнал недоступен при запуске: раздача не умирает, а ждёт базу и повторяет; пока ждёт, потоки не принимаются (T-120).
+// До среза 41 Run возвращал ошибку, копия оставалась жить с потоками, которые ничего не получали.
+func TestHubWaitsForTheJournalAtStart(t *testing.T) {
 	w := newWorld(t)
-	db, _ := testkit.Faulty(testkit.Pool, 1)
-	if err := NewHub(svcOn(w, db), nil, HubConfig{}, w.Log, nil).Run(bg); !errors.Is(err, testkit.ErrFault) {
+	db := &brokenDB{DB: testkit.Pool}
+	db.down.Store(true)
+	h := NewHub(svcOn(w, db), nil, HubConfig{}, w.Log, &rejectCounter{})
+	ctx, cancel := context.WithCancel(bg)
+	done := make(chan error, 1)
+	go func() { done <- h.Run(ctx) }()
+	sci := w.Applicant("Анна Ильина")
+	waitFor(t, func() bool { return h.waiting.Load() })
+
+	if _, err := h.open(bg, sci.User, uuid.New()); !errors.Is(err, ErrHubBusy) {
+		t.Fatalf("a stream while the hub waits for the journal: %v", err)
+	}
+	if got := h.obs.(*rejectCounter).by[RejectStart]; got != 1 {
+		t.Errorf("rejected as %q: %d", RejectStart, got)
+	}
+	db.down.Store(false)
+	waitFor(t, func() bool { return !h.waiting.Load() })
+	st, err := h.open(bg, sci.User, uuid.New())
+	if err != nil {
+		t.Fatalf("a stream after the journal came back: %v", err)
+	}
+	h.remove(st)
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("Run = %v", err)
+	}
+}
+
+// Остановка раньше, чем ответила база, не ошибка и не зависание.
+func TestHubStopsWhileWaitingForTheJournal(t *testing.T) {
+	w := newWorld(t)
+	db := &brokenDB{DB: testkit.Pool}
+	db.down.Store(true)
+	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
+	defer cancel()
+	if err := NewHub(svcOn(w, db), nil, HubConfig{}, w.Log, nil).Run(ctx); err != nil {
 		t.Fatalf("Run = %v", err)
 	}
+}
+
+// rejectCounter считает отказы в потоке по причинам; остальные наблюдения ему не нужны.
+type rejectCounter struct {
+	nopObserver
+	mu sync.Mutex
+	by map[string]int
+}
+
+func (r *rejectCounter) StreamRejected(reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.by == nil {
+		r.by = map[string]int{}
+	}
+	r.by[reason]++
 }
 
 // brokenDB — база, которую тест может «отключить»: все обращения тогда сразу получают ошибку.
