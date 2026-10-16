@@ -48,7 +48,7 @@ func newWorld(t *testing.T) *world {
 	w.svc = NewService(testkit.Pool)
 	w.svc.now = w.clock.Now
 	// Обычные тесты пишут много подряд и не про пределы: пределы спама проверяют свои тесты с DefaultLimits (limits_test.go).
-	w.svc.limits = Limits{PersonPerDay: 1 << 20, OrgPerDay: 1 << 20, Unanswered: 1 << 20, ComplaintsPerDay: 1 << 20, ComplaintPerChat: time.Nanosecond, MailPerDay: 1 << 20}
+	w.svc.limits = Limits{PersonPerDay: 1 << 20, OrgPerDay: 1 << 20, Unanswered: 1 << 20, ComplaintsPerDay: 1 << 20, ComplaintPerChat: time.Nanosecond, MailPerDay: 1 << 20, EditsPerDay: 1 << 20}
 	w.tm = k.Team()
 	w.vacancy = w.tm.Published(&w.tm.UnitA.ID)
 	w.other = w.tm.Published(&w.tm.UnitB.ID)

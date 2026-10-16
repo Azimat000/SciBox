@@ -27,6 +27,9 @@ const (
 	DefaultComplaintsPerDay = 3
 	// DefaultComplaintPerChat — как часто можно жаловаться на одну переписку.
 	DefaultComplaintPerChat = 7 * 24 * time.Hour
+	// DefaultEditsPerDay — настоящих исправлений текста в сутки от одного человека. Правка рассылается собеседнику событием;
+	// без предела можно было бы гонять собеседнику поток событий, меняя один текст туда и обратно.
+	DefaultEditsPerDay = 200
 	// DefaultMailPerDay — писем о непрочитанном в сутки одному получателю, как бы много переписок ни ждало.
 	DefaultMailPerDay = 10
 
@@ -37,6 +40,7 @@ const (
 	kindSendPerson = "chat_send"
 	kindSendOrg    = "chat_send_org"
 	kindMail       = "chat_mail"
+	kindEdit       = "chat_edit"
 
 	// Ключи замков жалоб.
 	lockComplaint = "chat_complaint"
@@ -50,6 +54,7 @@ type Limits struct {
 	ComplaintsPerDay int
 	ComplaintPerChat time.Duration
 	MailPerDay       int
+	EditsPerDay      int
 }
 
 // DefaultLimits — пределы, выбранные пользователем (D-248).
@@ -57,6 +62,7 @@ func DefaultLimits() Limits {
 	return Limits{
 		PersonPerDay: DefaultPersonPerDay, OrgPerDay: DefaultOrgPerDay, Unanswered: DefaultUnanswered,
 		ComplaintsPerDay: DefaultComplaintsPerDay, ComplaintPerChat: DefaultComplaintPerChat, MailPerDay: DefaultMailPerDay,
+		EditsPerDay: DefaultEditsPerDay,
 	}
 }
 
@@ -74,6 +80,7 @@ func (l Limits) normalized() Limits {
 	l.Unanswered = pick(l.Unanswered, d.Unanswered)
 	l.ComplaintsPerDay = pick(l.ComplaintsPerDay, d.ComplaintsPerDay)
 	l.MailPerDay = pick(l.MailPerDay, d.MailPerDay)
+	l.EditsPerDay = pick(l.EditsPerDay, d.EditsPerDay)
 	if l.ComplaintPerChat <= 0 {
 		l.ComplaintPerChat = d.ComplaintPerChat
 	}

@@ -95,13 +95,14 @@ func messageClient(t *testing.T, chat uuid.UUID, seq int) *uuid.UUID {
 	return &id
 }
 
-func rateLimited(t *testing.T, err error) *auth.RateLimitedError {
+// rateLimited проверяет, что отказ — «слишком часто», и возвращает, через сколько можно повторить.
+func rateLimited(t *testing.T, err error) time.Duration {
 	t.Helper()
 	rl, ok := errors.AsType[*auth.RateLimitedError](err)
 	if !ok {
 		t.Fatalf("err = %v, want RateLimitedError", err)
 	}
-	return rl
+	return rl.RetryAfter
 }
 
 // Сутки на человека: считаются сообщения во всех его переписках; через сутки предел освобождается.
@@ -115,9 +116,9 @@ func TestSendLimitPerPerson(t *testing.T) {
 	for _, c := range chats[:3] {
 		w.send(w.tm.HR, c, "Здравствуйте")
 	}
-	rl := rateLimited(t, w.trySend(w.tm.HR, chats[3], "Четвёртое"))
-	if rl.RetryAfter < 23*time.Hour || rl.RetryAfter > 24*time.Hour {
-		t.Errorf("retry after = %v", rl.RetryAfter)
+	retry := rateLimited(t, w.trySend(w.tm.HR, chats[3], "Четвёртое"))
+	if retry < 23*time.Hour || retry > 24*time.Hour {
+		t.Errorf("retry after = %v", retry)
 	}
 	if n := w.messageCount(chats[3]); n != 0 {
 		t.Errorf("a refused message was stored: %d", n)
@@ -146,8 +147,8 @@ func TestSendLimitPerOrganization(t *testing.T) {
 	w.send(w.tm.HR, chats[0], "Раз")
 	w.send(w.tm.Owner, chats[1], "Два")
 	w.send(w.tm.HR, chats[2], "Три")
-	rateLimited(t, w.trySend(w.tm.Owner, chats[3], "Четыре"))
-	rateLimited(t, w.trySend(w.tm.HeadA, chats[3], "От руководителя"))
+	_ = rateLimited(t, w.trySend(w.tm.Owner, chats[3], "Четыре"))
+	_ = rateLimited(t, w.trySend(w.tm.HeadA, chats[3], "От руководителя"))
 
 	// Учёные пишут сколько нужно: предел организации их не касается.
 	for range 5 {
@@ -237,9 +238,9 @@ func TestComplaintLimits(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rl := rateLimited(t, errOf(w.svc.Complain(bg, sci.User, chats[3], in)))
-	if rl.RetryAfter < 23*time.Hour {
-		t.Errorf("retry after = %v", rl.RetryAfter)
+	retry := rateLimited(t, errOf(w.svc.Complain(bg, sci.User, chats[3], in)))
+	if retry < 23*time.Hour {
+		t.Errorf("retry after = %v", retry)
 	}
 	// Повтор на ту же переписку отвергается раньше, чем считаются сутки.
 	if _, err := w.svc.Complain(bg, sci.User, chats[0], in); !errors.Is(err, ErrAlreadyComplained) {
@@ -369,6 +370,33 @@ func TestUnreadMailCapPerRecipient(t *testing.T) {
 	w.clock.Advance(day + time.Minute)
 	if n := w.sendMail(); n != 0 {
 		t.Errorf("the suppressed chats must not mail later: %d", n)
+	}
+}
+
+// Правка текста: не больше EditsPerDay настоящих исправлений в сутки; та же правка повторно и отказ ничего не тратят.
+func TestEditLimit(t *testing.T) {
+	w := newWorld(t)
+	w.svc.WithLimits(Limits{EditsPerDay: 3})
+	sci := w.Applicant("Анна Ильина")
+	c := w.chatOf(sci, w.vacancy.ID, "sent")
+	w.send(sci, c, "Исходный текст")
+	for i := range 3 {
+		if _, err := w.svc.Edit(bg, sci.User, c, 1, EditInput{Text: fmt.Sprintf("Правка %d", i)}); err != nil {
+			t.Fatalf("edit %d: %v", i, err)
+		}
+	}
+	// Тот же текст — не исправление: события нет, предел не тратится.
+	if _, err := w.svc.Edit(bg, sci.User, c, 1, EditInput{Text: "Правка 2"}); err != nil {
+		t.Errorf("an edit without a change: %v", err)
+	}
+	_, err := w.svc.Edit(bg, sci.User, c, 1, EditInput{Text: "Четвёртая"})
+	_ = rateLimited(t, err)
+	if got := w.texts(sci, c); len(got) != 1 || got[0] != "Правка 2" {
+		t.Errorf("a refused edit changed the text: %q", got)
+	}
+	w.clock.Advance(day + time.Minute)
+	if _, err := w.svc.Edit(bg, sci.User, c, 1, EditInput{Text: "Следующие сутки"}); !errors.Is(err, ErrEditWindowClosed) {
+		t.Errorf("after a day the edit window is closed: %v", err)
 	}
 }
 

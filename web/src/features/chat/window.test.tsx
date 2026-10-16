@@ -287,6 +287,18 @@ describe('sending', () => {
     expect(screen.queryByText('Второе')).not.toBeInTheDocument()
   })
 
+  it('shows the reason when the server stops spam limits (T-99): wait for a reply, repeated number, too many a day', async () => {
+    const answer = { current: apiError(409, 'awaiting_reply', 'Вы написали несколько сообщений подряд. Дождитесь ответа собеседника') }
+    await open([textMessage(1)], undefined, { [SEND]: () => answer.current })
+    await type('Привет{Enter}')
+    expect(await screen.findByText('Не отправлено')).toBeInTheDocument()
+    expect(screen.getByText('Вы написали несколько сообщений подряд. Дождитесь ответа собеседника')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Убрать' }))
+    answer.current = apiError(409, 'client_id_reused', 'Этот номер отправки уже использован для другого текста. Повторите отправку')
+    await type('Второе{Enter}')
+    expect(await screen.findByText('Этот номер отправки уже использован для другого текста. Повторите отправку')).toBeInTheDocument()
+  })
+
   it('Shift+Enter makes a new line and an empty or blank message cannot be sent', async () => {
     const { calls } = await open([textMessage(1)])
     const send = screen.getByRole('button', { name: 'Отправить' })

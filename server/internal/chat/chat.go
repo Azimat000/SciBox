@@ -313,6 +313,9 @@ func (s *Service) Edit(ctx context.Context, user auth.User, id uuid.UUID, seq in
 			return ErrEditWindowClosed
 		}
 		if text != m.Body {
+			if err := spendRate(ctx, q, now, kindEdit, user.ID.String(), day, s.limits.EditsPerDay); err != nil {
+				return err
+			}
 			if err := q.EditChatMessage(ctx, dbgen.EditChatMessageParams{Body: text, Now: now, ChatID: id, Seq: m.Seq}); err != nil {
 				return fmt.Errorf("chat: edit message: %w", err)
 			}
