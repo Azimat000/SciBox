@@ -164,7 +164,7 @@ func TestManySendersAndTheDecision(t *testing.T) {
 	app := w.application(sci, w.vacancy.ID, "viewed")
 	chat := w.open(sci, w.vacancy.ID, &app, nil)
 	// Сервис на часах «сейчас», чтобы время строк шло само.
-	svc := NewService(testkit.Pool)
+	svc := relaxed(NewService(testkit.Pool))
 
 	var wg sync.WaitGroup
 	results := make(chan error, 60)
@@ -231,7 +231,7 @@ func TestParallelRepeatsMakeOneMessage(t *testing.T) {
 	sci := w.Applicant("Анна Ильина")
 	chat := w.chatOf(sci, w.vacancy.ID, "sent")
 	client := uuid.NewString()
-	svc := NewService(testkit.Pool)
+	svc := relaxed(NewService(testkit.Pool))
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	created := 0
@@ -263,7 +263,7 @@ func TestReadArchiveAndSendDoNotDeadlock(t *testing.T) {
 	w := newWorld(t)
 	sci := w.Applicant("Анна Ильина")
 	chat := w.chatOf(sci, w.vacancy.ID, "sent")
-	svc := NewService(testkit.Pool)
+	svc := relaxed(NewService(testkit.Pool))
 	people := []testkit.Person{sci, w.tm.Owner, w.tm.HR, w.tm.HeadA}
 	// У каждого уже есть личная строка в архиве: отправка будет её менять, чтение и архив тоже.
 	for _, p := range people {

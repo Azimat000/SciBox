@@ -589,7 +589,7 @@ func TestStreamBetweenTwoCopies(t *testing.T) {
 	w := newWorld(t)
 	a := newLiveOn(t, w)
 	// Вторая копия: свой сервис, своя раздача, свой HTTP-сервер, то же хранилище.
-	svcB := NewService(testkit.Pool)
+	svcB := relaxed(NewService(testkit.Pool))
 	svcB.now = w.clock.Now
 	w2 := *w
 	w2.svc = svcB

@@ -61,7 +61,7 @@ func TestHTTPDatabaseDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	pool.Close() // закрытый пул отвечает ошибкой на любое обращение
-	svc := NewService(pool)
+	svc := relaxed(NewService(pool))
 	api := testkit.NewAPI(w.World, func(r chi.Router, requireUser func(http.Handler) http.Handler) {
 		NewHandler(svc, w.Log, requireUser).Mount(r)
 	})

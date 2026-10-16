@@ -11,7 +11,7 @@ import (
 // соответствует правилам и разбирается заново так же.
 
 func FuzzCleanText(f *testing.F) {
-	for _, s := range []string{"", " ", "Привет", "a\r\nb", "\x00", "a‮b", " ", "😀", strings.Repeat("я", MaxText+1), "\xff\xfe", "\t\n x \n"} {
+	for _, s := range []string{"", " ", "Привет", "a\r\nb", "\x00", "a\u202eb", " ", "😀", strings.Repeat("я", MaxText+1), "\xff\xfe", "\t\n x \n"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
@@ -53,7 +53,7 @@ func FuzzDecodeCursor(f *testing.F) {
 }
 
 func FuzzMailSafe(f *testing.F) {
-	for _, s := range []string{"", "Анна\nИльина", "a‮b", "\x00", strings.Repeat("я", 500)} {
+	for _, s := range []string{"", "Анна\nИльина", "a\u202eb", "\x00", strings.Repeat("я", 500)} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {

@@ -52,7 +52,7 @@ func TestCursorDecodeIsTotalAndStable(t *testing.T) {
 
 func TestCleanTextProperty(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		raw := rapid.OneOf(rapid.String(), rapid.StringOfN(rapid.RuneFrom([]rune{'a', 'я', ' ', '\n', '\r', '\t', '\x00', '‮', '⁦', 'ё', '🙂', '​'}), 0, 40, -1)).Draw(rt, "raw")
+		raw := rapid.OneOf(rapid.String(), rapid.StringOfN(rapid.RuneFrom([]rune{'a', 'я', ' ', '\n', '\r', '\t', '\x00', '\u202e', '\u2066', 'ё', '🙂', '\u200b'}), 0, 40, -1)).Draw(rt, "raw")
 		text, problem := cleanText(raw)
 		if problem != "" {
 			if text != "" {

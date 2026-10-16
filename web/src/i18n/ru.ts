@@ -329,6 +329,7 @@ export const ru = {
       consentRequired: 'Без согласия на обработку персональных данных мы не можем создать аккаунт',
       rateLimited: (n: number, unit: string) => `Слишком много попыток. Попробуйте снова через ${n} ${unit}`,
       minuteForms: ['минуту', 'минуты', 'минут'] as readonly [string, string, string],
+      hourForms: ['час', 'часа', 'часов'] as readonly [string, string, string],
       rateLimitedShort: 'Слишком много попыток. Подождите немного и попробуйте снова',
       fixFields: 'Проверьте отмеченные поля',
     },

@@ -252,7 +252,7 @@ func TestUnreadMailNeverDoubles(t *testing.T) {
 	total := 0
 	for range 4 { // четыре «копии» задачи одновременно, по две попытки каждая
 		wg.Go(func() {
-			svc := NewService(testkit.Pool)
+			svc := relaxed(NewService(testkit.Pool))
 			svc.now = w.clock.Now
 			svc.WithMail(MailConfig{ProductName: "SciBox", PublicURL: "https://scibox.example.ru"})
 			for range 2 {

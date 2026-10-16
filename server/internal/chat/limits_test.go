@@ -184,13 +184,12 @@ func TestSendLimitsHoldUnderConcurrency(t *testing.T) {
 				err := w.trySend(who(i), chats[i], "Параллельно")
 				mu.Lock()
 				defer mu.Unlock()
-				switch {
-				case err == nil:
+				if err == nil {
 					ok++
-				default:
-					if _, isRL := errors.AsType[*auth.RateLimitedError](err); !isRL {
-						t.Errorf("unexpected error: %v", err)
-					}
+					return
+				}
+				if _, isRL := errors.AsType[*auth.RateLimitedError](err); !isRL {
+					t.Errorf("unexpected error: %v", err)
 				}
 			}()
 		}
@@ -409,7 +408,7 @@ func TestMailSafe(t *testing.T) {
 	}{
 		"plain":    {"Анна Ильина", 100, "Анна Ильина"},
 		"lines":    {"Анна\n\nИльина\r\n", 100, "Анна Ильина"},
-		"bidi":     {"Анна‮аниьлИ", 100, "Анна аниьлИ"},
+		"bidi":     {"Анна\u202eаниьлИ", 100, "Анна аниьлИ"},
 		"control":  {"A\x00B\x07C", 100, "A B C"},
 		"too long": {long, 10, strings.Repeat("я", 9) + "…"},
 		"exact":    {strings.Repeat("я", 10), 10, strings.Repeat("я", 10)},
@@ -493,7 +492,7 @@ func TestChatsAreOpenedOnlyByApplicationsAndOffers(t *testing.T) {
 		if pkg == "chat" || pkg == "dbgen" || pkg == "testkit" {
 			return nil
 		}
-		src, err := os.ReadFile(path)
+		src, err := os.ReadFile(path) //nolint:gosec // G304: путь из обхода исходников собственного пакета, не от пользователя
 		if err != nil {
 			return err
 		}

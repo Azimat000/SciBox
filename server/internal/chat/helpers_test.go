@@ -46,9 +46,9 @@ func newWorld(t *testing.T) *world {
 	k := testkit.NewWorld(t)
 	w := &world{World: k, clock: &clock{t: time.Now().UTC().Truncate(time.Microsecond)}}
 	w.svc = NewService(testkit.Pool)
-	w.svc.now = w.clock.Now
 	// Обычные тесты пишут много подряд и не про пределы: пределы спама проверяют свои тесты с DefaultLimits (limits_test.go).
-	w.svc.limits = Limits{PersonPerDay: 1 << 20, OrgPerDay: 1 << 20, Unanswered: 1 << 20, ComplaintsPerDay: 1 << 20, ComplaintPerChat: time.Nanosecond, MailPerDay: 1 << 20, EditsPerDay: 1 << 20}
+	relaxed(w.svc)
+	w.svc.now = w.clock.Now
 	w.tm = k.Team()
 	w.vacancy = w.tm.Published(&w.tm.UnitA.ID)
 	w.other = w.tm.Published(&w.tm.UnitB.ID)
@@ -174,4 +174,14 @@ func people(w *world) []struct {
 func jsonString(v any) (string, error) {
 	b, err := json.Marshal(v)
 	return string(b), err
+}
+
+// relaxed снимает пределы спама у сервиса, созданного в тесте не про них: тесты, которые пишут много подряд от одной
+// стороны (параллельные отправки, гонки с решением), иначе упираются в «подряд без ответа».
+func relaxed(s *Service) *Service {
+	s.limits = Limits{
+		PersonPerDay: 1 << 20, OrgPerDay: 1 << 20, Unanswered: 1 << 20, ComplaintsPerDay: 1 << 20, ComplaintPerChat: time.Nanosecond,
+		MailPerDay: 1 << 20, EditsPerDay: 1 << 20,
+	}
+	return s
 }

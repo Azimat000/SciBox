@@ -15,6 +15,11 @@ export function describeError(err: unknown): string {
     case 'rate_limited': {
       if (!err.retryAfter) return t.auth.errors.rateLimitedShort
       const minutes = Math.max(1, Math.ceil(err.retryAfter / 60))
+      // Суточные пределы (чат) ждут часы: «через 1440 минут» не читается.
+      if (minutes >= 120) {
+        const hours = Math.ceil(minutes / 60)
+        return t.auth.errors.rateLimited(hours, plural(hours, t.auth.errors.hourForms))
+      }
       return t.auth.errors.rateLimited(minutes, plural(minutes, t.auth.errors.minuteForms))
     }
     default:
