@@ -9,7 +9,7 @@
 # SCIBOX_TUNNEL=localhost.run.
 #
 # Постоянная ссылка (D-133): бесплатный аккаунт tuna даёт один постоянный адрес вида
-# brave-otter-4821.ru.tuna.am. Его имя (brave-otter-4821) записывается в файл .share.local
+# brave-otter-4821.ru.tuna.am (с версии tuna 0.36 бесплатный адрес выглядит как brave-otter-4821.a.tuna.free). Его имя (brave-otter-4821) записывается в файл .share.local
 # в корне проекта строкой SCIBOX_TUNA_SUBDOMAIN=brave-otter-4821 (файл не попадает в git)
 # или передаётся той же переменной окружения.
 set -eu
@@ -54,9 +54,9 @@ echo "Собираю сервер…"
 
 case "$tunnel" in
   tuna)
-    pattern='https://[A-Za-z0-9.-]*tuna\.am'
+    pattern='https://[A-Za-z0-9.-]*tuna\.(am|free)'
     # С постоянным адресом ищем именно его: tuna печатает и другие ссылки (инспектор запросов, подсказки).
-    if [ -n "$subdomain" ]; then pattern="https://$subdomain\.[A-Za-z0-9.-]*tuna\.am"; fi
+    if [ -n "$subdomain" ]; then pattern="https://$subdomain\.[A-Za-z0-9.-]*tuna\.(am|free)"; fi
     ;;
   localhost.run) pattern='https://[A-Za-z0-9.-]*\.(lhr\.life|localhost\.run)' ;;
   *)
