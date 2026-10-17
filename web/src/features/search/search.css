@@ -14,17 +14,7 @@
 
 /* ---- колонка фильтров ---- */
 
-/* На компьютере колонка остаётся на экране, пока листают выдачу; длинная прокручивается сама. */
-@media (min-width: 60rem) {
-  .search-filters {
-    position: sticky;
-    top: calc(var(--s-7) + var(--s-6));
-    max-height: calc(100dvh - var(--s-7) - var(--s-6) - var(--s-4));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: var(--s-2);
-  }
-}
+/* Колонка фильтров идёт вместе со страницей, без собственной прокрутки: высокая колонка, прилипшая к экрану, обрезалась бы снизу. */
 
 .filters-toggle {
   display: none;
