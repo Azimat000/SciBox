@@ -386,7 +386,7 @@ describe('profile of another person', () => {
     expect(screen.queryByRole('button', { name: /Удалить/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Изменить основное' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /@/ })).not.toBeInTheDocument()
-    expect(screen.getByText('Войдите, чтобы скачать резюме.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Войдите' })).toHaveAttribute('href', `/login?next=${encodeURIComponent(path)}`)
   })
 
   it('shows the contact mail to those allowed and a resume link to a signed-in person', async () => {

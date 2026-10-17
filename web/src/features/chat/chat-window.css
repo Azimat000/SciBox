@@ -266,11 +266,17 @@
     opacity var(--t-fast) var(--ease);
 }
 
-/* Невидимый запас под палец */
+/* Невидимый запас под палец; на сенсорном экране до 44 px */
 .chat-msg-menu::after {
   content: '';
   position: absolute;
   inset: -0.5rem -0.375rem;
+}
+
+@media (pointer: coarse) {
+  .chat-msg-menu::after {
+    inset: -0.625rem;
+  }
 }
 
 .chat-msg-menu:hover,

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ann, reply, signedInAs, stubApi } from '../../test/api'
 import { press } from '../../test/forms'
 import { renderApp } from '../../test/render'
+import { shortName } from './shortName'
 
 const banner = () => screen.getAllByRole('banner')[0]
 const menuButton = () => screen.findByRole('button', { name: /Меню аккаунта: Анна Смирнова/ })
@@ -130,7 +131,14 @@ describe('user menu', () => {
     stubApi(signedInAs({ ...ann, name: long }))
     renderApp('/')
     const button = await screen.findByRole('button', { name: new RegExp(long) })
-    expect(within(button).getByText(long)).toHaveClass('user-menu-name')
+    expect(within(button).getByText('Александр')).toHaveClass('user-menu-name')
+  })
+
+  it('shows only the first name in the header and the full name inside the menu', async () => {
+    expect(shortName('Анна Смирнова')).toBe('Анна')
+    expect(shortName('  Анна  ')).toBe('Анна')
+    expect(shortName('Д. Королёв')).toBe('Д. Королёв')
+    expect(shortName('Ли Мин')).toBe('Ли Мин')
   })
 })
 

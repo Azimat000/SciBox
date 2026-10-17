@@ -26,8 +26,9 @@
 .nav-desktop {
   display: flex;
   gap: var(--s-3);
-  flex: 1;
-  min-width: 0;
+  /* Меню не сжимается: при нехватке места уступает правая часть (имя в кнопке аккаунта обрезается),
+     а пункты меню никогда не заезжают на переключатель режима */
+  flex: none;
 }
 
 .nav-link {
@@ -57,7 +58,18 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
+  min-width: 0;
   margin-left: auto;
+  padding-left: var(--s-3);
+}
+
+.header-signin {
+  min-width: 0;
+}
+
+.header-role,
+.header-icons {
+  flex: none;
 }
 
 .header-icons {

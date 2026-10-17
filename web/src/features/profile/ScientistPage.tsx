@@ -1,5 +1,5 @@
 import { usePageTitle } from '../../app/pageTitle'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
 import { ButtonLink } from '../../ui/Button'
@@ -75,7 +75,12 @@ export function ScientistPage() {
                 {t.profile.downloadCv}
               </a>
             ) : (
-              <p className="profile-note">{t.profile.cvNeedLogin}</p>
+              <p className="profile-note">
+                <Link to={`/login?next=${encodeURIComponent(`/scientists/${id}`)}`} state={{ notice: 'need-login' }}>
+                  {t.profile.cvNeedLogin.link}
+                </Link>
+                {t.profile.cvNeedLogin.rest}
+              </p>
             )}
           </>
         }

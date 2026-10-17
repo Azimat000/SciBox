@@ -300,6 +300,15 @@
   overflow-wrap: anywhere;
 }
 
+/* Код специальности не рвётся посередине («1.2» и «.2» на разных строках), как в каталоге соискателей */
+.profile-tags .num {
+  flex: none;
+  align-self: start;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 .profile-facts {
   margin: 0;
   display: grid;

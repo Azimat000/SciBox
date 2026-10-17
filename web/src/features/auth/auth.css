@@ -77,6 +77,8 @@
 .social-button {
   width: 100%;
   justify-content: space-between;
+  padding-inline: var(--s-3);
+  white-space: nowrap;
 }
 
 /* Пока не работают: тонкая рамка без заливки, чтобы не спорить с кнопкой «Войти» */
@@ -96,7 +98,8 @@
   gap: var(--s-2);
 }
 
-@media (max-width: 24rem) {
+/* Две кнопки в ряд помещаются от 368 px: название сервиса и «скоро» не переносятся */
+@media (max-width: 23rem) {
   .social-list {
     grid-template-columns: minmax(0, 1fr);
   }

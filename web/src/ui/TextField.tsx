@@ -6,10 +6,14 @@ type Shared = { label: string; hint?: string; error?: string; optional?: boolean
 
 type TextFieldProps = Shared & Omit<InputHTMLAttributes<HTMLInputElement>, 'id'>
 
+/** В почте, адресе и телефоне проверка орфографии только подчёркивает всё красным: выключена по умолчанию. */
+const noSpellcheck = new Set(['email', 'url', 'tel'])
+
 export function TextField({ label, hint, error, optional, required, className, ...rest }: TextFieldProps) {
+  const spellCheck = rest.spellCheck ?? (rest.type && noSpellcheck.has(rest.type) ? false : undefined)
   return (
     <Field label={label} hint={hint} error={error} optional={optional} required={required} className={className}>
-      {(control) => <input className="control" {...control} required={required} {...rest} />}
+      {(control) => <input className="control" {...control} required={required} {...rest} spellCheck={spellCheck} />}
     </Field>
   )
 }

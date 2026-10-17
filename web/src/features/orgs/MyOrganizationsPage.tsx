@@ -81,11 +81,12 @@ function OrganizationRow({ org }: { org: MyOrganization }) {
           </span>
         </p>
       </div>
+      {/* В строке списка нет синей кнопки: пять «Управление» подряд спорили бы друг с другом (DESIGN.md, одна синяя кнопка на участок) */}
       <div className="mine-row-actions">
-        <ButtonLink to={`/my-organization/${org.slug}`} size="sm">
+        <ButtonLink to={`/my-organization/${org.slug}`} variant="secondary" size="sm">
           {t.orgs.mine.openManage}
         </ButtonLink>
-        <ButtonLink to={`/organizations/${org.slug}`} variant="secondary" size="sm">
+        <ButtonLink to={`/organizations/${org.slug}`} variant="quiet" size="sm">
           {t.orgs.mine.openPage}
         </ButtonLink>
       </div>

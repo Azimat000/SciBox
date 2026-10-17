@@ -90,15 +90,16 @@ function Page({ offer }: { offer: Offer }) {
           {[v.unit_name, v.city].filter(Boolean).join(', ')}
         </p>
         {v.deadline && open !== 'closed' && <Deadline date={v.deadline} />}
+        {/* Главное действие первым: на телефоне кнопки встают столбиком, и синяя не должна теряться в середине */}
         <div className="offer-actions">
-          <ButtonLink to={`/vacancies/${v.id}`} variant="secondary">
-            {o.openVacancy}
-          </ButtonLink>
           {offer.application_id ? (
             <ButtonLink to={`/applications/${offer.application_id}`}>{o.seeApplication}</ButtonLink>
           ) : (
             open === 'open' && <ButtonLink to={`/vacancies/${v.id}/apply`}>{o.apply}</ButtonLink>
           )}
+          <ButtonLink to={`/vacancies/${v.id}`} variant="secondary">
+            {o.openVacancy}
+          </ButtonLink>
           <ChatButton chat={offer.chat} />
         </div>
         {offer.application_id && <p className="application-muted">{o.alreadyApplied}</p>}

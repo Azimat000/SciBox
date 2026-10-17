@@ -1,5 +1,6 @@
 .user-menu {
   position: relative;
+  min-width: 0;
 }
 
 .user-menu-button {
@@ -7,8 +8,8 @@
   align-items: center;
   gap: var(--s-2);
   min-height: var(--control-h);
-  max-width: 10rem;
-  padding: 0 var(--s-3);
+  max-width: 100%;
+  padding: 0 var(--s-2) 0 var(--s-3);
   border: 1px solid transparent;
   border-radius: var(--r-md);
   background: transparent;

@@ -10,6 +10,18 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  -webkit-tap-highlight-color: var(--tap);
+}
+
+/* Без задержки двойного касания на кнопках и ссылках: нажатие срабатывает сразу */
+a,
+button,
+summary,
+label,
+input,
+select,
+textarea {
+  touch-action: manipulation;
 }
 
 body {

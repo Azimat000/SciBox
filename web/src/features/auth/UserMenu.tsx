@@ -4,6 +4,7 @@ import { t } from '../../i18n'
 import { Button } from '../../ui/Button'
 import { ChevronDownIcon } from '../../ui/icons'
 import type { User } from './api'
+import { shortName } from './shortName'
 import { useSignOut } from './useSignOut'
 import './UserMenu.css'
 
@@ -46,7 +47,7 @@ export function UserMenu({ user }: { user: User }) {
         aria-label={`${t.shell.accountMenu}: ${user.name}`}
         onClick={() => setOpenAt(open ? null : pathname)}
       >
-        <span className="user-menu-name">{user.name}</span>
+        <span className="user-menu-name">{shortName(user.name)}</span>
         <ChevronDownIcon size={16} />
       </button>
       <div id="user-menu-panel" className="user-menu-panel" hidden={!open}>

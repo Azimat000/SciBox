@@ -28,6 +28,7 @@
 
 /* Внутри метки пробел между кодом и названием стирается (она выровнена флексом): отступ задан явно */
 .sci-specs .num {
+  align-self: start;
   margin-inline-end: var(--s-2);
   color: var(--ink-soft);
   white-space: nowrap;

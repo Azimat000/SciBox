@@ -24,7 +24,8 @@
 .vacancy-head h1 {
   overflow-wrap: anywhere;
   text-wrap: balance;
-  max-width: 24ch;
+  /* 30ch: обычное название «Должность: тема» ложится в две строки, а не в три узкие */
+  max-width: 30ch;
 }
 
 .vacancy-head h1[data-long] {
