@@ -23,8 +23,8 @@ describe('landing page', () => {
   it('tells both sides what the site is, with the numbers and the fresh vacancies from the server', async () => {
     const { called } = setup()
     renderApp('/')
-    expect(await screen.findByRole('heading', { level: 1, name: /Найдите место в\sнаучно-образовательной сфере/ })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Или человека в ваш коллектив.')
+    expect(await screen.findByRole('heading', { level: 1, name: /Найдите работу в\sнауке/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Или тех, кто в ней нужен.')
 
     const facts = await screen.findByRole('list', { name: 'Сейчас на сайте' })
     expect(within(facts).getByRole('link', { name: '188 открытых вакансий' })).toHaveAttribute('href', '/vacancies')
