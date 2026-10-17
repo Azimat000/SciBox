@@ -1,6 +1,7 @@
-/* Жёлтый маркер: единственный акцентный приём системы. Им отмечено то, что нужно успеть. */
+/* Винный маркер: единственный акцентный приём системы. Им отмечено то, что нужно успеть. */
 .mark {
-  background: linear-gradient(transparent 55%, var(--mark) 55%) no-repeat left / 100% 100%;
+  background: var(--mark);
+  color: var(--on-ink);
   padding-inline: 0.15em;
   margin-inline: -0.15em;
   -webkit-box-decoration-break: clone;
@@ -35,6 +36,11 @@
   color: var(--ink-soft);
 }
 
+.deadline-date.mark,
+.cal-day.mark {
+  color: var(--on-ink);
+}
+
 .deadline-rest {
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
@@ -47,7 +53,10 @@
 
 @keyframes mark-draw {
   from {
-    background-size: 0% 100%;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
   }
 }
 

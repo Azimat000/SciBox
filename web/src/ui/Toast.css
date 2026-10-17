@@ -44,6 +44,8 @@
 
 .toast[data-kind='info'] .toast-icon {
   color: var(--mark);
+  background: var(--paper);
+  border-radius: var(--r-sm);
 }
 
 .toast-icon {

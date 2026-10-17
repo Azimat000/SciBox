@@ -25,7 +25,8 @@ export function EmptyState({ title, text, tone = 'empty', action, headingLevel =
           <>
             {/* маркер проведён под строкой текста, как карандашом по странице */}
             <path d="M33 43.5h30" stroke="var(--mark)" strokeWidth="7" strokeLinecap="round" />
-            <path d="M33 30h30M33 43h22M33 56h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M33 30h30M33 56h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path d="M33 43h22" stroke="var(--on-ink)" strokeWidth="2" strokeLinecap="round" />
           </>
         )}
       </svg>

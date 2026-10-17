@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { productName } from '../../config/product'
 import { t } from '../../i18n'
 import { ButtonLink } from '../../ui/Button'
 import { BookmarkIcon, CloseIcon, MenuIcon } from '../../ui/icons'
@@ -10,6 +9,7 @@ import { useSignOut } from '../auth/useSignOut'
 import { ChatLive } from '../chat/ChatLive'
 import { MessagesLink } from '../chat/MessagesLink'
 import { NotificationBell } from '../notifications/NotificationBell'
+import { BrandLogo } from './BrandLogo'
 import { favoritesNav, isCurrent, navFor, publicNav } from './nav'
 import { RoleSwitch } from './RoleSwitch'
 import { useRole } from './useRole'
@@ -49,7 +49,7 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="site-header-bar">
         <Link to="/" className="wordmark" title={t.shell.brandExpansion}>
-          {productName}
+          <BrandLogo />
         </Link>
 
         <nav className="nav-desktop" aria-label={t.shell.mainNav}>

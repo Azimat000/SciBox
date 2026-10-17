@@ -20,20 +20,7 @@
 .wordmark {
   display: inline-flex;
   align-items: center;
-  color: var(--blue);
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: 1.75rem;
-  font-variation-settings: 'opsz' 72;
-  /* Заглавные буквы чуть разрежены, в отличие от прежнего поджатого строчного названия */
-  letter-spacing: 0.04em;
-  text-decoration: none;
   flex: none;
-}
-
-.wordmark:hover {
-  text-decoration: none;
-  color: var(--blue-hover);
 }
 
 .nav-desktop {

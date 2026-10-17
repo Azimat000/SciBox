@@ -41,7 +41,7 @@ main {
 
 ::selection {
   background: var(--mark);
-  color: var(--ink);
+  color: var(--on-ink);
 }
 
 :focus-visible {

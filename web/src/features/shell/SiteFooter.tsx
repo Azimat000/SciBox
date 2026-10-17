@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
-import { productName } from '../../config/product'
 import { t } from '../../i18n'
+import { BrandLogo } from './BrandLogo'
 import './SiteFooter.css'
 
 export function SiteFooter() {
@@ -8,7 +8,9 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="site-footer-inner">
         <div className="footer-about">
-          <p className="footer-name">{productName}</p>
+          <p className="footer-name">
+            <BrandLogo />
+          </p>
           <p className="footer-tagline">{t.shell.footerTagline}</p>
           <p className="footer-note">{t.shell.footerNote}</p>
         </div>

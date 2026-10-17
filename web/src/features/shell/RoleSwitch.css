@@ -1,5 +1,5 @@
 /* Режим аккаунта: переключатель из двух сегментов. Он отличается от пунктов меню видом,
-   чтобы жёлтый маркер в шапке означал одно: «вы на этой странице». */
+   чтобы винный маркер в шапке означал одно: «вы на этой странице». */
 .role-switch {
   display: inline-flex;
   border: 1px solid var(--ink);
@@ -43,4 +43,8 @@
 .role-option:focus-visible {
   outline-offset: -4px;
   outline-color: var(--mark);
+}
+
+.role-option[aria-pressed='true']:focus-visible {
+  outline-color: var(--on-ink);
 }

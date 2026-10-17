@@ -11,7 +11,7 @@ type DeadlineProps = {
   align?: 'start' | 'end'
 }
 
-/** Срок подачи заявок. Близкий срок (до двух недель) отмечен жёлтым маркером. */
+/** Срок подачи заявок. Близкий срок (до двух недель) отмечен винным маркером. */
 export function Deadline({ date, now, align = 'start' }: DeadlineProps) {
   const [mountedAt] = useState(() => new Date())
   const view = describeDeadline(date, now ?? mountedAt)

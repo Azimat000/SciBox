@@ -1,0 +1,11 @@
+.brand-logo {
+  display: block;
+  width: 7rem;
+  height: auto;
+}
+
+@media (max-width: 26rem) {
+  .site-header .brand-logo {
+    width: 5rem;
+  }
+}

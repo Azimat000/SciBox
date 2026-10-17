@@ -1,6 +1,6 @@
 ---
 name: ИОН
-description: A science job board set like a serious journal, with one yellow highlighter for the deadline.
+description: A science job board set like a serious journal, with one dark wine accent for deadlines and navigation.
 colors:
   paper: "#ffffff"
   wash: "#f6f4f1"
@@ -13,7 +13,7 @@ colors:
   ink-blue: "#1c2c66"
   ink-blue-deep: "#121e4d"
   blue-wash: "#eceefa"
-  marker-yellow: "#f7d559"
+  marker-wine: "#722F37"
   ok: "#1e6b45"
   ok-wash: "#e6f3ec"
   fail: "#a3261b"
@@ -142,13 +142,13 @@ components:
 
 **Creative North Star: "The Journal"**
 
-A vacancy is set like an article in a serious science journal: serif title, organization line, abstract, a row of facts. The page is pure white, the ink is warm near-black, actions and links are one deep ink-blue, and the single accent is a marker-yellow highlighter that appears only on a deadline that needs attention. Entries are separated by hairline rules, not boxed cards. The world refuses the generic job-board card grid with logo tiles and a bright blue button.
+A vacancy is set like an article in a serious science journal: serif title, organization line, abstract, a row of facts. The page is pure white, the ink is warm near-black, actions and links are one deep ink-blue, and the single accent is a dark wine marker for urgent deadlines and the current place in navigation. Entries are separated by hairline rules, not boxed cards. The world refuses the generic job-board card grid with logo tiles and a bright blue button.
 
 Density is calm and readable: generous line height, a 68ch reading measure, a 72rem content column. Phone and desktop are equal; the same entry reflows so the deadline stays visible before the abstract on a phone. There is no dark theme. Depth is typographic and linear (rules, weight, whitespace), not shadowed.
 
 **Key Characteristics:**
-- Serif for what is read (titles, abstracts, lead paragraphs, wordmark); sans for what is operated (interface, facts, forms).
-- One action color (ink-blue) and one accent (marker yellow), never mixed in roles.
+- Serif for what is read (titles, abstracts, lead paragraphs); sans for what is operated (interface, facts, forms).
+- One action color (ink-blue) and one accent (marker wine), never mixed in roles.
 - Hairlines (1px) between entries and sections; one black rule under the result count.
 - Printed corners: 2px small, 4px controls and panels; no pills (only the avatar and the bell counter are round).
 - Rules carry the hierarchy like a printed journal: a 3px double rule under the masthead, a 3px ink rule above every rubric (section heads, landing table of contents, tracks, footer), 1px ink under a heading, 1px line between entries.
@@ -157,13 +157,13 @@ Density is calm and readable: generous line height, a 68ch reading measure, a 72
 
 ## Colors
 
-A white sheet, warm ink, one blue, one yellow; status colors are muted and used only for state.
+A white sheet, warm ink, one blue, one dark wine; status colors are muted and used only for state.
 
 ### Primary
-- **Ink Blue** (#1c2c66): primary buttons, links, the wordmark, selected chip text, focus ring, caret. Hover deepens to **Ink Blue Deep** (#121e4d). **Blue Wash** (#eceefa) is its tint for the active combobox option and quiet-button hover; a selected chip is filled ink-blue.
+- **Ink Blue** (#1c2c66): primary buttons, links, selected chip text, focus ring, caret. Hover deepens to **Ink Blue Deep** (#121e4d). **Blue Wash** (#eceefa) is its tint for the active combobox option and quiet-button hover; a selected chip is filled ink-blue.
 
 ### Secondary
-- **Marker Yellow** (#f7d559): the only accent. It highlights an urgent deadline date, underlines the active nav item and active section tab (3px), colors text selection, and tints the info icon on dark toasts.
+- **Marker Wine** (#722F37): the only accent. It fills urgent deadline dates and text selections with white lettering, underlines the active nav item and active section tab (3px), and colors the info icon on a small white backing in dark toasts. Empty-state artwork uses a white text stroke over its wine marker. The approved graphic logo keeps its blue artwork and wine tassel.
 
 ### Neutral
 - **Paper** (#ffffff): page, fields, modal, secondary buttons.
@@ -173,7 +173,7 @@ A white sheet, warm ink, one blue, one yellow; status colors are muted and used 
 - **Status:** OK (#1e6b45) with OK Wash (#e6f3ec); Fail (#a3261b), Fail Deep (#7f1c13) and Fail Wash (#fbebe9) for errors and the danger button. On dark toasts: On Ink (#ffffff), On Ink Soft (#d9d6d1), with lighter green (#8fdcb2) and red (#ffb3aa) icon tints defined in tokens.
 
 ### Named Rules
-**The One Highlighter Rule.** Marker yellow marks what must be done soon, and the current place in navigation. It is never a button fill, a background panel, or decoration.
+**The One Highlighter Rule.** Marker wine marks what must be done soon, and the current place in navigation. It is never a button fill or a background panel. The same accent appears in the logo tassel and empty-state marker.
 **The One Action Blue Rule.** Every clickable commitment is ink-blue. Status colors never stand in for actions except the danger button.
 
 ## Typography
@@ -239,19 +239,19 @@ Printed and quiet: 2px for tags, chips, option rows and skeletons; 4px for butto
 - Select is the native element with a drawn chevron; the combobox adds a floating white list (edge border, shadow) with blue-wash active row and a drawn check on the selected option.
 
 ### Navigation
-Sticky white header closed by a 3px double ink rule, like a journal masthead, 4.25rem tall. Serif ink-blue wordmark «ИОН», text only, no mark (1.75rem, 700, display optical size, letter-spacing 0.04em because it is set in capitals), sans links in ink-soft that turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. In the seeker role «Избранное» is not a menu item but a bookmark icon beside the bell (44px, filled with a 3px marker underline when the section is current; tooltip and accessible name «Избранное»); it stays in the bar on phones too. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: two segments in a 1px ink frame with 4px corners and an ink divider; the active segment is filled ink with white semibold text. In the mobile menu the active link carries an inset 3px marker line over the hairline.
+Sticky white header closed by a 3px double ink rule, like a journal masthead, 4.25rem tall. The shared `BrandLogo` renders the approved graphic «ИОН» logo in both header and footer. The header logo links to the home page, with accessible name «ИОН» and a title with the expanded product name; the footer logo remains an image in a paragraph. The image has explicit 1376 × 548 dimensions to reserve its aspect ratio. The artwork is blue with a wine tassel. It displays 112px wide (about 45px high); in the header at widths up to 26rem it shrinks to 80px (about 32px high). Navigation links remain sans in ink-soft and turn ink on hover. The current page is ink, semibold, with a 3px marker underline; the marker in the header means only "you are here". A guest sees only the open sections (Вакансии, Учёные, Организации); personal sections and the role switch appear after sign-in. In the seeker role «Избранное» is not a menu item but a bookmark icon beside the bell (44px, filled with a 3px marker underline when the section is current; tooltip and accessible name «Избранное»); it stays in the bar on phones too. The role switch ("Ищу работу" / "Нанимаю") is a segmented control, not tabs: two segments in a 1px ink frame with 4px corners and an ink divider; the active segment is filled ink with white semibold text. Its inset keyboard focus outline is white; the inactive segment uses wine. In the mobile menu the active link carries an inset 3px marker line over the hairline.
 
 ### Vacancy Entry (signature)
 Serif title (ink, underlined in blue on hover), organization line in ink-soft medium, a 3-line serif abstract, a facts row in 0.875rem ink-body joined by edge-colored middle dots (the accent "Конкурс" tag leads the row, the level code is ink semibold), the specialties on their own ink-soft line, and the deadline column at the right. A vacancy without a deadline says "Без срока подачи / приём до закрытия" in ink-soft, so the column never collapses and the bookmark stays at the same height. Entries separate by a 1px line. On the vacancy page VAK specialties are a list with the code in its own 3.5rem column, never wrapped.
 
 ### Deadline (signature)
-Date in 0.875rem. Only an urgent deadline gets the marker: a yellow band under the lower 45% of the date, drawn once in 480ms (150ms delay) on appear; with reduced motion it is simply there. Normal deadlines are medium weight ink; expired ones are ink-soft. The remaining-time text sits beneath in ink-soft tabular numerals.
+Date in 0.875rem. Only an urgent deadline gets the marker: a full wine fill with white lettering, revealed together from left to right once in 480ms (150ms delay) on appear so text stays readable throughout; with reduced motion it is simply there. Normal deadlines are medium weight ink; expired ones are ink-soft. The remaining-time text sits beneath in ink-soft tabular numerals.
 
 ### Results Header
 Count line in 0.875rem ink-soft above a 2px solid ink rule.
 
 ### Modal and Toast
-Modal: white, 4px corners, shadow, scrim of ink at 50%, header with serif title and close button, hairline above actions. Toast: ink background, white text, 4px corners, shadow; the icon carries the kind (green, red, or yellow for info). Both enter with a 240ms ease-out rise (the toast as a transition from `@starting-style`, so quick successive toasts retarget instead of restarting). With reduced motion both only fade.
+Modal: white, 4px corners, shadow, scrim of ink at 50%, header with serif title and close button, hairline above actions. Toast: ink background, white text, 4px corners, shadow; the icon carries the kind (green, red, or wine on a small white backing for info). Both enter with a 240ms ease-out rise (the toast as a transition from `@starting-style`, so quick successive toasts retarget instead of restarting). With reduced motion both only fade.
 
 ### Skeleton and Empty State
 Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry layout. Empty state is centered, 30rem wide, with an edge-colored (or fail for errors) illustration, text in ink-soft, and actions below.
@@ -259,7 +259,7 @@ Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry
 ## Do's and Don'ts
 
 ### Do:
-- **Do** use ink-blue (#1c2c66) for every primary action and link, and keep marker yellow (#f7d559) for urgent deadlines and the current place in navigation.
+- **Do** use ink-blue (#1c2c66) for every primary action and link, and keep marker wine (#722F37) for urgent deadlines and the current place in navigation.
 - **Do** separate list entries with a 1px line (#e4e1dc) and give the results count a single ink rule.
 - **Do** set titles, abstracts and leads in Literata and everything operable in Golos Text.
 - **Do** keep control borders at edge (#85807a) so fields stay above 3:1 on white, and keep every control at least 44px tall on touch layouts.
@@ -273,7 +273,7 @@ Skeleton blocks sweep a wash to wash-deep shimmer over 1.6s and mirror the entry
 ### Don't:
 - **Don't** build a card grid with logo tiles, boxed shadows and a blue button.
 - **Don't** add shadows to anything that sits in the page flow; shadows are for modal, toast and combobox list.
-- **Don't** use yellow as a button fill, panel background or decoration, and don't highlight non-urgent dates.
+- **Don't** use the wine accent as a button fill, panel background or decoration, and don't highlight non-urgent dates.
 - **Don't** add a kicker or eyebrow above headings, colored side borders, or gradient text.
 - **Don't** bring back pills, tinted option cards or a grey second half of a headline: they are what made the first rendition read as generated (D-132).
 - **Don't** add a dark theme or a second accent color without a new decision.
