@@ -1,9 +1,8 @@
-/* Режим аккаунта: переключатель из двух сегментов. Выбранный режим залит винным цветом марки
-   (решение пользователя D-254): чёрная заливка выпадала из палитры. От пунктов меню он отличается
-   формой: залитый сегмент в рамке, а не черта под словом. */
+/* Режим аккаунта: переключатель из двух сегментов. Он отличается от пунктов меню видом,
+   чтобы винный маркер в шапке означал одно: «вы на этой странице». */
 .role-switch {
   display: inline-flex;
-  border: 1px solid var(--mark);
+  border: 1px solid var(--ink);
   border-radius: var(--r-md);
   background: var(--paper);
   overflow: hidden;
@@ -26,7 +25,7 @@
 }
 
 .role-option + .role-option {
-  border-left: 1px solid var(--mark);
+  border-left: 1px solid var(--ink);
 }
 
 .role-option:hover {
@@ -35,7 +34,7 @@
 }
 
 .role-option[aria-pressed='true'] {
-  background: var(--mark);
+  background: var(--ink);
   color: var(--on-ink);
   font-weight: 600;
   cursor: default;
