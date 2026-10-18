@@ -5,6 +5,8 @@
       "name": "scibox",
       "runtimeExecutable": "make",
       "runtimeArgs": [
+        "-C",
+        "/Users/azamatsibgatullin/Documents/Claude/SciBox",
         "dev"
       ],
       "port": 5173

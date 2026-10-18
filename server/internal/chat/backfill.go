@@ -163,14 +163,6 @@ func markHistoryRead(ctx context.Context, q *dbgen.Queries, chatID, vacancyID, u
 	return nil
 }
 
-// laterOf — более позднее из двух моментов.
-func laterOf(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
-	}
-	return a
-}
-
 // offerLines восстанавливает строки приглашения на вакансию.
 func offerLines(o dbgen.GetBackfillOfferRow) []backfillLine {
 	out := []backfillLine{{at: o.CreatedAt, kind: EventOfferCreated, data: OfferCreatedData{OfferID: o.ID, Message: o.Message, Status: "pending"}}}
