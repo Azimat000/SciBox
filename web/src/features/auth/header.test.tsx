@@ -45,18 +45,19 @@ describe('header while nobody is signed in', () => {
 })
 
 describe('user menu', () => {
-  it('shows the name and opens with name, address and the two commands', async () => {
+  it('shows the name and opens with the full name and the commands, without the address', async () => {
     stubApi(signedInAs())
     renderApp('/')
     const button = await menuButton()
     expect(button).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText('anna@example.ru', { selector: '.user-menu *' })).not.toBeVisible()
+    expect(screen.getByText('Анна Смирнова', { selector: '.user-menu *' })).not.toBeVisible()
 
     await userEvent.click(button)
     expect(button).toHaveAttribute('aria-expanded', 'true')
     const panel = document.getElementById('user-menu-panel')!
     expect(panel).not.toHaveAttribute('hidden')
-    expect(within(panel).getByText('anna@example.ru')).toBeVisible()
+    expect(within(panel).getByText('Анна Смирнова')).toBeVisible()
+    expect(within(panel).queryByText('anna@example.ru')).not.toBeInTheDocument()
     expect(within(panel).getByRole('link', { name: 'Настройки аккаунта' })).toHaveAttribute('href', '/account')
     expect(within(panel).getByRole('button', { name: 'Выйти' })).toBeInTheDocument()
   })
@@ -85,7 +86,7 @@ describe('user menu', () => {
     renderApp('/')
     const button = await menuButton()
     await userEvent.click(button)
-    await userEvent.click(within(document.getElementById('user-menu-panel')!).getByText('anna@example.ru'))
+    await userEvent.click(within(document.getElementById('user-menu-panel')!).getByText('Анна Смирнова'))
     expect(button).toHaveAttribute('aria-expanded', 'true')
     await userEvent.click(screen.getByRole('main'))
     expect(button).toHaveAttribute('aria-expanded', 'false')

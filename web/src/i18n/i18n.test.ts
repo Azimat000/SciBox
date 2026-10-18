@@ -10,8 +10,8 @@ describe('i18n', () => {
   })
 
   it('formats messages with values', () => {
-    expect(t.status.databaseOk(3)).toBe('Работает, схема версии 3')
-    expect(t.status.version('1.2.0')).toBe('Версия сервера: 1.2.0')
+    expect(t.find.filtersCount(3)).toBe('Фильтры (3)')
+    expect(t.orgs.mine.accepted('Институт')).toBe('Вы теперь в организации «Институт»')
   })
 })
 

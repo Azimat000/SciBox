@@ -10,7 +10,6 @@ import { useToast } from '../../ui/useToast'
 import { login, resendConfirmation, setMe, useMe } from './api'
 import { AuthPage } from './AuthPage'
 import { describeError, errorCode, fieldErrorsOf } from './errors'
-import { SocialSoon } from './SocialSoon'
 import { useForm } from './useForm'
 import { checkEmail, checkPasswordPresent, compact, safeNext } from './validation'
 
@@ -101,7 +100,6 @@ export function LoginPage() {
           {t.auth.login.noAccount} <Link to="/register">{t.auth.login.toRegister}</Link>
         </span>
       </div>
-      <SocialSoon />
     </AuthPage>
   )
 }

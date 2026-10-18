@@ -22,9 +22,9 @@ export function navFor(role: Role): NavItem[] {
       { to: '/my-organization', label: t.nav.myOrganization },
     ]
   }
+  // Каталога соискателей у ищущего работу нет: он нужен тем, кто нанимает, а гостю показывает, кого здесь можно найти
   return [
     { to: '/vacancies', label: t.nav.vacancies },
-    { to: '/scientists', label: t.nav.scientists },
     { to: '/organizations', label: t.nav.organizations },
     { to: '/applications', label: t.nav.myApplications, also: ['/offers'] },
   ]

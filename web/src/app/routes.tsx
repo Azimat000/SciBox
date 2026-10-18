@@ -46,7 +46,6 @@ import { VacancyPage } from '../features/vacancies/VacancyPage'
 import { NotFoundPage } from '../features/status/NotFoundPage'
 import { LandingPage } from '../features/landing/LandingPage'
 import { SearchPage } from '../features/search/SearchPage'
-import { StatusPage } from '../features/status/StatusPage'
 import { StyleguidePage } from '../features/styleguide/StyleguidePage'
 import { CrashPage } from './CrashPage'
 import { Layout } from './Layout'
@@ -59,7 +58,6 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <LandingPage /> },
       { path: 'vacancies', handle: { title: t.pageTitles.vacancies }, element: <SearchPage /> },
-      { path: 'status', handle: { title: t.pageTitles.status }, element: <StatusPage /> },
       { path: 'login', handle: { title: t.pageTitles.login }, element: <LoginPage /> },
       { path: 'register', handle: { title: t.pageTitles.register }, element: <RegisterPage /> },
       { path: 'forgot-password', handle: { title: t.pageTitles.forgotPassword }, element: <ForgotPasswordPage /> },
@@ -115,7 +113,8 @@ export const routes: RouteObject[] = [
       { path: 'saved-searches/:id', element: <OpenSavedSearchPage /> },
       { path: 'deadlines', handle: { title: t.pageTitles.deadlines }, element: <DeadlinesPage /> },
       { path: 'invitations/accept', handle: { title: t.pageTitles.invitationsAccept }, element: <AcceptInvitationPage /> },
-      { path: 'styleguide', handle: { title: t.pageTitles.styleguide }, element: <StyleguidePage /> },
+      // Образцы интерфейса нужны только при разработке: в собранный сайт страница не попадает
+      ...(import.meta.env.DEV ? [{ path: 'styleguide', handle: { title: t.pageTitles.styleguide }, element: <StyleguidePage /> }] : []),
       { path: '*', handle: { title: t.pageTitles.notFound }, element: <NotFoundPage /> },
     ],
   },

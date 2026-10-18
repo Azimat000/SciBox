@@ -8,7 +8,7 @@ import { shortName } from './shortName'
 import { useSignOut } from './useSignOut'
 import './UserMenu.css'
 
-/** Имя человека в шапке; по нажатию открывается «Настройки аккаунта» и «Выйти». */
+/** Имя человека в шапке; по нажатию открываются «Мой профиль», «Настройки аккаунта» и «Выйти». */
 export function UserMenu({ user }: { user: User }) {
   const { pathname } = useLocation()
   // Меню открыто «на этой странице»: перешли на другую, и оно закрылось само
@@ -57,7 +57,7 @@ export function UserMenu({ user }: { user: User }) {
   )
 }
 
-/** Имя, почта и две команды: общий кусок для выпадающего и мобильного меню. */
+/** Имя и команды аккаунта: общий кусок для выпадающего и мобильного меню. Почту не повторяем: она в настройках. */
 export function AccountBlock({
   user,
   signOut,
@@ -74,7 +74,6 @@ export function AccountBlock({
     <div className="account-block">
       <div className="account-block-who">
         <p className="account-block-name">{user.name}</p>
-        <p className="account-block-email">{user.email}</p>
       </div>
       <Link to="/profile" className="account-block-link">
         {t.profile.menuLink}

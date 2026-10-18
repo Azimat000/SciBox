@@ -69,12 +69,6 @@
   overflow-wrap: anywhere;
 }
 
-.account-block-email {
-  font-size: var(--text-sm);
-  color: var(--ink-soft);
-  overflow-wrap: anywhere;
-}
-
 .account-block-link {
   display: flex;
   align-items: center;

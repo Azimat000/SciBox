@@ -47,12 +47,12 @@ describe('AccountPage', () => {
     expect(screen.queryByText('подтверждена')).not.toBeInTheDocument()
   })
 
-  it('lists the four coming-soon services in their own section', async () => {
+  it('has no sign-in services that do not work and no second sign-out button', async () => {
     stubApi(signedInAs())
     renderApp('/account')
-    const section = (await screen.findByRole('heading', { name: 'Вход через другие сервисы' })).closest('section')!
-    expect(within(section).getAllByRole('button')).toHaveLength(4)
-    for (const b of within(section).getAllByRole('button')) expect(b).toBeDisabled()
+    await within(screen.getByRole('main')).findByText('anna@example.ru')
+    expect(screen.queryByText('Вход через другие сервисы')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('main')).queryByRole('button', { name: /Выйти/ })).not.toBeInTheDocument()
   })
 
   describe('name', () => {
@@ -177,20 +177,6 @@ describe('AccountPage', () => {
       await fill(/^Новый пароль/, 'другой пароль 1')
       await press('Сменить пароль')
       expect(await screen.findByRole('alert')).toHaveTextContent('через 14 минут')
-    })
-  })
-
-  describe('sign-out', () => {
-    it('signs out of this device and goes home, not to a sign-in page asking to sign in', async () => {
-      const api = stubApi({ ...signedInAs(), 'POST /api/auth/logout': reply(204) })
-      const { router } = renderApp('/account')
-      await screen.findByRole('heading', { level: 2, name: 'Профиль' })
-      await press('Выйти из аккаунта')
-
-      expect(await screen.findByText('Вы вышли из аккаунта')).toBeInTheDocument()
-      expect(router.state.location.pathname).toBe('/')
-      expect(api.called('POST', '/api/auth/logout')).toHaveLength(1)
-      expect((await screen.findAllByRole('link', { name: 'Войти' })).length).toBeGreaterThan(0)
     })
   })
 })

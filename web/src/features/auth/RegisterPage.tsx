@@ -11,7 +11,6 @@ import { useToast } from '../../ui/useToast'
 import { register, resendConfirmation, useMe, type RegisterInput } from './api'
 import { AuthPage } from './AuthPage'
 import { describeError, fieldErrorsOf } from './errors'
-import { SocialSoon } from './SocialSoon'
 import { useForm } from './useForm'
 import { checkEmail, checkName, checkNewPassword, compact } from './validation'
 
@@ -123,7 +122,6 @@ export function RegisterPage() {
       <p className="auth-alt">
         {t.auth.register.haveAccount} <Link to="/login">{t.auth.register.toLogin}</Link>
       </p>
-      <SocialSoon />
     </AuthPage>
   )
 }

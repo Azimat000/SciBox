@@ -14,9 +14,7 @@ import { MailSettings } from '../matching/MailSettings'
 import { setMe, updateName, useMe, type User } from './api'
 import { AuthPage } from './AuthPage'
 import { describeError, fieldErrorsOf } from './errors'
-import { SocialSoon } from './SocialSoon'
 import { useForm } from './useForm'
-import { useSignOut } from './useSignOut'
 import { checkName, compact } from './validation'
 import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
@@ -92,20 +90,11 @@ export function AccountPage() {
 }
 
 function Account({ user }: { user: User }) {
-  const signOut = useSignOut()
   return (
     <>
       <ProfileSection user={user} />
       <MailSettings />
       <BlockedOrganizations />
-      <section className="account-section">
-        <SocialSoon title={t.auth.account.linked} note={t.auth.account.linkedText} />
-      </section>
-      <section className="account-section">
-        <Button variant="secondary" loading={signOut.isPending} onClick={() => signOut.mutate()}>
-          {t.auth.account.signOut}
-        </Button>
-      </section>
     </>
   )
 }

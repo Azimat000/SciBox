@@ -6,11 +6,9 @@ import { renderApp } from '../../test/render'
 import { isCurrent, navFor, publicNav } from './nav'
 import { parseRole, ROLE_STORAGE_KEY } from './role-context'
 
-const healthy = { status: 'ok', product: 'SciBox', version: 'dev', database: { schema_version: 1, server_version: '16.15' } }
-
 beforeEach(() => {
   window.localStorage.clear()
-  stubApi({ 'GET /api/health': reply(200, healthy) })
+  stubApi({})
 })
 
 const desktopNav = () => screen.getAllByRole('navigation', { name: 'Основное меню' })[0]
@@ -24,7 +22,7 @@ describe('parseRole and navFor', () => {
   })
 
   it('gives each role its own menu', () => {
-    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Соискатели', 'Организации', 'Мои отклики'])
+    expect(navFor('seeker').map((i) => i.label)).toEqual(['Вакансии', 'Организации', 'Мои отклики'])
     expect(navFor('employer').map((i) => i.label)).toEqual(['Мои вакансии', 'Отклики', 'Соискатели', 'Организация'])
   })
 
@@ -80,7 +78,7 @@ describe('site shell', () => {
   })
 
   it('switches to the employer menu, remembers the choice and restores it', async () => {
-    stubApi({ 'GET /api/health': reply(200, healthy), ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
+    stubApi({ ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
     const first = renderApp('/')
     const switcher = (await screen.findAllByRole('group', { name: 'Режим' }))[0]
     expect(within(switcher).getByRole('button', { name: 'Ищу работу' })).toHaveAttribute('aria-pressed', 'true')
@@ -101,7 +99,7 @@ describe('site shell', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked')
     })
-    stubApi({ 'GET /api/health': reply(200, healthy), ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
+    stubApi({ ...signedInAs(), 'GET /api/notifications*': reply(200, { items: [], unread: 0 }) })
     renderApp('/')
     expect(await within(desktopNav()).findByRole('link', { name: 'Мои отклики' })).toBeInTheDocument()
     await userEvent.click(screen.getAllByRole('button', { name: 'Нанимаю' })[0])

@@ -139,15 +139,6 @@ describe('RegisterPage', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
-  it('offers the other ways to sign in as "coming soon" and keeps them disabled', () => {
-    stubApi()
-    renderApp('/register')
-    for (const name of ['ORCID', 'Яндекс ID', 'VK ID', 'Госуслуги']) {
-      expect(screen.getByRole('button', { name: new RegExp(name) })).toBeDisabled()
-    }
-    expect(screen.getAllByText('скоро')).toHaveLength(4)
-  })
-
   it('sends a signed-in person home instead of showing the form', async () => {
     stubApi(signedInAs())
     const { router } = renderApp('/register')

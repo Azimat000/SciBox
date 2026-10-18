@@ -122,13 +122,6 @@ describe('LoginPage', () => {
     expect(router.state.location.pathname).toBe('/register')
   })
 
-  it('shows the other ways to sign in as disabled "soon" buttons', () => {
-    stubApi()
-    renderApp('/login')
-    expect(screen.getByRole('heading', { name: 'Другие способы входа' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /ORCID/ })).toBeDisabled()
-  })
-
   it('does not show the form to someone who is already signed in', async () => {
     stubApi(signedInAs())
     const { router } = renderApp('/login?next=/account')

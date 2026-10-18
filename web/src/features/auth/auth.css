@@ -56,55 +56,6 @@
   align-self: flex-start;
 }
 
-/* Вход через другие сервисы: ниже формы, отделён линией */
-.social {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  padding-top: var(--s-5);
-  border-top: 1px solid var(--line);
-}
-
-.social-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2);
-}
-
-.social-button {
-  width: 100%;
-  justify-content: space-between;
-  padding-inline: var(--s-3);
-  white-space: nowrap;
-}
-
-/* Пока не работают: тонкая рамка без заливки, чтобы не спорить с кнопкой «Войти» */
-.social-button.btn:disabled {
-  background: var(--paper);
-  border-color: var(--line);
-  color: var(--ink-soft);
-  font-weight: 500;
-  cursor: default;
-}
-
-.social-button .btn-label {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-}
-
-/* Две кнопки в ряд помещаются от 368 px: название сервиса и «скоро» не переносятся */
-@media (max-width: 23rem) {
-  .social-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 /* Настройки: разделы отделены линиями, без карточек */
 .account-section {
   display: flex;
@@ -125,12 +76,6 @@
 
 .account-section > .btn {
   align-self: flex-start;
-}
-
-/* У блока входа через сервисы своя линия сверху; внутри раздела она была бы второй подряд */
-.account-section .social {
-  border-top: 0;
-  padding-top: 0;
 }
 
 .account-section:first-child {
