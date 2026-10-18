@@ -31,7 +31,7 @@ func TestHTTPRequiresSignIn(t *testing.T) {
 	for _, c := range []struct{ method, path string }{
 		{"GET", "/api/favorites"}, {"GET", "/api/favorites/ids"}, {"PUT", "/api/favorites/" + id}, {"DELETE", "/api/favorites/" + id},
 		{"GET", "/api/saved-searches"}, {"POST", "/api/saved-searches"}, {"GET", "/api/saved-searches/" + id},
-		{"PATCH", "/api/saved-searches/" + id}, {"DELETE", "/api/saved-searches/" + id}, {"GET", "/api/matches"}, {"GET", "/api/deadlines"},
+		{"PATCH", "/api/saved-searches/" + id}, {"DELETE", "/api/saved-searches/" + id}, {"GET", "/api/matches"}, {"GET", "/api/favorites?sort=deadline"},
 	} {
 		if r := a.api.Do(nil, c.method, c.path, map[string]any{}); r.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s: %d", c.method, c.path, r.Code)
@@ -178,7 +178,7 @@ func TestHTTPSavedSearches(t *testing.T) {
 	}
 }
 
-func TestHTTPMatchesAndDeadlines(t *testing.T) {
+func TestHTTPMatchesAndFavoritesByDeadline(t *testing.T) {
 	a := newAPI(t)
 	p := a.seeker("Анна", profiles.CoreInput{Specialties: []string{"1.4.4"}, RegionCode: "54"})
 	v := a.publish(vacancyOpts{title: "Подходящая", specialties: []string{"1.4.4"}, region: "54"})
@@ -201,12 +201,18 @@ func TestHTTPMatchesAndDeadlines(t *testing.T) {
 		t.Errorf("основа: %v", basis)
 	}
 
+	near := a.publish(vacancyOpts{title: "Срок ближе"})
 	a.addFavorite(p, v.ID)
-	r = a.api.Do(&p, "GET", "/api/deadlines", nil)
-	cal := r.JSON(t)
-	days := cal["items"].([]any)
-	if r.Code != 200 || len(days) != 1 || cal["without_deadline"] != float64(0) || days[0].(map[string]any)["days_left"].(float64) < 80 {
-		t.Errorf("deadlines: %d %s", r.Code, r.Raw)
+	a.addFavorite(p, near.ID)
+	soon := moscowToday(a.clock.Now()).AddDate(0, 0, 2)
+	a.setDeadline(near.ID, &soon)
+	r = a.api.Do(&p, "GET", "/api/favorites?sort=deadline", nil)
+	favs := r.JSON(t)["items"].([]any)
+	if r.Code != 200 || len(favs) != 2 || favs[0].(map[string]any)["vacancy"].(map[string]any)["id"] != near.ID.String() {
+		t.Errorf("избранное по сроку: %d %s", r.Code, r.Raw)
+	}
+	if r = a.api.Do(&p, "GET", "/api/deadlines", nil); r.Code != 404 {
+		t.Errorf("старый адрес календаря: %d", r.Code)
 	}
 }
 
@@ -222,7 +228,7 @@ func TestHTTPInternalErrorsAreHidden(t *testing.T) {
 	for _, c := range []struct{ method, path string }{
 		{"GET", "/api/favorites"}, {"GET", "/api/favorites/ids"}, {"DELETE", "/api/favorites/" + uuid.NewString()},
 		{"GET", "/api/saved-searches"}, {"GET", "/api/saved-searches/" + id}, {"PATCH", "/api/saved-searches/" + id},
-		{"DELETE", "/api/saved-searches/" + id}, {"GET", "/api/matches"}, {"GET", "/api/deadlines"},
+		{"DELETE", "/api/saved-searches/" + id}, {"GET", "/api/matches"}, {"GET", "/api/favorites?sort=deadline"},
 	} {
 		// Сломанная база: ответ 500 без подробностей.
 		db, _ := testkit.Faulty(testkit.Pool, 1)

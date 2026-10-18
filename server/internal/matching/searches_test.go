@@ -39,7 +39,8 @@ func TestCreateSearchStoresCanonicalQuery(t *testing.T) {
 		{"условия для учёного", "conferences=1&equipment=true&publications=1&housing=0", "conferences=1&equipment=1&publications=1"},
 		{"пустые значения не пишутся", "q=&region=&field=1.4", "field=1.4"},
 		{"все виды фильтров", "format=remote&type=research&degree=candidate&org_kind=institute&funding=grant&rate=100&term=short&deadline=week",
-			"deadline=week&degree=candidate&format=remote&funding=grant&org_kind=institute&rate=100&term=short&type=research"},
+			// «funding» (фильтр убран, D-256) отбрасывается
+			"deadline=week&degree=candidate&format=remote&org_kind=institute&rate=100&term=short&type=research"},
 		{"срок подачи «без срока»", "deadline=none", "deadline=none"},
 	} {
 		s, err := w.svc.CreateSearch(bg, p.User, SearchInput{Name: "Мой поиск", Query: c.in})
@@ -333,7 +334,7 @@ func TestDeleteSearch(t *testing.T) {
 // Запись с кириллицей без процентов короче предела, а в каноническом виде (с процентами) уже длиннее.
 func encodedTooLong() string {
 	rep := func(s string) string { return strings.Repeat(s+"&", 30) }
-	return "q=" + strings.Repeat("я", 200) + "&" + rep("org_kind=institute") + rep("funding=grant") + rep("format=onsite")
+	return "q=" + strings.Repeat("я", 200) + "&" + rep("org_kind=institute") + rep("type=research") + rep("format=onsite")
 }
 
 func TestDefaultConfig(t *testing.T) {

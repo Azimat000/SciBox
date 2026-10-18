@@ -48,7 +48,6 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Patch("/saved-searches/{id}", h.updateSearch)
 		r.Delete("/saved-searches/{id}", h.deleteSearch)
 		r.Get("/matches", h.matches)
-		r.Get("/deadlines", h.deadlines)
 	})
 }
 
@@ -87,7 +86,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func (h *Handler) favorites(w http.ResponseWriter, r *http.Request) {
-	out, err := h.svc.Favorites(r.Context(), actor(r), intParam(r, "limit"), intParam(r, "offset"))
+	out, err := h.svc.Favorites(r.Context(), actor(r), intParam(r, "limit"), intParam(r, "offset"), r.URL.Query().Get("sort") == "deadline")
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -206,11 +205,3 @@ func (h *Handler) matches(w http.ResponseWriter, r *http.Request) {
 	apierr.WriteJSON(w, http.StatusOK, out)
 }
 
-func (h *Handler) deadlines(w http.ResponseWriter, r *http.Request) {
-	out, err := h.svc.Deadlines(r.Context(), actor(r))
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	apierr.WriteJSON(w, http.StatusOK, out)
-}

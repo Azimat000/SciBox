@@ -1,0 +1,7 @@
+{
+  "purpose": "Preserve unrelated pre-existing changes during naming research",
+  "pre_existing_paths": [],
+  "new_owned_directory": "docs/naming/2026-10-16",
+  "git_head_at_retained_baseline": "f5c669ac8e7c1962c5d1434e51608bec7fedbbed",
+  "initial_observation": "At the first read, unrelated slice 41 changes were present; by the saved baseline they had been committed externally as f5c669a. This task does not own or modify those paths."
+}

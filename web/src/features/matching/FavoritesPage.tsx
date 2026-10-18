@@ -13,7 +13,8 @@ import { describeError } from '../auth/errors'
 import { RequireUser } from '../orgs/RequireUser'
 import { LoadFailed, PageSkeleton } from '../orgs/states'
 import { VacancyCard } from '../vacancies/VacancyList'
-import { addFavorite, PAGE_SIZE, removeFavorite, useFavorites, type FavoriteItem } from './api'
+import { Select } from '../../ui/Select'
+import { addFavorite, PAGE_SIZE, removeFavorite, useFavorites, type FavoriteItem, type FavoriteSort } from './api'
 import { Pager } from './Pager'
 import { ShelfTabs } from './ShelfTabs'
 import '../../ui/ResultsHeader.css'
@@ -28,7 +29,8 @@ function Favorites() {
   const m = t.matching.favorites
   const [params, setParams] = useSearchParams()
   const page = Math.max(1, Number(params.get('page')) || 1)
-  const query = useFavorites(page)
+  const sort: FavoriteSort = params.get('sort') === 'deadline' ? 'deadline' : 'added'
+  const query = useFavorites(page, sort)
 
   if (query.isPending) return <PageSkeleton />
   if (query.isError) return <LoadFailed title={m.loadError} error={query.error} onRetry={() => void query.refetch()} />
@@ -40,6 +42,13 @@ function Favorites() {
     if (n > 1) next.set('page', String(n))
     else next.delete('page')
     setParams(next)
+  }
+  const sortBy = (next: FavoriteSort) => {
+    const out = new URLSearchParams(params)
+    out.delete('page')
+    if (next === 'deadline') out.set('sort', 'deadline')
+    else out.delete('sort')
+    setParams(out)
   }
 
   return (
@@ -63,7 +72,21 @@ function Favorites() {
         />
       ) : (
         <>
-          <p className="results-header num">{m.count(total, plural(total, m.countForms))}</p>
+          <div className="fav-bar">
+            <p className="results-header num">{m.count(total, plural(total, m.countForms))}</p>
+            {total > 1 && (
+              <Select
+                className="fav-sort"
+                label={m.sortLabel}
+                options={[
+                  { value: 'added', label: m.sorts.added },
+                  { value: 'deadline', label: m.sorts.deadline },
+                ]}
+                value={sort}
+                onChange={(e) => sortBy(e.target.value as FavoriteSort)}
+              />
+            )}
+          </div>
           <ul className="vacancy-list" aria-busy={query.isPlaceholderData}>
             {items.map((item) => (
               <li key={item.vacancy.id}>
@@ -93,7 +116,6 @@ function Row({ item }: { item: FavoriteItem }) {
       // Список не перечитываем сразу: строка с «Вернуть» должна остаться на месте до следующего открытия страницы.
       await Promise.all([
         client.invalidateQueries({ queryKey: ['matching', 'ids'] }),
-        client.invalidateQueries({ queryKey: ['matching', 'calendar'] }),
         client.invalidateQueries({ queryKey: ['matching', 'favorites'], refetchType: 'none' }),
       ])
     },

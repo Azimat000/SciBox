@@ -5,13 +5,11 @@ import { positionTypes, type Reference } from '../vacancies/api'
 import {
   degreeOptions,
   formatLabel,
-  fundingOptions,
   levelOptions,
   levelParts,
   positionTypeLabel,
   rateOptions,
   degreeLabel,
-  fundingLabel,
 } from '../vacancies/labels'
 import { terms, type FilterRef, type MultiKey, type Search } from './params'
 
@@ -25,7 +23,6 @@ export const optionsFor: Record<Exclude<MultiKey, 'field'>, readonly Option[]> =
   format: ['onsite', 'hybrid', 'remote'].map((v) => ({ value: v, label: formatLabel(v) })),
   degree: degreeOptions,
   org_kind: kindOptions,
-  funding: fundingOptions,
   rate: rateOptions,
   term: termOptions,
 }
@@ -70,8 +67,6 @@ export function filterLabel(ref: FilterRef, search: Search, names: Map<string, s
           return `${t.find.groups.degree}: ${degreeLabel(v).toLowerCase()}`
         case 'org_kind':
           return kindLabel(v)
-        case 'funding':
-          return fundingLabel(v)
         case 'rate':
           return t.vacancies.rate(Number(v))
         case 'term':

@@ -261,107 +261,34 @@
   gap: var(--s-2);
 }
 
-/* ---- сроки ---- */
+/* ---- избранное: счётчик и порядок в одной строке над списком ---- */
 
-.cal {
-  margin-top: var(--s-5);
-}
-
-.cal-month + .cal-month {
-  margin-top: var(--s-6);
-}
-
-.cal-month-title {
-  padding-bottom: var(--s-2);
+.fav-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-5);
+  padding-bottom: var(--s-3);
   border-bottom: 1px solid var(--ink);
-  font-size: var(--text-xl);
 }
 
-.cal-month-title::first-letter {
-  text-transform: uppercase;
-}
-
-.cal-list {
-  list-style: none;
+.fav-bar .results-header {
+  flex: 1 1 auto;
   margin: 0;
-  padding: 0;
+  border-bottom: 0;
+  padding-bottom: var(--s-2);
 }
 
-.cal-entry {
-  display: grid;
-  grid-template-columns: 4.25rem minmax(0, 1fr);
-  gap: var(--s-4);
-  padding-block: var(--s-4);
-  border-bottom: 1px solid var(--line);
+.fav-sort {
+  flex: 0 1 16rem;
+  min-width: 12rem;
 }
 
 @media (max-width: 40rem) {
-  .cal-entry {
-    grid-template-columns: 2.75rem minmax(0, 1fr);
-    gap: var(--s-3);
+  .fav-sort {
+    flex: 1 1 100%;
   }
-}
-
-.cal-date {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s-1);
-}
-
-.cal-day {
-  font-family: var(--font-serif);
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-
-.cal-weekday {
-  color: var(--ink-soft);
-  font-size: var(--text-xs);
-}
-
-.cal-title {
-  font-size: var(--text-lg);
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.cal-title a {
-  color: var(--ink);
-  text-decoration: none;
-}
-
-.cal-title a:hover {
-  color: var(--blue);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-}
-
-.cal-org {
-  margin: var(--s-1) 0 0;
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.cal-left {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-1) var(--s-3);
-  margin: var(--s-1) 0 0;
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
-}
-
-.cal-note {
-  margin-top: var(--s-5);
-  max-width: var(--measure);
-  color: var(--ink-soft);
-  font-size: var(--text-sm);
 }
 
 /* ---- письма в настройках аккаунта ---- */

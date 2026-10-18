@@ -1,4 +1,4 @@
-import type { RouteObject } from 'react-router'
+import { Navigate, type RouteObject } from 'react-router'
 import { AccountPage } from '../features/auth/AccountPage'
 import { ConfirmEmailPage } from '../features/auth/ConfirmEmailPage'
 import { ConfirmEmailChangePage, RevertEmailChangePage } from '../features/auth/EmailChangePages'
@@ -33,7 +33,6 @@ import { RecommendPage } from '../features/applications/RecommendPage'
 import { ChatsPage } from '../features/chat/ChatsPage'
 import { ChatTemplatesPage } from '../features/chat/ChatTemplatesPage'
 import { NotificationsPage } from '../features/notifications/NotificationsPage'
-import { DeadlinesPage } from '../features/matching/DeadlinesPage'
 import { FavoritesPage } from '../features/matching/FavoritesPage'
 import { MatchesPage } from '../features/matching/MatchesPage'
 import { OpenSavedSearchPage, SavedSearchesPage } from '../features/matching/SavedSearchesPage'
@@ -111,7 +110,8 @@ export const routes: RouteObject[] = [
       { path: 'matches', handle: { title: t.pageTitles.matches }, element: <MatchesPage /> },
       { path: 'saved-searches', handle: { title: t.pageTitles.savedSearches }, element: <SavedSearchesPage /> },
       { path: 'saved-searches/:id', element: <OpenSavedSearchPage /> },
-      { path: 'deadlines', handle: { title: t.pageTitles.deadlines }, element: <DeadlinesPage /> },
+      // Бывшая страница «Сроки»: теперь это порядок в избранном (D-256); старые ссылки ведут туда
+      { path: 'deadlines', element: <Navigate to="/favorites?sort=deadline" replace /> },
       { path: 'invitations/accept', handle: { title: t.pageTitles.invitationsAccept }, element: <AcceptInvitationPage /> },
       // Образцы интерфейса нужны только при разработке: в собранный сайт страница не попадает
       ...(import.meta.env.DEV ? [{ path: 'styleguide', handle: { title: t.pageTitles.styleguide }, element: <StyleguidePage /> }] : []),

@@ -554,26 +554,25 @@ WITH hits AS MATERIALIZED (
     AND (cardinality($16::text[]) = 0 OR fv.degree_required = ANY($16::text[]))
     AND (cardinality($17::text[]) = 0 OR EXISTS (
            SELECT 1 FROM organizations org WHERE org.id = fv.org_id AND org.kind = ANY($17::text[])))
-    AND (cardinality($18::text[]) = 0 OR fv.funding_source = ANY($18::text[]))
-    AND (cardinality($19::int[]) = 0 OR fv.rate_percent = ANY($19::int[]))
-    AND (cardinality($20::text[]) = 0 OR (CASE
+    AND (cardinality($18::int[]) = 0 OR fv.rate_percent = ANY($18::int[]))
+    AND (cardinality($19::text[]) = 0 OR (CASE
            WHEN fv.contract_type = 'permanent' THEN 'permanent'
            WHEN fv.contract_months <= 12 THEN 'short'
            WHEN fv.contract_months <= 36 THEN 'medium'
            WHEN fv.contract_months > 36 THEN 'long'
-         END) = ANY($20::text[]))
-    AND ($21::int = 0 OR COALESCE(fv.salary_to, fv.salary_from) >= $21::int)
-    AND (NOT $22::bool OR fv.housing <> 'none')
-    AND (NOT $23::bool OR fv.is_competition)
-    AND (NOT $24::bool OR fv.equipment_access)
-    AND (NOT $25::bool OR fv.publications_paid)
-    AND (NOT $26::bool OR fv.conference_travel)
-    AND (NOT $27::bool OR fv.deadline IS NULL)
-    AND ($28::date IS NULL OR fv.deadline <= $28::date)
-    AND ($29::timestamptz IS NULL OR fv.published_at > $29::timestamptz)
-    AND ($30::timestamptz IS NULL OR fv.published_at <= $30::timestamptz)
+         END) = ANY($19::text[]))
+    AND ($20::int = 0 OR COALESCE(fv.salary_to, fv.salary_from) >= $20::int)
+    AND (NOT $21::bool OR fv.housing <> 'none')
+    AND (NOT $22::bool OR fv.is_competition)
+    AND (NOT $23::bool OR fv.equipment_access)
+    AND (NOT $24::bool OR fv.publications_paid)
+    AND (NOT $25::bool OR fv.conference_travel)
+    AND (NOT $26::bool OR fv.deadline IS NULL)
+    AND ($27::date IS NULL OR fv.deadline <= $27::date)
+    AND ($28::timestamptz IS NULL OR fv.published_at > $28::timestamptz)
+    AND ($29::timestamptz IS NULL OR fv.published_at <= $29::timestamptz)
   ORDER BY k_rank DESC NULLS LAST, k_deadline ASC NULLS LAST, k_pay DESC NULLS LAST, fv.published_at DESC, fv.id
-  LIMIT $31
+  LIMIT $30
 ), page AS (
   SELECT f.id, count(*) OVER () AS total,
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_deadline ASC NULLS LAST, f.k_pay DESC NULLS LAST, f.published_at DESC, f.id) AS ord
@@ -603,7 +602,6 @@ type SearchVacanciesParams struct {
 	Levels         []int32
 	Degrees        []string
 	OrgKinds       []string
-	Fundings       []string
 	Rates          []int32
 	Terms          []string
 	SalaryMin      int32
@@ -661,7 +659,6 @@ func (q *Queries) SearchVacancies(ctx context.Context, arg SearchVacanciesParams
 		arg.Levels,
 		arg.Degrees,
 		arg.OrgKinds,
-		arg.Fundings,
 		arg.Rates,
 		arg.Terms,
 		arg.SalaryMin,

@@ -85,9 +85,6 @@ export function FilterPanel({ search, onChange, reference }: PanelProps) {
       <Group title={g.term} selected={n('term')}>
         <Checks search={search} onChange={onChange} name="term" />
       </Group>
-      <Group title={g.funding} selected={n('funding')}>
-        <Checks search={search} onChange={onChange} name="funding" />
-      </Group>
       <Group title={g.degree} selected={n('degree')}>
         <Checks search={search} onChange={onChange} name="degree" />
       </Group>

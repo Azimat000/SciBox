@@ -24,6 +24,7 @@ SELECT count(*) FROM favorites WHERE user_id = $1;
 SELECT vacancy_id FROM favorites WHERE user_id = $1 ORDER BY created_at DESC, vacancy_id;
 
 -- Список избранного: сначала те, на что ещё можно откликнуться, внутри групп новые добавления сверху.
+-- by_deadline: внутри групп ближайший срок подачи первым, вакансии без срока в конце (бывшая вкладка «Сроки», D-256).
 -- Архивные вакансии не показываются (открыть их нельзя).
 -- name: ListFavorites :many
 SELECT sqlc.embed(v), f.created_at AS added_at, a.id AS application_id, count(*) OVER () AS total
@@ -31,22 +32,9 @@ FROM favorites f
 JOIN vacancy_view v ON v.id = f.vacancy_id
 LEFT JOIN applications a ON a.vacancy_id = v.id AND a.user_id = f.user_id AND a.status <> 'withdrawn'
 WHERE f.user_id = @user_id AND v.status IN ('published', 'closed')
-ORDER BY (v.status = 'published' AND (v.deadline IS NULL OR v.deadline >= @today::date)) DESC, f.created_at DESC, v.id
+ORDER BY (v.status = 'published' AND (v.deadline IS NULL OR v.deadline >= @today::date)) DESC,
+    CASE WHEN @by_deadline::bool THEN v.deadline END ASC NULLS LAST, f.created_at DESC, v.id
 LIMIT @row_limit OFFSET @row_offset;
-
--- Календарь сроков: избранные опубликованные вакансии, срок которых сегодня или позже.
--- name: ListFavoriteDeadlines :many
-SELECT sqlc.embed(v), f.created_at AS added_at, a.id AS application_id
-FROM favorites f
-JOIN vacancy_view v ON v.id = f.vacancy_id
-LEFT JOIN applications a ON a.vacancy_id = v.id AND a.user_id = f.user_id AND a.status <> 'withdrawn'
-WHERE f.user_id = @user_id AND v.status = 'published' AND v.deadline >= @today::date
-ORDER BY v.deadline, f.created_at, v.id;
-
--- Избранные без срока подачи (открытые): в календаре о них только число.
--- name: CountFavoritesWithoutDeadline :one
-SELECT count(*) FROM favorites f JOIN vacancies v ON v.id = f.vacancy_id
-WHERE f.user_id = $1 AND v.status = 'published' AND v.deadline IS NULL;
 
 -- ---- сохранённые поиски ----
 

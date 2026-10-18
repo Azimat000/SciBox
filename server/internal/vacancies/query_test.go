@@ -14,7 +14,7 @@ import (
 func TestParseSearchQueryReadsEveryParameter(t *testing.T) {
 	q := url.Values{
 		"q": {"химия"}, "field": {"1.4", "1.5"}, "region": {"54"}, "format": {"remote"}, "type": {"research"}, "level": {"2", "3"},
-		"degree": {"candidate"}, "org_kind": {"institute"}, "funding": {"grant"}, "rate": {"100", "50"}, "term": {"short"},
+		"degree": {"candidate"}, "org_kind": {"institute"}, "rate": {"100", "50"}, "term": {"short"},
 		"salary_min": {"80000"}, "housing": {"1"}, "competition": {"true"}, "deadline": {"week"}, "sort": {"new"}, "org": {"baikal"},
 		"equipment": {"1"}, "publications": {"true"}, "conferences": {"1"},
 		"unit": {"6f9619ff-8b86-d011-b42d-00c04fc964ff"}, "limit": {"15"}, "offset": {"30"},
@@ -62,7 +62,7 @@ func TestHasConditions(t *testing.T) {
 	for name, p := range map[string]SearchParams{
 		"слова": {Query: "а"}, "область": {Fields: []string{"1"}}, "регион": {Region: "54"}, "формат": {Formats: []string{"remote"}},
 		"тип": {Types: []string{"research"}}, "уровень": {Levels: []int{1}}, "степень": {Degrees: []string{"none"}},
-		"тип организации": {OrgKinds: []string{"institute"}}, "финансирование": {Fundings: []string{"grant"}}, "ставка": {Rates: []int{100}},
+		"тип организации": {OrgKinds: []string{"institute"}}, "ставка": {Rates: []int{100}},
 		"срок договора": {Terms: []string{"short"}}, "зарплата": {SalaryMin: 1}, "жильё": {Housing: true}, "конкурс": {Competition: true},
 		"срок подачи": {Deadline: "week"}, "оборудование": {Equipment: true}, "публикации": {Publications: true}, "конференции": {Conferences: true},
 	} {
@@ -83,7 +83,7 @@ func TestHasConditions(t *testing.T) {
 func TestEncodeRoundTrip(t *testing.T) {
 	p := SearchParams{
 		Query: "химия катализа", Fields: []string{"1.4", "1.5.7"}, Region: "54", Formats: []string{"remote", "hybrid"}, Types: []string{"research"},
-		Levels: []int{2, 3}, Degrees: []string{"candidate"}, OrgKinds: []string{"institute"}, Fundings: []string{"grant"}, Rates: []int{100, 50},
+		Levels: []int{2, 3}, Degrees: []string{"candidate"}, OrgKinds: []string{"institute"}, Rates: []int{100, 50},
 		Terms: []string{"short"}, SalaryMin: 90000, Housing: true, Competition: true, Deadline: "month", Sort: "deadline",
 		Equipment: true, Publications: true, Conferences: true,
 	}
@@ -168,5 +168,16 @@ func TestSearchNoFuzzy(t *testing.T) {
 	res = w.search(st, typo)
 	if res.Fuzzy || res.Total != 0 {
 		t.Errorf("без запасного поиска ничего: %+v", res)
+	}
+}
+
+// Фильтра «Финансирование» больше нет (D-256): старый сохранённый поиск с ним читается без ошибки, условие отбрасывается.
+func TestParseSearchQueryIgnoresRemovedFunding(t *testing.T) {
+	p, err := ParseSearchQuery(url.Values{"funding": {"grant"}, "q": {"химия"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Encode(); got != "q=%D1%85%D0%B8%D0%BC%D0%B8%D1%8F" {
+		t.Errorf("Encode() = %q", got)
 	}
 }

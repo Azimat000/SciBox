@@ -27,7 +27,7 @@ describe('reading the address', () => {
     expect(s).toEqual({
       q: 'органическая химия',
       region: '54',
-      multi: { field: ['1.4', '1.3.8'], type: ['research', 'teaching'], level: ['3'], format: ['remote'], degree: ['doctor'], org_kind: ['institute'], funding: ['grant'], rate: ['50'], term: ['short'] },
+      multi: { field: ['1.4', '1.3.8'], type: ['research', 'teaching'], level: ['3'], format: ['remote'], degree: ['doctor'], org_kind: ['institute'], rate: ['50'], term: ['short'] },
       salaryMin: 80000,
       housing: true,
       competition: true,

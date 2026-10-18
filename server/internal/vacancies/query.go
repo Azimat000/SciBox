@@ -28,7 +28,7 @@ func ParseSearchQuery(q url.Values) (SearchParams, error) {
 	flag := func(name string) bool { return q.Get(name) == "1" || q.Get(name) == "true" }
 	p := SearchParams{
 		Query: q.Get("q"), Fields: q["field"], Region: q.Get("region"), Formats: q["format"], Types: q["type"],
-		Levels: ints("level"), Degrees: q["degree"], OrgKinds: q["org_kind"], Fundings: q["funding"],
+		Levels: ints("level"), Degrees: q["degree"], OrgKinds: q["org_kind"],
 		Rates: ints("rate"), Terms: q["term"], Housing: flag("housing"), Competition: flag("competition"),
 		Equipment: flag("equipment"), Publications: flag("publications"), Conferences: flag("conferences"),
 		Deadline: q.Get("deadline"), Sort: q.Get("sort"), OrgSlug: q.Get("org"),
@@ -65,7 +65,7 @@ func ValidateSearch(p *SearchParams) error { return validateSearch(p) }
 // HasConditions — задано ли хоть что-то, кроме порядка: слова или хотя бы один фильтр. Поиск «всё подряд» не сохраняется.
 func (p SearchParams) HasConditions() bool {
 	return p.Query != "" || len(p.Fields) > 0 || p.Region != "" || len(p.Formats) > 0 || len(p.Types) > 0 ||
-		len(p.Levels) > 0 || len(p.Degrees) > 0 || len(p.OrgKinds) > 0 || len(p.Fundings) > 0 || len(p.Rates) > 0 ||
+		len(p.Levels) > 0 || len(p.Degrees) > 0 || len(p.OrgKinds) > 0 || len(p.Rates) > 0 ||
 		len(p.Terms) > 0 || p.SalaryMin > 0 || p.Housing || p.Competition || p.Equipment || p.Publications || p.Conferences || p.Deadline != ""
 }
 
@@ -96,9 +96,6 @@ func (p SearchParams) Encode() string {
 	}
 	for _, x := range p.OrgKinds {
 		v.Add("org_kind", x)
-	}
-	for _, x := range p.Fundings {
-		v.Add("funding", x)
 	}
 	for _, x := range p.Rates {
 		v.Add("rate", strconv.Itoa(x))

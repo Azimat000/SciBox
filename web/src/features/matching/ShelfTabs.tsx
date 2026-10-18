@@ -3,16 +3,15 @@ import { t } from '../../i18n'
 import '../orgs/orgs.css'
 import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
-export type ShelfTab = 'favorites' | 'matches' | 'searches' | 'deadlines'
+export type ShelfTab = 'favorites' | 'matches' | 'searches'
 
 const links: Record<ShelfTab, string> = {
   favorites: '/favorites',
   matches: '/matches',
   searches: '/saved-searches',
-  deadlines: '/deadlines',
 }
 
-/** Четыре вкладки раздела «Избранное»: избранное, подходящие вакансии, сохранённые поиски и сроки подачи. */
+/** Три вкладки раздела «Избранное»: избранное, подходящие вакансии и сохранённые поиски. Сроки подачи — порядок в избранном. */
 export function ShelfTabs({ current }: { current: ShelfTab }) {
   const tabsRef = useActiveTabInView<HTMLElement>()
   return (

@@ -123,7 +123,6 @@ WITH hits AS MATERIALIZED (
     AND (cardinality(@degrees::text[]) = 0 OR fv.degree_required = ANY(@degrees::text[]))
     AND (cardinality(@org_kinds::text[]) = 0 OR EXISTS (
            SELECT 1 FROM organizations org WHERE org.id = fv.org_id AND org.kind = ANY(@org_kinds::text[])))
-    AND (cardinality(@fundings::text[]) = 0 OR fv.funding_source = ANY(@fundings::text[]))
     AND (cardinality(@rates::int[]) = 0 OR fv.rate_percent = ANY(@rates::int[]))
     AND (cardinality(@terms::text[]) = 0 OR (CASE
            WHEN fv.contract_type = 'permanent' THEN 'permanent'

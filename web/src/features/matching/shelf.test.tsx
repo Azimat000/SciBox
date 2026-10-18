@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ann, apiError, reply, signedInAs, stubApi, type Route } from '../../test/api'
-import { SEARCH_ID, calendar, cardThree, cardTwo, deadlineItem, matchItem, matchList, savedSearch } from '../../test/matching'
+import { SEARCH_ID, cardThree, cardTwo, matchItem, matchList, savedSearch } from '../../test/matching'
 import { renderApp } from '../../test/render'
 import { card, reference } from '../../test/vacancies'
 
@@ -103,79 +103,6 @@ describe('matches page', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'Страницы 3 нет' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'К началу списка' }))
     await waitFor(() => expect(router.state.location.search).toBe(''))
-  })
-})
-
-// ---------------------------------------------------------------- «Сроки»
-
-describe('deadlines page', () => {
-  it('sends a visitor to sign in', async () => {
-    stubApi()
-    const { router } = renderApp('/deadlines')
-    await waitFor(() => expect(router.state.location.pathname).toBe('/login'))
-  })
-
-  it('groups the dates by month and says how much time is left', async () => {
-    const items = [
-      deadlineItem({ vacancy: { ...card, deadline: '2026-10-06' }, days_left: 3 }),
-      deadlineItem({ vacancy: { ...cardTwo, deadline: '2026-10-28' }, days_left: 25 }),
-      deadlineItem({ vacancy: { ...cardThree, deadline: '2026-11-20' }, days_left: 48 }),
-    ]
-    stubApi(signedIn({ 'GET /api/deadlines': reply(200, calendar(items)) }))
-    renderApp('/deadlines')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Сроки подачи' })).toBeInTheDocument()
-    const months = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
-    expect(months).toEqual(['октябрь 2026 г.', 'ноябрь 2026 г.'])
-    const rows = screen.getAllByRole('listitem').filter((li) => li.classList.contains('cal-entry'))
-    expect(rows).toHaveLength(3)
-    expect(within(rows[0]).getByRole('link', { name: card.title })).toHaveAttribute('href', `/vacancies/${card.id}`)
-    expect(within(rows[0]).getByText('осталось 3 дня')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('6')).toHaveClass('mark')
-    expect(within(rows[0]).getByText(/Сибирский институт, Новосибирск/)).toBeInTheDocument()
-    // Дальше недели от срока маркера нет: он значит «напоминание уже идёт».
-    expect(within(rows[1]).getByText('28')).not.toHaveClass('mark')
-    expect(within(rows[2]).getByText('осталось 48 дней')).toBeInTheDocument()
-  })
-
-  it('does not mark a deadline when the person has already applied, and says so', async () => {
-    stubApi(signedIn({ 'GET /api/deadlines': reply(200, calendar([deadlineItem({ days_left: 2, application_id: 'app-1' })])) }))
-    renderApp('/deadlines')
-    const row = (await screen.findAllByRole('listitem')).find((li) => li.classList.contains('cal-entry'))!
-    expect(within(row).getByText('Вы откликнулись')).toBeInTheDocument()
-    expect(within(row).getByText('7')).not.toHaveClass('mark')
-  })
-
-  it('says how long is left on the last days', async () => {
-    stubApi(signedIn({ 'GET /api/deadlines': reply(200, calendar([deadlineItem({ days_left: 0 }), deadlineItem({ vacancy: { ...cardTwo, deadline: '2026-10-08' }, days_left: 1 })])) }))
-    renderApp('/deadlines')
-    expect(await screen.findByText('сегодня последний день')).toBeInTheDocument()
-    expect(screen.getByText('остался 1 день')).toBeInTheDocument()
-  })
-
-  it('tells about favorites without a deadline and about the mail settings', async () => {
-    stubApi(signedIn({ 'GET /api/deadlines': reply(200, calendar([deadlineItem()], { without_deadline: 2 })) }))
-    renderApp('/deadlines')
-    expect(await screen.findByText(/Ещё 2 вакансии из избранного без срока подачи/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'К избранному' })).toHaveAttribute('href', '/favorites')
-    expect(screen.getByRole('link', { name: 'Настройки писем' })).toHaveAttribute('href', '/account')
-  })
-
-  it('explains an empty calendar', async () => {
-    stubApi(signedIn({ 'GET /api/deadlines': reply(200, calendar([])) }))
-    renderApp('/deadlines')
-    expect(await screen.findByRole('heading', { level: 2, name: 'Сроков пока нет' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Открыть избранное' })).toHaveAttribute('href', '/favorites')
-  })
-
-  it('shows an error with a retry', async () => {
-    const user = userEvent.setup()
-    let fail = true
-    stubApi(signedIn({ 'GET /api/deadlines': () => (fail ? apiError(500, 'internal', 'Сбой') : reply(200, calendar())) }))
-    renderApp('/deadlines')
-    expect(await screen.findByRole('heading', { level: 2, name: 'Не удалось загрузить сроки' })).toBeInTheDocument()
-    fail = false
-    await user.click(screen.getByRole('button', { name: 'Проверить ещё раз' }))
-    expect(await screen.findByRole('link', { name: card.title })).toBeInTheDocument()
   })
 })
 

@@ -27,8 +27,6 @@ export type MatchList = { items: MatchItem[]; total: number; ready: boolean; bas
 
 // ---- сроки ----
 
-export type DeadlineItem = { vacancy: Card; days_left: number; application_id: string | null }
-export type Calendar = { items: DeadlineItem[]; without_deadline: number }
 
 // ---- сохранённые поиски ----
 
@@ -57,9 +55,8 @@ const who = (userId: string | null | undefined) => userId ?? 'anonymous'
 export const keys = {
   all: ['matching'] as const,
   ids: (userId: string | null | undefined) => ['matching', 'ids', who(userId)] as const,
-  favorites: (userId: string | null | undefined, page: number) => ['matching', 'favorites', who(userId), page] as const,
+  favorites: (userId: string | null | undefined, page: number, sort: FavoriteSort) => ['matching', 'favorites', who(userId), page, sort] as const,
   matches: (userId: string | null | undefined, page: number) => ['matching', 'matches', who(userId), page] as const,
-  calendar: (userId: string | null | undefined) => ['matching', 'calendar', who(userId)] as const,
   searches: (userId: string | null | undefined) => ['matching', 'searches', who(userId)] as const,
   search: (userId: string | null | undefined, id: string) => ['matching', 'search', who(userId), id] as const,
   mail: (userId: string | null | undefined) => ['matching', 'mail', who(userId)] as const,
@@ -81,11 +78,14 @@ export function useFavoriteIds() {
   })
 }
 
-export function useFavorites(page: number) {
+/** Порядок избранного: недавно добавленные сверху или ближайший срок подачи первым (бывшая вкладка «Сроки», D-256). */
+export type FavoriteSort = 'added' | 'deadline'
+
+export function useFavorites(page: number, sort: FavoriteSort = 'added') {
   const { user, enabled } = useSignedIn()
   return useQuery({
-    queryKey: keys.favorites(user?.id, page),
-    queryFn: ({ signal }) => apiGet<FavoriteList>(`/api/favorites?${pageQuery(page)}`, { signal }),
+    queryKey: keys.favorites(user?.id, page, sort),
+    queryFn: ({ signal }) => apiGet<FavoriteList>(`/api/favorites?${pageQuery(page)}${sort === 'deadline' ? '&sort=deadline' : ''}`, { signal }),
     enabled,
     placeholderData: (previous) => previous,
     retry: false,
@@ -99,16 +99,6 @@ export function useMatches(page: number) {
     queryFn: ({ signal }) => apiGet<MatchList>(`/api/matches?${pageQuery(page)}`, { signal }),
     enabled,
     placeholderData: (previous) => previous,
-    retry: false,
-  })
-}
-
-export function useCalendar() {
-  const { user, enabled } = useSignedIn()
-  return useQuery({
-    queryKey: keys.calendar(user?.id),
-    queryFn: ({ signal }) => apiGet<Calendar>('/api/deadlines', { signal }),
-    enabled,
     retry: false,
   })
 }
@@ -164,16 +154,16 @@ export const deleteSearch = (id: string) => apiSend('DELETE', `/api/saved-search
 
 export const saveMailSettings = (fields: MailSettings) => apiSend<MailSettings>('PUT', '/api/notification-settings', fields)
 
-/** Избранное изменилось: закладки, список и календарь сроков перечитаются. */
+/** Избранное изменилось: закладки и список перечитаются. */
 export function refreshFavorites(client: QueryClient) {
   return Promise.all(
-    (['ids', 'favorites', 'calendar'] as const).map((part) => client.invalidateQueries({ queryKey: ['matching', part] })),
+    (['ids', 'favorites'] as const).map((part) => client.invalidateQueries({ queryKey: ['matching', part] })),
   )
 }
 
-/** Человек откликнулся на вакансию: она уходит из подборки, а в избранном и сроках получает отметку об отклике. */
+/** Человек откликнулся на вакансию: она уходит из подборки, а в избранном получает отметку об отклике. */
 export function refreshAfterApplying(client: QueryClient) {
   return Promise.all(
-    (['matches', 'favorites', 'calendar'] as const).map((part) => client.invalidateQueries({ queryKey: ['matching', part] })),
+    (['matches', 'favorites'] as const).map((part) => client.invalidateQueries({ queryKey: ['matching', part] })),
   )
 }

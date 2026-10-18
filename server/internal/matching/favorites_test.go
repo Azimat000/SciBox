@@ -29,7 +29,7 @@ func TestFavoritesLifecycle(t *testing.T) {
 		t.Errorf("в таблице %d записей, ожидали 2", n)
 	}
 
-	list, err := w.svc.Favorites(bg, p.User, 20, 0)
+	list, err := w.svc.Favorites(bg, p.User, 20, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,13 +61,13 @@ func TestFavoritesEmptyListsAreNotNull(t *testing.T) {
 	if err != nil || got == nil || len(got) != 0 {
 		t.Errorf("номера: %v %v", got, err)
 	}
-	list, err := w.svc.Favorites(bg, p.User, 20, 0)
+	list, err := w.svc.Favorites(bg, p.User, 20, 0, false)
 	if err != nil || list.Items == nil || list.Total != 0 {
 		t.Errorf("список: %+v %v", list, err)
 	}
-	cal, err := w.svc.Deadlines(bg, p.User)
-	if err != nil || cal.Items == nil || cal.WithoutDeadline != 0 {
-		t.Errorf("календарь: %+v %v", cal, err)
+	byDeadline, err := w.svc.Favorites(bg, p.User, 20, 0, true)
+	if err != nil || byDeadline.Items == nil || byDeadline.Total != 0 {
+		t.Errorf("по сроку: %+v %v", byDeadline, err)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestFavoritesOnlyPublicVacancies(t *testing.T) {
 		t.Errorf("отказ оставил %d записей", n)
 	}
 	w.addFavorite(p, closed.ID, open.ID)
-	list, _ := w.svc.Favorites(bg, p.User, 20, 0)
+	list, _ := w.svc.Favorites(bg, p.User, 20, 0, false)
 	sameIDs(t, "открытая первой, закрытая после", ids(list.Items), open.ID, closed.ID)
 	if list.Items[0].State != StateOpen || list.Items[1].State != StateClosed {
 		t.Errorf("состояния: %s, %s", list.Items[0].State, list.Items[1].State)
@@ -108,7 +108,7 @@ func TestArchivedFavoriteIsHiddenAndComesBack(t *testing.T) {
 
 	w.setStatus(v.ID, vacancies.StatusClosed)
 	w.setStatus(v.ID, vacancies.StatusArchived)
-	list, _ := w.svc.Favorites(bg, p.User, 20, 0)
+	list, _ := w.svc.Favorites(bg, p.User, 20, 0, false)
 	if len(list.Items) != 0 || list.Total != 0 {
 		t.Errorf("архивная вакансия в списке: %+v", list)
 	}
@@ -118,7 +118,7 @@ func TestArchivedFavoriteIsHiddenAndComesBack(t *testing.T) {
 
 	w.setStatus(v.ID, vacancies.StatusClosed)
 	w.setStatus(v.ID, vacancies.StatusPublished)
-	list, _ = w.svc.Favorites(bg, p.User, 20, 0)
+	list, _ = w.svc.Favorites(bg, p.User, 20, 0, false)
 	sameIDs(t, "после возвращения", ids(list.Items), v.ID)
 }
 
@@ -131,7 +131,7 @@ func TestFavoritesAreOwn(t *testing.T) {
 	if got, _ := w.svc.FavoriteIDs(bg, boris.User); len(got) != 0 {
 		t.Errorf("чужое избранное: %v", got)
 	}
-	if list, _ := w.svc.Favorites(bg, boris.User, 20, 0); len(list.Items) != 0 {
+	if list, _ := w.svc.Favorites(bg, boris.User, 20, 0, false); len(list.Items) != 0 {
 		t.Errorf("чужое избранное в списке: %+v", list)
 	}
 	if err := w.svc.RemoveFavorite(bg, boris.User, v.ID); err != nil {
@@ -140,8 +140,8 @@ func TestFavoritesAreOwn(t *testing.T) {
 	if got, _ := w.svc.FavoriteIDs(bg, anna.User); len(got) != 1 {
 		t.Errorf("Борис убрал чужую закладку: %v", got)
 	}
-	if cal, _ := w.svc.Deadlines(bg, boris.User); len(cal.Items) != 0 {
-		t.Errorf("чужой календарь: %+v", cal)
+	if list, _ := w.svc.Favorites(bg, boris.User, 20, 0, true); len(list.Items) != 0 {
+		t.Errorf("чужое избранное по сроку: %+v", list)
 	}
 }
 
@@ -226,7 +226,7 @@ func TestFavoritesListOrderStatesAndPages(t *testing.T) {
 
 	// Добавляем в таком порядке, чтобы «открытые сверху» нельзя было получить случайно.
 	w.addFavorite(p, expired.ID, closed.ID, lastDay.ID, noDeadline.ID, applied.ID, withdrawn.ID)
-	list, err := w.svc.Favorites(bg, p.User, 20, 0)
+	list, err := w.svc.Favorites(bg, p.User, 20, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,24 +250,25 @@ func TestFavoritesListOrderStatesAndPages(t *testing.T) {
 	}
 
 	// Страницы: вторая страница и страница дальше последней знают общее число.
-	page2, _ := w.svc.Favorites(bg, p.User, 4, 4)
+	page2, _ := w.svc.Favorites(bg, p.User, 4, 4, false)
 	if len(page2.Items) != 2 || page2.Total != 6 {
 		t.Errorf("вторая страница: %d записей из %d", len(page2.Items), page2.Total)
 	}
-	beyond, _ := w.svc.Favorites(bg, p.User, 4, 40)
+	beyond, _ := w.svc.Favorites(bg, p.User, 4, 40, false)
 	if len(beyond.Items) != 0 || beyond.Total != 6 {
 		t.Errorf("за последней страницей: %d записей из %d", len(beyond.Items), beyond.Total)
 	}
 	// Размер страницы: по умолчанию 20, не больше 50, смещение не бывает отрицательным.
-	if got, _ := w.svc.Favorites(bg, p.User, 0, -5); len(got.Items) != 6 {
+	if got, _ := w.svc.Favorites(bg, p.User, 0, -5, false); len(got.Items) != 6 {
 		t.Errorf("умолчания: %d", len(got.Items))
 	}
-	if got, _ := w.svc.Favorites(bg, p.User, 1000, 0); len(got.Items) != 6 {
+	if got, _ := w.svc.Favorites(bg, p.User, 1000, 0, false); len(got.Items) != 6 {
 		t.Errorf("предел: %d", len(got.Items))
 	}
 }
 
-func TestDeadlineCalendar(t *testing.T) {
+// Бывшая вкладка «Сроки» (D-256): то же избранное, ближайший срок первым, без срока в конце, закрытые ниже открытых.
+func TestFavoritesByDeadline(t *testing.T) {
 	w := newWorld(t)
 	p := w.User("Анна")
 	today := moscowToday(w.clock.Now())
@@ -290,37 +291,22 @@ func TestDeadlineCalendar(t *testing.T) {
 	w.apply(p, applied.ID, "sent")
 	w.addFavorite(p, far.ID, soon.ID, todayV.ID, gone.ID, closed.ID, none1.ID, none2.ID, applied.ID)
 
-	cal, err := w.svc.Deadlines(bg, p.User)
+	list, err := w.svc.Favorites(bg, p.User, 20, 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var gotIDs []uuid.UUID
-	days := map[uuid.UUID]int{}
-	for _, it := range cal.Items {
-		gotIDs = append(gotIDs, it.Vacancy.ID)
-		days[it.Vacancy.ID] = it.DaysLeft
+	sameIDs(t, "по близости срока", ids(list.Items), todayV.ID, soon.ID, applied.ID, far.ID, none2.ID, none1.ID, gone.ID, closed.ID)
+	if list.Total != 8 {
+		t.Errorf("всего %d, ожидали 8", list.Total)
 	}
-	sameIDs(t, "по близости срока", gotIDs, todayV.ID, soon.ID, applied.ID, far.ID)
-	if days[todayV.ID] != 0 || days[soon.ID] != 3 || days[far.ID] != 40 {
-		t.Errorf("дни: %v", days)
-	}
-	if cal.WithoutDeadline != 2 {
-		t.Errorf("без срока %d, ожидали 2", cal.WithoutDeadline)
-	}
-	for _, it := range cal.Items {
+	for _, it := range list.Items {
 		if (it.Vacancy.ID == applied.ID) != (it.ApplicationID != nil) {
 			t.Errorf("отметка об отклике у %s: %v", it.Vacancy.ID, it.ApplicationID)
 		}
 	}
 }
 
-func TestDaysLeftWithoutDeadline(t *testing.T) {
-	if got := daysLeft(*day(2026, 10, 7), nil); got != 0 {
-		t.Errorf("%d", got)
-	}
-	if got := daysLeft(*day(2026, 10, 7), day(2026, 10, 10)); got != 3 {
-		t.Errorf("%d", got)
-	}
+func TestStateWithoutDeadline(t *testing.T) {
 	if stateOf("published", nil, *day(2026, 10, 7)) != StateOpen {
 		t.Error("без срока открыта")
 	}

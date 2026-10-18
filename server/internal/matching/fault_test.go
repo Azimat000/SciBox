@@ -41,17 +41,17 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		"favorites": func(t *testing.T, w *world) func(*Service) error {
 			p, v := w.User("Анна"), w.publish(vacancyOpts{})
 			w.addFavorite(p, v.ID)
-			return func(s *Service) error { _, err := s.Favorites(bg, p.User, 20, 0); return err }
+			return func(s *Service) error { _, err := s.Favorites(bg, p.User, 20, 0, false); return err }
 		},
 		"favorites beyond the last page": func(t *testing.T, w *world) func(*Service) error {
 			p, v := w.User("Анна"), w.publish(vacancyOpts{})
 			w.addFavorite(p, v.ID)
-			return func(s *Service) error { _, err := s.Favorites(bg, p.User, 20, 40); return err }
+			return func(s *Service) error { _, err := s.Favorites(bg, p.User, 20, 40, false); return err }
 		},
-		"deadlines": func(t *testing.T, w *world) func(*Service) error {
+		"favorites by deadline beyond the last page": func(t *testing.T, w *world) func(*Service) error {
 			p, v := w.User("Анна"), w.publish(vacancyOpts{})
 			w.addFavorite(p, v.ID)
-			return func(s *Service) error { _, err := s.Deadlines(bg, p.User); return err }
+			return func(s *Service) error { _, err := s.Favorites(bg, p.User, 20, 40, true); return err }
 		},
 		"matches": func(t *testing.T, w *world) func(*Service) error {
 			p := w.seeker("Анна", profiles.CoreInput{Specialties: []string{"1.4.4"}})

@@ -1,4 +1,4 @@
-import type { Calendar, DeadlineItem, FavoriteItem, FavoriteList, MatchItem, MatchList, SavedSearch } from '../features/matching/api'
+import type { FavoriteItem, FavoriteList, MatchItem, MatchList, SavedSearch } from '../features/matching/api'
 import { card } from './vacancies'
 
 export const cardTwo = { ...card, id: 'b0000000-0000-4000-8000-000000000002', title: 'Постдок: геномика растений', deadline: '' }
@@ -30,19 +30,6 @@ export const matchList = (items: MatchItem[] = [matchItem()], extra: Partial<Mat
   total: items.length,
   ready: true,
   basis: { specialties: 2, level: 2, has_region: true, has_degree: true },
-  ...extra,
-})
-
-export const deadlineItem = (over: Partial<DeadlineItem> = {}): DeadlineItem => ({
-  vacancy: { ...card, deadline: '2026-10-07' },
-  days_left: 4,
-  application_id: null,
-  ...over,
-})
-
-export const calendar = (items: DeadlineItem[] = [deadlineItem()], extra: Partial<Calendar> = {}): Calendar => ({
-  items,
-  without_deadline: 0,
   ...extra,
 })
 

@@ -1,0 +1,151 @@
+{
+  "errors": [],
+  "checks": [
+    {
+      "width": 780,
+      "name": "Наувея",
+      "word": "НАУВЕЯ",
+      "company": "ООО «Наувея»",
+      "scrollWidth": 748,
+      "clientWidth": 748,
+      "wordWidth": 128,
+      "headerWidth": 748,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 780,
+      "name": "Науксия",
+      "word": "НАУКСИЯ",
+      "company": "ООО «Науксия»",
+      "scrollWidth": 748,
+      "clientWidth": 748,
+      "wordWidth": 156,
+      "headerWidth": 748,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 780,
+      "name": "Наукрета",
+      "word": "НАУКРЕТА",
+      "company": "ООО «Наукрета»",
+      "scrollWidth": 748,
+      "clientWidth": 748,
+      "wordWidth": 170,
+      "headerWidth": 748,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 780,
+      "name": "ИОН",
+      "word": "ИОН",
+      "company": "ООО «ИОН»",
+      "scrollWidth": 748,
+      "clientWidth": 748,
+      "wordWidth": 73,
+      "headerWidth": 748,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 390,
+      "name": "Наувея",
+      "word": "НАУВЕЯ",
+      "company": "ООО «Наувея»",
+      "scrollWidth": 358,
+      "clientWidth": 358,
+      "wordWidth": 128,
+      "headerWidth": 358,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 390,
+      "name": "Науксия",
+      "word": "НАУКСИЯ",
+      "company": "ООО «Науксия»",
+      "scrollWidth": 358,
+      "clientWidth": 358,
+      "wordWidth": 156,
+      "headerWidth": 358,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 390,
+      "name": "Наукрета",
+      "word": "НАУКРЕТА",
+      "company": "ООО «Наукрета»",
+      "scrollWidth": 358,
+      "clientWidth": 358,
+      "wordWidth": 170,
+      "headerWidth": 358,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 390,
+      "name": "ИОН",
+      "word": "ИОН",
+      "company": "ООО «ИОН»",
+      "scrollWidth": 358,
+      "clientWidth": 358,
+      "wordWidth": 73,
+      "headerWidth": 358,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 320,
+      "name": "Наувея",
+      "word": "НАУВЕЯ",
+      "company": "ООО «Наувея»",
+      "scrollWidth": 288,
+      "clientWidth": 288,
+      "wordWidth": 128,
+      "headerWidth": 288,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 320,
+      "name": "Науксия",
+      "word": "НАУКСИЯ",
+      "company": "ООО «Науксия»",
+      "scrollWidth": 288,
+      "clientWidth": 288,
+      "wordWidth": 156,
+      "headerWidth": 288,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 320,
+      "name": "Наукрета",
+      "word": "НАУКРЕТА",
+      "company": "ООО «Наукрета»",
+      "scrollWidth": 288,
+      "clientWidth": 288,
+      "wordWidth": 170,
+      "headerWidth": 288,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    },
+    {
+      "width": 320,
+      "name": "ИОН",
+      "word": "ИОН",
+      "company": "ООО «ИОН»",
+      "scrollWidth": 288,
+      "clientWidth": 288,
+      "wordWidth": 73,
+      "headerWidth": 288,
+      "overlap": false,
+      "productBackground": "rgb(255, 255, 255)"
+    }
+  ],
+  "menuToggle": "PASS",
+  "scope": "Guest header name mockup; the existing signed-in header is not verified by this mockup"
+}

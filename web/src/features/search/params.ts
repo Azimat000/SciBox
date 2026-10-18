@@ -5,7 +5,7 @@
 export const PAGE_SIZE = 20
 
 /** Фильтры «один из нескольких»: ключ — имя параметра в адресе и на сервере. */
-export const multiKeys = ['field', 'type', 'level', 'format', 'degree', 'org_kind', 'funding', 'rate', 'term'] as const
+export const multiKeys = ['field', 'type', 'level', 'format', 'degree', 'org_kind', 'rate', 'term'] as const
 export type MultiKey = (typeof multiKeys)[number]
 
 export const sorts = ['relevance', 'new', 'deadline', 'salary'] as const
@@ -27,7 +27,6 @@ export const allowed: Record<Exclude<MultiKey, 'field'>, readonly string[]> = {
   format: ['onsite', 'hybrid', 'remote'],
   degree: ['none', 'candidate', 'doctor'],
   org_kind: ['university', 'institute', 'science_center', 'rd_company', 'technopark', 'other'],
-  funding: ['budget', 'grant', 'contract', 'own'],
   rate: ['25', '50', '75', '100'],
   term: terms,
 }
@@ -58,7 +57,7 @@ export function emptySearch(): Search {
   return {
     q: '',
     region: '',
-    multi: { field: [], type: [], level: [], format: [], degree: [], org_kind: [], funding: [], rate: [], term: [] },
+    multi: { field: [], type: [], level: [], format: [], degree: [], org_kind: [], rate: [], term: [] },
     salaryMin: 0,
     housing: false,
     competition: false,

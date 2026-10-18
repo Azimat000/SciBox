@@ -71,7 +71,6 @@ type SearchParams struct {
 	Levels      []int    // 1–4
 	Degrees     []string
 	OrgKinds    []string
-	Fundings    []string
 	Rates       []int
 	Terms       []string
 	SalaryMin   int  // рублей в месяц; 0 — без ограничения
@@ -148,7 +147,6 @@ func validateSearch(p *SearchParams) error {
 	check("type", p.Types, PositionTypes)
 	check("degree", p.Degrees, Degrees)
 	check("org_kind", p.OrgKinds, orgs.OrgKinds)
-	check("funding", p.Fundings, FundingSources)
 	check("term", p.Terms, Terms)
 	if len(p.Fields) > maxFilterItems {
 		errs["field"] = "Слишком много значений"
@@ -232,7 +230,7 @@ func (s *Service) Search(ctx context.Context, p SearchParams) (SearchResult, err
 	arg := dbgen.SearchVacanciesParams{
 		Today: today, OrgID: orgID, UnitID: p.UnitID, Q: p.Query,
 		Fields: nonNil(p.Fields), Region: p.Region, Formats: nonNil(p.Formats), Types: nonNil(p.Types),
-		Levels: num.Int32s(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds), Fundings: nonNil(p.Fundings),
+		Levels: num.Int32s(p.Levels), Degrees: nonNil(p.Degrees), OrgKinds: nonNil(p.OrgKinds),
 		Rates: num.Int32s(p.Rates), Terms: nonNil(p.Terms), SalaryMin: num.Int32(p.SalaryMin), Housing: p.Housing,
 		Competition: p.Competition, Equipment: p.Equipment, Publications: p.Publications, Conferences: p.Conferences, NoDeadline: p.Deadline == DeadlineNone, Sort: sort, RowLimit: limit, RowOffset: offset,
 		PublishedAfter: p.PublishedAfter, PublishedUntil: p.PublishedUntil, RowCap: num.Int32(s.cfg.maxResults() + 1), HitCap: num.Int32(s.cfg.maxResults() + 1), MaxResults: num.Int32(s.cfg.maxResults()),

@@ -32,7 +32,7 @@ export function navFor(role: Role): NavItem[] {
 
 /** «Избранное» в шапке не пункт меню, а значок рядом с уведомлениями (только в режиме «Ищу работу»). */
 export function favoritesNav(): NavItem {
-  return { to: '/favorites', label: t.nav.favorites, also: ['/matches', '/saved-searches', '/deadlines'] }
+  return { to: '/favorites', label: t.nav.favorites, also: ['/matches', '/saved-searches'] }
 }
 
 /** Пункт меню текущий, если открыт его раздел: сам адрес, страницы внутри него и связанные разделы (`also`). */

@@ -135,7 +135,8 @@ describe('search page', () => {
     expect(within(list).getByText('R3 · самостоятельный исследователь')).toBeInTheDocument()
     expect(within(list).getByText('Требуемая степень: доктор наук')).toBeInTheDocument()
     expect(within(list).getByText('НИИ / институт РАН')).toBeInTheDocument()
-    expect(within(list).getByText('Грант')).toBeInTheDocument()
+    // Фильтра «Финансирование» больше нет: старая ссылка с ним открывается, условие отбрасывается
+    expect(within(list).queryByText('Грант')).not.toBeInTheDocument()
     expect(within(list).getByText('Срочный, от года до трёх лет')).toBeInTheDocument()
     expect(within(list).getByText('Преподаватель')).toBeInTheDocument()
     // Группа со сделанным выбором открыта, и выбор виден в её заголовке.

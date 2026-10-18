@@ -156,28 +156,48 @@ describe('favorites page', () => {
     expect(within(rows[2]).getByRole('link', { name: 'Смотреть отклик' })).toHaveAttribute('href', '/applications/app-1')
   })
 
-  it('has the four tabs and marks the section in the header', async () => {
+  it('has the three tabs and marks the section in the header', async () => {
     stubApi(signedIn({ 'GET /api/favorites?*': reply(200, favoriteList()) }))
     renderApp('/favorites')
     const tabs = await screen.findByRole('navigation', { name: 'Разделы избранного' })
     expect(within(tabs).getByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
     expect(within(tabs).getByRole('link', { name: 'Подходящие' })).toHaveAttribute('href', '/matches')
     expect(within(tabs).getByRole('link', { name: 'Поиски' })).toHaveAttribute('href', '/saved-searches')
-    expect(within(tabs).getByRole('link', { name: 'Сроки' })).toHaveAttribute('href', '/deadlines')
+    expect(within(tabs).queryByRole('link', { name: 'Сроки' })).not.toBeInTheDocument()
     // «Избранное» в шапке — значок рядом с уведомлениями, а не пункт меню
     expect(within(screen.getByRole('banner')).getByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it.each(['/matches', '/saved-searches', '/deadlines'])('keeps the «Избранное» icon current on %s', async (path) => {
+  it.each(['/matches', '/saved-searches'])('keeps the «Избранное» icon current on %s', async (path) => {
     stubApi(
       signedIn({
         'GET /api/matches?*': reply(200, { items: [], total: 0, ready: false, basis: { specialties: 0, level: 1, has_region: false, has_degree: false } }),
         'GET /api/saved-searches': reply(200, { items: [] }),
-        'GET /api/deadlines': reply(200, { items: [], without_deadline: 0 }),
       }),
     )
     renderApp(path)
     expect(await within(await screen.findByRole('banner')).findByRole('link', { name: 'Избранное' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('orders by the nearest deadline on request, keeps it in the address and starts from the first page', async () => {
+    const user = userEvent.setup()
+    const { called } = stubApi(signedIn({ 'GET /api/favorites?*': reply(200, favoriteList([favoriteItem(), favoriteItem({ vacancy: cardTwo })])) }))
+    const { router } = renderApp('/favorites?page=2')
+    const order = await screen.findByRole('combobox', { name: 'Порядок' })
+    expect(order).toHaveValue('added')
+    await user.selectOptions(order, 'deadline')
+    await waitFor(() => expect(router.state.location.search).toBe('?sort=deadline'))
+    await waitFor(() => expect(called('GET', '/api/favorites?limit=20&offset=0&sort=deadline')).toHaveLength(1))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Порядок' }), 'added')
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+  })
+
+  it('takes the old «Сроки» address to the favorites ordered by deadline', async () => {
+    stubApi(signedIn({ 'GET /api/favorites?*': reply(200, favoriteList([favoriteItem(), favoriteItem({ vacancy: cardTwo })])) }))
+    const { router } = renderApp('/deadlines')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/favorites'))
+    expect(router.state.location.search).toBe('?sort=deadline')
+    expect(await screen.findByRole('combobox', { name: 'Порядок' })).toHaveValue('deadline')
   })
 
   it('explains an empty list and leads to the search', async () => {

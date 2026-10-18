@@ -137,14 +137,6 @@ const (
 	StateClosed  = "closed"
 )
 
-// daysLeft — сколько дней до последнего дня подачи (0 — срок сегодня). Нет срока — 0.
-func daysLeft(today time.Time, deadline *time.Time) int {
-	if deadline == nil {
-		return 0
-	}
-	return int(deadline.Sub(today).Hours() / 24)
-}
-
 func stateOf(status string, deadline *time.Time, today time.Time) string {
 	switch {
 	case status != vacancies.StatusPublished:
@@ -208,12 +200,13 @@ func (s *Service) FavoriteIDs(ctx context.Context, user auth.User) ([]uuid.UUID,
 	return ids, nil
 }
 
-// Favorites — «Избранное»: сначала вакансии, на которые ещё можно откликнуться, внутри групп новые добавления сверху.
+// Favorites — «Избранное»: сначала вакансии, на которые ещё можно откликнуться, внутри групп новые добавления сверху
+// или, если byDeadline, ближайший срок подачи первым (вакансии без срока в конце группы).
 // Вакансии в архиве не показываются (открыть их нельзя), но из избранного не пропадают.
-func (s *Service) Favorites(ctx context.Context, user auth.User, limit, offset int) (FavoriteList, error) {
+func (s *Service) Favorites(ctx context.Context, user auth.User, limit, offset int, byDeadline bool) (FavoriteList, error) {
 	lim, off := pageOf(limit, offset)
 	today := s.today()
-	rows, err := s.q.ListFavorites(ctx, dbgen.ListFavoritesParams{UserID: user.ID, Today: today, RowLimit: lim, RowOffset: off})
+	rows, err := s.q.ListFavorites(ctx, dbgen.ListFavoritesParams{UserID: user.ID, Today: today, ByDeadline: byDeadline, RowLimit: lim, RowOffset: off})
 	if err != nil {
 		return FavoriteList{}, fmt.Errorf("matching: list favorites: %w", err)
 	}
@@ -233,54 +226,13 @@ func (s *Service) Favorites(ctx context.Context, user auth.User, limit, offset i
 		out.Total = int(rows[0].Total)
 	} else if off > 0 {
 		// Страница дальше последней: общее число берём отдельным запросом, чтобы сайт мог предложить вернуться.
-		probe, err := s.q.ListFavorites(ctx, dbgen.ListFavoritesParams{UserID: user.ID, Today: today, RowLimit: 1, RowOffset: 0})
+		probe, err := s.q.ListFavorites(ctx, dbgen.ListFavoritesParams{UserID: user.ID, Today: today, ByDeadline: byDeadline, RowLimit: 1, RowOffset: 0})
 		if err != nil {
 			return FavoriteList{}, fmt.Errorf("matching: list favorites: %w", err)
 		}
 		if len(probe) > 0 {
 			out.Total = int(probe[0].Total)
 		}
-	}
-	return out, nil
-}
-
-// ---- календарь сроков ----
-
-// DeadlineItem — вакансия из избранного со сроком подачи.
-type DeadlineItem struct {
-	Vacancy       vacancies.Card `json:"vacancy"`
-	DaysLeft      int            `json:"days_left"`
-	ApplicationID *uuid.UUID     `json:"application_id"`
-}
-
-// DeadlineCalendar — сроки избранного: ближайшие первыми. WithoutDeadline — сколько открытых вакансий в избранном без срока.
-type DeadlineCalendar struct {
-	Items           []DeadlineItem `json:"items"`
-	WithoutDeadline int            `json:"without_deadline"`
-}
-
-// Deadlines собирает календарь сроков: опубликованные вакансии из избранного, срок которых сегодня или позже.
-func (s *Service) Deadlines(ctx context.Context, user auth.User) (DeadlineCalendar, error) {
-	today := s.today()
-	rows, err := s.q.ListFavoriteDeadlines(ctx, dbgen.ListFavoriteDeadlinesParams{UserID: user.ID, Today: today})
-	if err != nil {
-		return DeadlineCalendar{}, fmt.Errorf("matching: list deadlines: %w", err)
-	}
-	views := make([]dbgen.VacancyView, len(rows))
-	for i, r := range rows {
-		views[i] = r.VacancyView
-	}
-	cards, err := vacancies.CardsFrom(ctx, s.q, views)
-	if err != nil {
-		return DeadlineCalendar{}, err
-	}
-	none, err := s.q.CountFavoritesWithoutDeadline(ctx, user.ID)
-	if err != nil {
-		return DeadlineCalendar{}, fmt.Errorf("matching: count undated: %w", err)
-	}
-	out := DeadlineCalendar{Items: make([]DeadlineItem, len(rows)), WithoutDeadline: int(none)}
-	for i, r := range rows {
-		out.Items[i] = DeadlineItem{Vacancy: cards[i], DaysLeft: daysLeft(today, r.VacancyView.Deadline), ApplicationID: r.ApplicationID}
 	}
 	return out, nil
 }

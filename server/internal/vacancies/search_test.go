@@ -129,8 +129,6 @@ func TestSearchFilters(t *testing.T) {
 		{"degree candidate", SearchParams{Degrees: []string{DegreeCandidate}}, []string{st.chem, st.math}},
 		{"org kind", SearchParams{OrgKinds: []string{orgs.KindInstitute}}, all},
 		{"org kind: another", SearchParams{OrgKinds: []string{orgs.KindUniversity, orgs.KindTechnopark}}, nil},
-		{"funding grant", SearchParams{Fundings: []string{FundingGrant}}, []string{st.chem, st.gen}},
-		{"funding own or budget", SearchParams{Fundings: []string{FundingOwn, FundingBudget}}, []string{st.math, st.ckp}},
 		{"rate 50", SearchParams{Rates: []int{50}}, []string{st.math}},
 		{"rate 100", SearchParams{Rates: []int{100}}, []string{st.chem, st.ckp}},
 		{"term permanent", SearchParams{Terms: []string{TermPermanent}}, []string{st.math, st.ckp}},
@@ -150,7 +148,7 @@ func TestSearchFilters(t *testing.T) {
 		{"deadline week", SearchParams{Deadline: DeadlineWeek}, []string{st.gen}},
 		{"deadline month", SearchParams{Deadline: DeadlineMonth}, []string{st.chem, st.gen, st.ckp}},
 		{"deadline none", SearchParams{Deadline: DeadlineNone}, []string{st.math}},
-		{"filters combine with AND", SearchParams{Types: []string{TypeResearch, TypePhD}, Fundings: []string{FundingGrant}, Levels: []int{2}}, []string{st.gen}},
+		{"filters combine with AND", SearchParams{Types: []string{TypeResearch, TypePhD}, Levels: []int{2}}, []string{st.gen}},
 		{"unit", SearchParams{UnitID: &st.unitA.ID}, []string{st.chem}},
 	}
 	for _, c := range cases {
@@ -333,7 +331,6 @@ func TestSearchValidation(t *testing.T) {
 		{"type", SearchParams{Types: []string{"nobody"}}, "type"},
 		{"degree", SearchParams{Degrees: []string{"master"}}, "degree"},
 		{"org kind", SearchParams{OrgKinds: []string{"circus"}}, "org_kind"},
-		{"funding", SearchParams{Fundings: []string{"gift"}}, "funding"},
 		{"term", SearchParams{Terms: []string{"forever"}}, "term"},
 		{"field code", SearchParams{Fields: []string{"1.4.x"}}, "field"},
 		{"field code with SQL", SearchParams{Fields: []string{"1.4%"}}, "field"},
@@ -359,7 +356,7 @@ func TestSearchValidation(t *testing.T) {
 	// Всё допустимое проходит.
 	ok := SearchParams{
 		Query: "  химия   ", Fields: []string{"1", "1.4", "1.4.4"}, Region: "54", Formats: WorkFormats, Types: []string{TypeResearch},
-		Levels: []int{1, 2, 3, 4}, Degrees: Degrees, OrgKinds: orgs.OrgKinds, Fundings: FundingSources, Rates: Rates,
+		Levels: []int{1, 2, 3, 4}, Degrees: Degrees, OrgKinds: orgs.OrgKinds, Rates: Rates,
 		Terms: Terms, SalaryMin: 1, Housing: true, Competition: true, Deadline: DeadlineWeek, Sort: SortSalary,
 	}
 	if _, err := w.svc.Search(bg, ok); err != nil {

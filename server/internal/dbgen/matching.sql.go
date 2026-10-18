@@ -65,19 +65,6 @@ func (q *Queries) CountFavorites(ctx context.Context, userID uuid.UUID) (int64, 
 	return count, err
 }
 
-const countFavoritesWithoutDeadline = `-- name: CountFavoritesWithoutDeadline :one
-SELECT count(*) FROM favorites f JOIN vacancies v ON v.id = f.vacancy_id
-WHERE f.user_id = $1 AND v.status = 'published' AND v.deadline IS NULL
-`
-
-// Избранные без срока подачи (открытые): в календаре о них только число.
-func (q *Queries) CountFavoritesWithoutDeadline(ctx context.Context, userID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countFavoritesWithoutDeadline, userID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countSavedSearches = `-- name: CountSavedSearches :one
 
 SELECT count(*) FROM saved_searches WHERE user_id = $1
@@ -290,96 +277,6 @@ func (q *Queries) ListDueSavedSearches(ctx context.Context, arg ListDueSavedSear
 	return items, nil
 }
 
-const listFavoriteDeadlines = `-- name: ListFavoriteDeadlines :many
-SELECT v.id, v.org_id, v.unit_id, v.created_by, v.status, v.title, v.position_code, v.summary, v.description, v.requirements, v.focus, v.career_level, v.work_format, v.region_code, v.city, v.housing, v.rate_percent, v.salary_from, v.salary_to, v.contract_type, v.contract_months, v.funding_source, v.funding_note, v.degree_required, v.title_required, v.is_competition, v.deadline, v.published_at, v.closed_at, v.archived_at, v.created_at, v.updated_at, v.position_name, v.position_type, v.region_name, v.org_slug, v.org_name, v.org_kind, v.org_city, v.unit_name, v.equipment_access, v.equipment_note, v.equipment_unit_id, v.publications_paid, v.conference_travel, v.equipment_unit_name, f.created_at AS added_at, a.id AS application_id
-FROM favorites f
-JOIN vacancy_view v ON v.id = f.vacancy_id
-LEFT JOIN applications a ON a.vacancy_id = v.id AND a.user_id = f.user_id AND a.status <> 'withdrawn'
-WHERE f.user_id = $1 AND v.status = 'published' AND v.deadline >= $2::date
-ORDER BY v.deadline, f.created_at, v.id
-`
-
-type ListFavoriteDeadlinesParams struct {
-	UserID uuid.UUID
-	Today  time.Time
-}
-
-type ListFavoriteDeadlinesRow struct {
-	VacancyView   VacancyView
-	AddedAt       time.Time
-	ApplicationID *uuid.UUID
-}
-
-// Календарь сроков: избранные опубликованные вакансии, срок которых сегодня или позже.
-func (q *Queries) ListFavoriteDeadlines(ctx context.Context, arg ListFavoriteDeadlinesParams) ([]ListFavoriteDeadlinesRow, error) {
-	rows, err := q.db.Query(ctx, listFavoriteDeadlines, arg.UserID, arg.Today)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListFavoriteDeadlinesRow
-	for rows.Next() {
-		var i ListFavoriteDeadlinesRow
-		if err := rows.Scan(
-			&i.VacancyView.ID,
-			&i.VacancyView.OrgID,
-			&i.VacancyView.UnitID,
-			&i.VacancyView.CreatedBy,
-			&i.VacancyView.Status,
-			&i.VacancyView.Title,
-			&i.VacancyView.PositionCode,
-			&i.VacancyView.Summary,
-			&i.VacancyView.Description,
-			&i.VacancyView.Requirements,
-			&i.VacancyView.Focus,
-			&i.VacancyView.CareerLevel,
-			&i.VacancyView.WorkFormat,
-			&i.VacancyView.RegionCode,
-			&i.VacancyView.City,
-			&i.VacancyView.Housing,
-			&i.VacancyView.RatePercent,
-			&i.VacancyView.SalaryFrom,
-			&i.VacancyView.SalaryTo,
-			&i.VacancyView.ContractType,
-			&i.VacancyView.ContractMonths,
-			&i.VacancyView.FundingSource,
-			&i.VacancyView.FundingNote,
-			&i.VacancyView.DegreeRequired,
-			&i.VacancyView.TitleRequired,
-			&i.VacancyView.IsCompetition,
-			&i.VacancyView.Deadline,
-			&i.VacancyView.PublishedAt,
-			&i.VacancyView.ClosedAt,
-			&i.VacancyView.ArchivedAt,
-			&i.VacancyView.CreatedAt,
-			&i.VacancyView.UpdatedAt,
-			&i.VacancyView.PositionName,
-			&i.VacancyView.PositionType,
-			&i.VacancyView.RegionName,
-			&i.VacancyView.OrgSlug,
-			&i.VacancyView.OrgName,
-			&i.VacancyView.OrgKind,
-			&i.VacancyView.OrgCity,
-			&i.VacancyView.UnitName,
-			&i.VacancyView.EquipmentAccess,
-			&i.VacancyView.EquipmentNote,
-			&i.VacancyView.EquipmentUnitID,
-			&i.VacancyView.PublicationsPaid,
-			&i.VacancyView.ConferenceTravel,
-			&i.VacancyView.EquipmentUnitName,
-			&i.AddedAt,
-			&i.ApplicationID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listFavoriteIDs = `-- name: ListFavoriteIDs :many
 SELECT vacancy_id FROM favorites WHERE user_id = $1 ORDER BY created_at DESC, vacancy_id
 `
@@ -411,15 +308,17 @@ FROM favorites f
 JOIN vacancy_view v ON v.id = f.vacancy_id
 LEFT JOIN applications a ON a.vacancy_id = v.id AND a.user_id = f.user_id AND a.status <> 'withdrawn'
 WHERE f.user_id = $1 AND v.status IN ('published', 'closed')
-ORDER BY (v.status = 'published' AND (v.deadline IS NULL OR v.deadline >= $2::date)) DESC, f.created_at DESC, v.id
-LIMIT $4 OFFSET $3
+ORDER BY (v.status = 'published' AND (v.deadline IS NULL OR v.deadline >= $2::date)) DESC,
+    CASE WHEN $3::bool THEN v.deadline END ASC NULLS LAST, f.created_at DESC, v.id
+LIMIT $5 OFFSET $4
 `
 
 type ListFavoritesParams struct {
-	UserID    uuid.UUID
-	Today     time.Time
-	RowOffset int32
-	RowLimit  int32
+	UserID     uuid.UUID
+	Today      time.Time
+	ByDeadline bool
+	RowOffset  int32
+	RowLimit   int32
 }
 
 type ListFavoritesRow struct {
@@ -430,11 +329,13 @@ type ListFavoritesRow struct {
 }
 
 // Список избранного: сначала те, на что ещё можно откликнуться, внутри групп новые добавления сверху.
+// by_deadline: внутри групп ближайший срок подачи первым, вакансии без срока в конце (бывшая вкладка «Сроки», D-256).
 // Архивные вакансии не показываются (открыть их нельзя).
 func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([]ListFavoritesRow, error) {
 	rows, err := q.db.Query(ctx, listFavorites,
 		arg.UserID,
 		arg.Today,
+		arg.ByDeadline,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
