@@ -253,7 +253,7 @@ func TestAnonymousThenHiddenStaysNamelessInOrganizationLists(t *testing.T) {
 	w := newWorld(t)
 	sci, profile := w.anonScientist()
 	o := w.mustInvite(w.tm.HR, w.vacancy.ID, profile, "")
-	if _, err := w.Prof.SetPrivacy(bg, sci.User, "hidden", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, sci.User, "hidden"); err != nil {
 		t.Fatal(err)
 	}
 	if got := w.sent(); !got[0].Scientist.Anonymous || got[0].Scientist.Name != "" {

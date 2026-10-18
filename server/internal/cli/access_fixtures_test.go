@@ -193,7 +193,7 @@ func (f *fx) reference(app uuid.UUID) (uuid.UUID, string) {
 func (f *fx) scientist(visibility string) uuid.UUID {
 	f.t.Helper()
 	subj := f.Subject()
-	if _, err := f.w.k.Prof.SetPrivacy(bgctx, subj.User, visibility, false); err != nil {
+	if _, err := f.w.k.Prof.SetPrivacy(bgctx, subj.User, visibility); err != nil {
 		f.t.Fatal(err)
 	}
 	own, err := f.w.k.Prof.Own(bgctx, subj.User)

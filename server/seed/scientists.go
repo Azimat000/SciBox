@@ -129,9 +129,8 @@ func teach(course, inst, level string, from, to int) prof.ItemInput {
 }
 
 type scientist struct {
-	key          string
-	visibility   string
-	openToOffers bool
+	key        string
+	visibility string
 	// hiddenFrom — адреса организаций, от сотрудников которых профиль скрыт (D-200).
 	hiddenFrom []string
 	core       prof.CoreInput
@@ -140,7 +139,7 @@ type scientist struct {
 
 var scientists = []scientist{
 	{
-		key: "orlova", visibility: "public", openToOffers: false,
+		key: "orlova", visibility: "public",
 		core: prof.CoreInput{
 			Headline: "Заместитель директора по науке, Сибирский институт квантовых материалов", City: "Новосибирск", RegionCode: "54",
 			About:  "Занимаюсь сверхпроводящими плёнками и теорией электронной структуры. Руковожу отделом вычислительной физики, веду аспирантов. Ищу не работу, а сильных постдоков в команду.",
@@ -169,7 +168,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "zaitseva", visibility: "orgs", openToOffers: false,
+		key: "zaitseva", visibility: "orgs",
 		core: prof.CoreInput{
 			Headline: "Заведующая лабораторией сверхпроводящих материалов", City: "Новосибирск", RegionCode: "54",
 			About:  "Синтез и измерение плёнок высокотемпературных сверхпроводителей.",
@@ -187,7 +186,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "belov", visibility: "public", openToOffers: false,
+		key: "belov", visibility: "public",
 		core: prof.CoreInput{
 			Headline: "Заведующий кафедрой прикладной математики", City: "Казань", RegionCode: "16",
 			About:  "Численные методы, оптимизация, математическое моделирование для промышленности. Веду курсы для бакалавров и магистров.",
@@ -208,7 +207,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "kuznetsova", visibility: "hidden", openToOffers: false,
+		key: "kuznetsova", visibility: "hidden",
 		core: prof.CoreInput{
 			Headline: "Директор Центра изучения Арктики", City: "Архангельск", RegionCode: "29",
 			Degree: "candidate", DegreeSpecialty: "1.6.17", DegreeYear: ip(2010), About: "Профиль скрыт: я нанимаю, а не ищу работу.", Specialties: []string{"1.6.17", "1.6.18"},
@@ -219,7 +218,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "fedorov", visibility: "orgs", openToOffers: true,
+		key: "fedorov", visibility: "orgs",
 		core: prof.CoreInput{
 			Headline: "Руководитель отдела климатического моделирования", City: "Архангельск", RegionCode: "29",
 			About:  "Региональные модели климата, прогноз ледовой обстановки. Рассматриваю предложения от институтов, где есть вычислительные мощности и полевые данные.",
@@ -238,7 +237,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "vasilev", visibility: "public", openToOffers: true,
+		key: "vasilev", visibility: "public",
 		core: prof.CoreInput{
 			Headline: "Кадровик, бывший химик-аналитик", City: "Новосибирск", RegionCode: "54",
 			About:  "Помогаю научным организациям с набором. Раньше работал в аналитической лаборатории.",
@@ -250,7 +249,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "korolev", visibility: "public", openToOffers: true,
+		key: "korolev", visibility: "public",
 		core: prof.CoreInput{
 			Headline: "Научный сотрудник, лаборатория биоинформатики", City: "Казань", RegionCode: "16",
 			About:  "Анализ геномов и транскриптомов клинических образцов. Пишу пайплайны на Nextflow и Python, читаю лекции по статистике для биологов. Открыт к предложениям из лабораторий, где работают с секвенированием.",
@@ -271,7 +270,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "lebedeva", visibility: "anon", openToOffers: false,
+		key: "lebedeva", visibility: "anon",
 		core: prof.CoreInput{
 			Headline: "Старший научный сотрудник, геохимия", City: "Томск", RegionCode: "70",
 			About:  "Геохимия редких элементов в мерзлотных почвах.",
@@ -287,7 +286,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "morozov", visibility: "public", openToOffers: true,
+		key: "morozov", visibility: "public",
 		core: prof.CoreInput{
 			Headline: "Аспирант, физика конденсированного состояния", City: "Новосибирск", RegionCode: "54",
 			About:  "Третий год аспирантуры, измеряю тонкие плёнки при низких температурах. Ищу постдок через год.",
@@ -300,7 +299,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "zhukova", visibility: "public", openToOffers: false,
+		key: "zhukova", visibility: "public",
 		core: prof.CoreInput{
 			Headline: "Доцент кафедры математического анализа", City: "Екатеринбург", RegionCode: "66",
 			About:  "Дифференциальные уравнения и математическая физика. Преподаю анализ и уравнения математической физики, веду кружок для школьников.",
@@ -321,7 +320,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "shiryaev", visibility: "hidden", openToOffers: true,
+		key: "shiryaev", visibility: "hidden",
 		core: prof.CoreInput{
 			Headline: "Инженер-исследователь, оптика", City: "Санкт-Петербург", RegionCode: "78",
 			Degree: "none", Specialties: []string{"1.3.6"}, About: "Профиль скрыт: пока присматриваюсь.",
@@ -331,7 +330,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "guseva", visibility: "orgs", openToOffers: true,
+		key: "guseva", visibility: "orgs",
 		core: prof.CoreInput{
 			Headline: "Научный сотрудник, микробиология", City: "Москва", RegionCode: "77",
 			About:  "Микробные сообщества почв и водоёмов, метагеномика. Ищу позицию, где можно совмещать полевые выезды и лабораторную работу.",
@@ -349,7 +348,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "tarasov", visibility: "public", openToOffers: false, hiddenFrom: []string{"neurofotonika"},
+		key: "tarasov", visibility: "public", hiddenFrom: []string{"neurofotonika"},
 		core: prof.CoreInput{
 			Headline: "Профессор, главный научный сотрудник, материаловедение", City: "Томск", RegionCode: "70",
 			About:  "Порошковая металлургия и композиционные материалы. Создал научную школу по спечённым композитам, подготовил четырнадцать кандидатов наук.",
@@ -376,7 +375,7 @@ var scientists = []scientist{
 		},
 	},
 	{
-		key: "andreeva", visibility: "hidden", openToOffers: false,
+		key: "andreeva", visibility: "hidden",
 		core: prof.CoreInput{
 			Headline: "Младший научный сотрудник, экология Арктики", City: "Архангельск", RegionCode: "29",
 			Degree: "none", Specialties: []string{"1.5.15"}, About: "Профиль скрыт, пока нет публикаций.",
@@ -409,7 +408,7 @@ func seedScientists(ctx context.Context, pool *pgxpool.Pool, ids map[string]uuid
 		if _, err := svc.SaveCore(ctx, user, withSkills(s.key, s.core)); err != nil {
 			return 0, fmt.Errorf("seed profile %s: %w", s.key, err)
 		}
-		if _, err := svc.SetPrivacy(ctx, user, s.visibility, s.openToOffers); err != nil {
+		if _, err := svc.SetPrivacy(ctx, user, s.visibility); err != nil {
 			return 0, fmt.Errorf("seed profile %s: %w", s.key, err)
 		}
 		if len(s.hiddenFrom) > 0 {

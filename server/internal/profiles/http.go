@@ -163,13 +163,14 @@ func (h *Handler) saveCore(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) setPrivacy(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Visibility   string `json:"visibility"`
-		OpenToOffers bool   `json:"open_to_offers"`
+		Visibility string `json:"visibility"`
+		// Отметки «открыт к предложениям» нет (D-256); вкладка со старой версией сайта ещё может прислать поле, его не читаем.
+		OpenToOffers bool `json:"open_to_offers"`
 	}
 	if !apierr.DecodeJSON(w, r, &in, maxBody) {
 		return
 	}
-	page, err := h.svc.SetPrivacy(r.Context(), actor(r), in.Visibility, in.OpenToOffers)
+	page, err := h.svc.SetPrivacy(r.Context(), actor(r), in.Visibility)
 	if err != nil {
 		h.fail(w, r, err)
 		return
@@ -277,7 +278,7 @@ func catalogParams(r *http.Request) (CatalogParams, error) {
 	errs := map[string]string{}
 	p := CatalogParams{
 		Query: q.Get("q"), Fields: q["field"], Region: q.Get("region"), Degrees: q["degree"], Titles: q["title"],
-		OpenOnly: q.Get("open") == "1" || q.Get("open") == "true", Sort: q.Get("sort"),
+		Sort: q.Get("sort"),
 	}
 	for name, dst := range map[string]*int{"h_min": &p.HMin, "q12_min": &p.Q12Min, "limit": &p.Limit, "offset": &p.Offset} {
 		raw := q.Get(name)

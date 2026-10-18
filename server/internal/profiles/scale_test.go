@@ -99,7 +99,7 @@ func TestQ12CounterFollowsThePublications(t *testing.T) {
 		}
 		return n
 	}
-	w.setVisibility(p, "hidden", false) // создаёт профиль
+	w.setVisibility(p, "hidden") // создаёт профиль
 	if counter() != 0 {
 		t.Fatalf("a new profile has %d", counter())
 	}

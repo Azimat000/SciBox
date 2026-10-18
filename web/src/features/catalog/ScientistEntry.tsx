@@ -41,11 +41,10 @@ export function ScientistEntry({ card, headingLevel = 2, recentFrom }: Props) {
         <Link to={`/scientists/${card.id}`}>{title}</Link>
       </Heading>
       {card.headline && <p className="entry-org">{card.headline}</p>}
-      {(card.open_to_offers || card.anonymous) && (
+      {card.anonymous && (
         <div className="entry-side sci-side">
           <div className="sci-tags">
-            {card.anonymous && <Tag>{t.profile.anonymous.badge}</Tag>}
-            {card.open_to_offers && <Tag tone="accent">{c.openToOffers}</Tag>}
+            <Tag>{t.profile.anonymous.badge}</Tag>
           </div>
         </div>
       )}

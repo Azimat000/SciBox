@@ -102,7 +102,7 @@ func TestEraseRemovesPersonalData(t *testing.T) {
 	w := newWorld(t)
 	who := w.Applicant("Удаляемый Соискатель")
 	other := w.Applicant("Другой Соискатель")
-	if _, err := w.Prof.SetPrivacy(bg, who.User, "public", true); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, who.User, "public"); err != nil {
 		t.Fatal(err)
 	}
 	open := w.apply(who, w.vac.ID, w.pdf("Статья.pdf"))

@@ -178,7 +178,7 @@ func TestFormerStaffAuthor(t *testing.T) {
 
 func (w *world) privacy(p testkit.Person, visibility string) {
 	w.T.Helper()
-	if _, err := w.Prof.SetPrivacy(bg, p.User, visibility, false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, p.User, visibility); err != nil {
 		w.T.Fatalf("privacy: %v", err)
 	}
 }

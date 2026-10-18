@@ -65,7 +65,7 @@ func newWorld(t *testing.T) *world {
 func (w *world) scientist(name, visibility string) (testkit.Person, uuid.UUID) {
 	w.T.Helper()
 	p := w.Applicant(name)
-	if _, err := w.Prof.SetPrivacy(bg, p.User, visibility, false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, p.User, visibility); err != nil {
 		w.T.Fatalf("privacy: %v", err)
 	}
 	own, err := w.Prof.Own(bg, p.User)

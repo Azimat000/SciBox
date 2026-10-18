@@ -197,7 +197,7 @@ func TestHTTPErrorCodes(t *testing.T) {
 		t.Errorf("откликнулся: %d %s", r.Code, r.Raw)
 	}
 	a.FillProfile(a.tm.Owner)
-	if _, err := a.Prof.SetPrivacy(bg, a.tm.Owner.User, "public", false); err != nil {
+	if _, err := a.Prof.SetPrivacy(bg, a.tm.Owner.User, "public"); err != nil {
 		t.Fatal(err)
 	}
 	own, _ := a.Prof.Own(bg, a.tm.Owner.User)

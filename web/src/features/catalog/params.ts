@@ -27,7 +27,6 @@ export type CatalogSearch = {
   field: string[]
   degree: string[]
   title: string[]
-  open: boolean
   /** h-index от; 0 — без ограничения. */
   hMin: number
   /** Статей в журналах Q1–Q2 от; 0 — без ограничения. */
@@ -38,7 +37,7 @@ export type CatalogSearch = {
 }
 
 export function emptyCatalog(): CatalogSearch {
-  return { q: '', region: '', field: [], degree: [], title: [], open: false, hMin: 0, q12Min: 0, sort: '', page: 1 }
+  return { q: '', region: '', field: [], degree: [], title: [], hMin: 0, q12Min: 0, sort: '', page: 1 }
 }
 
 const clean = (raw: string[], ok: (v: string) => boolean) => [...new Set(raw.filter(ok))].slice(0, MAX_VALUES)
@@ -52,8 +51,6 @@ export function parseCatalog(params: URLSearchParams): CatalogSearch {
   s.field = clean(params.getAll('field'), (v) => fieldCode.test(v))
   s.degree = clean(params.getAll('degree'), (v) => (degrees as readonly string[]).includes(v))
   s.title = clean(params.getAll('title'), (v) => (titles as readonly string[]).includes(v))
-  const open = params.get('open')
-  s.open = open === '1' || open === 'true'
   const h = Number.parseInt(params.get('h_min') ?? '', 10)
   s.hMin = Number.isFinite(h) && h > 0 && h <= MAX_H ? h : 0
   const q12 = Number.parseInt(params.get('q12_min') ?? '', 10)
@@ -80,7 +77,6 @@ function filterParams(s: CatalogSearch): URLSearchParams {
   for (const v of s.degree) out.append('degree', v)
   for (const v of s.title) out.append('title', v)
   if (s.region) out.set('region', s.region)
-  if (s.open) out.set('open', '1')
   if (s.hMin > 0) out.set('h_min', String(s.hMin))
   if (s.q12Min > 0) out.set('q12_min', String(s.q12Min))
   return out
@@ -105,8 +101,8 @@ export function toApiParams(s: CatalogSearch): URLSearchParams {
 
 export type ListKey = 'field' | 'degree' | 'title'
 
-/** Фильтры, которые можно убрать по одному: области, степени, звания, регион, «открыт к предложениям», h-index, статьи в Q1–Q2. */
-export type FilterRef = { kind: 'list'; key: ListKey; value: string } | { kind: 'region' } | { kind: 'open' } | { kind: 'hIndex' } | { kind: 'q12' }
+/** Фильтры, которые можно убрать по одному: области, степени, звания, регион, h-index, статьи в Q1–Q2. */
+export type FilterRef = { kind: 'list'; key: ListKey; value: string } | { kind: 'region' } | { kind: 'hIndex' } | { kind: 'q12' }
 
 /** Сколько фильтров включено (слова поиска и порядок не считаются). */
 export const filterCount = (s: CatalogSearch) => activeFilters(s).length
@@ -129,8 +125,6 @@ export function removeFilter(s: CatalogSearch, ref: FilterRef): CatalogSearch {
       return toggleList(s, ref.key, ref.value)
     case 'region':
       return change(s, { region: '' })
-    case 'open':
-      return change(s, { open: false })
     case 'hIndex':
       return change(s, { hMin: 0 })
     case 'q12':
@@ -143,7 +137,6 @@ export function activeFilters(s: CatalogSearch): FilterRef[] {
   const out: FilterRef[] = []
   for (const key of ['field', 'degree', 'title'] as const) for (const value of s[key]) out.push({ kind: 'list', key, value })
   if (s.region) out.push({ kind: 'region' })
-  if (s.open) out.push({ kind: 'open' })
   if (s.hMin > 0) out.push({ kind: 'hIndex' })
   if (s.q12Min > 0) out.push({ kind: 'q12' })
   return out

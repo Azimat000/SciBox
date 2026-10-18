@@ -100,7 +100,7 @@ func TestHiddenProfileCanStillApplyAndStaysHidden(t *testing.T) {
 	// D-072: человек сам откликнулся, организация видит отправленное; сам режим приватности профиля не меняется.
 	w := newWorld(t)
 	me := w.Applicant("Мария Смирнова")
-	if _, err := w.Prof.SetPrivacy(bg, me.User, "hidden", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, me.User, "hidden"); err != nil {
 		t.Fatal(err)
 	}
 	d := w.mustApply(me, nil)

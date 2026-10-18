@@ -14,7 +14,6 @@ export type CatalogCard = {
   region: string
   degree: 'none' | 'candidate' | 'doctor'
   academic_title: 'none' | 'docent' | 'professor'
-  open_to_offers: boolean
   h_index: number | null
   publications: number
   /** Статей в журналах Q1–Q2 (по справочнику SCImago) и из них с года recent_from выдачи. */

@@ -175,8 +175,9 @@ func TestHTTPOwnProfileCycle(t *testing.T) {
 	}
 
 	// Приватность.
+	// Старая вкладка сайта ещё присылает «открыт к предложениям» (D-256): поле принимается и ничего не значит.
 	r = a.do(&p, "PUT", "/api/profile/privacy", map[string]any{"visibility": "public", "open_to_offers": true})
-	if r.Code != 200 || r.profile(t)["visibility"] != "public" || r.profile(t)["open_to_offers"] != true {
+	if _, has := r.profile(t)["open_to_offers"]; r.Code != 200 || r.profile(t)["visibility"] != "public" || has {
 		t.Errorf("privacy: %d %s", r.Code, r.Raw)
 	}
 	r = a.do(&p, "PUT", "/api/profile/privacy", map[string]any{"visibility": "friends"})
@@ -284,7 +285,7 @@ func TestHTTPPublicProfileLeaks(t *testing.T) {
 	path := "/api/scientists/" + own.Profile.ID.String()
 
 	for _, mode := range []string{"hidden", "orgs", "public"} {
-		a.setVisibility(v.owner, mode, false)
+		a.setVisibility(v.owner, mode)
 		for _, c := range []struct {
 			name     string
 			who      *person
@@ -350,7 +351,7 @@ func TestHTTPCV(t *testing.T) {
 	if r := a.do(&v.staff, "GET", path, nil); r.Code != http.StatusNotFound {
 		t.Errorf("скрытый: %d", r.Code)
 	}
-	a.setVisibility(v.owner, "public", false)
+	a.setVisibility(v.owner, "public")
 	if r := a.do(&v.stranger, "GET", path, nil); r.Code != 200 || !strings.HasPrefix(r.Raw, "%PDF-") {
 		t.Errorf("публичный: %d", r.Code)
 	}

@@ -28,7 +28,7 @@ describe('own profile page', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Елена Орлова' })).toBeInTheDocument()
     expect(screen.getByText('Старший научный сотрудник, лаборатория катализа')).toBeInTheDocument()
     expect(screen.getByText('Новосибирск, Новосибирская область')).toBeInTheDocument()
-    expect(screen.getByText('Открыт к предложениям', { selector: '.tag' })).toBeInTheDocument()
+    expect(screen.queryByText('Открыт к предложениям')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'orlova@example.ru' })).toHaveAttribute('href', 'mailto:orlova@example.ru')
     expect(screen.getByRole('link', { name: 'Изменить основное' })).toHaveAttribute('href', '/profile/edit')
     expect(screen.getByRole('link', { name: 'Скачать резюме (PDF)' })).toHaveAttribute('href', '/api/profile/cv')
@@ -107,7 +107,6 @@ describe('own profile page', () => {
       'Добавьте курсы, которые вы читаете или читали.',
     ])
       expect(screen.getByText(hint)).toBeInTheDocument()
-    expect(screen.queryByText('Открыт к предложениям', { selector: '.tag' })).not.toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Никто/ })).toBeChecked()
   })
 
@@ -129,15 +128,8 @@ describe('privacy panel', () => {
     expect(await screen.findByRole('radio', { name: /Все/ })).toBeChecked()
     await userEvent.click(screen.getByRole('radio', { name: /^Организации/ }))
     expect(await screen.findByText('Приватность сохранена')).toBeInTheDocument()
-    expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'orgs', open_to_offers: true })
-  })
-
-  it('saves the "open to offers" mark with the current mode', async () => {
-    const api = stubApi(own(ownPage(), { 'PUT /api/profile/privacy': reply(200, ownPage({ ...profile, open_to_offers: false })) }))
-    renderApp('/profile')
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Открыт к предложениям' }))
-    await screen.findByText('Приватность сохранена')
-    expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'public', open_to_offers: false })
+    expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'orgs' })
+    expect(screen.queryByRole('checkbox', { name: 'Открыт к предложениям' })).not.toBeInTheDocument()
   })
 
   it('tells when saving failed', async () => {
@@ -660,7 +652,7 @@ describe('anonymous mode and hiding from organizations', () => {
     expect(within(group).queryByText(/Профиль скрыт: его нет среди соискателей/)).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: /Анонимно/ }))
     await screen.findByText('Приватность сохранена')
-    expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'anon', open_to_offers: true })
+    expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'anon' })
   })
 
   it('shows how organizations will see the profile, only in the anonymous mode', async () => {
@@ -756,7 +748,6 @@ describe('anonymous profile page', () => {
     renderApp(path)
     expect(await screen.findByRole('heading', { level: 1, name: 'Кандидат наук, доцент, 1.4.4, 1.4.1, R2, h-index 15' })).toBeInTheDocument()
     expect(screen.getByText(/Анонимный профиль: имя, место работы, номера и названия работ скрыты/)).toBeInTheDocument()
-    expect(screen.getByText('Открыт к предложениям', { selector: '.tag' })).toBeInTheDocument()
     expect(screen.getByText('Новосибирская область')).toBeInTheDocument()
     expect((await section('Степень и звание')).getByText('Кандидат наук')).toBeInTheDocument()
     expect((await section('Идентификаторы и метрики')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['РИНЦ 12', 'Scopus 9', 'Google Scholar 15'])

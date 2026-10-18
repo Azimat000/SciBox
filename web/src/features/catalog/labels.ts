@@ -21,8 +21,6 @@ export function filterLabel(ref: FilterRef, search: CatalogSearch, names: Map<st
       return ref.key === 'degree' ? degreeLabel(ref.value) : titleLabel(ref.value)
     case 'region':
       return regionName(search.region)
-    case 'open':
-      return t.catalog.openOnly
     case 'hIndex':
       return t.catalog.hIndexFrom(search.hMin)
     case 'q12':

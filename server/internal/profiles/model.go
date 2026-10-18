@@ -227,7 +227,6 @@ type View struct {
 	ID                uuid.UUID     `json:"id"`
 	Name              string        `json:"name"`
 	Visibility        string        `json:"visibility,omitempty"` // только владельцу
-	OpenToOffers      bool          `json:"open_to_offers"`
 	Headline          string        `json:"headline"`
 	City              string        `json:"city"`
 	Region            *Code         `json:"region"`

@@ -34,7 +34,7 @@ func TestOwnCreatesEmptyHiddenProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	v := page.Profile
-	if v.Name != "Елена Орлова" || v.Visibility != "hidden" || v.OpenToOffers || v.Degree.Level != DegreeNone || v.AcademicTitle != TitleNone {
+	if v.Name != "Елена Орлова" || v.Visibility != "hidden" || v.Degree.Level != DegreeNone || v.AcademicTitle != TitleNone {
 		t.Errorf("пустой профиль: %+v", v)
 	}
 	if v.Region != nil || v.Degree.Specialty != nil || v.Degree.Year != nil || v.HIndex.RSCI != nil {
@@ -147,13 +147,13 @@ func TestSaveCoreChecksReferences(t *testing.T) {
 func TestSaveCoreKeepsItemsAndPrivacy(t *testing.T) {
 	w := newWorld(t)
 	p := w.user("Елена Орлова")
-	w.setVisibility(p, "public", true)
+	w.setVisibility(p, "public")
 	w.addItem(p, goodPublication())
 	page, err := w.svc.SaveCore(bg, p.User, goodCore())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Profile.Visibility != "public" || !page.Profile.OpenToOffers || len(page.Profile.Sections.Publications) != 1 {
+	if page.Profile.Visibility != "public" || len(page.Profile.Sections.Publications) != 1 {
 		t.Errorf("основное сохранение задело чужое: %+v", page.Profile)
 	}
 }
@@ -162,16 +162,16 @@ func TestSetPrivacy(t *testing.T) {
 	w := newWorld(t)
 	p := w.user("Елена Орлова")
 	for _, vis := range []string{"orgs", "public", "hidden"} {
-		page, err := w.svc.SetPrivacy(bg, p.User, vis, vis == "orgs")
+		page, err := w.svc.SetPrivacy(bg, p.User, vis)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if page.Profile.Visibility != vis || page.Profile.OpenToOffers != (vis == "orgs") {
+		if page.Profile.Visibility != vis {
 			t.Errorf("%s: %+v", vis, page.Profile)
 		}
 	}
 	for _, bad := range []string{"", "Public", "friends"} {
-		if _, err := w.svc.SetPrivacy(bg, p.User, bad, true); fieldsOf(t, err)["visibility"] == "" {
+		if _, err := w.svc.SetPrivacy(bg, p.User, bad); fieldsOf(t, err)["visibility"] == "" {
 			t.Errorf("режим %q принят", bad)
 		}
 	}
@@ -211,7 +211,7 @@ func TestWhoSeesWhat(t *testing.T) {
 		"public": {"аноним": true, "вошедший без организации": true, "сотрудник организации": true, "владелец": true},
 	}
 	for _, mode := range []string{"hidden", "orgs", "public"} {
-		w.setVisibility(v.owner, mode, true)
+		w.setVisibility(v.owner, mode)
 		for _, who := range people {
 			t.Run(mode+"/"+who.name, func(t *testing.T) {
 				page, err := w.svc.Get(bg, id, who.p)
@@ -230,9 +230,6 @@ func TestWhoSeesWhat(t *testing.T) {
 				p := page.Profile
 				if p.Name != "Владелец профиля" || p.Headline == "" || len(p.Sections.Publications) != 1 || p.Sections.Publications[0].ID != pub.ID {
 					t.Errorf("содержимое: %+v", p)
-				}
-				if !p.OpenToOffers {
-					t.Errorf("«открыт к предложениям» видят все, кто видит профиль")
 				}
 				wantContacts := who.owner || who.member
 				if (p.ContactEmail != "") != wantContacts || page.Viewer.CanSeeContacts != wantContacts {
@@ -262,7 +259,7 @@ func TestStaffBecomesVisibleAfterJoining(t *testing.T) {
 	w := newWorld(t)
 	owner, viewer := w.user("Владелец"), w.user("Зритель")
 	own, _ := w.svc.Own(bg, owner.User)
-	w.setVisibility(owner, "orgs", false)
+	w.setVisibility(owner, "orgs")
 	if _, err := w.svc.Get(bg, own.Profile.ID, &viewer.User); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("без организации: %v", err)
 	}
@@ -571,14 +568,14 @@ func TestCVRespectsPrivacy(t *testing.T) {
 	if _, _, err := w.svc.CV(bg, v.owner.User, &id); err != nil {
 		t.Errorf("скрытый, владелец: %v", err)
 	}
-	w.setVisibility(v.owner, "orgs", false)
+	w.setVisibility(v.owner, "orgs")
 	if _, _, err := w.svc.CV(bg, v.stranger.User, &id); !errors.Is(err, ErrNotFound) {
 		t.Errorf("организациям, вошедший без организации: %v", err)
 	}
 	if _, _, err := w.svc.CV(bg, v.staff.User, &id); err != nil {
 		t.Errorf("организациям, сотрудник: %v", err)
 	}
-	w.setVisibility(v.owner, "public", false)
+	w.setVisibility(v.owner, "public")
 	if _, _, err := w.svc.CV(bg, v.stranger.User, &id); err != nil {
 		t.Errorf("публичный, вошедший: %v", err)
 	}
@@ -653,7 +650,7 @@ func TestForApplicationIgnoresPrivacyButNeverLeaksOwnerFields(t *testing.T) {
 			t.Fatal(err)
 		}
 		w.addItem(p, goodPublication())
-		w.setVisibility(p, mode, true)
+		w.setVisibility(p, mode)
 
 		pkg, err := w.svc.ForApplication(bg, p.User, "elena.apply@example.ru")
 		if err != nil {
@@ -666,7 +663,7 @@ func TestForApplicationIgnoresPrivacyButNeverLeaksOwnerFields(t *testing.T) {
 		if v.ContactEmail != "elena.apply@example.ru" {
 			t.Errorf("%s: contact = %q (the application's contact must replace the profile's)", mode, v.ContactEmail)
 		}
-		if v.Name != "Елена Орлова" || len(v.Sections.Publications) != 1 || len(v.Specialties) != 2 || !v.OpenToOffers {
+		if v.Name != "Елена Орлова" || len(v.Sections.Publications) != 1 || len(v.Specialties) != 2 {
 			t.Errorf("%s: snapshot is incomplete: %+v", mode, v)
 		}
 		if !bytes.HasPrefix(pkg.CV, []byte("%PDF-")) || pkg.CVName != "Елена Орлова — CV.pdf" {
@@ -701,7 +698,7 @@ func TestStaffViewsOfOthersProfilesAreCappedPerDay(t *testing.T) {
 	}
 	own, _ := w.svc.Own(bg, v.owner.User)
 	id := own.Profile.ID
-	w.setVisibility(v.owner, "public", true)
+	w.setVisibility(v.owner, "public")
 
 	w.svc.cfg.Views = Limit{Max: 3, Window: 24 * time.Hour}
 	for i := 0; i < 3; i++ {

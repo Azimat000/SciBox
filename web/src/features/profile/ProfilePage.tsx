@@ -69,7 +69,7 @@ function Own() {
         afterHead={
           <>
             {p.visibility === 'hidden' && <Alert kind="info">{t.profile.hiddenNote}</Alert>}
-            <PrivacyPanel visibility={p.visibility ?? 'hidden'} openToOffers={p.open_to_offers} preview={page.anonymous_preview} />
+            <PrivacyPanel visibility={p.visibility ?? 'hidden'} preview={page.anonymous_preview} />
             <HiddenOrgsPanel hidden={page.hidden_orgs ?? []} />
           </>
         }

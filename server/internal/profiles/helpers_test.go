@@ -200,9 +200,9 @@ func (w *world) addItem(p person, in ItemInput) Item {
 	return it
 }
 
-func (w *world) setVisibility(p person, vis string, open bool) {
+func (w *world) setVisibility(p person, vis string) {
 	w.t.Helper()
-	if _, err := w.svc.SetPrivacy(bg, p.User, vis, open); err != nil {
+	if _, err := w.svc.SetPrivacy(bg, p.User, vis); err != nil {
 		w.t.Fatalf("privacy: %v", err)
 	}
 }

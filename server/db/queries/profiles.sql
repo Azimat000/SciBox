@@ -37,7 +37,7 @@ UPDATE profiles SET
 WHERE id = @id;
 
 -- name: UpdateProfilePrivacy :execrows
-UPDATE profiles SET visibility = @visibility, open_to_offers = @open_to_offers, updated_at = @now WHERE id = @id;
+UPDATE profiles SET visibility = @visibility, updated_at = @now WHERE id = @id;
 
 -- name: TouchProfile :exec
 UPDATE profiles SET updated_at = @now WHERE id = @id;
@@ -136,7 +136,6 @@ WITH hits AS MATERIALIZED (
     AND (@region::text = '' OR p.region_code = @region::text)
     AND (cardinality(@degrees::text[]) = 0 OR p.degree = ANY(@degrees::text[]))
     AND (cardinality(@titles::text[]) = 0 OR p.academic_title = ANY(@titles::text[]))
-    AND (NOT @open_only::bool OR p.open_to_offers)
     AND (@h_min::int = 0 OR p.h_max >= @h_min::int)
     AND (@q12_min::int = 0 OR p.q12_total >= @q12_min::int)
   ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
@@ -146,7 +145,7 @@ WITH hits AS MATERIALIZED (
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT p.id, p.visibility, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+SELECT p.id, p.visibility, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.updated_at,
        p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
        p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,

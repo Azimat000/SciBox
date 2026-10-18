@@ -355,7 +355,7 @@ func profileCases() []kase {
 			return call{body: map[string]any{"headline": "Научный сотрудник", "city": "Новосибирск", "region_code": "54", "about": "Изучаю катализаторы.", "specialties": []string{"1.4.4"}}}
 		}},
 		{route: "PUT /api/profile/privacy", kind: self, make: func(*fx, actor) call {
-			return call{body: map[string]any{"visibility": "public", "open_to_offers": true}}
+			return call{body: map[string]any{"visibility": "public"}}
 		}},
 		{route: "PUT /api/profile/hidden-orgs", kind: self, make: func(*fx, actor) call {
 			return call{body: map[string]any{"org_ids": []string{}}}

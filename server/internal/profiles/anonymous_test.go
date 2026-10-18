@@ -27,7 +27,7 @@ func anonOwner(t *testing.T, w *world, name string) (person, []string) {
 	w.addItem(p, ItemInput{Kind: KindEducation, ItemFields: ItemFields{Institution: "Новосибирский государственный университет", Program: "Химия", YearFrom: ptr(2008), YearTo: ptr(2013)}})
 	w.addItem(p, ItemInput{Kind: KindExperience, ItemFields: ItemFields{Organization: "Институт катализа СО РАН", Position: "Младший научный сотрудник", YearFrom: ptr(2014)}})
 	w.addItem(p, ItemInput{Kind: KindGrant, ItemFields: ItemFields{Title: "Грант на изучение оксидов", Funder: "РНФ", Number: "22-73-10001", Role: "lead", YearFrom: ptr(2022)}})
-	w.setVisibility(p, "anon", true)
+	w.setVisibility(p, "anon")
 	secrets := []string{
 		name, "Старший научный сотрудник", "лаборатория катализа", `"city":"Новосибирск"`, "Новосибирск,", "Изучаю активные центры", "Институт катализа",
 		"0000-0002-1825-0097", "1234-5678", "57190123456", "a-1234-2008", "Elena-Orlova", "github.com", "orlova@example.ru", "Orlova@Example.ru",
@@ -92,7 +92,7 @@ func TestAnonymousProfileForStaffIsBlind(t *testing.T) {
 	if p.Degree.Level != DegreeCandidate || p.Degree.Specialty == nil || p.Degree.Specialty.Code != "1.4.4" || p.AcademicTitle != TitleDocent {
 		t.Errorf("пропали степень или звание: %+v", p)
 	}
-	if len(p.Specialties) != 2 || p.Region == nil || p.Region.Code != "54" || !p.OpenToOffers {
+	if len(p.Specialties) != 2 || p.Region == nil || p.Region.Code != "54" {
 		t.Errorf("пропали специальности, регион или отметка: %+v", p)
 	}
 	if p.HIndex.RSCI == nil || *p.HIndex.RSCI != 12 || p.HIndex.Scholar == nil || *p.HIndex.Scholar != 15 {
@@ -177,7 +177,7 @@ func TestVisibilityModesTable(t *testing.T) {
 	viewers := map[string]*auth.User{"staff": &staff.User, "stranger": &stranger.User, "guest": nil}
 	for _, tc := range tests {
 		t.Run(tc.mode+"/"+tc.viewer, func(t *testing.T) {
-			w.setVisibility(owner, tc.mode, false)
+			w.setVisibility(owner, tc.mode)
 			got, err := w.svc.Get(bg, id, viewers[tc.viewer])
 			if tc.wantFound != (err == nil) {
 				t.Fatalf("err = %v, найден должен быть = %v", err, tc.wantFound)
@@ -238,7 +238,7 @@ func TestHiddenFromOrganization(t *testing.T) {
 		t.Fatalf("hidden_orgs = %+v, ожидали 2 без повтора", page.HiddenOrgs)
 	}
 	for _, mode := range []string{"anon", "orgs", "public"} {
-		w.setVisibility(owner, mode, false)
+		w.setVisibility(owner, mode)
 		if _, err := w.svc.Get(bg, id, &staffA.User); !errors.Is(err, ErrNotFound) {
 			t.Errorf("режим %s: сотрудник скрытой организации видит профиль (err = %v)", mode, err)
 		}
@@ -337,7 +337,7 @@ func TestCatalogAnonymousCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	pub := w.addItem(owner, goodPublication())
-	w.setVisibility(owner, "anon", true)
+	w.setVisibility(owner, "anon")
 	id := ownPage(t, w, owner).Profile.ID
 
 	named := w.user("Яков Абрамов")
@@ -346,7 +346,7 @@ func TestCatalogAnonymousCard(t *testing.T) {
 	if _, err := w.svc.SaveCore(bg, named.User, in2); err != nil {
 		t.Fatal(err)
 	}
-	w.setVisibility(named, "orgs", false)
+	w.setVisibility(named, "orgs")
 	namedID := ownPage(t, w, named).Profile.ID
 
 	staff, stranger := w.staff("Сотрудник"), w.user("Без организации")
@@ -372,7 +372,7 @@ func TestCatalogAnonymousCard(t *testing.T) {
 		t.Errorf("анонимная карточка: %+v", card)
 	}
 	if card.Degree != DegreeCandidate || card.AcademicTitle != TitleDocent || card.Region != "Новосибирская область" || len(card.Specialties) != 2 ||
-		card.HIndex == nil || *card.HIndex != 299 || card.Publications != 1 || !card.OpenToOffers {
+		card.HIndex == nil || *card.HIndex != 299 || card.Publications != 1 {
 		t.Errorf("в анонимной карточке пропали научные данные: %+v", card)
 	}
 	noLeak(t, "карточка каталога", jsonOf(t, card), []string{"Ксения", "Ярмоленко", "лаборатория катализа", `"city":"Новосибирск"`, "Новосибирск,", pub.Title, "0000-0002-1825-0097", "Orlova@Example.ru"})
@@ -404,11 +404,11 @@ func TestCatalogAnonymousCard(t *testing.T) {
 	}
 
 	// Режим «организациям»: имя находится поиском, возврат к анонимному прячет его снова (триггер на смену режима).
-	w.setVisibility(owner, "orgs", true)
+	w.setVisibility(owner, "orgs")
 	if r := w.catalog(&staff.User, CatalogParams{Query: "Ярмоленко", HMin: 299}); !slices.Contains(ids(r), id) {
 		t.Error("в режиме «организациям» человек не находится по фамилии")
 	}
-	w.setVisibility(owner, "anon", true)
+	w.setVisibility(owner, "anon")
 	if r := w.catalog(&staff.User, CatalogParams{Query: "Ярмоленко", HMin: 299}); slices.Contains(ids(r), id) {
 		t.Error("после возврата в анонимный режим человек всё ещё находится по фамилии")
 	}
@@ -423,7 +423,7 @@ func TestCatalogOwnAnonymousProfileIsNotListed(t *testing.T) {
 	if _, err := w.svc.SaveCore(bg, owner.User, in); err != nil {
 		t.Fatal(err)
 	}
-	w.setVisibility(owner, "anon", false)
+	w.setVisibility(owner, "anon")
 	own := ownPage(t, w, owner).Profile.ID
 	for _, c := range w.catalog(&owner.User, CatalogParams{HMin: 298}).Items {
 		if c.ID == own {
@@ -436,8 +436,8 @@ func TestCatalogOwnAnonymousProfileIsNotListed(t *testing.T) {
 func TestSetPrivacyAnonymous(t *testing.T) {
 	w := newWorld(t)
 	p := w.user("Елена Громова")
-	page, err := w.svc.SetPrivacy(bg, p.User, "anon", true)
-	if err != nil || page.Profile.Visibility != "anon" || !page.Profile.OpenToOffers {
+	page, err := w.svc.SetPrivacy(bg, p.User, "anon")
+	if err != nil || page.Profile.Visibility != "anon" {
 		t.Fatalf("SetPrivacy anon: %+v, %v", page.Profile, err)
 	}
 	// Владелец видит заранее, как его увидят организации: безымянная карточка с научными данными и уровнем.
@@ -453,14 +453,14 @@ func TestSetPrivacyAnonymous(t *testing.T) {
 		t.Errorf("собственная страница владельца изменилась: %+v", own.Profile)
 	}
 	var verr *auth.ValidationError
-	if _, err := w.svc.SetPrivacy(bg, p.User, "anonymous", true); !errors.As(err, &verr) || verr.Fields["visibility"] == "" {
+	if _, err := w.svc.SetPrivacy(bg, p.User, "anonymous"); !errors.As(err, &verr) || verr.Fields["visibility"] == "" {
 		t.Errorf("неизвестный режим: %v", err)
 	}
 	org := orgOf(t, w.staff("Сотрудник"))
 	if _, err := w.svc.SetHiddenOrgs(bg, p.User, []uuid.UUID{org}); err != nil {
 		t.Fatal(err)
 	}
-	page, err = w.svc.SetPrivacy(bg, p.User, "public", false)
+	page, err = w.svc.SetPrivacy(bg, p.User, "public")
 	if err != nil || len(page.HiddenOrgs) != 1 {
 		t.Errorf("смена режима затронула список скрытых организаций: %+v, %v", page.HiddenOrgs, err)
 	}

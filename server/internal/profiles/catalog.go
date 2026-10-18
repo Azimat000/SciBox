@@ -45,17 +45,16 @@ var fieldCode = regexp.MustCompile(`^[1-9][0-9]*(\.[0-9]+){0,2}$`)
 
 // CatalogParams — что ищет человек. Пустое поле значит «любые». Несколько значений одного фильтра — «или».
 type CatalogParams struct {
-	Query    string
-	Fields   []string // коды областей науки: «1.4» находит все специальности группы
-	Region   string   // код региона
-	Degrees  []string // none | candidate | doctor
-	Titles   []string // none | docent | professor
-	OpenOnly bool     // только «открыт к предложениям»
-	HMin     int      // h-index не меньше (лучшее из четырёх значений); 0 — без ограничения
-	Q12Min   int      // статей в журналах Q1–Q2 не меньше (за всё время); 0 — без ограничения
-	Sort     string
-	Limit    int
-	Offset   int
+	Query   string
+	Fields  []string // коды областей науки: «1.4» находит все специальности группы
+	Region  string   // код региона
+	Degrees []string // none | candidate | doctor
+	Titles  []string // none | docent | professor
+	HMin    int      // h-index не меньше (лучшее из четырёх значений); 0 — без ограничения
+	Q12Min  int      // статей в журналах Q1–Q2 не меньше (за всё время); 0 — без ограничения
+	Sort    string
+	Limit   int
+	Offset  int
 }
 
 // CatalogCard — карточка учёного в каталоге: только то, что видно из любого режима, и без контактов.
@@ -67,7 +66,6 @@ type CatalogCard struct {
 	Region        string    `json:"region"`
 	Degree        string    `json:"degree"`
 	AcademicTitle string    `json:"academic_title"`
-	OpenToOffers  bool      `json:"open_to_offers"`
 	HIndex        *int      `json:"h_index"` // лучшее из введённых значений; нет, если ничего не указано
 	Publications  int       `json:"publications"`
 	Q12Total      int       `json:"q12_total"`  // статей в журналах Q1–Q2
@@ -193,7 +191,7 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	}
 	arg := dbgen.SearchScientistsParams{
 		Modes: modes, ExcludeUser: exclude, ViewerOrgs: viewerOrgs, Q: p.Query, Fields: nonNil(p.Fields), Region: p.Region,
-		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), OpenOnly: p.OpenOnly, HMin: num.Int32(p.HMin),
+		Degrees: nonNil(p.Degrees), Titles: nonNil(p.Titles), HMin: num.Int32(p.HMin),
 		Q12Min: num.Int32(p.Q12Min), RecentFrom: num.Int32(s.recentFrom()),
 		Sort: sort, RowLimit: num.Int32(limit), RowOffset: num.Int32(offset), RowCap: num.Int32(s.cfg.maxResults() + 1), HitCap: num.Int32(s.cfg.maxResults() + 1), MaxResults: num.Int32(s.cfg.maxResults()),
 	}
@@ -243,7 +241,7 @@ func (s *Service) Catalog(ctx context.Context, p CatalogParams, viewer *auth.Use
 	for _, r := range rows {
 		c := CatalogCard{
 			ID: r.ID, Name: r.DisplayName, Headline: r.Headline, City: r.City, Degree: r.Degree, AcademicTitle: r.AcademicTitle,
-			OpenToOffers: r.OpenToOffers, Publications: int(r.Publications), Q12Total: int(r.Q12Total), Q12Recent: int(r.Q12Recent),
+			Publications: int(r.Publications), Q12Total: int(r.Q12Total), Q12Recent: int(r.Q12Recent),
 			Specialties: byProfile[r.ID], UpdatedAt: r.UpdatedAt,
 		}
 		if c.Specialties == nil {

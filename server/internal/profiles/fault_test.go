@@ -35,13 +35,13 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		},
 		"get as anonymous": func(t *testing.T, w *world) func(*Service) error {
 			p := w.user("Елена")
-			w.setVisibility(p, "public", false)
+			w.setVisibility(p, "public")
 			own, _ := w.svc.Own(bg, p.User)
 			return func(s *Service) error { _, err := s.Get(bg, own.Profile.ID, nil); return err }
 		},
 		"get as staff": func(t *testing.T, w *world) func(*Service) error {
 			p, staff := w.user("Елена"), w.staff("Сотрудник")
-			w.setVisibility(p, "orgs", false)
+			w.setVisibility(p, "orgs")
 			own, _ := w.svc.Own(bg, p.User)
 			return func(s *Service) error { _, err := s.Get(bg, own.Profile.ID, &staff.User); return err }
 		},
@@ -60,7 +60,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		},
 		"set privacy": func(t *testing.T, w *world) func(*Service) error {
 			p := w.user("Елена")
-			return func(s *Service) error { _, err := s.SetPrivacy(bg, p.User, "public", true); return err }
+			return func(s *Service) error { _, err := s.SetPrivacy(bg, p.User, "public"); return err }
 		},
 		"add item": func(t *testing.T, w *world) func(*Service) error {
 			p := w.user("Елена")
@@ -126,7 +126,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		},
 		"cv of another": func(t *testing.T, w *world) func(*Service) error {
 			p, q := w.user("Елена"), w.user("Другой")
-			w.setVisibility(p, "public", false)
+			w.setVisibility(p, "public")
 			own, _ := w.svc.Own(bg, p.User)
 			return func(s *Service) error { _, _, err := s.CV(bg, q.User, &own.Profile.ID); return err }
 		},

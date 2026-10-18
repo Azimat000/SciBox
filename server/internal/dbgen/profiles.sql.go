@@ -622,17 +622,16 @@ WITH hits AS MATERIALIZED (
     AND ($13::text = '' OR p.region_code = $13::text)
     AND (cardinality($14::text[]) = 0 OR p.degree = ANY($14::text[]))
     AND (cardinality($15::text[]) = 0 OR p.academic_title = ANY($15::text[]))
-    AND (NOT $16::bool OR p.open_to_offers)
-    AND ($17::int = 0 OR p.h_max >= $17::int)
-    AND ($18::int = 0 OR p.q12_total >= $18::int)
+    AND ($16::int = 0 OR p.h_max >= $16::int)
+    AND ($17::int = 0 OR p.q12_total >= $17::int)
   ORDER BY k_rank DESC NULLS LAST, k_h DESC NULLS LAST, k_name ASC NULLS LAST, p.updated_at DESC, p.id
-  LIMIT $19
+  LIMIT $18
 ), page AS (
   SELECT f.id, count(*) OVER () AS total,
          row_number() OVER (ORDER BY f.k_rank DESC NULLS LAST, f.k_h DESC NULLS LAST, f.k_name ASC NULLS LAST, f.updated_at DESC, f.id) AS ord
   FROM found f
 )
-SELECT p.id, p.visibility, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.open_to_offers, p.updated_at,
+SELECT p.id, p.visibility, u.display_name, p.headline, p.city, r.name AS region_name, p.degree, p.academic_title, p.updated_at,
        p.h_max::int AS h_max,
        (SELECT count(*) FROM profile_items i WHERE i.profile_id = p.id AND i.kind = 'publication')::bigint AS publications,
        p.q12_total::int AS q12_total, qq.recent::int AS q12_recent,
@@ -667,7 +666,6 @@ type SearchScientistsParams struct {
 	Region      string
 	Degrees     []string
 	Titles      []string
-	OpenOnly    bool
 	HMin        int32
 	Q12Min      int32
 	RowCap      int32
@@ -682,7 +680,6 @@ type SearchScientistsRow struct {
 	RegionName    *string
 	Degree        string
 	AcademicTitle string
-	OpenToOffers  bool
 	UpdatedAt     time.Time
 	HMax          int32
 	Publications  int64
@@ -718,7 +715,6 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 		arg.Region,
 		arg.Degrees,
 		arg.Titles,
-		arg.OpenOnly,
 		arg.HMin,
 		arg.Q12Min,
 		arg.RowCap,
@@ -739,7 +735,6 @@ func (q *Queries) SearchScientists(ctx context.Context, arg SearchScientistsPara
 			&i.RegionName,
 			&i.Degree,
 			&i.AcademicTitle,
-			&i.OpenToOffers,
 			&i.UpdatedAt,
 			&i.HMax,
 			&i.Publications,
@@ -871,23 +866,17 @@ func (q *Queries) UpdateProfileItem(ctx context.Context, arg UpdateProfileItemPa
 }
 
 const updateProfilePrivacy = `-- name: UpdateProfilePrivacy :execrows
-UPDATE profiles SET visibility = $1, open_to_offers = $2, updated_at = $3 WHERE id = $4
+UPDATE profiles SET visibility = $1, updated_at = $2 WHERE id = $3
 `
 
 type UpdateProfilePrivacyParams struct {
-	Visibility   string
-	OpenToOffers bool
-	Now          time.Time
-	ID           uuid.UUID
+	Visibility string
+	Now        time.Time
+	ID         uuid.UUID
 }
 
 func (q *Queries) UpdateProfilePrivacy(ctx context.Context, arg UpdateProfilePrivacyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateProfilePrivacy,
-		arg.Visibility,
-		arg.OpenToOffers,
-		arg.Now,
-		arg.ID,
-	)
+	result, err := q.db.Exec(ctx, updateProfilePrivacy, arg.Visibility, arg.Now, arg.ID)
 	if err != nil {
 		return 0, err
 	}

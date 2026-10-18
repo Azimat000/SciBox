@@ -114,7 +114,7 @@ func build(t *testing.T, w *world) built {
 	b.meApp = mine.ID
 	other := w.apply(b.other, otherCover, "ref-other@example.ru", w.pdf("Чужая.pdf", "OTHER-ATTACHMENT"))
 	b.otherID = other.ID
-	if _, err := w.Prof.SetPrivacy(bg, b.me.User, "public", true); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, b.me.User, "public"); err != nil {
 		t.Fatal(err)
 	}
 	// Решение организации, письмо рекомендателя (текст и файл) — соискатель увидит записку, но не письмо.
@@ -257,7 +257,7 @@ func TestArchiveHoldsEverythingAboutThePersonAndNothingAboutOthers(t *testing.T)
 	}
 	var profile map[string]any
 	a.section(t, "profile", &profile)
-	if profile["headline"] != "Научный сотрудник, лаборатория катализа" || profile["visibility"] != "public" || profile["open_to_offers"] != true {
+	if profile["headline"] != "Научный сотрудник, лаборатория катализа" || profile["visibility"] != "public" {
 		t.Errorf("profile = %v", profile)
 	}
 	if profile["github_url"] != "https://github.com/scibox-demo-applicant" {

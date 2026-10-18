@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { t } from '../../i18n'
-import { Checkbox } from '../../ui/Checkbox'
 import { useToast } from '../../ui/useToast'
 import { describeError } from '../auth/errors'
 import { refreshProfile, savePrivacy, visibilities, type Profile, type Visibility } from './api'
@@ -8,17 +7,16 @@ import { anonymousLabel, bestHIndex } from './labels'
 
 type Props = {
   visibility: Visibility
-  openToOffers: boolean
   /** Как организации увидят анонимный профиль (сервер собирает его из собственных данных человека). */
   preview?: Profile
 }
 
-/** «Кто видит профиль»: четыре режима и отметка «открыт к предложениям». Каждое изменение сохраняется сразу. */
-export function PrivacyPanel({ visibility, openToOffers, preview }: Props) {
+/** «Кто видит профиль»: четыре режима. Каждое изменение сохраняется сразу. */
+export function PrivacyPanel({ visibility, preview }: Props) {
   const client = useQueryClient()
   const toast = useToast()
   const save = useMutation({
-    mutationFn: (next: { visibility: Visibility; open: boolean }) => savePrivacy(next.visibility, next.open),
+    mutationFn: (next: Visibility) => savePrivacy(next),
     onSuccess: async () => {
       await refreshProfile(client)
       toast.show({ kind: 'success', title: t.profile.privacy.saved })
@@ -26,8 +24,7 @@ export function PrivacyPanel({ visibility, openToOffers, preview }: Props) {
     onError: (err) => toast.show({ kind: 'error', title: t.profile.privacy.saveFailed, text: describeError(err) }),
   })
   // Пока запрос идёт, показываем выбранное человеком, а не старое значение
-  const shownVisibility = save.isPending ? save.variables.visibility : visibility
-  const shownOffers = save.isPending ? save.variables.open : openToOffers
+  const shownVisibility = save.isPending ? save.variables : visibility
 
   return (
     <section className="privacy-panel" aria-labelledby="privacy-title">
@@ -41,7 +38,7 @@ export function PrivacyPanel({ visibility, openToOffers, preview }: Props) {
               value={mode}
               checked={shownVisibility === mode}
               disabled={save.isPending}
-              onChange={() => save.mutate({ visibility: mode, open: shownOffers })}
+              onChange={() => save.mutate(mode)}
             />
             <span className="privacy-mode-text">
               <span className="privacy-mode-label">{t.profile.privacy.modes[mode].label}</span>
@@ -52,13 +49,6 @@ export function PrivacyPanel({ visibility, openToOffers, preview }: Props) {
         ))}
       </div>
       {shownVisibility === 'anon' && preview && <AnonymousPreview preview={preview} />}
-      <Checkbox
-        label={t.profile.privacy.offers}
-        checked={shownOffers}
-        disabled={save.isPending}
-        onChange={(e) => save.mutate({ visibility: shownVisibility, open: e.target.checked })}
-      />
-      <p className="field-hint">{t.profile.privacy.offersHint}</p>
     </section>
   )
 }

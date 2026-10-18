@@ -29,7 +29,7 @@ func (w *world) listed(name, mark, vis string, mod func(*CoreInput)) person {
 	if _, err := w.svc.SaveCore(bg, p.User, in); err != nil {
 		w.t.Fatalf("save core: %v", err)
 	}
-	w.setVisibility(p, vis, false)
+	w.setVisibility(p, vis)
 	return p
 }
 
@@ -70,7 +70,7 @@ func TestCatalogWhoSeesWhat(t *testing.T) {
 	if _, err := w.svc.SaveCore(bg, staffSci.User, CoreInput{Headline: "Исследователь " + m}); err != nil {
 		t.Fatal(err)
 	}
-	w.setVisibility(staffSci, "public", false)
+	w.setVisibility(staffSci, "public")
 
 	tests := []struct {
 		name string
@@ -100,7 +100,7 @@ func TestCatalogNeverShowsHidden(t *testing.T) {
 	w.listed("Зюзюкина", m, "hidden", func(c *CoreInput) { c.Specialties = []string{"1.4.4"} })
 	staff := w.staff("Сотрудник")
 	for _, p := range []CatalogParams{
-		{Query: m}, {Query: m, Fields: []string{"1.4"}}, {Query: "Зюзюкинв"}, {Query: "Зюзюкина " + m, Sort: SortName}, {Query: m, OpenOnly: false, HMin: 0},
+		{Query: m}, {Query: m, Fields: []string{"1.4"}}, {Query: "Зюзюкинв"}, {Query: "Зюзюкина " + m, Sort: SortName}, {Query: m, HMin: 0},
 	} {
 		for _, who := range []*auth.User{nil, &staff.User} {
 			if res := w.catalog(who, p); res.Total != 0 || len(res.Items) != 0 {
@@ -118,7 +118,7 @@ func TestCatalogNeedsAHeadline(t *testing.T) {
 	if _, err := w.svc.SaveCore(bg, p.User, CoreInput{About: "Пишу о " + m}); err != nil {
 		t.Fatal(err)
 	}
-	w.setVisibility(p, "public", false)
+	w.setVisibility(p, "public")
 	if res := w.catalog(nil, CatalogParams{Query: m}); res.Total != 0 {
 		t.Errorf("профиль без должности в каталоге: %v", catalogNames(res))
 	}
@@ -142,7 +142,7 @@ func TestCatalogFilters(t *testing.T) {
 		c.RegionCode, c.Degree, c.DegreeSpecialty, c.AcademicTitle = "16", DegreeCandidate, "1.4.1", TitleDocent
 		c.HScholar, c.Specialties = ptr(5), []string{"1.4.1", "1.2.1"}
 	})
-	w.setVisibility(b, "public", true)
+	w.setVisibility(b, "public")
 	w.listed("Виктор", m, "public", func(c *CoreInput) { c.Specialties = []string{"1.2.1"} })
 
 	tests := []struct {
@@ -165,7 +165,6 @@ func TestCatalogFilters(t *testing.T) {
 		{"звание профессор", CatalogParams{Titles: []string{"professor"}}, []string{"Анна"}},
 		{"звание без звания", CatalogParams{Titles: []string{"none"}}, []string{"Виктор"}},
 		{"доцент или профессор", CatalogParams{Titles: []string{"docent", "professor"}}, []string{"Анна", "Борис"}},
-		{"открыт к предложениям", CatalogParams{OpenOnly: true}, []string{"Борис"}},
 		{"h-index от 30 (лучшее из значений)", CatalogParams{HMin: 30}, []string{"Анна"}},
 		{"h-index от 5 (Google Scholar тоже считается)", CatalogParams{HMin: 5}, []string{"Анна", "Борис"}},
 		{"h-index от 41", CatalogParams{HMin: 41}, nil},
@@ -356,7 +355,7 @@ func TestCatalogCard(t *testing.T) {
 	other := goodPublication()
 	other.DOI = "10.1234/second"
 	w.addItem(p, other)
-	w.setVisibility(p, "public", true)
+	w.setVisibility(p, "public")
 	staff := w.staff("Сотрудник")
 	w.listed("Без подробностей", m, "public", nil)
 
@@ -373,7 +372,7 @@ func TestCatalogCard(t *testing.T) {
 		}
 		own, _ := w.svc.Own(bg, p.User)
 		if c.ID != own.Profile.ID || c.Headline != in.Headline || c.City != "Новосибирск" || c.Region != "Новосибирская область" ||
-			c.Degree != DegreeCandidate || c.AcademicTitle != TitleDocent || !c.OpenToOffers || c.Publications != 2 {
+			c.Degree != DegreeCandidate || c.AcademicTitle != TitleDocent || c.Publications != 2 {
 			t.Errorf("карточка: %+v", c)
 		}
 		if c.HIndex == nil || *c.HIndex != 15 {
@@ -478,7 +477,8 @@ func TestHTTPCatalog(t *testing.T) {
 	if r := a.do(&staff, "GET", "/api/scientists?q="+m, nil); r.Code != 200 || r.json(t)["total"] != float64(2) {
 		t.Errorf("сотрудник: %d %s", r.Code, r.Raw)
 	}
-	if r := a.do(nil, "GET", "/api/scientists?q="+m+"&open=1", nil); r.Code != 200 || r.json(t)["total"] != float64(0) {
+	// Фильтра «открыт к предложениям» нет (D-256): старая ссылка с open=1 ничего не отбирает.
+	if r := a.do(nil, "GET", "/api/scientists?q="+m+"&open=1", nil); r.Code != 200 || r.json(t)["total"] != float64(1) {
 		t.Errorf("open=1: %d %s", r.Code, r.Raw)
 	}
 	if r := a.do(nil, "GET", "/api/scientists?q="+m+"&open=true&h_min=0&degree=none&title=none&region=77", nil); r.Code != 200 {

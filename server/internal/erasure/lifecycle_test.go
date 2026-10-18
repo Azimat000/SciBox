@@ -21,7 +21,7 @@ import (
 func TestDeletionLifecycle(t *testing.T) {
 	w := newWorld(t)
 	who := w.Applicant("Передумавший Соискатель")
-	if _, err := w.Prof.SetPrivacy(bg, who.User, "orgs", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, who.User, "orgs"); err != nil {
 		t.Fatal(err)
 	}
 	p := fresh(t, w.World, who.Email)
@@ -161,7 +161,7 @@ func TestDueDeletionIsCancelledWhenStaffAppeared(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.Prof.SetPrivacy(bg, lone.User, "public", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, lone.User, "public"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.Auth.RequestDeletion(bg, fresh(t, w.World, lone.Email)); err != nil {
@@ -297,7 +297,7 @@ func mailed(w *testkit.World, to, subject string) bool {
 func TestDeletionOfAnAnonymousProfile(t *testing.T) {
 	w := newWorld(t)
 	who := w.Applicant("Анонимный Передумавший")
-	if _, err := w.Prof.SetPrivacy(bg, who.User, "anon", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, who.User, "anon"); err != nil {
 		t.Fatal(err)
 	}
 	own, err := w.Prof.SetHiddenOrgs(bg, who.User, []uuid.UUID{w.Team().OrgID})

@@ -110,7 +110,7 @@ func TestQuartilesInProfile(t *testing.T) {
 	}
 
 	// Другой смотрящий видит то же самое.
-	w.setVisibility(p, "public", false)
+	w.setVisibility(p, "public")
 	other, err := w.svc.Get(bg, page.Profile.ID, nil)
 	if err != nil || other.Profile.Quartiles.Q12Total != 4 {
 		t.Fatalf("anonymous = %+v, %v", other.Profile.Quartiles, err)

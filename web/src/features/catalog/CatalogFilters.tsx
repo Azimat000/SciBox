@@ -29,9 +29,6 @@ export function CatalogFilters({ search, onChange, reference }: Props) {
   q12.sort((a, b) => a - b)
   return (
     <div className="filter-panel">
-      <FilterGroup title={g.offers} selected={search.open ? 1 : 0} defaultOpen>
-        <Checkbox label={t.catalog.openOnly} checked={search.open} onChange={(e) => onChange(change(search, { open: e.target.checked }))} />
-      </FilterGroup>
       <FilterGroup title={g.field} selected={search.field.length}>
         {reference && <ScienceFilter fields={reference.science} selected={search.field} onToggle={(code) => onChange(toggleList(search, 'field', code))} />}
       </FilterGroup>

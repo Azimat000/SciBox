@@ -17,7 +17,6 @@ export const profile: Profile = {
   id: PROFILE_ID,
   name: 'Елена Орлова',
   visibility: 'public',
-  open_to_offers: true,
   headline: 'Старший научный сотрудник, лаборатория катализа',
   city: 'Новосибирск',
   region: { code: '54', name: 'Новосибирская область' },
@@ -38,7 +37,6 @@ export const emptyProfile: Profile = {
   id: PROFILE_ID,
   name: 'Анна Смирнова',
   visibility: 'hidden',
-  open_to_offers: false,
   headline: '',
   city: '',
   region: null,
@@ -64,7 +62,6 @@ export const otherPage = (p: Profile = profile, contacts = false): ProfilePage =
 export const anonProfile: Profile = {
   id: PROFILE_ID,
   name: '',
-  open_to_offers: true,
   headline: '',
   city: '',
   region: { code: '54', name: 'Новосибирская область' },

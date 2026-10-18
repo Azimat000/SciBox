@@ -63,7 +63,6 @@ export type Profile = {
   name: string
   /** Только у владельца. */
   visibility?: Visibility
-  open_to_offers: boolean
   headline: string
   city: string
   region: Code | null
@@ -214,8 +213,7 @@ export function useScientist(id: string) {
 
 export const saveCore = (fields: CoreFields) => apiSend<ProfilePage>('PUT', '/api/profile', fields)
 
-export const savePrivacy = (visibility: Visibility, openToOffers: boolean) =>
-  apiSend<ProfilePage>('PUT', '/api/profile/privacy', { visibility, open_to_offers: openToOffers })
+export const savePrivacy = (visibility: Visibility) => apiSend<ProfilePage>('PUT', '/api/profile/privacy', { visibility })
 
 export const saveHiddenOrgs = (orgIds: string[]) => apiSend<ProfilePage>('PUT', '/api/profile/hidden-orgs', { org_ids: orgIds })
 

@@ -103,10 +103,9 @@ export function ProfileView({ page, nested = false, editable = false, onAdd, onE
         <header className="profile-head">
           {nested ? <h2 data-long={longName(heading)}>{heading}</h2> : <h1 data-long={longName(heading)}>{heading}</h1>}
           {p.headline && <p className="profile-headline">{p.headline}</p>}
-          {(place || p.open_to_offers) && (
+          {place && (
             <p className="profile-meta">
-              {place && <span>{place}</span>}
-              {p.open_to_offers && <Tag tone="accent">{t.profile.openToOffers}</Tag>}
+              <span>{place}</span>
             </p>
           )}
           {page.viewer.can_see_contacts && p.contact_email && (

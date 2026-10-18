@@ -148,7 +148,7 @@ func TestScientistsMatchWhatAGuestSeesInTheCatalog(t *testing.T) {
 	clean(t)
 	w := testkit.NewWorld(t)
 	set := func(p testkit.Person, visibility string) {
-		if _, err := w.Prof.SetPrivacy(bg, p.User, visibility, false); err != nil {
+		if _, err := w.Prof.SetPrivacy(bg, p.User, visibility); err != nil {
 			t.Fatal(err)
 		}
 	}

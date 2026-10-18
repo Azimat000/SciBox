@@ -29,7 +29,7 @@ const filters = () => screen.getByRole('complementary', { name: 'Уточнит�
 const chipsList = () => screen.queryByRole('list', { name: 'Выбранные фильтры' })
 
 describe('catalog page', () => {
-  it('lists scientists as journal entries: name, post, facts, specialties, open-to-offers mark', async () => {
+  it('lists scientists as journal entries: name, post, facts, specialties, no open-to-offers mark', async () => {
     const { last } = setup()
     renderApp('/scientists')
     expect(await screen.findByRole('heading', { level: 1, name: 'Соискатели' })).toBeInTheDocument()
@@ -43,7 +43,7 @@ describe('catalog page', () => {
     expect(e.getByText('Новосибирск, Новосибирская область')).toBeInTheDocument()
     expect(e.getByText('h-index 15')).toBeInTheDocument()
     expect(e.getByText('12 публикаций')).toBeInTheDocument()
-    expect(e.getByText('Открыт к предложениям')).toBeInTheDocument()
+    expect(e.queryByText('Открыт к предложениям')).not.toBeInTheDocument()
     expect(within(e.getByRole('list', { name: 'Научные специальности' })).getAllByRole('listitem')).toHaveLength(2)
     expect(screen.getByText('Найдено 2 соискателя')).toBeInTheDocument()
     expect(last().get('limit')).toBe('20')
@@ -62,7 +62,6 @@ describe('catalog page', () => {
     expect(link).toHaveAttribute('href', `/scientists/${anon.id}`)
     const entry = within(link.closest('article') as HTMLElement)
     expect(entry.getByText('Имя скрыто')).toBeInTheDocument()
-    expect(entry.getByText('Открыт к предложениям')).toBeInTheDocument()
     // степень, уровень и h-index уже в названии и в строке фактов не повторяются
     expect(entry.queryByText('R3', { selector: 'li' })).not.toBeInTheDocument()
     expect(entry.queryByText('h-index 9')).not.toBeInTheDocument()
@@ -77,7 +76,6 @@ describe('catalog page', () => {
     const entry = (await screen.findByRole('link', { name: 'Борис Лапин' })).closest('article') as HTMLElement
     expect(within(entry).queryByRole('list', { name: 'Основные сведения' })).not.toBeInTheDocument()
     expect(within(entry).queryByRole('list', { name: 'Научные специальности' })).not.toBeInTheDocument()
-    expect(within(entry).queryByText('Открыт к предложениям')).not.toBeInTheDocument()
     expect(screen.getByText('Найден 1 соискатель')).toBeInTheDocument()
   })
 
@@ -110,7 +108,8 @@ describe('catalog page', () => {
     expect(last().getAll('degree')).toEqual(['doctor'])
     expect(last().getAll('title')).toEqual(['professor'])
     expect(last().get('region')).toBe('54')
-    expect(last().get('open')).toBe('1')
+    // Фильтра «открыт к предложениям» нет (D-256): старый параметр из адреса отбрасывается
+    expect(last().has('open')).toBe(false)
     expect(last().get('h_min')).toBe('20')
     expect(last().getAll('field')).toEqual(['1.4'])
     expect(last().get('offset')).toBe('20')
@@ -123,8 +122,7 @@ describe('catalog page', () => {
     const { router } = renderApp('/scientists')
     await screen.findByRole('link', { name: 'Елена Орлова' })
 
-    await user.click(within(filters()).getByRole('checkbox', { name: 'Только открытые к предложениям' }))
-    await waitFor(() => expect(last().get('open')).toBe('1'))
+    expect(within(filters()).queryByRole('checkbox', { name: 'Только открытые к предложениям' })).not.toBeInTheDocument()
     await user.click(within(filters()).getByRole('checkbox', { name: 'Доктор наук' }))
     await user.click(within(filters()).getByRole('checkbox', { name: 'Профессор' }))
     await user.click(within(filters()).getByText('Область науки'))
@@ -141,10 +139,10 @@ describe('catalog page', () => {
     expect(last().getAll('field')).toEqual(['1.4'])
     expect(last().get('h_min')).toBe('30')
     expect(last().get('q12_min')).toBe('5')
-    expect(router.state.location.search).toContain('open=1')
+    expect(router.state.location.search).not.toContain('open=')
 
     const chips = within(chipsList() as HTMLElement)
-    expect(chips.getAllByRole('button')).toHaveLength(7)
+    expect(chips.getAllByRole('button')).toHaveLength(6)
     expect(chips.getByRole('button', { name: 'Убрать фильтр: Статей в Q1–Q2 от 5' })).toBeInTheDocument()
     expect(chips.getByRole('button', { name: 'Убрать фильтр: 1.4 Химические науки' })).toBeInTheDocument()
     expect(chips.getByRole('button', { name: 'Убрать фильтр: Москва' })).toBeInTheDocument()

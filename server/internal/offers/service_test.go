@@ -109,7 +109,7 @@ func TestStaffCannotBeInvitedToTheirOwnVacancy(t *testing.T) {
 	w := newWorld(t)
 	profileOf := func(p testkit.Person, vis string) uuid.UUID {
 		w.FillProfile(p)
-		if _, err := w.Prof.SetPrivacy(bg, p.User, vis, false); err != nil {
+		if _, err := w.Prof.SetPrivacy(bg, p.User, vis); err != nil {
 			t.Fatal(err)
 		}
 		own, _ := w.Prof.Own(bg, p.User)
@@ -899,7 +899,7 @@ func TestOfferSurvivesProfileHiding(t *testing.T) {
 	w := newWorld(t)
 	sci, profile := w.scientist("Учёный", "public")
 	o := w.mustInvite(w.tm.HR, w.vacancy.ID, profile, "")
-	if _, err := w.Prof.SetPrivacy(bg, sci.User, "hidden", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, sci.User, "hidden"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.svc.Get(bg, sci.User, o.ID); err != nil {
@@ -1022,7 +1022,7 @@ func TestTargetsRespectPrivacy(t *testing.T) {
 	}
 	// Себя пригласить нельзя: список пуст.
 	own, _ := w.Prof.Own(bg, w.tm.Owner.User)
-	if _, err := w.Prof.SetPrivacy(bg, w.tm.Owner.User, "public", false); err != nil {
+	if _, err := w.Prof.SetPrivacy(bg, w.tm.Owner.User, "public"); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := w.svc.Targets(bg, w.tm.Owner.User, own.Profile.ID); err != nil || len(got) != 0 {

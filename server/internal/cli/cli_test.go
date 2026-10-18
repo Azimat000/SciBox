@@ -318,9 +318,6 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 			t.Errorf("no %s profiles", mode)
 		}
 	}
-	if n := count("SELECT count(*) FROM profiles WHERE open_to_offers"); n == 0 {
-		t.Error("nobody is open to offers")
-	}
 	if n := count("SELECT count(DISTINCT kind) FROM profile_items"); n != 6 {
 		t.Errorf("%d kinds of profile items, want 6", n)
 	}

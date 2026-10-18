@@ -222,7 +222,7 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 	}
 	vis, _ := privacy.Parse(p.Visibility)
 	v := View{
-		ID: p.ID, Name: name, OpenToOffers: p.OpenToOffers, Headline: p.Headline, City: p.City, About: p.About,
+		ID: p.ID, Name: name, Headline: p.Headline, City: p.City, About: p.About,
 		AcademicTitle: p.AcademicTitle, AcademicTitleYear: intp(p.AcademicTitleYear),
 		Degree:      DegreeInfo{Level: p.Degree, Year: intp(p.DegreeYear), Institution: p.DegreeInstitution, Dissertation: p.DissertationTitle},
 		Identifiers: Identifiers{ORCID: p.Orcid, SPIN: p.Spin, ScopusID: p.ScopusID, WosID: p.WosID, GitHubURL: p.GithubUrl},
@@ -266,11 +266,11 @@ func (s *Service) build(ctx context.Context, q *dbgen.Queries, p dbgen.Profile, 
 
 // blindView — безымянная карточка (D-199). Собирается списком разрешённого, а не вычёркиванием лишнего: новое поле
 // профиля по умолчанию в безымянную карточку не попадает. Разрешено: степень (уровень и специальность), звание, регион,
-// специальности, h-index, счётчики публикаций и статей в Q1–Q2, «открыт к предложениям», дата обновления.
+// специальности, h-index, счётчики публикаций и статей в Q1–Q2, дата обновления.
 func blindView(v View) View {
 	pubs := len(v.Sections.Publications)
 	return View{
-		ID: v.ID, OpenToOffers: v.OpenToOffers, Region: v.Region,
+		ID: v.ID, Region: v.Region,
 		Degree:        DegreeInfo{Level: v.Degree.Level, Specialty: v.Degree.Specialty},
 		AcademicTitle: v.AcademicTitle,
 		HIndex:        v.HIndex, Specialties: v.Specialties,
@@ -483,8 +483,9 @@ func (s *Service) SaveCore(ctx context.Context, user auth.User, in CoreInput) (P
 	return s.Own(ctx, user)
 }
 
-// SetPrivacy меняет, кому виден профиль, и отметку «открыт к предложениям».
-func (s *Service) SetPrivacy(ctx context.Context, user auth.User, visibility string, openToOffers bool) (Page, error) {
+// SetPrivacy меняет, кому виден профиль. Отметки «открыт к предложениям» нет с D-256: столбец open_to_offers остался
+// от прежних версий и больше не читается и не пишется.
+func (s *Service) SetPrivacy(ctx context.Context, user auth.User, visibility string) (Page, error) {
 	vis, ok := privacy.Parse(visibility)
 	if !ok {
 		return Page{}, &auth.ValidationError{Fields: map[string]string{"visibility": msgPickFromList}}
@@ -494,7 +495,7 @@ func (s *Service) SetPrivacy(ctx context.Context, user auth.User, visibility str
 		if err != nil {
 			return err
 		}
-		n, err := q.UpdateProfilePrivacy(ctx, dbgen.UpdateProfilePrivacyParams{ID: id, Visibility: string(vis), OpenToOffers: openToOffers, Now: s.now()})
+		n, err := q.UpdateProfilePrivacy(ctx, dbgen.UpdateProfilePrivacyParams{ID: id, Visibility: string(vis), Now: s.now()})
 		if err != nil {
 			return fmt.Errorf("profiles: update privacy: %w", err)
 		}
