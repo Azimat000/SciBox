@@ -81,14 +81,24 @@ func TestInviteAndAccept(t *testing.T) {
 	}
 }
 
+// Два приглашения в одно свободное подразделение: принявший первым становится руководителем, второй просто сотрудником
+// (место заняли, пока письмо шло). Новое приглашение в занятое подразделение не отправляется (D-256).
 func TestAcceptKeepsExistingHead(t *testing.T) {
 	w := newWorld(t)
 	owner := w.user("Иван")
 	org := w.org(owner)
 	unit := w.unit(owner, org.Slug)
 	first, second := w.user("Первый"), w.user("Второй")
-	w.member(owner, org.Slug, first, "unit_head", &unit.ID)
-	w.member(owner, org.Slug, second, "unit_head", &unit.ID) // место занято
+	for _, p := range []person{first, second} {
+		if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: p.Email, Role: "unit_head", UnitID: &unit.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []person{first, second} {
+		if _, err := w.svc.AcceptInvitation(bg, p.User, tokenIn(t, w.lastMailTo(p.Email).Body)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	v, _ := w.svc.GetUnit(bg, org.Slug, unit.ID, &owner.User)
 	if v.Unit.HeadUserID == nil || *v.Unit.HeadUserID != first.ID {
 		t.Errorf("an accepted invitation must not take over an occupied place: %+v", v.Unit)
@@ -139,9 +149,17 @@ func TestInviteValidation(t *testing.T) {
 	if f := fieldsOf(t, err); f["unit_id"] != "" || f["role"] == "" {
 		t.Errorf("fields = %v", f)
 	}
-	// Руководитель без подразделения — допустимо.
-	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "a@example.ru", Role: "unit_head"}); err != nil {
-		t.Errorf("a head without a unit: %v", err)
+	// Руководитель без подразделения ничего не может: такое приглашение не отправляется (D-256).
+	_, err = w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "a@example.ru", Role: "unit_head"})
+	if f := fieldsOf(t, err); f["unit_id"] != msgUnitRequired {
+		t.Errorf("a head without a unit: %v", f)
+	}
+	// Подразделение с руководителем занято.
+	head := w.user("Руководитель")
+	w.member(owner, org.Slug, head, "unit_head", &unit.ID)
+	_, err = w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "b@example.ru", Role: "unit_head", UnitID: &unit.ID})
+	if f := fieldsOf(t, err); f["unit_id"] != msgUnitTaken {
+		t.Errorf("an occupied unit: %v", f)
 	}
 }
 

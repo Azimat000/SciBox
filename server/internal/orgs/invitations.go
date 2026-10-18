@@ -32,7 +32,7 @@ func hashToken(raw string) []byte {
 	return sum[:]
 }
 
-// InviteInput — поля формы приглашения. UnitID указывают только для руководителя подразделения.
+// InviteInput — поля формы приглашения. UnitID обязателен для руководителя подразделения и запрещён остальным (D-256).
 type InviteInput struct {
 	Email  string
 	Role   string
@@ -60,13 +60,18 @@ func (s *Service) Invite(ctx context.Context, p auth.Principal, slug string, in 
 	switch {
 	case in.UnitID != nil && ok && role != access.RoleUnitHead:
 		fields["unit_id"] = msgUnitForHeadsOn
+	case in.UnitID == nil && ok && role == access.RoleUnitHead:
+		fields["unit_id"] = msgUnitRequired
 	case in.UnitID != nil && ok:
 		unit, err := s.q.GetUnitInOrg(ctx, dbgen.GetUnitInOrgParams{ID: *in.UnitID, OrgID: org.ID})
-		if errors.Is(err, pgx.ErrNoRows) {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
 			fields["unit_id"] = msgUnitUnknown
-		} else if err != nil {
+		case err != nil:
 			return PendingInvitation{}, fmt.Errorf("orgs: load invitation unit: %w", err)
-		} else {
+		case unit.HeadUserID != nil:
+			fields["unit_id"] = msgUnitTaken
+		default:
 			unitName = &unit.Name
 		}
 	}

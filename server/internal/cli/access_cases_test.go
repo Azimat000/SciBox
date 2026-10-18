@@ -383,7 +383,6 @@ func personalCases() []kase {
 		{route: "GET /api/favorites", kind: self},
 		{route: "GET /api/favorites/ids", kind: self},
 		{route: "GET /api/matches", kind: self},
-		{route: "GET /api/deadlines", kind: self},
 		{route: "GET /api/saved-searches", kind: self},
 		{route: "POST /api/saved-searches", kind: self, make: func(*fx, actor) call {
 			return call{body: map[string]any{"name": "Химия", "query": "q=химия", "frequency": "weekly"}}

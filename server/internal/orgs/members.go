@@ -22,6 +22,8 @@ type Member struct {
 	Email    string    `json:"email"`
 	Role     string    `json:"role"`
 	JoinedAt time.Time `json:"joined_at"`
+	// HeadOf — подразделения, которыми человек руководит. У руководителя подразделения пустой список значит «пока ничего не может».
+	HeadOf []string `json:"head_of"`
 }
 
 // PendingInvitation — приглашение, которое ещё не принято и не отозвано.
@@ -57,7 +59,7 @@ func (s *Service) Members(ctx context.Context, user auth.User, slug string) (Mem
 	}
 	out := MembersView{Members: make([]Member, 0, len(members)), Invitations: make([]PendingInvitation, 0, len(invs))}
 	for _, m := range members {
-		out.Members = append(out.Members, Member{UserID: m.UserID, Name: m.DisplayName, Email: m.Email, Role: m.Role, JoinedAt: m.JoinedAt})
+		out.Members = append(out.Members, Member{UserID: m.UserID, Name: m.DisplayName, Email: m.Email, Role: m.Role, JoinedAt: m.JoinedAt, HeadOf: m.HeadOf})
 	}
 	for _, i := range invs {
 		out.Invitations = append(out.Invitations, PendingInvitation{ID: i.ID, Email: i.Email, Role: i.Role, UnitID: i.UnitID, UnitName: i.UnitName, CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt})

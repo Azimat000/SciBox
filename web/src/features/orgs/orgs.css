@@ -487,6 +487,17 @@
   overflow-wrap: anywhere;
 }
 
+/* Какими подразделениями руководит руководитель подразделения; без них он ничего не может, и это сказано прямо */
+.member-units {
+  margin-top: var(--s-1);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.member-units-none {
+  color: var(--fail);
+}
+
 .role-legend {
   margin-top: var(--s-4);
   display: grid;

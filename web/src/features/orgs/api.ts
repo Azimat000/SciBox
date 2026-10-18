@@ -74,7 +74,8 @@ export type MyInvitation = {
   expires_at: string
 }
 
-export type Member = { user_id: string; name: string; email: string; role: Role; joined_at: string }
+/** head_of — подразделения, которыми человек руководит (D-256): руководитель без них ничего не может. Старый сервер поля не знает. */
+export type Member = { user_id: string; name: string; email: string; role: Role; joined_at: string; head_of?: string[] }
 
 export type PendingInvitation = {
   id: string

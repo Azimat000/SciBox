@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type FormEvent } from 'react'
 import { t } from '../../i18n'
 import { Alert } from '../../ui/Alert'
+import { Link } from 'react-router'
 import { Button, ButtonLink } from '../../ui/Button'
 import { EmptyState } from '../../ui/EmptyState'
 import { Select, type Option } from '../../ui/Select'
@@ -101,6 +102,8 @@ function InviteForm({ slug, vacantUnits }: { slug: string; vacantUnits: readonly
     const found = compact({
       email: checkEmail(values.email),
       role: values.role === '' ? t.orgs.errors.roleRequired : undefined,
+      // Руководитель без подразделения ничего не может: его приглашают сразу в подразделение (D-256)
+      unit_id: values.role === 'unit_head' && values.unit === '' ? t.orgs.members.unitRequired : undefined,
     })
     if (validate(found)) send.mutate(values)
   }
@@ -138,19 +141,24 @@ function InviteForm({ slug, vacantUnits }: { slug: string; vacantUnits: readonly
         error={errors.role}
         required
       />
-      {values.role === 'unit_head' && (
-        <Select
-          label={t.orgs.members.unit}
-          hint={t.orgs.members.unitHint}
-          name="unit"
-          placeholder={t.orgs.members.unitNone}
-          options={vacantUnits}
-          value={values.unit}
-          onChange={(e) => set('unit', e.target.value)}
-          error={errors.unit_id}
-          optional
-        />
-      )}
+      {values.role === 'unit_head' &&
+        (vacantUnits.length > 0 ? (
+          <Select
+            label={t.orgs.members.unit}
+            hint={t.orgs.members.unitHint}
+            name="unit"
+            placeholder={t.orgs.members.unitPlaceholder}
+            options={vacantUnits}
+            value={values.unit}
+            onChange={(e) => set('unit', e.target.value)}
+            error={errors.unit_id}
+            required
+          />
+        ) : (
+          <Alert kind="info" className="invite-wide">
+            {t.orgs.members.noVacantUnits} <Link to={`/my-organization/${slug}/units`}>{t.orgs.members.toUnits}</Link>
+          </Alert>
+        ))}
       <Button type="submit" loading={send.isPending}>
         {t.orgs.members.send}
       </Button>
@@ -191,6 +199,17 @@ function MemberRow({ slug, member }: { slug: string; member: Member }) {
           {member.name} {isYou && <Tag>{t.orgs.members.you}</Tag>}
         </p>
         <p className="member-email">{member.email}</p>
+        {member.role === 'unit_head' && member.head_of && (
+          <p className={member.head_of.length > 0 ? 'member-units' : 'member-units member-units-none'}>
+            {member.head_of.length > 0 ? (
+              t.orgs.members.headOf(member.head_of.join(', '))
+            ) : (
+              <>
+                {t.orgs.members.headOfNone} <Link to={`/my-organization/${slug}/units`}>{t.orgs.members.toUnits}</Link>
+              </>
+            )}
+          </p>
+        )}
       </div>
       <div className="select-wrap">
         <select

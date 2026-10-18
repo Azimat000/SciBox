@@ -468,22 +468,53 @@ describe('people and invitations', () => {
       await userEvent.selectOptions(field(/^Роль ·/), 'unit_head')
       const unit = field(/^Подразделение/)
       const options = within(unit).getAllByRole('option').map((o) => o.textContent)
-      expect(options).toEqual(['Назначу позже', dept.name])
+      expect(options).toEqual(['Выберите подразделение', dept.name])
       await userEvent.selectOptions(unit, dept.id)
       await press('Отправить приглашение')
       await screen.findByText('Приглашение отправлено на new@example.ru')
       expect(api.called('POST', `/api/organizations/${SLUG}/invitations`)[0].body).toEqual({ email: 'kolya@example.ru', role: 'unit_head', unit_id: dept.id })
     })
 
-    it('sends no unit when "decide later" stays selected', async () => {
-      const api = stubApi(asOwner({ [`POST /api/organizations/${SLUG}/invitations`]: reply(201, { invitation: pending }) }))
+    it('does not invite a head without a unit: he could do nothing', async () => {
+      const api = stubApi(asOwner())
       renderApp(`${base}/members`)
       await screen.findByRole('heading', { level: 2, name: 'Пригласить сотрудника' })
       await fill(/^Почта сотрудника/, 'kolya@example.ru')
       await userEvent.selectOptions(field(/^Роль ·/), 'unit_head')
       await press('Отправить приглашение')
-      await screen.findByText('Приглашение отправлено на new@example.ru')
-      expect(api.called('POST', `/api/organizations/${SLUG}/invitations`)[0].body).toMatchObject({ role: 'unit_head', unit_id: null })
+      expect(screen.getByText('Выберите подразделение: без него руководитель не сможет вести вакансии')).toBeInTheDocument()
+      expect(api.called('POST', `/api/organizations/${SLUG}/invitations`)).toHaveLength(0)
+    })
+
+    it('says so when every unit already has a head, and leads to the units', async () => {
+      const api = stubApi(asOwner({ ...orgRoutes(viewers.owner, [lab, { ...dept, head_name: 'Борис Кадров', head_user_id: members[1].user_id }]) }))
+      renderApp(`${base}/members`)
+      await screen.findByRole('heading', { level: 2, name: 'Пригласить сотрудника' })
+      await fill(/^Почта сотрудника/, 'kolya@example.ru')
+      await userEvent.selectOptions(field(/^Роль ·/), 'unit_head')
+      expect(screen.queryByRole('combobox', { name: /^Подразделение/ })).not.toBeInTheDocument()
+      expect(screen.getByText(/Свободных подразделений нет/)).toBeInTheDocument()
+      expect(within(screen.getByText(/Свободных подразделений нет/)).getByRole('link', { name: 'К подразделениям' })).toHaveAttribute('href', `${base}/units`)
+      await press('Отправить приглашение')
+      expect(api.called('POST', `/api/organizations/${SLUG}/invitations`)).toHaveLength(0)
+    })
+
+    it('shows which units a head runs, and warns when there are none', async () => {
+      const heads = [
+        ...members,
+        { user_id: '88888888-8888-4888-8888-888888888888', name: 'Вера Лабова', email: 'vera@example.ru', role: 'unit_head' as const, joined_at: '2026-10-03T10:00:00Z', head_of: [lab.name] },
+        { user_id: '99999999-9999-4999-8999-999999999999', name: 'Глеб Без', email: 'gleb@example.ru', role: 'unit_head' as const, joined_at: '2026-10-03T10:00:00Z', head_of: [] },
+      ]
+      stubApi(asOwner({ ...membersRoute(heads, []) }))
+      renderApp(`${base}/members`)
+      const vera = (await screen.findByText('Вера Лабова')).closest('.member-row') as HTMLElement
+      expect(within(vera).getByText(`Руководит: ${lab.name}`)).toBeInTheDocument()
+      const gleb = screen.getByText('Глеб Без').closest('.member-row') as HTMLElement
+      expect(within(gleb).getByText(/Не руководит ни одним подразделением/)).toBeInTheDocument()
+      expect(within(gleb).getByRole('link', { name: 'К подразделениям' })).toHaveAttribute('href', `${base}/units`)
+      // У кадровика строки о подразделениях нет
+      const boris = screen.getByText('Борис Кадров').closest('.member-row') as HTMLElement
+      expect(within(boris).queryByText(/^Руководит:|Не руководит/)).not.toBeInTheDocument()
     })
 
     it('checks the address and the role before asking the server', async () => {

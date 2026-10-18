@@ -5,8 +5,12 @@ INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES ($1, $2, $3, $
 SELECT * FROM org_members WHERE org_id = $1 AND user_id = $2;
 
 -- Сотрудники организации с именем и почтой (почту видит только владелец: решает сервис).
+-- head_of: подразделения, которыми человек руководит (по алфавиту). Руководитель подразделения без них ничего не может,
+-- и владелец должен это видеть в списке сотрудников (D-256).
 -- name: ListMembers :many
-SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email::text AS email
+SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email::text AS email,
+       COALESCE((SELECT array_agg(un.name ORDER BY lower(un.name), un.id) FROM units un
+                 WHERE un.org_id = m.org_id AND un.head_user_id = m.user_id), '{}')::text[] AS head_of
 FROM org_members m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
 ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'hr' THEN 1 ELSE 2 END, lower(u.display_name), m.user_id;

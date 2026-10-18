@@ -88,7 +88,9 @@ func (q *Queries) GetMemberIDByEmail(ctx context.Context, arg GetMemberIDByEmail
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email::text AS email
+SELECT m.user_id, m.role, m.joined_at, u.display_name, u.email::text AS email,
+       COALESCE((SELECT array_agg(un.name ORDER BY lower(un.name), un.id) FROM units un
+                 WHERE un.org_id = m.org_id AND un.head_user_id = m.user_id), '{}')::text[] AS head_of
 FROM org_members m JOIN users u ON u.id = m.user_id
 WHERE m.org_id = $1
 ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'hr' THEN 1 ELSE 2 END, lower(u.display_name), m.user_id
@@ -100,9 +102,12 @@ type ListMembersRow struct {
 	JoinedAt    time.Time
 	DisplayName string
 	Email       string
+	HeadOf      []string
 }
 
 // Сотрудники организации с именем и почтой (почту видит только владелец: решает сервис).
+// head_of: подразделения, которыми человек руководит (по алфавиту). Руководитель подразделения без них ничего не может,
+// и владелец должен это видеть в списке сотрудников (D-256).
 func (q *Queries) ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembersRow, error) {
 	rows, err := q.db.Query(ctx, listMembers, orgID)
 	if err != nil {
@@ -118,6 +123,7 @@ func (q *Queries) ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembe
 			&i.JoinedAt,
 			&i.DisplayName,
 			&i.Email,
+			&i.HeadOf,
 		); err != nil {
 			return nil, err
 		}

@@ -123,7 +123,7 @@ func TestHotQueriesOnLoadData(t *testing.T) {
 		{name: "отклик глазами соискателя", cookie: "applicant", gen: func(int) string { return "/api/applications/" + fx.applicantApp }, n: 40},
 		{name: "избранное", cookie: "applicant", gen: func(int) string { return "/api/favorites" }, n: 40},
 		{name: "подходящие вам", cookie: "applicant", gen: func(int) string { return "/api/matches" }, n: 30, budget: 80 * time.Millisecond},
-		{name: "сроки подачи", cookie: "applicant", gen: func(int) string { return "/api/deadlines" }, n: 30},
+		{name: "избранное по сроку", cookie: "applicant", gen: func(int) string { return "/api/favorites?sort=deadline" }, n: 30},
 		{name: "приглашения учёного", cookie: "applicant", gen: func(int) string { return "/api/offers" }, n: 30},
 		{name: "мой профиль", cookie: "applicant", gen: func(int) string { return "/api/profile" }, n: 40},
 		{name: "поиск журналов", cookie: "applicant", gen: func(i int) string { return "/api/journals?q=" + fx.word(i) }, n: 30},

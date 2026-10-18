@@ -107,7 +107,7 @@ func TestSetUnitHead(t *testing.T) {
 	org := w.org(owner)
 	unit := w.unit(owner, org.Slug)
 	colleague := w.user("Коллега")
-	w.member(owner, org.Slug, colleague, "unit_head", nil)
+	w.member(owner, org.Slug, colleague, "hr", nil) // руководителем можно назначить любого сотрудника
 	stranger := w.user("Чужой")
 
 	got, err := w.svc.SetUnitHead(bg, owner.User, org.Slug, unit.ID, &colleague.ID)

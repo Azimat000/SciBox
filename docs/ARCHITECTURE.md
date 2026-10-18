@@ -358,9 +358,9 @@ SciBox/
 | `PATCH /api/organizations/{slug}` | владелец |
 | `POST /api/organizations/{slug}/units`, `PATCH …/units/{id}`, `DELETE …/units/{id}`, `PUT …/units/{id}/head {user_id|null}` | создание, удаление и назначение руководителя: владелец; правка: владелец или руководитель этого подразделения |
 | `GET /api/organizations/{slug}/audit?before=&limit=` | владелец (иначе 403; нет входа 401): журнал действий организации `{items:[{id, at, action, actor:{id,name}|null, subject:{id,name}|null, target:{kind,id,label}, details}], next}`, от новых к старым, до 100 записей на страницу (по умолчанию 30), `before` — номер записи, с которой продолжать; адреса в ответе нет |
-| `GET /api/organizations/{slug}/members` | владелец: сотрудники с почтами и ожидающие приглашения |
+| `GET /api/organizations/{slug}/members` | владелец: сотрудники с почтами (у каждого `head_of`: подразделения, которыми он руководит, D-256) и ожидающие приглашения |
 | `PATCH …/members/{userId} {role}`, `DELETE …/members/{userId}` | владелец; уйти (DELETE себя) может любой сотрудник; последний владелец 409 `last_owner` |
-| `POST …/invitations {email,role,unit_id}`, `DELETE …/invitations/{id}` | владелец; письмо в фоне |
+| `POST …/invitations {email,role,unit_id}`, `DELETE …/invitations/{id}` | владелец; письмо в фоне; `unit_id` обязателен для `unit_head` и должен быть без руководителя (422 `unit_id`), остальным запрещён (D-256) |
 | `POST /api/invitations/lookup {token}` | без входа: что за приглашение (и совпадает ли почта с вошедшим) |
 | `POST /api/invitations/accept {token}`, `POST /api/invitations/{id}/accept` | вошедший; по ссылке из письма с чужой почтой 403 `invitation_wrong_email`; по номеру чужое приглашение неотличимо от выдуманного (400 `invalid_invitation`, срез 21); устарело 400 `invalid_invitation`, уже в организации 409 `already_member` |
 | `GET /api/my/organizations` | `{organizations:[…с ролью], invitations:[…на почту человека]}` |

@@ -2,6 +2,7 @@ package orgs
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -29,7 +30,8 @@ func TestMembersList(t *testing.T) {
 	org := w.org(owner)
 	hr := w.user("Анна Кадрова")
 	head := w.user("Борис Лабов")
-	w.member(owner, org.Slug, head, "unit_head", nil)
+	unit := w.unit(owner, org.Slug)
+	w.member(owner, org.Slug, head, "unit_head", &unit.ID)
 	w.member(owner, org.Slug, hr, "hr", nil)
 	if _, err := w.svc.Invite(bg, fresh(owner.User), org.Slug, InviteInput{Email: "future@example.ru", Role: "hr"}); err != nil {
 		t.Fatal(err)
@@ -44,6 +46,10 @@ func TestMembersList(t *testing.T) {
 	}
 	if v.Members[0].Email != owner.Email || v.Members[0].Name != "Иван Петров" {
 		t.Errorf("owner row: %+v", v.Members[0])
+	}
+	// Подразделения, которыми человек руководит: владелец видит, у кого из руководителей их нет (D-256).
+	if !slices.Equal(v.Members[2].HeadOf, []string{unit.Name}) || v.Members[1].HeadOf == nil || len(v.Members[1].HeadOf) != 0 {
+		t.Errorf("head_of: %+v / %+v", v.Members[2].HeadOf, v.Members[1].HeadOf)
 	}
 	if len(v.Invitations) != 1 || v.Invitations[0].Email != "future@example.ru" {
 		t.Errorf("pending invitations: %+v", v.Invitations)
