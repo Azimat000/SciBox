@@ -29,10 +29,10 @@ describe('landing page', () => {
     const facts = await screen.findByRole('list', { name: 'Сейчас на сайте' })
     expect(within(facts).getByRole('link', { name: '188 открытых вакансий' })).toHaveAttribute('href', '/vacancies')
     expect(within(facts).getByRole('link', { name: '30 организаций ищут людей' })).toHaveAttribute('href', '/organizations')
-    expect(within(facts).getByRole('link', { name: '7 соискателей открыли профиль' })).toHaveAttribute('href', '/scientists')
+    expect(within(facts).getByRole('link', { name: '7 открытых профилей соискателей' })).toHaveAttribute('href', '/scientists')
 
     expect(await link(card.title)).toHaveAttribute('href', `/vacancies/${card.id}`)
-    expect(await link('Все вакансии: 188')).toHaveAttribute('href', '/vacancies')
+    expect(await link('Все вакансии')).toHaveAttribute('href', '/vacancies')
     expect(called('GET', '/api/vacancies?limit=6')).toHaveLength(1)
 
     expect(screen.getByRole('heading', { level: 2, name: 'Ищу работу' })).toBeInTheDocument()

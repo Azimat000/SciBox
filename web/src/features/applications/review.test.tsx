@@ -260,7 +260,7 @@ describe('candidate card: decision panel', () => {
     // Решение стоит в колонке справа: она подписана своим заголовком
     const panel = within(await screen.findByRole('complementary', { name: 'Решение по отклику' }))
     expect(panel.getByRole('button', { name: 'Пригласить' })).toBeInTheDocument()
-    expect(panel.getByRole('button', { name: 'Принять' })).toBeInTheDocument()
+    expect(panel.getByRole('button', { name: 'Принять кандидата' })).toBeInTheDocument()
     expect(panel.getByRole('button', { name: 'Отказать' })).toBeInTheDocument()
     expect(screen.getByText('Вы пока никого не приглашали.')).toBeInTheDocument()
   })
@@ -269,7 +269,7 @@ describe('candidate card: decision panel', () => {
     stubApi(card({ ...reviewedApplication, status: 'sent', viewer: { ...reviewedApplication.viewer, decisions: ['rejected'] } }))
     renderApp(path)
     await screen.findByRole('button', { name: 'Пригласить' })
-    expect(screen.queryByRole('button', { name: 'Принять' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Принять кандидата' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Отказать' })).toBeInTheDocument()
   })
 
@@ -282,7 +282,7 @@ describe('candidate card: decision panel', () => {
     renderApp(path)
     expect(await screen.findByText(text)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Пригласить' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Принять' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Принять кандидата' })).not.toBeInTheDocument()
     if (status !== 'withdrawn') expect(screen.getByText('Спасибо за интерес')).toBeInTheDocument()
     else expect(screen.queryByText(/Записка кандидату/)).not.toBeInTheDocument()
     // Приглашать некого: раздела приглашений без приглашений нет.
@@ -292,8 +292,9 @@ describe('candidate card: decision panel', () => {
   it('accepts with a note', async () => {
     const { calls } = stubApi(card(reviewedApplication, { [POST('/status')]: reply(204) }))
     renderApp(path)
-    await click('Принять')
+    await click('Принять кандидата')
     const dialog = screen.getByRole('dialog', { name: 'Принять кандидата?' })
+    expect(within(dialog).getByText(/вы берёте кандидата на позицию.*Решение окончательное/)).toBeInTheDocument()
     await userEvent.type(within(dialog).getByLabelText(/Записка кандидату/), 'Ждём вас в понедельник')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Принять кандидата' }))
     expect(await screen.findByText('Кандидат принят', { selector: '.toast *' })).toBeInTheDocument()
@@ -316,7 +317,7 @@ describe('candidate card: decision panel', () => {
     let reject = apiError(409, 'invalid_status_change', 'Для отклика в таком состоянии это действие недоступно. Обновите страницу')
     stubApi(card(reviewedApplication, { [POST('/status')]: () => reject }))
     renderApp(path)
-    await click('Принять')
+    await click('Принять кандидата')
     const dialog = screen.getByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Принять кандидата' }))
     expect(await within(dialog).findByText('Для отклика в таком состоянии это действие недоступно. Обновите страницу')).toBeInTheDocument()

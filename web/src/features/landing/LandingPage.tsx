@@ -23,7 +23,7 @@ export function LandingPage() {
   return (
     <div className="page landing">
       <Hero stats={stats.data} />
-      <Fresh total={stats.data?.open_vacancies} />
+      <Fresh />
       <Browse stats={stats.data} pending={stats.isPending} />
       <Tracks />
       <Science />
@@ -143,7 +143,7 @@ function BrowseSkeleton() {
   )
 }
 
-function Fresh({ total }: { total: number | undefined }) {
+function Fresh() {
   const fresh = useFreshVacancies()
   const { user } = useMe()
   return (
@@ -152,7 +152,7 @@ function Fresh({ total }: { total: number | undefined }) {
         <h2 id="fresh-title">{t.landing.fresh.title}</h2>
         {fresh.data && fresh.data.items.length > 0 && (
           <Link to="/vacancies" className="section-more">
-            {total && total > fresh.data.items.length ? t.landing.fresh.allCount(total) : t.landing.fresh.all}
+            {t.landing.fresh.all}
           </Link>
         )}
       </div>

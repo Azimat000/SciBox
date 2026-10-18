@@ -655,6 +655,9 @@ describe('anonymous mode and hiding from organizations', () => {
     const group = await screen.findByRole('radiogroup')
     expect(within(group).getAllByRole('radio').map((r) => r.getAttribute('value'))).toEqual(['hidden', 'anon', 'orgs', 'public'])
     expect(within(group).getByText('Анонимно')).toBeInTheDocument()
+    // Пояснение только у выбранного режима
+    expect(within(group).getByText(/Страница профиля открыта всем/)).toBeInTheDocument()
+    expect(within(group).queryByText(/Профиль скрыт: его нет среди соискателей/)).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: /Анонимно/ }))
     await screen.findByText('Приватность сохранена')
     expect(api.called('PUT', '/api/profile/privacy')[0].body).toEqual({ visibility: 'anon', open_to_offers: true })

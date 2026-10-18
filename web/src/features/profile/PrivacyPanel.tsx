@@ -45,7 +45,8 @@ export function PrivacyPanel({ visibility, openToOffers, preview }: Props) {
             />
             <span className="privacy-mode-text">
               <span className="privacy-mode-label">{t.profile.privacy.modes[mode].label}</span>
-              <span className="privacy-mode-hint">{t.profile.privacy.modes[mode].text}</span>
+              {/* Пояснение только у выбранного режима: четыре абзаца подряд не читаются */}
+              {shownVisibility === mode && <span className="privacy-mode-hint">{t.profile.privacy.modes[mode].text}</span>}
             </span>
           </label>
         ))}

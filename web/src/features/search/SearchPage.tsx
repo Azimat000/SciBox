@@ -75,7 +75,6 @@ export function SearchPage() {
   return (
     <div className="page search-page">
       <h1>{t.find.title}</h1>
-      <p className="lead">{t.find.lead}</p>
 
       <div className="search-bar">
         <SearchBar
