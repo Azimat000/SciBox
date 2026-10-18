@@ -178,7 +178,7 @@ func listItem(side Side, viewer uuid.UUID, r dbgen.ListChatsRow) ListItem {
 		Vacancy:      VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, OrgName: r.OrgName, OrgSlug: r.OrgSlug, UnitName: deref(r.UnitName)},
 		Counterpart:  counterpartOf(side, r.OrgName, r.ScientistName, r.ProfileID, r.Visibility, r.HiddenFrom, r.Revealed),
 		Status:       Status{Source: st.Source, Value: st.Value},
-		NeedsAnswer:  needsAnswer(side, st, r.HasPendingInvitation, r.OfferStatus),
+		NeedsAnswer:  needsAnswer(side, st, r.OfferStatus),
 		Unread:       int(r.Unread),
 		Archived:     r.Archived,
 		CanWrite:     !st.Closed,

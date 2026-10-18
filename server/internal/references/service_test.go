@@ -76,7 +76,7 @@ func TestAddChecksWhoAsksAndWhatState(t *testing.T) {
 		t.Errorf("unknown application: %v", err)
 	}
 	// По статусу отклика: пока решения нет, можно; после решения или отзыва нельзя.
-	for status, ok := range map[string]bool{"sent": true, "viewed": true, "invited": true, "rejected": false, "accepted": false, "withdrawn": false} {
+	for status, ok := range map[string]bool{"sent": true, "viewed": true, "rejected": false, "accepted": false, "withdrawn": false} {
 		own := w.Applicant("Владелец " + status)
 		id := w.application(own)
 		w.setStatus(id, status)

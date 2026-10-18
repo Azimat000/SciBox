@@ -1,19 +1,19 @@
-import { invitationKinds, type Invitation, type InvitationKind, type InvitationStatus } from '../applications/api'
+import { oldInvitationKinds, type OldInvitation, type OldInvitationKind, type OldInvitationStatus } from './oldInvitation'
 import type { Message, Side } from './api'
 
 // Системные строки переписки (CHAT.md «Системные строки», contracts/chat/messages.json): что в них лежит и в каком
-// состоянии приглашение сейчас. Снимок приглашения в строке «создано» не меняется, а ответ, отмена и принятое
-// время приходят следующими строками: состояние считается по ним, чтобы кнопки пропадали сразу после ответа.
+// состоянии приглашение. Снимок старого приглашения внутри отклика (до D-256) в строке «создано» не меняется, а ответ,
+// отмена и принятое время лежат следующими строками: итоговое состояние считается по ним.
 
 type Data = Record<string, unknown>
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 
-const isKind = (v: unknown): v is InvitationKind => (invitationKinds as readonly unknown[]).includes(v)
+const isKind = (v: unknown): v is OldInvitationKind => (oldInvitationKinds as readonly unknown[]).includes(v)
 
 /** Приглашение из данных строки; нет нужных полей — null (строка покажется без карточки). */
-export function invitationOf(data: Data): Invitation | null {
+export function invitationOf(data: Data): OldInvitation | null {
   const raw = data.invitation
   if (typeof raw !== 'object' || raw === null) return null
   const v = raw as Record<string, unknown>
@@ -22,7 +22,7 @@ export function invitationOf(data: Data): Invitation | null {
   return {
     id: v.id,
     kind: v.kind,
-    status: (str(v.status) || 'pending') as InvitationStatus,
+    status: (str(v.status) || 'pending') as OldInvitationStatus,
     message: str(v.message),
     starts_at: strOrNull(v.starts_at),
     place_kind: v.place_kind === 'online' || v.place_kind === 'onsite' ? v.place_kind : '',
@@ -30,26 +30,15 @@ export function invitationOf(data: Data): Invitation | null {
     contact_name: str(v.contact_name),
     contact_email: str(v.contact_email),
     contact_phone: str(v.contact_phone),
-    answer: answer
-      ? { proposed_at: strOrNull(answer.proposed_at), note: str(answer.note), contact: str(answer.contact), time: str(answer.time), answered_at: str(answer.answered_at) }
-      : null,
-    created_at: str(v.created_at),
-    can_answer: v.can_answer === true,
-    can_cancel: v.can_cancel === true,
-    can_accept_proposal: v.can_accept_proposal === true,
+    answer: answer ? { proposed_at: strOrNull(answer.proposed_at), note: str(answer.note), contact: str(answer.contact), time: str(answer.time) } : null,
   }
 }
 
-const OPEN_FOR_CANCEL: readonly InvitationStatus[] = ['pending', 'proposed', 'confirmed']
-
-/**
- * Приглашение таким, каким оно стало к концу ленты, с правами смотрящего: ответить может только соискатель и только
- * на ждущее ответа; принять время и отменить может только организация; в закрытой переписке кнопок нет.
- */
-export function effectiveInvitation(items: readonly Message[], created: Message, side: Side, canWrite: boolean): Invitation | null {
+/** Старое приглашение таким, каким оно стало к концу ленты: ответ, принятое время и отмена лежат следующими строками. */
+export function effectiveInvitation(items: readonly Message[], created: Message): OldInvitation | null {
   const base = created.event ? invitationOf(created.event.data) : null
   if (!base) return null
-  const inv: Invitation = { ...base }
+  const inv: OldInvitation = { ...base }
   for (const m of items) {
     if (m.seq <= created.seq || !m.event) continue
     const d = m.event.data
@@ -57,7 +46,7 @@ export function effectiveInvitation(items: readonly Message[], created: Message,
     if (m.event.type === 'invitation.answered') {
       const answer = str(d.answer)
       inv.status = answer === 'proposed' ? 'proposed' : answer === 'answered' ? 'answered' : 'confirmed'
-      inv.answer = { proposed_at: strOrNull(d.proposed_at), note: str(d.note), contact: str(d.contact), time: str(d.time), answered_at: m.created_at }
+      inv.answer = { proposed_at: strOrNull(d.proposed_at), note: str(d.note), contact: str(d.contact), time: str(d.time) }
     } else if (m.event.type === 'invitation.proposal_accepted') {
       inv.status = 'confirmed'
       inv.starts_at = strOrNull(d.starts_at) ?? inv.starts_at
@@ -65,9 +54,6 @@ export function effectiveInvitation(items: readonly Message[], created: Message,
       inv.status = 'cancelled'
     }
   }
-  inv.can_answer = canWrite && side === 'scientist' && inv.status === 'pending' && (inv.kind === 'interview' || inv.kind === 'request_contacts')
-  inv.can_accept_proposal = canWrite && side === 'org' && inv.kind === 'interview' && inv.status === 'proposed'
-  inv.can_cancel = canWrite && side === 'org' && OPEN_FOR_CANCEL.includes(inv.status)
   return inv
 }
 

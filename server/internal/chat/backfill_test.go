@@ -7,28 +7,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"scibox/server/internal/dbgen"
 	"scibox/server/internal/testkit"
 )
 
-// Срез 38 (D-240): перенос прежних откликов и приглашений в переписки.
-
-func (w *world) legacyInvitation(app uuid.UUID, kind, status string, at time.Time, answerAt *time.Time, answeredAt *time.Time, contact string) uuid.UUID {
-	w.T.Helper()
-	var id uuid.UUID
-	var place *string
-	if kind == "interview" {
-		place = str("online")
-	}
-	err := testkit.Pool.QueryRow(bg, `INSERT INTO application_invitations
-		(application_id, kind, status, message, starts_at, place_kind, place, answer_at, answer_contact, answered_at, created_at, updated_at)
-		VALUES ($1, $2, $3, 'Приглашаем', CASE WHEN $2 = 'interview' THEN $4::timestamptz END, $5, CASE WHEN $2 = 'interview' THEN 'https://example.org/room' ELSE '' END, $6, $7, $8, $4, $4) RETURNING id`,
-		app, kind, status, at, place, answerAt, contact, answeredAt).Scan(&id)
-	if err != nil {
-		w.T.Fatal(err)
-	}
-	return id
-}
+// Срез 38 (D-240): перенос прежних откликов и приглашений на вакансию в переписки. Приглашений внутри отклика нет (D-256).
 
 func (w *world) setApplicationTimes(id uuid.UUID, status string, created, changed time.Time, note string) {
 	w.T.Helper()
@@ -83,17 +65,10 @@ func TestBackfillBuildsChatsFromLegacyRecords(t *testing.T) {
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-72 * time.Hour)
 	at := func(h int) time.Time { return base.Add(time.Duration(h) * time.Hour) }
 
-	// 1. Отклик с собеседованием, которое предложили перенести и приняли, контактами и отменённым запросом; принят.
+	// 1. Принятый отклик.
 	rich := w.Applicant("Богатый Отклик")
 	richApp := w.application(rich, w.vacancy.ID, "accepted")
 	w.setApplicationTimes(richApp, "accepted", at(0), at(30), "Рады видеть вас")
-	proposed := at(60)
-	answered := at(5)
-	w.legacyInvitation(richApp, "interview", "confirmed", at(2), &proposed, &answered, "")
-	w.legacyInvitation(richApp, "contacts", "shared", at(10), nil, nil, "")
-	reqAnswer := at(12)
-	w.legacyInvitation(richApp, "request_contacts", "answered", at(11), nil, &reqAnswer, "+7 913 555-66-77")
-	w.legacyInvitation(richApp, "interview", "cancelled", at(20), nil, nil, "")
 
 	// 2. Простой отклик: просмотрен.
 	viewed := w.Applicant("Просмотренный")
@@ -148,7 +123,7 @@ func TestBackfillBuildsChatsFromLegacyRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Чужие пары из общей тестовой базы тоже переносятся; нужные строки проверяем по своим данным.
-	if res.Pairs < 8 || res.Lines < 20 {
+	if res.Pairs < 8 || res.Lines < 15 {
 		t.Errorf("result = %+v", res)
 	}
 
@@ -162,9 +137,7 @@ func TestBackfillBuildsChatsFromLegacyRecords(t *testing.T) {
 			t.Errorf("%s: lines are not in order of time: %+v", name, got)
 		}
 	}
-	check("rich", w.chatByApplication(richApp),
-		EventApplicationSent, EventInvitationCreated, EventInvitationAnswered, EventInvitationAccepted, EventInvitationCreated,
-		EventInvitationCreated, EventInvitationAnswered, EventInvitationCreated, EventInvitationCancelled, EventApplicationDecided)
+	check("rich", w.chatByApplication(richApp), EventApplicationSent, EventApplicationDecided)
 	check("viewed", w.chatByApplication(viewedApp), EventApplicationSent, EventApplicationViewed)
 	check("rejected", w.chatByApplication(rejectedApp), EventApplicationSent, EventApplicationDecided)
 	check("withdrawn", w.chatByApplication(withdrawnApp), EventApplicationSent, EventApplicationWithdrawn)
@@ -221,7 +194,7 @@ func TestBackfillBuildsChatsFromLegacyRecords(t *testing.T) {
 	if again2.Pairs != 0 || again2.Lines != 0 {
 		t.Errorf("second run = %+v", again2)
 	}
-	if got := w.backfilledLines(w.chatByApplication(richApp)); len(got) != 10 {
+	if got := w.backfilledLines(w.chatByApplication(richApp)); len(got) != 2 {
 		t.Errorf("lines after the second run: %d", len(got))
 	}
 }
@@ -236,20 +209,3 @@ func (w *world) chatOfOffer(offer uuid.UUID) uuid.UUID {
 }
 
 // Вид ответа выводится из того, что человек ответил.
-func TestAnswerOf(t *testing.T) {
-	at := time.Now().UTC()
-	for name, c := range map[string]struct {
-		inv  dbgen.ApplicationInvitation
-		want string
-	}{
-		"proposed time":      {dbgen.ApplicationInvitation{Kind: "interview", AnswerAt: &at}, "proposed"},
-		"contact":            {dbgen.ApplicationInvitation{Kind: "request_contacts", AnswerContact: "+7 900"}, "answered"},
-		"only a time":        {dbgen.ApplicationInvitation{Kind: "request_contacts", AnswerTime: "после 15:00"}, "answered"},
-		"empty reply":        {dbgen.ApplicationInvitation{Kind: "request_contacts"}, "answered"},
-		"plain confirmation": {dbgen.ApplicationInvitation{Kind: "interview"}, "confirmed"},
-	} {
-		if got := answerOf(c.inv); got != c.want {
-			t.Errorf("%s: %q, want %q", name, got, c.want)
-		}
-	}
-}

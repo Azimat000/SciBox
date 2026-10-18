@@ -5,7 +5,7 @@ import { refreshAfterApplying } from '../matching/api'
 import type { Profile } from '../profile/api'
 import type { ChatRef } from '../chat/api'
 
-export const statuses = ['sent', 'viewed', 'invited', 'rejected', 'accepted', 'withdrawn'] as const
+export const statuses = ['sent', 'viewed', 'rejected', 'accepted', 'withdrawn'] as const
 export type AppStatus = (typeof statuses)[number]
 
 export const PAGE_SIZE = 20
@@ -35,7 +35,6 @@ export type Summary = {
   vacancy: VacancyRef
   references: { total: number; received: number }
   /** Приглашения, которые ждут ответа соискателя. */
-  pending_invitations: number
   /** Переписка по этому отклику (срез 38); null, пока переписки нет. */
   chat?: ChatRef | null
 }
@@ -62,33 +61,6 @@ export type Reference = {
 /** То же глазами организации, с письмом. */
 export type StaffReference = Reference & { letter: { text: string; file: FileRef | null } | null }
 
-export const invitationKinds = ['interview', 'contacts', 'request_contacts'] as const
-export type InvitationKind = (typeof invitationKinds)[number]
-export type InvitationStatus = 'pending' | 'confirmed' | 'proposed' | 'answered' | 'shared' | 'cancelled'
-export type PlaceKind = 'online' | 'onsite'
-
-/** Ответ соискателя на приглашение. */
-export type InvitationAnswer = { proposed_at: string | null; note: string; contact: string; time: string; answered_at: string }
-
-/** Приглашение: обе стороны видят его целиком, флаги can_* зависят от того, кто смотрит. */
-export type Invitation = {
-  id: string
-  kind: InvitationKind
-  status: InvitationStatus
-  message: string
-  starts_at: string | null
-  place_kind: PlaceKind | ''
-  place: string
-  contact_name: string
-  contact_email: string
-  contact_phone: string
-  answer: InvitationAnswer | null
-  created_at: string
-  can_answer: boolean
-  can_cancel: boolean
-  can_accept_proposal: boolean
-}
-
 export type Detail = {
   id: string
   status: AppStatus
@@ -104,8 +76,7 @@ export type Detail = {
   cv: FileRef | null
   files: FileRef[]
   decision_note: string
-  invitations: Invitation[]
-  viewer: { role: 'applicant' | 'staff'; can_withdraw: boolean; decisions: ('accepted' | 'rejected')[]; can_invite: boolean }
+  viewer: { role: 'applicant' | 'staff'; can_withdraw: boolean; decisions: ('accepted' | 'rejected')[] }
   references: Reference[] | StaffReference[]
   chat?: ChatRef | null
 }
@@ -122,8 +93,6 @@ export type Candidate = {
   vacancy: VacancyRef
   unit_name: string
   references: { total: number; received: number }
-  pending_invitations: number
-  proposed_invitations: number
   chat?: ChatRef | null
 }
 
@@ -266,37 +235,6 @@ export function cancelReferee(appId: string, refId: string) {
 /** Решение организации: принят или отказ, с запиской, которую увидит соискатель. */
 export function decideApplication(id: string, status: 'accepted' | 'rejected', note: string) {
   return apiSend('POST', `/api/applications/${id}/status`, { status, note })
-}
-
-/** Поля приглашения; лишнее для вида сервер отбрасывает. starts_at — момент со смещением +03:00. */
-export type InvitationFields = {
-  kind: InvitationKind
-  message: string
-  starts_at?: string
-  place_kind?: PlaceKind
-  place?: string
-  contact_name?: string
-  contact_email?: string
-  contact_phone?: string
-}
-
-export async function sendInvitation(appId: string, fields: InvitationFields): Promise<Invitation> {
-  const res = await apiSend<{ invitation: Invitation }>('POST', `/api/applications/${appId}/invitations`, fields)
-  return res.invitation
-}
-
-export function cancelInvitation(appId: string, invId: string) {
-  return apiSend('DELETE', `/api/applications/${appId}/invitations/${invId}`)
-}
-
-export function acceptProposal(appId: string, invId: string) {
-  return apiSend('POST', `/api/applications/${appId}/invitations/${invId}/accept-proposal`)
-}
-
-export type AnswerFields = { action: 'confirm' | 'propose' | 'reply'; proposed_at?: string; note?: string; contact?: string; time?: string }
-
-export function answerInvitation(appId: string, invId: string, fields: AnswerFields) {
-  return apiSend('POST', `/api/applications/${appId}/invitations/${invId}/answer`, fields)
 }
 
 /** Отклик изменился: карточка, список и состояние кнопки на вакансии перечитаются. */

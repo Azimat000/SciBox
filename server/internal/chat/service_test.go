@@ -249,7 +249,6 @@ func TestClosedChatsRefuseWriting(t *testing.T) {
 	}{
 		{name: "application sent", app: "sent"},
 		{name: "application viewed", app: "viewed"},
-		{name: "application invited", app: "invited"},
 		{name: "application accepted", app: "accepted"},
 		{name: "application rejected", app: "rejected", closed: true, reason: ClosedRejected},
 		{name: "application withdrawn", app: "withdrawn", closed: true, reason: ClosedWithdrawn},

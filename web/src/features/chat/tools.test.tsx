@@ -15,7 +15,7 @@ const tpl = (id: number, title: string, text: string) => ({ id: `90000000-0000-4
 const TEMPLATES = [tpl(1, 'Нужны документы', 'Пришлите, пожалуйста, скан диплома.'), tpl(2, 'Приглашение', 'Добрый день! Приглашаем на собеседование.')]
 
 const orgHeader = (over: Partial<ChatHeader> = {}): ChatHeader => ({ ...chatHeaders.orgAnonymousOffer(), ...over })
-const sciHeader = (over: Partial<ChatHeader> = {}): ChatHeader => ({ ...chatHeaders.scientistInvited(), ...over })
+const sciHeader = (over: Partial<ChatHeader> = {}): ChatHeader => ({ ...chatHeaders.scientistViewed(), ...over })
 const ORG_ID = orgHeader().viewer.org_id as string
 const TEMPLATES_URL = `GET /api/orgs/${ORG_ID}/chat-templates`
 

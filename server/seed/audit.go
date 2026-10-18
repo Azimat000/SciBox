@@ -203,8 +203,6 @@ func orgHistory(ctx context.Context, pool *pgxpool.Pool, orgID, owner uuid.UUID,
 			evs = append(evs, ev(audit.ApplicationFileDownloaded, base.Add(-90*time.Minute), map[string]string{"kind": "cv"}))
 		}
 		switch status {
-		case "invited":
-			evs = append(evs, ev(audit.ApplicationInvited, base, map[string]string{"kind": "interview"}))
 		case "accepted":
 			evs = append(evs, ev(audit.ApplicationAccepted, base, nil))
 		case "rejected":

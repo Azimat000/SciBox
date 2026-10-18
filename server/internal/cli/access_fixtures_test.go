@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -152,25 +151,6 @@ func (f *fx) application() application {
 		}
 	}
 	return a
-}
-
-func (f *fx) interview(app uuid.UUID) uuid.UUID {
-	f.t.Helper()
-	res := f.must(f.w.fixer, "POST", "/api/applications/{id}/invitations", map[string]string{"id": app.String()}, map[string]any{
-		"kind": "interview", "message": "Расскажем о проекте", "place_kind": "online", "place": "https://meet.example.org/room-1",
-		"starts_at": time.Now().Add(48 * time.Hour).In(time.FixedZone("MSK", 3*3600)).Format(time.RFC3339),
-	})
-	return id(f, res, "invitation", "id")
-}
-
-// proposal — собеседование, на которое соискатель предложил другое время.
-func (f *fx) proposal(app uuid.UUID) uuid.UUID {
-	f.t.Helper()
-	inv := f.interview(app)
-	f.must(f.Subject(), "POST", "/api/applications/{id}/invitations/{invId}/answer", map[string]string{"id": app.String(), "invId": inv.String()}, map[string]any{
-		"action": "propose", "proposed_at": time.Now().Add(96 * time.Hour).In(time.FixedZone("MSK", 3*3600)).Format(time.RFC3339), "note": "Удобнее позже",
-	})
-	return inv
 }
 
 // reference — просьба соискателя к рекомендателю; возвращает её номер и одноразовую ссылку из письма.

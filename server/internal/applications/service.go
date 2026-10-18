@@ -428,7 +428,7 @@ func (s *Service) Mine(ctx context.Context, user auth.User, limit, offset int) (
 		out.Items = append(out.Items, Summary{Chat: links.Application(r.ID),
 			ID: r.ID, Status: r.Status, CreatedAt: r.CreatedAt, StatusChangedAt: r.StatusChangedAt,
 			Vacancy:    VacancyRef{ID: r.VacancyID, Title: r.VacancyTitle, Status: r.VacancyStatus, OrgName: r.OrgName, OrgSlug: r.OrgSlug, Deadline: dateStr(r.Deadline)},
-			References: RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)}, PendingInvitations: int(r.InvitesPending),
+			References: RefsCount{Total: int(r.RefsTotal), Received: int(r.RefsReceived)},
 		})
 	}
 	return out, nil
@@ -491,9 +491,6 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 		Vacancy:       VacancyRef{ID: a.VacancyID, Title: a.VacancyTitle, Status: a.VacancyStatus, OrgName: a.OrgName, OrgSlug: a.OrgSlug, Deadline: dateStr(a.Deadline)},
 		ApplicantName: a.ApplicantName, Anonymized: a.Anonymized, ContactEmail: a.ContactEmail, CoverLetter: a.CoverLetter, Profile: view, Files: []FileRef{}, DecisionNote: a.DecisionNote,
 	}}
-	if d.Invitations, err = s.invitationsOf(ctx, s.q, a.ID, reader); err != nil {
-		return Detail{}, err
-	}
 	for _, f := range fs {
 		kind, ok := files.Parse(f.Kind)
 		// Письма рекомендателей показываются в блоке рекомендаций, а не среди файлов отклика.
@@ -527,7 +524,7 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Detail
 			return Detail{}, err
 		}
 	default:
-		d.Viewer = ViewerInfo{Role: RoleStaff, Decisions: DecisionsFrom(a.Status), CanInvite: CanInvite(a.Status)}
+		d.Viewer = ViewerInfo{Role: RoleStaff, Decisions: DecisionsFrom(a.Status)}
 		if d.References, err = s.refs.ListForStaff(ctx, a.ID); err != nil {
 			return Detail{}, err
 		}
@@ -611,9 +608,6 @@ func (s *Service) Withdraw(ctx context.Context, user auth.User, id uuid.UUID) er
 			VacancyID: a.VacancyID, UserID: a.UserID, ApplicationID: &id, Type: chat.EventApplicationWithdrawn, At: now,
 			Data: chat.ApplicationData{ApplicationID: id},
 		}); err != nil {
-			return err
-		}
-		if err := s.cancelOpenInvitations(ctx, q, a, now); err != nil {
 			return err
 		}
 		staff, err := orgs.UsersWhoCan(ctx, q, a.OrgID, access.ViewApplications, unitOf(a.UnitID))

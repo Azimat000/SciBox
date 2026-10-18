@@ -21,8 +21,8 @@ import (
 
 // Демо-отклики (срез 8): учёные из seedScientists откликаются на вакансии своей области, у части откликов есть
 // статусы, приложенные файлы и рекомендатели (письмо получено, ждём ответа, отказался). Отклики отправляются через
-// настоящий сервис откликов, поэтому проходят те же проверки, что и в приложении. Статусы «просмотрен», «приглашение»,
-// «отказ», «принят», приглашения и записки к решениям (срез 9) ставятся напрямую в базе.
+// настоящий сервис откликов, поэтому проходят те же проверки, что и в приложении. Статусы «просмотрен», «отказ»,
+// «принят» и записки к решениям (срез 9) ставятся напрямую в базе. Приглашений внутри отклика нет (D-256).
 // Письма, которые при этом попали в очередь, помечаются отправленными: демо-данные не рассылают почту.
 
 type demoApplicant struct {
@@ -31,12 +31,12 @@ type demoApplicant struct {
 }
 
 var demoApplicants = []demoApplicant{
-	{"korolev", []string{applications.StatusSent, applications.StatusViewed, applications.StatusInvited, applications.StatusRejected, applications.StatusAccepted}},
+	{"korolev", []string{applications.StatusSent, applications.StatusViewed, applications.StatusViewed, applications.StatusRejected, applications.StatusAccepted}},
 	{"lebedeva", []string{applications.StatusSent, applications.StatusWithdrawn}},
-	{"morozov", []string{applications.StatusSent, applications.StatusInvited}},
-	{"zhukova", []string{applications.StatusInvited}},
+	{"morozov", []string{applications.StatusSent, applications.StatusViewed}},
+	{"zhukova", []string{applications.StatusViewed}},
 	{"shiryaev", []string{applications.StatusSent}},
-	{"guseva", []string{applications.StatusInvited, applications.StatusRejected}},
+	{"guseva", []string{applications.StatusViewed, applications.StatusRejected}},
 	{"tarasov", []string{applications.StatusSent}},
 	{"andreeva", []string{applications.StatusSent}},
 }
@@ -230,45 +230,7 @@ func answerReferees(ctx context.Context, pool *pgxpool.Pool, vault *files.Vault,
 	return nil
 }
 
-// ---- приглашения и решения (срез 9) ----
-
-// demoInvitation — приглашение в демо-отклике. Ставится напрямую в базе, как и статусы откликов.
-type demoInvitation struct {
-	kind, status, message string
-	// Собеседование: через сколько дней (может быть отрицательным) и в котором часу по Москве, формат и место.
-	days, hour       int
-	placeKind, place string
-	// Контакты организации.
-	contactName, contactEmail, contactPhone string
-	// Ответ соискателя.
-	proposedDays                          int
-	answerNote, answerContact, answerTime string
-}
-
-// demoInvitations — приглашения по ключу «человек#номер отклика». Отклики с приглашениями в статусе «приглашён»
-// (кроме принятого собеседования у принятого отклика).
-var demoInvitations = map[string][]demoInvitation{
-	"korolev#2": {
-		{kind: applications.InvInterview, status: applications.InvPending, message: "Расскажем о проекте и познакомим с командой. Продолжительность около часа.",
-			days: 3, hour: 15, placeKind: applications.PlaceOnline, place: "https://meet.example.org/scibox-demo-1"},
-		{kind: applications.InvContacts, status: applications.InvShared, message: "Если понадобится перенести встречу, напишите или позвоните.",
-			contactName: "Ольга Кузнецова", contactEmail: "olga.kuznetsova@demo.example.ru", contactPhone: "+7 383 000-11-22"},
-	},
-	"guseva#0": {
-		{kind: applications.InvInterview, status: applications.InvProposed, message: "Приглашаем на очную встречу в лабораторию.",
-			days: 4, hour: 11, placeKind: applications.PlaceOnsite, place: "г. Новосибирск, пр. Академика Лаврентьева, 5, каб. 214",
-			proposedDays: 6, answerNote: "В этот день я на конференции, удобнее в четверг или пятницу после обеда."},
-		{kind: applications.InvRequest, status: applications.InvAnswered, message: "Оставьте, пожалуйста, телефон и удобное время для звонка.",
-			answerContact: "+7 913 555-66-77", answerTime: "будни после 15:00"},
-	},
-	"morozov#1": {
-		{kind: applications.InvRequest, status: applications.InvPending, message: "Хотим коротко созвониться. Оставьте телефон и удобное время."},
-	},
-	"korolev#4": {
-		{kind: applications.InvInterview, status: applications.InvConfirmed, message: "Финальная встреча с руководителем лаборатории.",
-			days: -5, hour: 14, placeKind: applications.PlaceOnline, place: "https://meet.example.org/scibox-demo-2"},
-	},
-}
+// ---- решения (срез 9) ----
 
 // demoDecisionNotes — записки к решениям (принят, отказ).
 var demoDecisionNotes = map[string]string{
@@ -276,45 +238,8 @@ var demoDecisionNotes = map[string]string{
 	"korolev#3": "Спасибо за интерес к вакансии. На эту позицию мы выбрали кандидата с опытом в смежной методике, но будем рады вашему отклику на другие вакансии.",
 }
 
-// seedReview добавляет приглашения, записки к решениям и уведомления соискателю.
+// seedReview добавляет записки к решениям.
 func seedReview(ctx context.Context, pool *pgxpool.Pool, key string, appID, userID uuid.UUID, vacancyTitle string, now time.Time) error {
-	moscow := time.FixedZone("MSK", 3*60*60)
-	at := func(days, hour int) time.Time {
-		n := now.In(moscow)
-		return time.Date(n.Year(), n.Month(), n.Day()+days, hour, 0, 0, 0, moscow).UTC()
-	}
-	for _, inv := range demoInvitations[key] {
-		var startsAt, answerAt, answeredAt *time.Time
-		var placeKind *string
-		if inv.kind == applications.InvInterview {
-			s := at(inv.days, inv.hour)
-			startsAt, placeKind = &s, &inv.placeKind
-		}
-		if inv.proposedDays != 0 {
-			p := at(inv.proposedDays, 15)
-			answerAt = &p
-		}
-		if inv.status == applications.InvProposed || inv.status == applications.InvAnswered {
-			a := now
-			answeredAt = &a
-		}
-		if _, err := pool.Exec(ctx, `
-INSERT INTO application_invitations (application_id, kind, status, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone,
-  answer_at, answer_note, answer_contact, answer_time, answered_at, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)`,
-			appID, inv.kind, inv.status, inv.message, startsAt, placeKind, inv.place, inv.contactName, inv.contactEmail, inv.contactPhone,
-			answerAt, inv.answerNote, inv.answerContact, inv.answerTime, answeredAt, now); err != nil {
-			return fmt.Errorf("seed applications: invitation: %w", err)
-		}
-		title := map[string]string{
-			applications.InvInterview: "Приглашение на собеседование", applications.InvContacts: "Организация передала контакты",
-			applications.InvRequest: "Организация просит оставить контакты",
-		}[inv.kind]
-		if _, err := pool.Exec(ctx, `INSERT INTO notifications (user_id, kind, title, body, link, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-			userID, "invitation_"+inv.kind, title, fmt.Sprintf("Вакансия «%s». %s", vacancyTitle, inv.message), "/applications/"+appID.String(), now); err != nil {
-			return fmt.Errorf("seed applications: invitation notice: %w", err)
-		}
-	}
 	if note := demoDecisionNotes[key]; note != "" {
 		if _, err := pool.Exec(ctx, `UPDATE applications SET decision_note = $2 WHERE id = $1`, appID, note); err != nil {
 			return fmt.Errorf("seed applications: decision note: %w", err)

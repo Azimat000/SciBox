@@ -17,7 +17,6 @@ func TestStateOf(t *testing.T) {
 	}{
 		{"application sent", str("sent"), nil, "application", "sent", false, ""},
 		{"application viewed", str("viewed"), nil, "application", "viewed", false, ""},
-		{"application invited", str("invited"), nil, "application", "invited", false, ""},
 		{"application accepted stays open", str("accepted"), nil, "application", "accepted", false, ""},
 		{"application rejected", str("rejected"), nil, "application", "rejected", true, ClosedRejected},
 		{"application withdrawn", str("withdrawn"), nil, "application", "withdrawn", true, ClosedWithdrawn},

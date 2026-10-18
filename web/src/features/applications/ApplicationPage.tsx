@@ -35,7 +35,6 @@ import {
   type FileRef,
   type Reference,
 } from './api'
-import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
 import { ChatButton } from '../chat/ChatButton'
@@ -132,13 +131,6 @@ function Page({ app }: { app: Detail }) {
               {app.decision_note}
             </p>
           )}
-        </section>
-      )}
-
-      {app.invitations.length > 0 && (
-        <section className="application-section" aria-labelledby="app-invitations">
-          <h2 id="app-invitations">{t.applications.invitation.titleApplicant}</h2>
-          <InvitationList appId={app.id} invitations={app.invitations} role="applicant" />
         </section>
       )}
 

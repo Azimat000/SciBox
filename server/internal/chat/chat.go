@@ -39,12 +39,11 @@ func counterpartOf(side Side, orgName, scientistName string, profileID *uuid.UUI
 	return c
 }
 
-func needsAnswer(side Side, st State, hasPendingInvitation bool, offerStatus *string) bool {
-	if side != SideScientist || st.Closed {
+// needsAnswer — ждёт ли переписка ответа учёного: только приглашение на вакансию без ответа. У отклика ответа ждать
+// нечего: приглашений внутри отклика нет (D-256), о собеседовании договариваются сообщениями.
+func needsAnswer(side Side, st State, offerStatus *string) bool {
+	if side != SideScientist || st.Closed || st.Source == sourceApplication {
 		return false
-	}
-	if st.Source == sourceApplication {
-		return hasPendingInvitation
 	}
 	return offerStatus != nil && *offerStatus == "pending"
 }
@@ -72,7 +71,7 @@ func (s *Service) Get(ctx context.Context, user auth.User, id uuid.UUID) (Chat, 
 		Counterpart:   counterpartOf(w.side, row.OrgName, row.ScientistName, row.ProfileID, row.Visibility, row.HiddenFrom, row.Revealed),
 		ApplicationID: row.ApplicationID, OfferID: row.OfferID,
 		Status:       Status{Source: st.Source, Value: st.Value},
-		NeedsAnswer:  needsAnswer(w.side, st, row.HasPendingInvitation, row.OfferStatus),
+		NeedsAnswer:  needsAnswer(w.side, st, row.OfferStatus),
 		CanWrite:     !st.Closed,
 		ClosedReason: reasonPtr(st),
 		Archived:     row.Archived,

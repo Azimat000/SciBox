@@ -124,13 +124,9 @@ func TestHTTPFollowsTheContract(t *testing.T) {
 	anon := a.Applicant("Скрытый Учёный")
 	a.privacy(anon, "anon")
 
-	// Переписка учёного: отклик с приглашением, все виды строк о событиях.
-	chat := a.chatOf(sci, a.vacancy.ID, "invited")
-	app := uuidOfApplication(t, chat)
-	if _, err := testkit.Pool.Exec(bg, `INSERT INTO application_invitations (application_id, kind, status, message, starts_at, place_kind, place, created_at, updated_at)
-		VALUES ($1, 'interview', 'pending', 'Приходите', now() + interval '2 days', 'online', 'https://meet.example.org/r', now(), now())`, app); err != nil {
-		t.Fatal(err)
-	}
+	// Переписка учёного: просмотренный отклик и все виды строк о событиях (строки о приглашениях внутри отклика остались
+	// в старых переписках как история, D-256).
+	chat := a.chatOf(sci, a.vacancy.ID, "viewed")
 	lines := contractLines(t)
 	types := EventTypes()
 	slices.Sort(types)

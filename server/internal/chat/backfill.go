@@ -15,7 +15,7 @@ import (
 	"scibox/server/internal/orgs"
 )
 
-// Перенос прежних откликов и приглашений (срез 38, D-240): у каждой пары «вакансия × учёный», где отклик или приглашение
+// Перенос прежних откликов и приглашений на вакансию (срез 38, D-240): у каждой пары «вакансия × учёный», где отклик или приглашение
 // были до чата, появляется переписка с теми строками о событиях, которые можно восстановить из таблиц, в порядке времени.
 // Команда одноразовая и повторяемая: пара, у которой переписка уже есть, пропускается, поэтому повторный запуск (и запуск
 // после того, как новые отклики уже пишут строки сами) ничего не дублирует.
@@ -107,11 +107,7 @@ func backfillOne(ctx context.Context, q *dbgen.Queries, vacancyID, userID uuid.U
 		lines = append(lines, offerLines(*offer)...)
 	}
 	for _, a := range apps {
-		invs, err := q.ListInvitations(ctx, a.ID)
-		if err != nil {
-			return 0, fmt.Errorf("chat: backfill invitations: %w", err)
-		}
-		lines = append(lines, applicationLines(a, invs)...)
+		lines = append(lines, applicationLines(a)...)
 	}
 	in.ApplicationID = linkedApplication(apps)
 	if len(lines) == 0 {
@@ -191,25 +187,9 @@ func offerLines(o dbgen.GetBackfillOfferRow) []backfillLine {
 	return out
 }
 
-// applicationLines восстанавливает строки отклика и его приглашений.
-func applicationLines(a dbgen.ListBackfillApplicationsRow, invs []dbgen.ApplicationInvitation) []backfillLine {
+// applicationLines восстанавливает строки отклика. Приглашений внутри отклика нет с D-256.
+func applicationLines(a dbgen.ListBackfillApplicationsRow) []backfillLine {
 	out := []backfillLine{{at: a.CreatedAt, kind: EventApplicationSent, data: ApplicationSentData{ApplicationID: a.ID, CoverLetter: a.CoverLetter}}}
-	for _, inv := range invs {
-		out = append(out, backfillLine{at: inv.CreatedAt, kind: EventInvitationCreated, data: InvitationCreated(inv)})
-		if inv.AnsweredAt != nil {
-			out = append(out, backfillLine{at: *inv.AnsweredAt, kind: EventInvitationAnswered, data: InvitationAnswered(inv, answerOf(inv))})
-			if inv.Status == invitationConfirmed && inv.AnswerAt != nil {
-				// Предложенное время принято организацией: старт собеседования стал этим временем. Момент принятия не
-				// раньше ответа, на что бы ни указывало время изменения строки.
-				out = append(out, backfillLine{at: laterOf(inv.UpdatedAt, *inv.AnsweredAt), kind: EventInvitationAccepted,
-					data: InvitationAcceptedData{ApplicationID: a.ID, InvitationID: inv.ID, StartsAt: inv.StartsAt}})
-			}
-		}
-		if inv.Status == "cancelled" {
-			out = append(out, backfillLine{at: laterOf(inv.UpdatedAt, inv.CreatedAt), kind: EventInvitationCancelled,
-				data: InvitationCancelledData{ApplicationID: a.ID, InvitationID: inv.ID, Kind: inv.Kind}})
-		}
-	}
 	switch a.Status {
 	case "viewed":
 		out = append(out, backfillLine{at: a.StatusChangedAt, kind: EventApplicationViewed, data: ApplicationData{ApplicationID: a.ID}})

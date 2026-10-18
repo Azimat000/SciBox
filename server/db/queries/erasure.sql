@@ -89,16 +89,13 @@ WHERE (sent_at IS NOT NULL OR failed_at IS NOT NULL)
 -- name: EraseReferenceRequests :exec
 DELETE FROM reference_requests WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1);
 
--- name: EraseApplicationInvitations :exec
-DELETE FROM application_invitations WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1);
-
 -- Обезличить отклики: остаются вакансия, даты и статус. Нерешённые становятся отозванными:
 -- разбирать их больше некому, а окончательный статус не даёт организации писать стёртому аккаунту.
 -- name: AnonymizeApplications :exec
 UPDATE applications SET
     cover_letter = '', contact_email = '', profile = '{}'::jsonb, decision_note = '',
-    status = CASE WHEN status IN ('sent', 'viewed', 'invited') THEN 'withdrawn' ELSE status END,
-    status_changed_at = CASE WHEN status IN ('sent', 'viewed', 'invited') THEN sqlc.arg(now)::timestamptz ELSE status_changed_at END,
+    status = CASE WHEN status IN ('sent', 'viewed') THEN 'withdrawn' ELSE status END,
+    status_changed_at = CASE WHEN status IN ('sent', 'viewed') THEN sqlc.arg(now)::timestamptz ELSE status_changed_at END,
     anonymized_at = sqlc.arg(now)::timestamptz, updated_at = sqlc.arg(now)::timestamptz
 WHERE user_id = sqlc.arg(user_id);
 

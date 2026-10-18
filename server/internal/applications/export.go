@@ -154,7 +154,7 @@ var exportHeader = []string{
 
 var (
 	exportStatus = map[string]string{
-		StatusSent: "Отправлен", StatusViewed: "Просмотрен", StatusInvited: "Приглашён", StatusRejected: "Отказ",
+		StatusSent: "Отправлен", StatusViewed: "Просмотрен", StatusRejected: "Отказ",
 		StatusAccepted: "Принят", StatusWithdrawn: "Отозван",
 	}
 	exportDegree = map[string]string{profiles.DegreeNone: "Нет", profiles.DegreeCandidate: "Кандидат наук", profiles.DegreeDoctor: "Доктор наук"}

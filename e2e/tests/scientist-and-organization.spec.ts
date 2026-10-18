@@ -64,7 +64,7 @@ test('учёный регистрируется, откликается и по�
   const staff = await orgSide.newPage()
   const staffErrors = watchServerErrors(staff)
 
-  await test.step('организация видит отклик и приглашает на собеседование', async () => {
+  await test.step('организация видит отклик и зовёт на собеседование в переписке', async () => {
     await signIn(staff, owner)
     await switchRole(staff, 'Нанимаю')
     await staff.goto('/candidates')
@@ -77,26 +77,21 @@ test('учёный регистрируется, откликается и по�
     expect(download.status()).toBe(200)
     expect((await download.body()).toString()).toContain('%PDF-1.7')
 
-    await staff.getByRole('button', { name: 'Пригласить' }).click()
-    const dialog = staff.getByRole('dialog')
-    await dialog.getByLabel('Дата').fill(inDays(3))
-    await dialog.getByLabel('Время (МСК)').fill('11:00')
-    await dialog.getByLabel('Ссылка на встречу').fill('https://telemost.example.ru/j/12345')
-    await dialog.getByRole('button', { name: 'Отправить приглашение' }).click()
-    await expect(staff.getByText('Приглашение отправлено')).toBeVisible()
+    // Приглашений внутри отклика нет (D-256): время и ссылку организация пишет в переписке.
+    await staff.getByRole('link', { name: /Написать|Перейти к переписке/ }).first().click()
+    await staff.getByRole('textbox', { name: 'Сообщение' }).fill('Приглашаем на собеседование, ссылка: https://telemost.example.ru/j/12345')
+    await staff.getByRole('button', { name: 'Отправить' }).click()
+    await expect(staff.getByText(/Приглашаем на собеседование/)).toBeVisible()
   })
 
-  await test.step('учёный подтверждает время', async () => {
+  await test.step('учёный видит приглашение в переписке и отвечает', async () => {
     await page.goto('/applications')
     await page.getByRole('link', { name: applyTo }).first().click()
-    await expect(page.getByText('Собеседование').first()).toBeVisible()
-    await page.getByRole('button', { name: 'Подтвердить время' }).click()
-    await expect(page.getByText('Время подтверждено').first()).toBeVisible()
-  })
-
-  await test.step('организация видит подтверждение', async () => {
-    await staff.reload()
-    await expect(staff.getByText('Подтверждено').first()).toBeVisible()
+    await page.getByRole('link', { name: /Написать|Перейти к переписке/ }).first().click()
+    await expect(page.getByText(/Приглашаем на собеседование/)).toBeVisible()
+    await page.getByRole('textbox', { name: 'Сообщение' }).fill('Спасибо, время подходит.')
+    await page.getByRole('button', { name: 'Отправить' }).click()
+    await expect(page.getByText('Спасибо, время подходит.')).toBeVisible()
   })
 
   await test.step('организация находит учёного в каталоге и зовёт на другую вакансию', async () => {
@@ -124,9 +119,3 @@ test('учёный регистрируется, откликается и по�
   await orgSide.close()
   expect([...serverErrors, ...staffErrors]).toEqual([])
 })
-
-/** Дата через n дней в формате поля даты (ГГГГ-ММ-ДД), по Москве. */
-function inDays(n: number): string {
-  const d = new Date(Date.now() + n * 86_400_000)
-  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' })
-}

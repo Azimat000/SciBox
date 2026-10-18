@@ -263,21 +263,6 @@ func applicationCases() []kase {
 		{route: "POST /api/applications/{id}/status", kind: object, allow: staffA, deny: missing, twin: []string{"id"}, make: func(f *fx, _ actor) call {
 			return call{params: P{"id": f.application().id.String()}, body: map[string]any{"status": "rejected", "note": "Не подходит"}}
 		}},
-		{route: "POST /api/applications/{id}/invitations", kind: object, allow: staffA, deny: missing, twin: []string{"id"}, make: func(f *fx, _ actor) call {
-			return call{params: P{"id": f.application().id.String()}, body: map[string]any{"kind": "contacts", "message": "Пишите", "contact_name": "Ольга Кузнецова", "contact_email": "hr@example.ru"}}
-		}},
-		{route: "DELETE /api/applications/{id}/invitations/{invId}", kind: object, allow: staffA, deny: missing, twin: []string{"id", "invId"}, make: func(f *fx, _ actor) call {
-			a := f.application().id
-			return call{params: P{"id": a.String(), "invId": f.interview(a).String()}}
-		}},
-		{route: "POST /api/applications/{id}/invitations/{invId}/answer", kind: object, allow: of(subject), deny: missing, twin: []string{"id", "invId"}, make: func(f *fx, _ actor) call {
-			a := f.application().id
-			return call{params: P{"id": a.String(), "invId": f.interview(a).String()}, body: map[string]any{"action": "confirm"}}
-		}},
-		{route: "POST /api/applications/{id}/invitations/{invId}/accept-proposal", kind: object, allow: staffA, deny: missing, twin: []string{"id", "invId"}, make: func(f *fx, _ actor) call {
-			a := f.application().id
-			return call{params: P{"id": a.String(), "invId": f.proposal(a).String()}}
-		}},
 		{route: "POST /api/applications/{id}/references", kind: object, allow: of(subject), deny: missing, twin: []string{"id"}, make: func(f *fx, _ actor) call {
 			return call{params: P{"id": f.application().id.String()}, body: map[string]any{"name": "Профессор Петров", "email": "ref-" + uuid.NewString()[:8] + "@example.ru", "relation": "руководитель"}}
 		}},

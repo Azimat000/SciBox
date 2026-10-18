@@ -175,7 +175,7 @@ SELECT c.id, c.vacancy_id, c.user_id, c.application_id, c.offer_id,
        o.name AS org_name, o.slug AS org_slug, un.name AS unit_name,
        a.status AS application_status, ofr.status AS offer_status,
        u.display_name AS scientist_name, p.id AS profile_id, p.visibility,
-       rel.hidden_from, rel.revealed, rel.has_pending_invitation, rel.blocked,
+       rel.hidden_from, rel.revealed, rel.blocked,
        COALESCE(cp.read_seq, 0)::int AS read_seq, COALESCE(cp.archived, false)::boolean AS archived
 FROM chats c
 JOIN vacancies v ON v.id = c.vacancy_id
@@ -192,7 +192,6 @@ CROSS JOIN LATERAL (
                      WHERE ra.user_id = c.user_id AND ra.status <> 'withdrawn' AND rv.org_id = v.org_id)
             OR EXISTS (SELECT 1 FROM vacancy_offers ro JOIN vacancies rv ON rv.id = ro.vacancy_id
                         WHERE ro.user_id = c.user_id AND ro.status = 'interested' AND rv.org_id = v.org_id))::boolean AS revealed,
-           (a.id IS NOT NULL AND EXISTS (SELECT 1 FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending'))::boolean AS has_pending_invitation,
            EXISTS (SELECT 1 FROM chat_blocks b WHERE b.user_id = c.user_id AND b.org_id = v.org_id)::boolean AS blocked
 ) rel
 WHERE c.id = $2
@@ -204,36 +203,35 @@ type GetChatParams struct {
 }
 
 type GetChatRow struct {
-	ID                   uuid.UUID
-	VacancyID            uuid.UUID
-	UserID               uuid.UUID
-	ApplicationID        *uuid.UUID
-	OfferID              *uuid.UUID
-	LastSeq              int32
-	LastForScientist     int32
-	LastForOrg           int32
-	ScientistRead        int32
-	OrgRead              int32
-	UpdatedAt            time.Time
-	OrgID                uuid.UUID
-	UnitID               *uuid.UUID
-	VacancyTitle         string
-	VacancyStatus        string
-	Deadline             *time.Time
-	OrgName              string
-	OrgSlug              string
-	UnitName             *string
-	ApplicationStatus    *string
-	OfferStatus          *string
-	ScientistName        string
-	ProfileID            *uuid.UUID
-	Visibility           *string
-	HiddenFrom           bool
-	Revealed             bool
-	HasPendingInvitation bool
-	Blocked              bool
-	ReadSeq              int32
-	Archived             bool
+	ID                uuid.UUID
+	VacancyID         uuid.UUID
+	UserID            uuid.UUID
+	ApplicationID     *uuid.UUID
+	OfferID           *uuid.UUID
+	LastSeq           int32
+	LastForScientist  int32
+	LastForOrg        int32
+	ScientistRead     int32
+	OrgRead           int32
+	UpdatedAt         time.Time
+	OrgID             uuid.UUID
+	UnitID            *uuid.UUID
+	VacancyTitle      string
+	VacancyStatus     string
+	Deadline          *time.Time
+	OrgName           string
+	OrgSlug           string
+	UnitName          *string
+	ApplicationStatus *string
+	OfferStatus       *string
+	ScientistName     string
+	ProfileID         *uuid.UUID
+	Visibility        *string
+	HiddenFrom        bool
+	Revealed          bool
+	Blocked           bool
+	ReadSeq           int32
+	Archived          bool
 }
 
 // Переписка со всем, что нужно шапке и проверке прав: вакансия, организация, состояние отклика и приглашения, учёный
@@ -270,7 +268,6 @@ func (q *Queries) GetChat(ctx context.Context, arg GetChatParams) (GetChatRow, e
 		&i.Visibility,
 		&i.HiddenFrom,
 		&i.Revealed,
-		&i.HasPendingInvitation,
 		&i.Blocked,
 		&i.ReadSeq,
 		&i.Archived,
@@ -593,7 +590,7 @@ SELECT c.id, c.vacancy_id, c.user_id, c.application_id, c.offer_id, c.last_seq, 
        o.name AS org_name, o.slug AS org_slug, un.name AS unit_name,
        a.status AS application_status, ofr.status AS offer_status,
        u.display_name AS scientist_name, p.id AS profile_id, p.visibility,
-       rel.hidden_from, rel.revealed, rel.has_pending_invitation, rel.blocked,
+       rel.hidden_from, rel.revealed, rel.blocked,
        COALESCE(cp.read_seq, 0)::int AS read_seq, COALESCE(cp.archived, false)::boolean AS archived,
        (SELECT count(*) FROM (SELECT 1 FROM chat_messages x
                                WHERE x.chat_id = c.id AND x.seq > COALESCE(cp.read_seq, 0) AND x.to_side = $1::text
@@ -620,7 +617,6 @@ CROSS JOIN LATERAL (
                      WHERE ra.user_id = c.user_id AND ra.status <> 'withdrawn' AND rv.org_id = c.org_id)
             OR EXISTS (SELECT 1 FROM vacancy_offers ro JOIN vacancies rv ON rv.id = ro.vacancy_id
                         WHERE ro.user_id = c.user_id AND ro.status = 'interested' AND rv.org_id = c.org_id))::boolean AS revealed,
-           (a.id IS NOT NULL AND EXISTS (SELECT 1 FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending'))::boolean AS has_pending_invitation,
            EXISTS (SELECT 1 FROM chat_blocks b WHERE b.user_id = c.user_id AND b.org_id = c.org_id)::boolean AS blocked
 ) rel
 ORDER BY c.updated_at DESC, c.id DESC
@@ -640,42 +636,41 @@ type ListChatsParams struct {
 }
 
 type ListChatsRow struct {
-	ID                   uuid.UUID
-	VacancyID            uuid.UUID
-	UserID               uuid.UUID
-	ApplicationID        *uuid.UUID
-	OfferID              *uuid.UUID
-	LastSeq              int32
-	UpdatedAt            time.Time
-	OrgID                uuid.UUID
-	UnitID               *uuid.UUID
-	VacancyTitle         string
-	VacancyStatus        string
-	Deadline             *time.Time
-	OrgName              string
-	OrgSlug              string
-	UnitName             *string
-	ApplicationStatus    *string
-	OfferStatus          *string
-	ScientistName        string
-	ProfileID            *uuid.UUID
-	Visibility           *string
-	HiddenFrom           bool
-	Revealed             bool
-	HasPendingInvitation bool
-	Blocked              bool
-	ReadSeq              int32
-	Archived             bool
-	Unread               int32
-	LastKind             *string
-	LastAuthorSide       *string
-	LastAuthorID         *uuid.UUID
-	LastBody             *string
-	LastEventType        *string
-	LastDeletedAt        *time.Time
-	LastCreatedAt        *time.Time
-	LastAuthorName       *string
-	LastAuthorMember     bool
+	ID                uuid.UUID
+	VacancyID         uuid.UUID
+	UserID            uuid.UUID
+	ApplicationID     *uuid.UUID
+	OfferID           *uuid.UUID
+	LastSeq           int32
+	UpdatedAt         time.Time
+	OrgID             uuid.UUID
+	UnitID            *uuid.UUID
+	VacancyTitle      string
+	VacancyStatus     string
+	Deadline          *time.Time
+	OrgName           string
+	OrgSlug           string
+	UnitName          *string
+	ApplicationStatus *string
+	OfferStatus       *string
+	ScientistName     string
+	ProfileID         *uuid.UUID
+	Visibility        *string
+	HiddenFrom        bool
+	Revealed          bool
+	Blocked           bool
+	ReadSeq           int32
+	Archived          bool
+	Unread            int32
+	LastKind          *string
+	LastAuthorSide    *string
+	LastAuthorID      *uuid.UUID
+	LastBody          *string
+	LastEventType     *string
+	LastDeletedAt     *time.Time
+	LastCreatedAt     *time.Time
+	LastAuthorName    *string
+	LastAuthorMember  bool
 }
 
 // Список переписок одной стороны, новые сверху, листание по ключу (updated_at, id).
@@ -731,7 +726,6 @@ func (q *Queries) ListChats(ctx context.Context, arg ListChatsParams) ([]ListCha
 			&i.Visibility,
 			&i.HiddenFrom,
 			&i.Revealed,
-			&i.HasPendingInvitation,
 			&i.Blocked,
 			&i.ReadSeq,
 			&i.Archived,

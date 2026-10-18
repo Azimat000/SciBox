@@ -15,8 +15,8 @@ import (
 const anonymizeApplications = `-- name: AnonymizeApplications :exec
 UPDATE applications SET
     cover_letter = '', contact_email = '', profile = '{}'::jsonb, decision_note = '',
-    status = CASE WHEN status IN ('sent', 'viewed', 'invited') THEN 'withdrawn' ELSE status END,
-    status_changed_at = CASE WHEN status IN ('sent', 'viewed', 'invited') THEN $1::timestamptz ELSE status_changed_at END,
+    status = CASE WHEN status IN ('sent', 'viewed') THEN 'withdrawn' ELSE status END,
+    status_changed_at = CASE WHEN status IN ('sent', 'viewed') THEN $1::timestamptz ELSE status_changed_at END,
     anonymized_at = $1::timestamptz, updated_at = $1::timestamptz
 WHERE user_id = $2
 `
@@ -55,15 +55,6 @@ DELETE FROM application_files WHERE application_id IN (SELECT id FROM applicatio
 
 func (q *Queries) EraseApplicationFiles(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, eraseApplicationFiles, userID)
-	return err
-}
-
-const eraseApplicationInvitations = `-- name: EraseApplicationInvitations :exec
-DELETE FROM application_invitations WHERE application_id IN (SELECT id FROM applications WHERE user_id = $1)
-`
-
-func (q *Queries) EraseApplicationInvitations(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, eraseApplicationInvitations, userID)
 	return err
 }
 

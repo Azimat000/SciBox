@@ -352,8 +352,8 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM applications"); n < 12 {
 		t.Errorf("%d demo applications, want at least 12", n)
 	}
-	if n := count("SELECT count(DISTINCT status) FROM applications"); n != 6 {
-		t.Errorf("%d statuses among demo applications, want 6", n)
+	if n := count("SELECT count(DISTINCT status) FROM applications"); n != 5 {
+		t.Errorf("%d statuses among demo applications, want 5", n)
 	}
 	for _, status := range []string{"pending", "received", "declined"} {
 		if n := count("SELECT count(*) FROM reference_requests WHERE status = '" + status + "'"); n == 0 {
@@ -369,19 +369,9 @@ func TestSeedLoadsDemoDataOnceAndOnlyOnce(t *testing.T) {
 	if n := count("SELECT count(*) FROM notifications WHERE kind = 'application_received'"); n == 0 {
 		t.Error("organizations were not notified about demo applications")
 	}
-	// Разбор откликов (срез 9): приглашения всех видов и состояний, записки к решениям; открытые приглашения только у «приглашённых».
-	for _, kind := range []string{"interview", "contacts", "request_contacts"} {
-		if n := count("SELECT count(*) FROM application_invitations WHERE kind = '" + kind + "'"); n == 0 {
-			t.Errorf("no %s demo invitations", kind)
-		}
-	}
-	for _, status := range []string{"pending", "proposed", "confirmed", "answered", "shared"} {
-		if n := count("SELECT count(*) FROM application_invitations WHERE status = '" + status + "'"); n == 0 {
-			t.Errorf("no %s demo invitations", status)
-		}
-	}
-	if n := count("SELECT count(*) FROM application_invitations i JOIN applications a ON a.id = i.application_id WHERE i.status IN ('pending', 'proposed') AND a.status <> 'invited'"); n != 0 {
-		t.Errorf("%d open demo invitations on applications that are not 'invited'", n)
+	// Разбор откликов (срез 9): записки к решениям; приглашений внутри отклика нет (D-256).
+	if n := count("SELECT count(*) FROM application_invitations"); n != 0 {
+		t.Errorf("%d demo invitations inside applications", n)
 	}
 	if n := count("SELECT count(*) FROM applications WHERE decision_note <> ''"); n == 0 {
 		t.Error("no demo decision notes")

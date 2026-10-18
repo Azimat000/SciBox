@@ -3,8 +3,8 @@ import { t } from '../../i18n'
 import { Button } from '../../ui/Button'
 import { Modal } from '../../ui/Modal'
 import { Tag } from '../../ui/Tag'
-import { Answer, Details, InvitationActions } from '../applications/Invitations'
-import { invStatusLabel, kindLabel, momentText } from '../applications/labels'
+import { OldInvitationCard } from './InvitationHistory'
+import { momentText, oldKindLabel, oldStatusLabel } from './oldInvitation'
 import { AnswerForm } from '../offers/OfferPage'
 import type { ChatHeader, Message } from './api'
 import { COLLAPSE_AT, effectiveInvitation, effectiveOffer, field, momentField } from './events'
@@ -67,28 +67,18 @@ export function SystemLine({ message, items, chat, onChanged }: Props) {
       const accepted = field(message, 'decision') === 'accepted'
       return frame(l.application.decided, <Quote label={l.note} text={field(message, 'note')} />, <Tag tone={accepted ? 'accent' : 'neutral'}>{accepted ? l.application.accepted : l.application.rejected}</Tag>)
     }
+    // Приглашения внутри отклика были до D-256: старые строки показываются как история, без кнопок.
     case 'invitation.created': {
-      const inv = effectiveInvitation(items, message, side, chat.can_write)
+      const inv = effectiveInvitation(items, message)
       if (!inv) return frame(l.unknown)
-      const appId = field(message, 'application_id') || chat.application_id
-      const role = side === 'org' ? 'staff' : 'applicant'
-      return frame(
-        l.invitation.created(kindLabel(inv.kind).toLowerCase()),
-        <div className="chat-event-card">
-          <Details inv={inv} />
-          {inv.answer && <Answer inv={inv} role={role} />}
-          {appId && <InvitationActions appId={appId} inv={inv} onChanged={onChanged} />}
-        </div>,
-        <Tag tone={inv.can_answer ? 'accent' : 'neutral'}>{invStatusLabel(inv.status)}</Tag>,
-        'card',
-      )
+      return frame(l.invitation.created(oldKindLabel(inv.kind).toLowerCase()), <OldInvitationCard inv={inv} side={side} />, <Tag>{oldStatusLabel(inv.status)}</Tag>, 'card')
     }
     case 'invitation.answered': {
       const answer = field(message, 'answer')
       const key = answer === 'proposed' ? 'proposed' : answer === 'answered' ? 'answered' : 'confirmed'
       const lines: string[] = []
       const proposed = momentField(message, 'proposed_at')
-      const i = t.applications.invitation
+      const i = t.chat.oldInvitation
       if (proposed) lines.push(i.answerProposed(momentText(proposed)))
       const contact = field(message, 'contact')
       if (contact) lines.push(i.answerContact(contact))
@@ -115,7 +105,7 @@ export function SystemLine({ message, items, chat, onChanged }: Props) {
     }
     case 'invitation.cancelled': {
       const kind = field(message, 'kind')
-      return frame(kind ? l.invitation.cancelledKind(kindLabel(kind).toLowerCase()) : l.invitation.cancelled)
+      return frame(kind ? l.invitation.cancelledKind(oldKindLabel(kind).toLowerCase()) : l.invitation.cancelled)
     }
     case 'offer.created': {
       const offer = effectiveOffer(items, message, side, chat.can_write)

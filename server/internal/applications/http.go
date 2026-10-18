@@ -24,9 +24,6 @@ const (
 	CodeOwnVacancy      = "own_vacancy"
 	CodeAlreadyApplied  = "already_applied"
 	CodeInvalidStatusCh = "invalid_status_change"
-	CodeInvalidInvite   = "invalid_invitation_state"
-	CodeTooManyInvites  = "too_many_invitations"
-	CodeBlocked         = "blocked_by_person"
 )
 
 // Handler — HTTP-часть откликов.
@@ -55,10 +52,6 @@ func (h *Handler) Mount(r chi.Router) {
 	r.With(h.requireUser).Get("/my/candidates/export", h.exportCandidates)
 	r.With(h.requireUser).Get("/my/candidate-vacancies", h.candidateVacancies)
 	r.With(h.requireUser).Post("/applications/{id}/status", h.decide)
-	r.With(h.requireUser).Post("/applications/{id}/invitations", h.invite)
-	r.With(h.requireUser).Delete("/applications/{id}/invitations/{invId}", h.cancelInvitation)
-	r.With(h.requireUser).Post("/applications/{id}/invitations/{invId}/answer", h.answer)
-	r.With(h.requireUser).Post("/applications/{id}/invitations/{invId}/accept-proposal", h.acceptProposal)
 }
 
 func actor(r *http.Request) auth.User {
@@ -102,12 +95,6 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.WriteError(w, http.StatusConflict, CodeAlreadyApplied, "Вы уже откликнулись на эту вакансию")
 	case errors.Is(err, ErrBadStatus):
 		apierr.WriteError(w, http.StatusConflict, CodeInvalidStatusCh, "Для отклика в таком состоянии это действие недоступно. Обновите страницу")
-	case errors.Is(err, ErrBadInvitation):
-		apierr.WriteError(w, http.StatusConflict, CodeInvalidInvite, "С этим приглашением это действие уже невозможно: оно изменилось. Обновите страницу")
-	case errors.Is(err, ErrBlocked):
-		apierr.WriteError(w, http.StatusConflict, CodeBlocked, "Этот человек заблокировал вашу организацию, поэтому отправить ему приглашение нельзя")
-	case errors.Is(err, ErrTooManyInvitations):
-		apierr.WriteError(w, http.StatusConflict, CodeTooManyInvites, "На один отклик можно отправить не больше десяти приглашений")
 	default:
 		apierr.WriteInternal(w, r, h.logger, "applications", err)
 	}
@@ -302,70 +289,6 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Decide(r.Context(), actor(r), id, in.Status, in.Note); err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *Handler) invite(w http.ResponseWriter, r *http.Request) {
-	id, ok := param(r, "id")
-	if !ok {
-		h.fail(w, r, ErrNotFound)
-		return
-	}
-	var in InvitationInput
-	if !apierr.DecodeJSON(w, r, &in, maxSmallJSON) {
-		return
-	}
-	inv, err := h.svc.Invite(r.Context(), actor(r), id, in)
-	if err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	apierr.WriteJSON(w, http.StatusCreated, map[string]Invitation{"invitation": inv})
-}
-
-func (h *Handler) cancelInvitation(w http.ResponseWriter, r *http.Request) {
-	id, ok1 := param(r, "id")
-	invID, ok2 := param(r, "invId")
-	if !ok1 || !ok2 {
-		h.fail(w, r, ErrNotFound)
-		return
-	}
-	if err := h.svc.CancelInvitation(r.Context(), actor(r), id, invID); err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *Handler) answer(w http.ResponseWriter, r *http.Request) {
-	id, ok1 := param(r, "id")
-	invID, ok2 := param(r, "invId")
-	if !ok1 || !ok2 {
-		h.fail(w, r, ErrNotFound)
-		return
-	}
-	var in AnswerInput
-	if !apierr.DecodeJSON(w, r, &in, maxSmallJSON) {
-		return
-	}
-	if err := h.svc.Answer(r.Context(), actor(r), id, invID, in); err != nil {
-		h.fail(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *Handler) acceptProposal(w http.ResponseWriter, r *http.Request) {
-	id, ok1 := param(r, "id")
-	invID, ok2 := param(r, "invId")
-	if !ok1 || !ok2 {
-		h.fail(w, r, ErrNotFound)
-		return
-	}
-	if err := h.svc.AcceptProposal(r.Context(), actor(r), id, invID); err != nil {
 		h.fail(w, r, err)
 		return
 	}

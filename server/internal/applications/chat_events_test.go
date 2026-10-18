@@ -65,8 +65,8 @@ func wantLines(t *testing.T, app uuid.UUID, want ...string) []chatLine {
 	return got
 }
 
-// Отклик, просмотр, приглашения, ответы, принятое время, замена собеседования, отмена, решение: по строке на событие,
-// повторное открытие карточки строк не добавляет.
+// Отклик, просмотр, решение: по строке на событие, повторное открытие карточки строк не добавляет. Приглашений внутри
+// отклика нет (D-256).
 func TestEveryApplicationEventWritesOneLine(t *testing.T) {
 	w := newWorld(t)
 	me := w.Applicant("Мария")
@@ -88,114 +88,19 @@ func TestEveryApplicationEventWritesOneLine(t *testing.T) {
 	}
 	wantLines(t, d.ID, chat.EventApplicationSent, chat.EventApplicationViewed)
 
-	interview := w.mustInvite(w.tm.Owner, d.ID, w.interview())
-	got = wantLines(t, d.ID, chat.EventApplicationSent, chat.EventApplicationViewed, chat.EventInvitationCreated)
-	inv, _ := got[2].Data["invitation"].(map[string]any)
-	if inv["id"] != interview.ID.String() || inv["kind"] != "interview" || inv["status"] != "pending" || inv["can_answer"] != false {
-		t.Errorf("snapshot of the invitation = %v", inv)
-	}
-	if _, has := inv["answer"]; !has || inv["answer"] != nil {
-		t.Errorf("a new invitation has no answer: %v", inv["answer"])
-	}
-
-	if err := w.svc.Answer(bg, me.User, d.ID, interview.ID, AnswerInput{Action: AnswerPropose, ProposedAt: w.when(96 * time.Hour), Note: "Удобнее в четверг"}); err != nil {
-		t.Fatal(err)
-	}
-	got = wantLines(t, d.ID, chat.EventApplicationSent, chat.EventApplicationViewed, chat.EventInvitationCreated, chat.EventInvitationAnswered)
-	if a := got[3].Data; a["answer"] != "proposed" || a["note"] != "Удобнее в четверг" || a["proposed_at"] == nil || a["invitation_id"] != interview.ID.String() || a["kind"] != "interview" {
-		t.Errorf("data of the answer = %v", a)
-	}
-
-	if err := w.svc.AcceptProposal(bg, w.tm.Owner.User, d.ID, interview.ID); err != nil {
-		t.Fatal(err)
-	}
-	got = wantLines(t, d.ID, chat.EventApplicationSent, chat.EventApplicationViewed, chat.EventInvitationCreated, chat.EventInvitationAnswered, chat.EventInvitationAccepted)
-	if got[4].Data["starts_at"] == nil || got[4].Data["invitation_id"] != interview.ID.String() {
-		t.Errorf("data of the accepted time = %v", got[4].Data)
-	}
-
-	// Новое собеседование заменяет прежнее открытое: прежнее закрывается своей строкой, потом новое.
-	second := w.mustInvite(w.tm.Owner, d.ID, w.interview())
-	got = wantLines(t, d.ID, chat.EventApplicationSent, chat.EventApplicationViewed, chat.EventInvitationCreated, chat.EventInvitationAnswered,
-		chat.EventInvitationAccepted, chat.EventInvitationCancelled, chat.EventInvitationCreated)
-	if got[5].Data["invitation_id"] != interview.ID.String() || got[5].Data["kind"] != "interview" {
-		t.Errorf("replaced interview: %v", got[5].Data)
-	}
-
-	if err := w.svc.CancelInvitation(bg, w.tm.Owner.User, d.ID, second.ID); err != nil {
-		t.Fatal(err)
-	}
-	request := w.mustInvite(w.tm.Owner, d.ID, requestIn())
-	if err := w.svc.Answer(bg, me.User, d.ID, request.ID, AnswerInput{Action: AnswerReply, Contact: "+7 913 555-66-77", Time: "после 15:00"}); err != nil {
-		t.Fatal(err)
-	}
 	got = linesOf(t, d.ID)
-	last := got[len(got)-1]
-	if last.Type != chat.EventInvitationAnswered || last.Data["answer"] != "answered" || last.Data["contact"] != "+7 913 555-66-77" || last.Data["time"] != "после 15:00" {
-		t.Errorf("answer with contacts: %+v", last)
-	}
-
-	contacts := w.mustInvite(w.tm.Owner, d.ID, contactsIn())
-	got = linesOf(t, d.ID)
-	if c, _ := got[len(got)-1].Data["invitation"].(map[string]any); got[len(got)-1].Type != chat.EventInvitationCreated || c["status"] != "shared" || c["id"] != contacts.ID.String() {
-		t.Errorf("contacts line: %+v", got[len(got)-1])
-	}
-
 	before := len(got)
 	if err := w.svc.Decide(bg, w.tm.Owner.User, d.ID, StatusRejected, "Выбрали другого кандидата"); err != nil {
 		t.Fatal(err)
 	}
 	got = linesOf(t, d.ID)
-	// Решение пишет одну строку; открытых приглашений к этому моменту нет (интервью отменено, запрос отвечен, контакты не открыты).
+	// Решение пишет одну строку.
 	if len(got) != before+1 || got[before].Type != chat.EventApplicationDecided {
 		t.Fatalf("after the decision: %v", typesOf(got[before:]))
 	}
 	if got[before].Data["decision"] != "rejected" || got[before].Data["note"] != "Выбрали другого кандидата" {
 		t.Errorf("data of the decision: %v", got[before].Data)
 	}
-}
-
-// Отказ закрывает открытые приглашения: о каждом строка «отменено»; то же при отзыве отклика.
-func TestDecisionAndWithdrawalCloseInvitationsWithLines(t *testing.T) {
-	w := newWorld(t)
-
-	rejected := w.mustApply(w.Applicant("Первая"), nil)
-	open := w.mustInvite(w.tm.Owner, rejected.ID, w.interview())
-	if err := w.svc.Decide(bg, w.tm.Owner.User, rejected.ID, StatusRejected, ""); err != nil {
-		t.Fatal(err)
-	}
-	got := wantLines(t, rejected.ID, chat.EventApplicationSent, chat.EventInvitationCreated,
-		chat.EventApplicationDecided, chat.EventInvitationCancelled)
-	if got[3].Data["invitation_id"] != open.ID.String() {
-		t.Errorf("cancelled invitation: %v", got[3].Data)
-	}
-
-	me := w.Applicant("Вторая")
-	withdrawn := w.mustApply(me, nil)
-	w.mustInvite(w.tm.Owner, withdrawn.ID, w.interview())
-	if err := w.svc.Withdraw(bg, me.User, withdrawn.ID); err != nil {
-		t.Fatal(err)
-	}
-	wantLines(t, withdrawn.ID, chat.EventApplicationSent, chat.EventInvitationCreated,
-		chat.EventApplicationWithdrawn, chat.EventInvitationCancelled)
-
-	// Отказ с неверным решением, повторная отмена, ответ на закрытое: строк не добавляют.
-	for _, run := range []func() error{
-		func() error { return w.svc.Decide(bg, w.tm.Owner.User, rejected.ID, StatusRejected, "") },
-		func() error { return w.svc.Withdraw(bg, me.User, withdrawn.ID) },
-		func() error { return w.svc.CancelInvitation(bg, w.tm.Owner.User, rejected.ID, open.ID) },
-		func() error {
-			return w.svc.Answer(bg, me.User, withdrawn.ID, uuid.New(), AnswerInput{Action: AnswerConfirm})
-		},
-	} {
-		if err := run(); err == nil {
-			t.Error("a repeated action succeeded")
-		}
-	}
-	wantLines(t, rejected.ID, chat.EventApplicationSent, chat.EventInvitationCreated,
-		chat.EventApplicationDecided, chat.EventInvitationCancelled)
-	wantLines(t, withdrawn.ID, chat.EventApplicationSent, chat.EventInvitationCreated,
-		chat.EventApplicationWithdrawn, chat.EventInvitationCancelled)
 }
 
 // Одновременный просмотр двумя сотрудниками даёт одну строку «просмотрен».
@@ -255,8 +160,8 @@ func TestFailedDecisionLeavesNoLineBehind(t *testing.T) {
 	t.Fatal("too many database calls")
 }
 
-// Приглашения нельзя посылать человеку, заблокировавшему организацию (T-105); решение по отклику ставить можно.
-func TestBlockedOrganizationCannotInvite(t *testing.T) {
+// Учёный заблокировал организацию: переписка по отклику закрыта, решение по отклику ставить можно (T-105).
+func TestBlockedOrganizationStillDecides(t *testing.T) {
 	w := newWorld(t)
 	me := w.Applicant("Мария")
 	d := w.mustApply(me, nil)
@@ -267,12 +172,6 @@ func TestBlockedOrganizationCannotInvite(t *testing.T) {
 	}
 	if _, err := chats.Block(bg, me.User, chatID); err != nil {
 		t.Fatal(err)
-	}
-	if _, err := w.svc.Invite(bg, w.tm.Owner.User, d.ID, w.interview()); !errors.Is(err, ErrBlocked) {
-		t.Fatalf("invite = %v, want ErrBlocked", err)
-	}
-	if n := testkit.Count(t, `SELECT count(*) FROM application_invitations WHERE application_id = $1`, d.ID); n != 0 {
-		t.Errorf("invitations = %d", n)
 	}
 	// Закрытая блокировкой переписка видна в ответах отклика: писать нельзя.
 	got, err := w.svc.Get(bg, me.User, d.ID)

@@ -140,7 +140,7 @@ func (s *Service) framesFor(ev event, v eventView, side Side, viewer uuid.UUID) 
 		st := StateOf(v.row.ApplicationStatus, v.row.OfferStatus, v.row.Blocked)
 		out = append(out, primitiveFrame(0, "chat.state", streamState{
 			ChatID: ev.ChatID, Side: side, Status: Status{Source: st.Source, Value: st.Value},
-			NeedsAnswer: needsAnswer(side, st, v.row.HasPendingInvitation, v.row.OfferStatus),
+			NeedsAnswer: needsAnswer(side, st, v.row.OfferStatus),
 			CanWrite:    !st.Closed, ClosedReason: reasonPtr(st),
 		}, time.Time{}))
 	}

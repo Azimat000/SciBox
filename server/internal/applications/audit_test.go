@@ -4,7 +4,6 @@ import (
 	"errors"
 	"slices"
 	"testing"
-	"time"
 
 	"scibox/server/internal/audit"
 	"scibox/server/internal/files"
@@ -18,7 +17,7 @@ func (w *world) applicationRows() []testaudit.Row {
 	return testaudit.Rows(w.T, testkit.Pool, `org_id = $1 AND action LIKE 'application.%'`, w.tm.OrgID)
 }
 
-// Всё, что сотрудники делают с чужим откликом, остаётся в журнале: открыл, пригласил, решил, скачал файл.
+// Всё, что сотрудники делают с чужим откликом, остаётся в журнале: открыл, решил, скачал файл.
 func TestAuditTrailOfReviewing(t *testing.T) {
 	w := newWorld(t)
 	ctx := audit.WithSource(bg, "203.0.113.20")
@@ -43,19 +42,6 @@ func TestAuditTrailOfReviewing(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := w.svc.Get(ctx, w.tm.Owner.User, d.ID); err != nil {
-		t.Fatal(err)
-	}
-	inv, err := w.svc.Invite(ctx, w.tm.HeadA.User, d.ID, w.interview())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := w.svc.Answer(bg, me.User, d.ID, inv.ID, AnswerInput{Action: AnswerPropose, ProposedAt: w.when(100 * time.Hour)}); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.svc.AcceptProposal(ctx, w.tm.Owner.User, d.ID, inv.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.svc.CancelInvitation(ctx, w.tm.Owner.User, d.ID, inv.ID); err != nil {
 		t.Fatal(err)
 	}
 	// Скачивание: сотрудник записывается (и резюме, и приложенный файл), чужой руководитель получает «нет» без записи.
@@ -85,32 +71,32 @@ func TestAuditTrailOfReviewing(t *testing.T) {
 
 	rows := w.applicationRows()
 	want := []string{
-		"application.viewed", "application.invited", "application.proposal_accepted", "application.invitation_canceled",
+		"application.viewed",
 		"application.file_downloaded", "application.file_downloaded", "application.accepted",
 		"application.viewed", "application.rejected",
 	}
 	if got := testaudit.Actions(rows); !slices.Equal(got, want) {
 		t.Fatalf("journal = %v\nwant      %v", got, want)
 	}
-	actors := []testkit.Person{w.tm.HeadA, w.tm.HeadA, w.tm.Owner, w.tm.Owner, w.tm.Owner, w.tm.HR, w.tm.Owner, w.tm.HR, w.tm.HR}
+	actors := []testkit.Person{w.tm.HeadA, w.tm.Owner, w.tm.HR, w.tm.Owner, w.tm.HR, w.tm.HR}
 	for i, r := range rows {
 		wantSubject := me
-		if i >= 7 {
+		if i >= 4 {
 			wantSubject = other
 		}
 		wantID := d.ID
-		if i >= 7 {
+		if i >= 4 {
 			wantID = d2.ID
 		}
 		if *r.Actor != actors[i].ID || *r.Subject != wantSubject.ID || r.TargetKind != "application" || *r.TargetID != wantID || r.TargetLabel != w.vacancy.Title {
 			t.Errorf("entry %d (%s): %+v", i, r.Action, r)
 		}
-		if (i < 7) != (r.IP != nil && *r.IP == "203.0.113.20") {
+		if (i < 4) != (r.IP != nil && *r.IP == "203.0.113.20") {
 			t.Errorf("entry %d ip = %v", i, r.IP)
 		}
 	}
-	if rows[1].Details["kind"] != InvInterview || rows[4].Details["kind"] != string(files.KindCV) || rows[5].Details["kind"] != string(files.KindAttachment) {
-		t.Errorf("details = %v / %v / %v", rows[1].Details, rows[4].Details, rows[5].Details)
+	if rows[1].Details["kind"] != string(files.KindCV) || rows[2].Details["kind"] != string(files.KindAttachment) {
+		t.Errorf("details = %v / %v", rows[1].Details, rows[2].Details)
 	}
 	// Ни текста письма, ни записки к решению, ни контактов в записях нет.
 	for _, r := range rows {
@@ -147,15 +133,8 @@ func TestRefusedReviewingLeavesNoTrace(t *testing.T) {
 		"outsider decides":     func() error { return w.svc.Decide(bg, w.tm.Out.User, d.ID, StatusRejected, "") },
 		"applicant decides":    func() error { return w.svc.Decide(bg, me.User, d.ID, StatusAccepted, "") },
 		"wrong decision":       func() error { return w.svc.Decide(bg, w.tm.Owner.User, d.ID, "viewed", "") },
-		"outsider invites":     func() error { _, err := w.svc.Invite(bg, w.tm.Out.User, d.ID, w.interview()); return err },
-		"bad invitation": func() error {
-			_, err := w.svc.Invite(bg, w.tm.Owner.User, d.ID, InvitationInput{Kind: InvInterview})
-			return err
-		},
-		"outsider downloads":         func() error { _, _, err := readFile(bg, w.svc, w.tm.Out.User, d.ID, staff.CV.ID); return err },
-		"unknown file":               func() error { _, _, err := readFile(bg, w.svc, w.tm.Owner.User, d.ID, d.ID); return err },
-		"cancel an unknown invite":   func() error { return w.svc.CancelInvitation(bg, w.tm.Owner.User, d.ID, d.ID) },
-		"accept an unknown proposal": func() error { return w.svc.AcceptProposal(bg, w.tm.Owner.User, d.ID, d.ID) },
+		"outsider downloads":   func() error { _, _, err := readFile(bg, w.svc, w.tm.Out.User, d.ID, staff.CV.ID); return err },
+		"unknown file":         func() error { _, _, err := readFile(bg, w.svc, w.tm.Owner.User, d.ID, d.ID); return err },
 	} {
 		if err := do(); err == nil {
 			t.Errorf("%s: not refused", name)
@@ -191,12 +170,6 @@ func TestReviewingFailsWhenTheJournalIsDown(t *testing.T) {
 	}
 	if err := w.svc.Decide(bg, w.tm.Owner.User, seen.ID, StatusAccepted, ""); err == nil || w.statusOf(seen.ID) != StatusViewed {
 		t.Errorf("decision: %v, status %s", err, w.statusOf(seen.ID))
-	}
-	if _, err := w.svc.Invite(bg, w.tm.Owner.User, seen.ID, w.interview()); err == nil || w.statusOf(seen.ID) != StatusViewed {
-		t.Errorf("invitation: %v, status %s", err, w.statusOf(seen.ID))
-	}
-	if n := testkit.Count(t, `SELECT count(*) FROM application_invitations WHERE application_id = $1`, seen.ID); n != 0 {
-		t.Errorf("%d invitations were created", n)
 	}
 	name, data, err := readFile(bg, w.svc, w.tm.Owner.User, withFile.ID, staff.CV.ID)
 	if err == nil || name != "" || data != nil {

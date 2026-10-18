@@ -12,134 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const acceptProposedTime = `-- name: AcceptProposedTime :execrows
-UPDATE application_invitations SET status = 'confirmed', starts_at = answer_at, updated_at = $1::timestamptz
-WHERE id = $2 AND status = 'proposed' AND answer_at > $1::timestamptz
-`
-
-type AcceptProposedTimeParams struct {
-	Now time.Time
-	ID  uuid.UUID
-}
-
-// Организация принимает время, которое предложил соискатель: оно становится временем собеседования.
-func (q *Queries) AcceptProposedTime(ctx context.Context, arg AcceptProposedTimeParams) (int64, error) {
-	result, err := q.db.Exec(ctx, acceptProposedTime, arg.Now, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const answerInvitation = `-- name: AnswerInvitation :execrows
-UPDATE application_invitations
-SET status = $1, answer_at = $2, answer_note = $3, answer_contact = $4, answer_time = $5,
-    answered_at = $6::timestamptz, updated_at = $6::timestamptz
-WHERE id = $7 AND status = 'pending'
-`
-
-type AnswerInvitationParams struct {
-	ToStatus      string
-	AnswerAt      *time.Time
-	AnswerNote    string
-	AnswerContact string
-	AnswerTime    string
-	Now           time.Time
-	ID            uuid.UUID
-}
-
-// Ответ соискателя: срабатывает один раз, пока приглашение ждёт ответа.
-func (q *Queries) AnswerInvitation(ctx context.Context, arg AnswerInvitationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, answerInvitation,
-		arg.ToStatus,
-		arg.AnswerAt,
-		arg.AnswerNote,
-		arg.AnswerContact,
-		arg.AnswerTime,
-		arg.Now,
-		arg.ID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const cancelOpenInterviews = `-- name: CancelOpenInterviews :many
-UPDATE application_invitations SET status = 'cancelled', updated_at = $1::timestamptz
-WHERE application_id = $2 AND kind = 'interview' AND status IN ('pending', 'proposed', 'confirmed')
-RETURNING id, kind
-`
-
-type CancelOpenInterviewsParams struct {
-	Now           time.Time
-	ApplicationID uuid.UUID
-}
-
-type CancelOpenInterviewsRow struct {
-	ID   uuid.UUID
-	Kind string
-}
-
-// Новое собеседование заменяет прежние открытые.
-func (q *Queries) CancelOpenInterviews(ctx context.Context, arg CancelOpenInterviewsParams) ([]CancelOpenInterviewsRow, error) {
-	rows, err := q.db.Query(ctx, cancelOpenInterviews, arg.Now, arg.ApplicationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CancelOpenInterviewsRow
-	for rows.Next() {
-		var i CancelOpenInterviewsRow
-		if err := rows.Scan(&i.ID, &i.Kind); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const cancelOpenInvitations = `-- name: CancelOpenInvitations :many
-UPDATE application_invitations SET status = 'cancelled', updated_at = $1::timestamptz
-WHERE application_id = $2 AND status IN ('pending', 'proposed', 'confirmed')
-RETURNING id, kind
-`
-
-type CancelOpenInvitationsParams struct {
-	Now           time.Time
-	ApplicationID uuid.UUID
-}
-
-type CancelOpenInvitationsRow struct {
-	ID   uuid.UUID
-	Kind string
-}
-
-// Все открытые приглашения отклика закрываются (отказ, отзыв отклика).
-// Возвращает закрытые приглашения: о каждом переписка дописывает строку (срез 38).
-func (q *Queries) CancelOpenInvitations(ctx context.Context, arg CancelOpenInvitationsParams) ([]CancelOpenInvitationsRow, error) {
-	rows, err := q.db.Query(ctx, cancelOpenInvitations, arg.Now, arg.ApplicationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CancelOpenInvitationsRow
-	for rows.Next() {
-		var i CancelOpenInvitationsRow
-		if err := rows.Scan(&i.ID, &i.Kind); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const countCandidatesByStatus = `-- name: CountCandidatesByStatus :many
 SELECT a.status, count(*)::bigint AS total
 FROM applications a
@@ -178,17 +50,6 @@ func (q *Queries) CountCandidatesByStatus(ctx context.Context, arg CountCandidat
 		return nil, err
 	}
 	return items, nil
-}
-
-const countInvitations = `-- name: CountInvitations :one
-SELECT count(*)::bigint FROM application_invitations WHERE application_id = $1
-`
-
-func (q *Queries) CountInvitations(ctx context.Context, applicationID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countInvitations, applicationID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
 }
 
 const exportCandidates = `-- name: ExportCandidates :many
@@ -269,87 +130,6 @@ func (q *Queries) ExportCandidates(ctx context.Context, arg ExportCandidatesPara
 	return items, nil
 }
 
-const getInvitation = `-- name: GetInvitation :one
-SELECT id, application_id, kind, status, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone, answer_at, answer_note, answer_contact, answer_time, answered_at, created_by, created_at, updated_at FROM application_invitations WHERE id = $1 AND application_id = $2
-`
-
-type GetInvitationParams struct {
-	ID            uuid.UUID
-	ApplicationID uuid.UUID
-}
-
-func (q *Queries) GetInvitation(ctx context.Context, arg GetInvitationParams) (ApplicationInvitation, error) {
-	row := q.db.QueryRow(ctx, getInvitation, arg.ID, arg.ApplicationID)
-	var i ApplicationInvitation
-	err := row.Scan(
-		&i.ID,
-		&i.ApplicationID,
-		&i.Kind,
-		&i.Status,
-		&i.Message,
-		&i.StartsAt,
-		&i.PlaceKind,
-		&i.Place,
-		&i.ContactName,
-		&i.ContactEmail,
-		&i.ContactPhone,
-		&i.AnswerAt,
-		&i.AnswerNote,
-		&i.AnswerContact,
-		&i.AnswerTime,
-		&i.AnsweredAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const insertInvitation = `-- name: InsertInvitation :one
-
-
-INSERT INTO application_invitations (application_id, kind, status, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone, created_by, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
-RETURNING id
-`
-
-type InsertInvitationParams struct {
-	ApplicationID uuid.UUID
-	Kind          string
-	Status        string
-	Message       string
-	StartsAt      *time.Time
-	PlaceKind     *string
-	Place         string
-	ContactName   string
-	ContactEmail  string
-	ContactPhone  string
-	CreatedBy     *uuid.UUID
-	Now           time.Time
-}
-
-// Разбор откликов организацией (срез 9).
-// Приглашения ------------------------------------------------------------------------------------------------------
-func (q *Queries) InsertInvitation(ctx context.Context, arg InsertInvitationParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, insertInvitation,
-		arg.ApplicationID,
-		arg.Kind,
-		arg.Status,
-		arg.Message,
-		arg.StartsAt,
-		arg.PlaceKind,
-		arg.Place,
-		arg.ContactName,
-		arg.ContactEmail,
-		arg.ContactPhone,
-		arg.CreatedBy,
-		arg.Now,
-	)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const listCandidateVacancies = `-- name: ListCandidateVacancies :many
 SELECT v.id, v.title, v.status, v.org_name, v.org_slug,
        (count(a.id) FILTER (WHERE a.status <> 'withdrawn'))::bigint AS total,
@@ -414,9 +194,7 @@ SELECT a.id, a.status, a.created_at, a.status_changed_at, (a.anonymized_at IS NO
        COALESCE(a.profile->>'headline', '')::text AS headline,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.unit_name,
        (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id)::bigint AS refs_total,
-       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received,
-       (SELECT count(*) FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending')::bigint AS invites_pending,
-       (SELECT count(*) FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'proposed')::bigint AS invites_proposed
+       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received
 FROM applications a
 JOIN users u ON u.id = a.user_id
 JOIN vacancy_view v ON v.id = a.vacancy_id
@@ -452,8 +230,6 @@ type ListCandidatesRow struct {
 	UnitName        *string
 	RefsTotal       int64
 	RefsReceived    int64
-	InvitesPending  int64
-	InvitesProposed int64
 }
 
 // Список откликов для организации ----------------------------------------------------------------------------------
@@ -491,8 +267,6 @@ func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) 
 			&i.UnitName,
 			&i.RefsTotal,
 			&i.RefsReceived,
-			&i.InvitesPending,
-			&i.InvitesProposed,
 		); err != nil {
 			return nil, err
 		}
@@ -502,77 +276,10 @@ func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) 
 		return nil, err
 	}
 	return items, nil
-}
-
-const listInvitations = `-- name: ListInvitations :many
-SELECT id, application_id, kind, status, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone, answer_at, answer_note, answer_contact, answer_time, answered_at, created_by, created_at, updated_at FROM application_invitations WHERE application_id = $1 ORDER BY created_at, id
-`
-
-func (q *Queries) ListInvitations(ctx context.Context, applicationID uuid.UUID) ([]ApplicationInvitation, error) {
-	rows, err := q.db.Query(ctx, listInvitations, applicationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ApplicationInvitation
-	for rows.Next() {
-		var i ApplicationInvitation
-		if err := rows.Scan(
-			&i.ID,
-			&i.ApplicationID,
-			&i.Kind,
-			&i.Status,
-			&i.Message,
-			&i.StartsAt,
-			&i.PlaceKind,
-			&i.Place,
-			&i.ContactName,
-			&i.ContactEmail,
-			&i.ContactPhone,
-			&i.AnswerAt,
-			&i.AnswerNote,
-			&i.AnswerContact,
-			&i.AnswerTime,
-			&i.AnsweredAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const markApplicationInvited = `-- name: MarkApplicationInvited :execrows
-UPDATE applications
-SET status = 'invited', updated_at = $1::timestamptz,
-    status_changed_at = CASE WHEN status = 'invited' THEN status_changed_at ELSE $1::timestamptz END
-WHERE id = $2 AND status = ANY($3::text[])
-`
-
-type MarkApplicationInvitedParams struct {
-	Now          time.Time
-	ID           uuid.UUID
-	FromStatuses []string
-}
-
-// Приглашение переводит отклик в «приглашён» (из «отправлен» и «просмотрен»; уже приглашённому только обновляет строку и тем
-// самым блокирует её до конца транзакции: решение и приглашение одновременно не пройдут). Время статуса не сдвигается,
-// если отклик уже был приглашён.
-func (q *Queries) MarkApplicationInvited(ctx context.Context, arg MarkApplicationInvitedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markApplicationInvited, arg.Now, arg.ID, arg.FromStatuses)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const setApplicationDecision = `-- name: SetApplicationDecision :execrows
+
 
 UPDATE applications
 SET status = $1, decision_note = $2, decided_by = $3, updated_at = $4::timestamptz, status_changed_at = $4::timestamptz
@@ -588,6 +295,7 @@ type SetApplicationDecisionParams struct {
 	FromStatuses []string
 }
 
+// Разбор откликов организацией (срез 9). Приглашений внутри отклика нет с D-256.
 // Решение организации ----------------------------------------------------------------------------------------------
 // Статус меняется только из ожидаемых; записка и автор решения сохраняются вместе со статусом.
 func (q *Queries) SetApplicationDecision(ctx context.Context, arg SetApplicationDecisionParams) (int64, error) {
@@ -595,32 +303,6 @@ func (q *Queries) SetApplicationDecision(ctx context.Context, arg SetApplication
 		arg.ToStatus,
 		arg.Note,
 		arg.DecidedBy,
-		arg.Now,
-		arg.ID,
-		arg.FromStatuses,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setInvitationStatusFrom = `-- name: SetInvitationStatusFrom :execrows
-UPDATE application_invitations SET status = $1, updated_at = $2::timestamptz
-WHERE id = $3 AND status = ANY($4::text[])
-`
-
-type SetInvitationStatusFromParams struct {
-	ToStatus     string
-	Now          time.Time
-	ID           uuid.UUID
-	FromStatuses []string
-}
-
-// Статус приглашения меняется только из ожидаемых: две одновременные смены не пройдут обе.
-func (q *Queries) SetInvitationStatusFrom(ctx context.Context, arg SetInvitationStatusFromParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setInvitationStatusFrom,
-		arg.ToStatus,
 		arg.Now,
 		arg.ID,
 		arg.FromStatuses,

@@ -30,8 +30,8 @@ Built for science, not adapted from a general job site. It understands degrees a
 
 ## Operating Context
 
-- Seekers: search with filters (field, region, format, conditions, required degree, level, organization type, position type, deadline), save searches and favorites, track applications and statuses, respond to invitations.
-- Organizations: manage units and staff by invitation, publish vacancies through draft → published → closed/archive, review applications, send invitations (interview with date/time/link or address, contacts, or a request for the candidate's contacts).
+- Seekers: search with filters (field, region, format, conditions, required degree, level, organization type, position type, deadline), save searches and favorites (ordered by nearest deadline on request), track applications and statuses, answer invitations to vacancies, talk to organizations in conversations.
+- Organizations: manage units and staff by invitation (a unit head is always invited into a unit without a head), publish vacancies through draft → published → closed (reopen possible, no archive), review applications and agree on interviews in the conversation, then accept the candidate or reject (D-256).
 - Recommenders upload letters by a one-time link without an account; the organization sees them, the seeker does not.
 - Notifications on the site (bell) and by email.
 
@@ -40,9 +40,9 @@ Built for science, not adapted from a general job site. It understands degrees a
 - Russian interface; all strings in dictionaries, ready for English later (D-021).
 - Product name is a working title, kept in one setting (D-001).
 - Anyone can publish vacancies; no organization verification, no "verified" badges (D-003).
-- No moderator role, no chat, no analytics for organizations, no monetization.
+- No moderator role yet, no analytics for organizations, no monetization. Conversations between a scientist and an organization exist since D-214.
 - Salary is optional on vacancies (D-014).
-- Login: email + password; ORCID / Yandex / VK / Gosuslugi shown as "coming soon" (D-019).
+- Login: email + password. Other sign-in services are not shown until they work (D-256 replaced the "coming soon" buttons of D-019).
 - Personal data under 152-FZ: consent at registration; hosting in Russia when it goes public (D-020).
 - Phone and desktop are equally important (D-023).
 - The state portal ученые-исследователи.рф is not integrated for now (D-015).

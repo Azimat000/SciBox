@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"scibox/server/internal/auth"
-	"scibox/server/internal/dbgen"
 	"scibox/server/internal/testkit"
 )
 
@@ -50,7 +49,7 @@ func TestBlockClosesOnlyTheChatsOfThatOrganization(t *testing.T) {
 	w := newWorld(t)
 	sci := w.Applicant("Учёный")
 	open := w.chatOf(sci, w.vacancy.ID, "viewed")
-	second := w.chatOf(sci, w.other.ID, "invited")
+	second := w.chatOf(sci, w.other.ID, "viewed")
 	third := w.Published3()
 	rejected := w.chatOf(sci, third, "rejected")
 	foreign := w.Team()
@@ -502,18 +501,23 @@ func TestRecord(t *testing.T) {
 	}
 }
 
-// Данные каждой строки о событии, как их собирает сервер, совпадают с формой в contracts/chat/messages.json.
+// Данные каждой строки о событии, как их собирает сервер, совпадают с формой в contracts/chat/messages.json. Строки о
+// приглашениях внутри отклика сервер больше не пишет (D-256), но старые лежат в переписках: их форма та же, что была.
 func TestEventDataFollowsTheContract(t *testing.T) {
 	id := uuid.New()
-	now := w0()
-	inv := InvitationCreated(invitationRow(id, "interview"))
+	now := w0().Format(time.RFC3339)
 	samples := map[string]any{
-		EventApplicationSent:      ApplicationSentData{ApplicationID: id, CoverLetter: "Письмо"},
-		EventApplicationViewed:    map[string]any{},
-		EventInvitationCreated:    inv,
-		EventInvitationAnswered:   InvitationAnswered(invitationRow(id, "interview"), "proposed"),
-		EventInvitationAccepted:   InvitationAcceptedData{ApplicationID: id, InvitationID: id, StartsAt: &now},
-		EventInvitationCancelled:  InvitationCancelledData{ApplicationID: id, InvitationID: id, Kind: "contacts"},
+		EventApplicationSent:   ApplicationSentData{ApplicationID: id, CoverLetter: "Письмо"},
+		EventApplicationViewed: map[string]any{},
+		EventInvitationCreated: map[string]any{"application_id": id, "invitation": map[string]any{
+			"id": id, "kind": "interview", "status": "pending", "message": "Приглашаем", "starts_at": now, "place_kind": "online",
+			"place": "https://example.org/room", "contact_name": "", "contact_email": "", "contact_phone": "", "answer": nil,
+			"created_at": now, "can_answer": false, "can_cancel": false, "can_accept_proposal": false,
+		}},
+		EventInvitationAnswered: map[string]any{"application_id": id, "invitation_id": id, "kind": "interview", "answer": "proposed",
+			"proposed_at": now, "note": "Удобнее позже", "contact": "", "time": ""},
+		EventInvitationAccepted:   map[string]any{"application_id": id, "invitation_id": id, "starts_at": now},
+		EventInvitationCancelled:  map[string]any{"application_id": id, "invitation_id": id, "kind": "contacts"},
 		EventApplicationDecided:   ApplicationDecidedData{ApplicationID: id, Decision: "rejected", Note: "Спасибо"},
 		EventApplicationWithdrawn: ApplicationData{ApplicationID: id},
 		EventOfferCreated:         OfferCreatedData{OfferID: id, Message: "Приглашаем", Status: "pending"},
@@ -587,16 +591,6 @@ func TestToolsHTTPFollowTheContract(t *testing.T) {
 func w0() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
 // invitationRow — строка приглашения отклика для проверки форм данных.
-func invitationRow(id uuid.UUID, kind string) dbgen.ApplicationInvitation {
-	now := w0()
-	place := "online"
-	return dbgen.ApplicationInvitation{
-		ID: id, ApplicationID: id, Kind: kind, Status: "pending", Message: "Приглашаем", StartsAt: &now, PlaceKind: &place,
-		Place: "https://example.org/room", ContactName: "", AnswerAt: &now, AnswerNote: "Удобнее позже", AnsweredAt: &now,
-		CreatedAt: now, UpdatedAt: now,
-	}
-}
-
 // Негодные номера и тела на адресах инструментов: тот же 404, что у чужого, и 400 на неразборчивое тело; без входа 401.
 func TestToolsHTTPRefuseBadInput(t *testing.T) {
 	a := newAPI(t)

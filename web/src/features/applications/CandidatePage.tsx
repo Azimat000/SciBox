@@ -14,16 +14,14 @@ import { NotFoundPage } from '../status/NotFoundPage'
 import { useApplication, type Detail, type StaffReference } from './api'
 import { FileLink } from './ApplicationPage'
 import { DecisionModal } from './DecisionModal'
-import { InviteModal } from './InviteModal'
-import { InvitationList } from './Invitations'
 import { dateText, dateTimeText, refStatusLabel, statusLabel, statusTone } from './labels'
 import './applications.css'
 import { mailtoHref } from '../../lib/mailto'
 import { ChatButton } from '../chat/ChatButton'
 
 /**
- * Карточка отклика для организации: решение и приглашения, письмо, файлы, рекомендательные письма и профиль, как он был
- * отправлен. Первое открытие отмечает отклик просмотренным (это делает сервер). Список откликов: `/candidates`.
+ * Карточка отклика для организации: решение, письмо, файлы, рекомендательные письма и профиль, как он был
+ * отправлен. О собеседовании договариваются в переписке (кнопка рядом с решением); приглашений внутри отклика нет (D-256). Первое открытие отмечает отклик просмотренным (это делает сервер). Список откликов: `/candidates`.
  */
 export function CandidatePage() {
   const { id = '' } = useParams()
@@ -67,17 +65,6 @@ function Loader({ id }: { id: string }) {
         </aside>
 
         <div className="split-main application-main">
-          {(app.invitations.length > 0 || app.viewer.can_invite) && (
-            <section className="application-section" aria-labelledby="cand-invitations">
-              <h2 id="cand-invitations">{t.applications.invitation.title}</h2>
-              {app.invitations.length === 0 ? (
-                <p className="application-muted">{t.applications.invitation.noneStaff}</p>
-              ) : (
-                <InvitationList appId={app.id} invitations={app.invitations} role="staff" />
-              )}
-            </section>
-          )}
-
           {app.anonymized ? (
             <section className="application-section" aria-labelledby="cand-erased">
               <h2 id="cand-erased">{c.anonymizedTitle}</h2>
@@ -171,12 +158,12 @@ function Submission({ app, refs }: { app: Detail; refs: StaffReference[] }) {
   )
 }
 
-/** Решение по отклику: пока оно не принято, кнопки «Пригласить», «Принять», «Отказать»; потом итог и записка. */
+/** Решение по отклику: пока его нет, кнопки «Принять кандидата» и «Отказать»; потом итог и записка. */
 function ReviewPanel({ app }: { app: Detail }) {
   const r = t.applications.review
-  const [dialog, setDialog] = useState<'invite' | 'accepted' | 'rejected' | null>(null)
-  const { decisions, can_invite: canInvite } = app.viewer
-  const open = canInvite || decisions.length > 0
+  const [dialog, setDialog] = useState<'accepted' | 'rejected' | null>(null)
+  const { decisions } = app.viewer
+  const open = decisions.length > 0
   return (
     <div className="review-panel">
       <h2 id="cand-decision" className="review-title">
@@ -184,9 +171,8 @@ function ReviewPanel({ app }: { app: Detail }) {
       </h2>
       {open ? (
         <div className="review-actions">
-          {canInvite && <Button onClick={() => setDialog('invite')}>{t.applications.invitation.invite}</Button>}
           {decisions.includes('accepted') && (
-            <Button variant="secondary" onClick={() => setDialog('accepted')}>
+            <Button onClick={() => setDialog('accepted')}>
               {r.accept}
             </Button>
           )}
@@ -209,7 +195,6 @@ function ReviewPanel({ app }: { app: Detail }) {
           {app.decision_note}
         </p>
       )}
-      {dialog === 'invite' && <InviteModal appId={app.id} onClose={() => setDialog(null)} />}
       {(dialog === 'accepted' || dialog === 'rejected') && <DecisionModal appId={app.id} decision={dialog} onClose={() => setDialog(null)} />}
     </div>
   )

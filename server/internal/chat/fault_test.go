@@ -3,7 +3,6 @@ package chat
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -239,10 +238,7 @@ func TestDatabaseFailuresAreNeverSwallowed(t *testing.T) {
 		},
 		"backfill of a pair": func(t *testing.T, w *world) func(testkit.DB, *Service) error {
 			sci := w.Applicant("Борис Сомов")
-			app := w.application(sci, w.vacancy.ID, "invited")
-			at := w.clock.Now().Add(-time.Hour)
-			ans := at.Add(10 * time.Minute)
-			w.legacyInvitation(app, "interview", "confirmed", at, &ans, &ans, "")
+			w.application(sci, w.vacancy.ID, "viewed")
 			offer := w.offer(sci, w.vacancy.ID, "interested")
 			_ = offer
 			return func(db testkit.DB, _ *Service) error {

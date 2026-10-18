@@ -18,7 +18,7 @@ export const chatLists = {
 }
 
 export const chatHeaders = {
-  scientistInvited: () => clone<{ chat: ChatHeader }>(chatFile.examples.scientist_invited.response).chat,
+  scientistViewed: () => clone<{ chat: ChatHeader }>(chatFile.examples.scientist_viewed.response).chat,
   scientistClosed: () => clone<{ chat: ChatHeader }>(chatFile.examples.scientist_closed.response).chat,
   orgAnonymousOffer: () => clone<{ chat: ChatHeader }>(chatFile.examples.org_anonymous_offer.response).chat,
   orgApplication: () => clone<{ chat: ChatHeader }>(chatFile.examples.org_offer_then_application.response).chat,

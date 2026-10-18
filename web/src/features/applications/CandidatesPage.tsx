@@ -22,7 +22,7 @@ import { ChatButton } from '../chat/ChatButton'
 import { useActiveTabInView } from '../../ui/useActiveTabInView'
 
 /** Порядок вкладок: сначала то, до чего ещё не дошли руки. */
-const tabs: readonly AppStatus[] = ['sent', 'viewed', 'invited', 'accepted', 'rejected', 'withdrawn']
+const tabs: readonly AppStatus[] = ['sent', 'viewed', 'accepted', 'rejected', 'withdrawn']
 
 /** Список откликов на вакансии, которые человек ведёт: отбор по вакансии и статусу, всё в адресе страницы. */
 export function CandidatesPage() {
@@ -200,8 +200,6 @@ function Row({ cand, showVacancy }: { cand: Candidate; showVacancy: boolean }) {
       )}
       <p className="cand-meta">
         <Tag tone={statusTone(cand.status)}>{statusLabel(cand.status)}</Tag>
-        {cand.proposed_invitations > 0 && <Tag tone="accent">{c.proposed}</Tag>}
-        {cand.pending_invitations > 0 && <span>{c.waitsAnswer}</span>}
         <span>{c.sentAt(dateText(cand.created_at))}</span>
         {refs.total > 0 && <span>{c.refs(refs.received, refs.total)}</span>}
         <ChatButton chat={cand.chat} compact />

@@ -196,7 +196,7 @@ func TestEraseRemovesPersonalData(t *testing.T) {
 		"candidate notices":    `SELECT count(*) FROM notifications n JOIN applications a ON n.link = '/candidates/' || a.id::text WHERE a.user_id = $1`,
 		"not anonymized":       `SELECT count(*) FROM applications WHERE user_id = $1 AND (anonymized_at IS NULL OR cover_letter <> '' OR contact_email <> '' OR profile <> '{}'::jsonb OR decision_note <> '')`,
 		"rate events (by id)":  `SELECT count(*) FROM rate_events WHERE key = $1::text`,
-		"undecided still open": `SELECT count(*) FROM applications WHERE user_id = $1 AND status IN ('sent', 'viewed', 'invited')`,
+		"undecided still open": `SELECT count(*) FROM applications WHERE user_id = $1 AND status IN ('sent', 'viewed')`,
 	}
 	for what, q := range gone {
 		if n := testkit.Count(t, q, who.ID); n != 0 {

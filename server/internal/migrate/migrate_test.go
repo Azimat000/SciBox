@@ -129,12 +129,13 @@ func TestUpDownUp(t *testing.T) {
 		wantTables []string
 	}{
 		{"status", "pending", 0, nil},
-		{"up", "00034_vacancy_no_archive.sql", 2, allTables},
+		{"up", "00035_no_application_invitations.sql", 2, allTables},
 		{"up", "no migrations to apply", 2, allTables},
 		{"status", "applied", 2, allTables},
 		// Столбцы привязки ссылки (00025) и неактивности (00026), индексы для чисел главной (00024) и метрики очереди
 		// писем (00023) таблиц не добавляют; 00027 добавляет таблицу скрытых от организаций; 00028 (условия вакансии)
-		// только столбцы; 00029 (ссылка на GitHub) тоже один столбец; 00030 добавляет справочник навыков; 00031 чат; 00032 инструменты чата; 00033 живое обновление чата; 00034 (без архива вакансий, D-256) таблиц не меняет.
+		// только столбцы; 00029 (ссылка на GitHub) тоже один столбец; 00030 добавляет справочник навыков; 00031 чат; 00032 инструменты чата; 00033 живое обновление чата; 00034 (без архива вакансий) и 00035 (без приглашений в отклике) таблиц не меняют (D-256).
+		{"down", "00035_no_application_invitations.sql", 2, allTables},
 		{"down", "00034_vacancy_no_archive.sql", 2, allTables},
 		{"down", "00033_chat_live.sql", 2, toolTables},
 		{"down", "00032_chat_tools.sql", 2, chatTables},
@@ -171,7 +172,7 @@ func TestUpDownUp(t *testing.T) {
 		{"down", "00003_organizations.sql", 2, accountTables},
 		{"down", "00002_accounts.sql", 2, nil},
 		{"down", "00001_extensions.sql", 0, nil},
-		{"up", "00034_vacancy_no_archive.sql", 2, allTables},
+		{"up", "00035_no_application_invitations.sql", 2, allTables},
 		{"reset", "00001_extensions.sql", 0, nil},
 		{"reset", "no migrations to apply", 0, nil},
 		{"up", "00001_extensions.sql", 2, allTables},

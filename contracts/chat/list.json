@@ -50,9 +50,9 @@
             },
             "status": {
               "source": "application",
-              "value": "invited"
+              "value": "viewed"
             },
-            "needs_answer": true,
+            "needs_answer": false,
             "last_message": {
               "seq": 6,
               "kind": "system",
@@ -215,9 +215,9 @@
             },
             "status": {
               "source": "application",
-              "value": "invited"
+              "value": "viewed"
             },
-            "needs_answer": true,
+            "needs_answer": false,
             "last_message": {
               "seq": 6,
               "kind": "system",
@@ -428,9 +428,9 @@
             },
             "status": {
               "source": "application",
-              "value": "invited"
+              "value": "viewed"
             },
-            "needs_answer": true,
+            "needs_answer": false,
             "last_message": {
               "seq": 7,
               "kind": "system",

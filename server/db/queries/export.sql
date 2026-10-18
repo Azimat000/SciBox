@@ -32,7 +32,7 @@ JOIN profiles p ON p.id = h.profile_id
 JOIN organizations o ON o.id = h.org_id
 WHERE p.user_id = sqlc.arg(user_id);
 
--- Отклики вместе с приглашениями организаций, рекомендателями (без их писем: соискатель их не видит, D-082) и описанием
+-- Отклики вместе с рекомендателями (без их писем: соискатель их не видит, D-082) и описанием
 -- файлов. Сами файлы кладёт в архив сервис. Сотрудники организации названы только там, где они сами оставили контакты.
 -- name: ExportApplications :one
 SELECT COALESCE(jsonb_agg(x.doc ORDER BY x.created_at, x.id), '[]'::jsonb)::jsonb AS doc FROM (
@@ -42,9 +42,6 @@ SELECT COALESCE(jsonb_agg(x.doc ORDER BY x.created_at, x.id), '[]'::jsonb)::json
         'status', a.status, 'cover_letter', a.cover_letter, 'contact_email', a.contact_email,
         'profile_snapshot', a.profile, 'decision_note', a.decision_note,
         'created_at', a.created_at, 'status_changed_at', a.status_changed_at, 'anonymized_at', a.anonymized_at,
-        'invitations', (
-            SELECT COALESCE(jsonb_agg(to_jsonb(i) - 'application_id' - 'created_by' ORDER BY i.created_at, i.id), '[]'::jsonb)
-            FROM application_invitations i WHERE i.application_id = a.id),
         'referees', (
             SELECT COALESCE(jsonb_agg(jsonb_build_object('name', r.name, 'email', r.email::text, 'relation', r.relation,
                 'status', r.status, 'requested_at', r.created_at, 'answered_at', r.answered_at) ORDER BY r.created_at, r.id), '[]'::jsonb)

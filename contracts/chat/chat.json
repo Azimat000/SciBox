@@ -14,7 +14,7 @@
     "not_found"
   ],
   "examples": {
-    "scientist_invited": {
+    "scientist_viewed": {
       "status": 200,
       "response": {
         "chat": {
@@ -39,9 +39,9 @@
           "offer_id": null,
           "status": {
             "source": "application",
-            "value": "invited"
+            "value": "viewed"
           },
-          "needs_answer": true,
+          "needs_answer": false,
           "can_write": true,
           "closed_reason": null,
           "archived": false,

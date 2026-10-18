@@ -52,6 +52,7 @@ const (
 	ApplicationViewed             Action = "application.viewed" // организация впервые открыла отклик
 	ApplicationAccepted           Action = "application.accepted"
 	ApplicationRejected           Action = "application.rejected"
+	// Три действия ниже были, пока внутри отклика жили приглашения (до D-256); остались только в старых записях журнала.
 	ApplicationInvited            Action = "application.invited" // details: kind
 	ApplicationInvitationCanceled Action = "application.invitation_canceled"
 	ApplicationProposalAccepted   Action = "application.proposal_accepted"

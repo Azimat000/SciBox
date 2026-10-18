@@ -51,7 +51,7 @@ describe('chats page', () => {
     expect(first).toHaveAttribute('href', `/chats/${sciChat}`)
     expect(within(first).getByText('Сибирский институт квантовых материалов')).toBeInTheDocument()
     expect(within(first).getByText('Младший научный сотрудник лаборатории спинтроники')).toBeInTheDocument()
-    expect(within(first).getByText('Ждёт вашего ответа')).toBeInTheDocument()
+    expect(within(first).queryByText('Ждёт вашего ответа')).not.toBeInTheDocument()
     expect(within(first).getByText('Приглашение от организации')).toBeInTheDocument()
     expect(within(first).getByText('Непрочитанных сообщений: 1')).toBeInTheDocument()
     expect(first.querySelector('time')).toHaveAttribute('dateTime', '2026-10-14T09:40:00Z')
@@ -303,7 +303,7 @@ describe('chats page', () => {
 })
 
 describe('open chat', () => {
-  const header = (path: string, chat = chatHeaders.scientistInvited()) => ({ [`GET /api/chats/${path}`]: reply(200, { chat }) })
+  const header = (path: string, chat = chatHeaders.scientistViewed()) => ({ [`GET /api/chats/${path}`]: reply(200, { chat }) })
 
   it('marks the row, shows the header and the way to the application', async () => {
     stubApi(signedIn({ [LIST]: reply(200, chatLists.scientistAll()), ...header(sciChat) }))
@@ -336,13 +336,13 @@ describe('open chat', () => {
   })
 
   it('leads the scientist to the offer, and shows nothing when the chat has neither', async () => {
-    const offerChat = { ...chatHeaders.scientistInvited(), application_id: null, offer_id: 'd1' }
-    const bare = { ...chatHeaders.scientistInvited(), application_id: null, offer_id: null, needs_answer: false, vacancy: { ...chatHeaders.scientistInvited().vacancy, unit_name: '' } }
+    const offerChat = { ...chatHeaders.scientistViewed(), application_id: null, offer_id: 'd1' }
+    const bare = { ...chatHeaders.scientistViewed(), application_id: null, offer_id: null, needs_answer: false, vacancy: { ...chatHeaders.scientistViewed().vacancy, unit_name: '' } }
     stubApi(signedIn({ [LIST]: reply(200, chatLists.scientistAll()), ...header('o', offerChat), ...header('b', bare) }))
     const { router } = renderApp('/chats/o')
     expect(await screen.findByRole('link', { name: 'Открыть приглашение' })).toHaveAttribute('href', '/offers/d1')
     await act(() => router.navigate('/chats/b'))
-    await screen.findByText('Приглашение', { selector: '.chat-window-meta .tag' })
+    await screen.findByText('Отклик просмотрен', { selector: '.chat-window-meta .tag' })
     expect(screen.queryByRole('link', { name: /Открыть/ })).not.toBeInTheDocument()
     expect(document.querySelector('.chat-window-unit')).toBeNull()
   })
@@ -353,7 +353,7 @@ describe('open chat', () => {
       signedIn({
         [LIST]: reply(200, chatLists.scientistAll()),
         'GET /api/chats/nope': apiError(404, 'not_found', 'Такой переписки нет'),
-        'GET /api/chats/flaky': () => (fail ? apiError(500, 'internal', 'Сбой') : reply(200, { chat: chatHeaders.scientistInvited() })),
+        'GET /api/chats/flaky': () => (fail ? apiError(500, 'internal', 'Сбой') : reply(200, { chat: chatHeaders.scientistViewed() })),
       }),
     )
     const { router } = renderApp('/chats/nope')

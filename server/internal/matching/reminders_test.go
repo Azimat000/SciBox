@@ -180,8 +180,8 @@ func TestRemindersSkipWhoShouldNotGetThem(t *testing.T) {
 
 	applied := r.favorite(r.who, oct(12), long)
 	r.apply(r.who, applied.ID, "sent")
-	invited := r.favorite(r.who, oct(12), long)
-	r.apply(r.who, invited.ID, "invited")
+	viewed := r.favorite(r.who, oct(12), long)
+	r.apply(r.who, viewed.ID, "viewed")
 	withdrawn := r.favorite(r.who, oct(12), long) // отозванный отклик не мешает: вакансия снова открыта для человека
 	r.apply(r.who, withdrawn.ID, "withdrawn")
 	closed := r.favorite(r.who, oct(12), long)

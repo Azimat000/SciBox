@@ -245,24 +245,21 @@ func TestSearchAndVacancyFilter(t *testing.T) {
 func TestListItemContent(t *testing.T) {
 	w := newWorld(t)
 	sci := w.Applicant("Анна Ильина")
-	chat := w.chatOf(sci, w.vacancy.ID, "invited")
+	chat := w.chatOf(sci, w.vacancy.ID, "viewed")
 	app := uuidOfApplication(t, chat)
-	if _, err := testkit.Pool.Exec(bg, `INSERT INTO application_invitations (application_id, kind, status, message, starts_at, place_kind, place, created_at, updated_at)
-		VALUES ($1, 'interview', 'pending', 'Приходите', now() + interval '2 days', 'online', 'https://meet.example.org/r', now(), now())`, app); err != nil {
-		t.Fatal(err)
-	}
-	w.system(chat, EventInvitationCreated, map[string]any{"application_id": app})
+	w.system(chat, EventApplicationViewed, map[string]any{"application_id": app})
 	l, err := w.svc.List(bg, sci.User, ListQuery{Side: "scientist"})
 	if err != nil || len(l.Items) != 1 {
 		t.Fatalf("list: %+v, %v", l, err)
 	}
 	it := l.Items[0]
-	if !it.NeedsAnswer || it.Status != (Status{Source: "application", Value: "invited"}) || !it.CanWrite || it.ClosedReason != nil ||
+	// Отклик ответа учёного не ждёт: приглашений внутри отклика нет (D-256).
+	if it.NeedsAnswer || it.Status != (Status{Source: "application", Value: "viewed"}) || !it.CanWrite || it.ClosedReason != nil ||
 		it.Counterpart.Kind != SideOrg || it.Counterpart.Name == "" || it.Counterpart.Anonymous || it.Counterpart.ProfileID != nil {
 		t.Errorf("item = %+v", it)
 	}
 	if it.LastMessage == nil || it.LastMessage.Kind != KindSystem || it.LastMessage.Author != nil || it.LastMessage.EventType == nil ||
-		*it.LastMessage.EventType != EventInvitationCreated || it.LastMessage.Text != "" || it.LastMessage.Seq != 1 {
+		*it.LastMessage.EventType != EventApplicationViewed || it.LastMessage.Text != "" || it.LastMessage.Seq != 1 {
 		t.Errorf("last message = %+v", it.LastMessage)
 	}
 	if it.Vacancy.Title != w.vacancy.Title || it.Vacancy.OrgSlug != w.tm.Slug || it.Vacancy.UnitName != w.tm.UnitA.Name {

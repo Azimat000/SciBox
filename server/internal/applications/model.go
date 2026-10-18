@@ -20,17 +20,16 @@ import (
 const (
 	StatusSent      = "sent"      // отправлен
 	StatusViewed    = "viewed"    // просмотрен организацией
-	StatusInvited   = "invited"   // приглашён
 	StatusRejected  = "rejected"  // отказ
 	StatusAccepted  = "accepted"  // принят
 	StatusWithdrawn = "withdrawn" // отозван соискателем
 )
 
 // Statuses — все статусы.
-var Statuses = []string{StatusSent, StatusViewed, StatusInvited, StatusRejected, StatusAccepted, StatusWithdrawn}
+var Statuses = []string{StatusSent, StatusViewed, StatusRejected, StatusAccepted, StatusWithdrawn}
 
 // withdrawable — из каких статусов соискатель может отозвать отклик: пока решения нет.
-var withdrawable = []string{StatusSent, StatusViewed, StatusInvited}
+var withdrawable = []string{StatusSent, StatusViewed}
 
 // CanWithdraw — можно ли отозвать отклик в таком статусе.
 func CanWithdraw(status string) bool {
@@ -69,14 +68,8 @@ var (
 	ErrAlreadyApplied = errors.New("applications: already applied")
 	// ErrFilePending — файл ещё не проверен на вирусы и не выдаётся.
 	ErrFilePending = errors.New("applications: file is not scanned yet")
-	// ErrBadStatus — отклик в таком статусе нельзя отозвать, решить по нему или пригласить.
+	// ErrBadStatus — отклик в таком статусе нельзя отозвать или решить по нему.
 	ErrBadStatus = errors.New("applications: invalid status change")
-	// ErrBadInvitation — приглашение уже в другом состоянии (отвечено, отменено): действие не подходит.
-	ErrBadInvitation = errors.New("applications: invalid invitation state")
-	// ErrTooManyInvitations — на отклик уже отправлено предельное число приглашений.
-	ErrTooManyInvitations = errors.New("applications: too many invitations")
-	// ErrBlocked — соискатель заблокировал организацию: новых приглашений он не получает (срез 38, D-237).
-	ErrBlocked = errors.New("applications: the person blocked the organization")
 )
 
 // VacancyRef — вакансия, на которую пришёл отклик.
@@ -112,8 +105,6 @@ type Summary struct {
 	StatusChangedAt time.Time  `json:"status_changed_at"`
 	Vacancy         VacancyRef `json:"vacancy"`
 	References      RefsCount  `json:"references"`
-	// PendingInvitations — приглашения, которые ждут ответа соискателя.
-	PendingInvitations int `json:"pending_invitations"`
 	// Chat — переписка по отклику глазами смотрящего; null, если её нет (срез 38).
 	Chat *chat.Link `json:"chat"`
 }
@@ -140,8 +131,7 @@ type Base struct {
 	CV           *FileRef      `json:"cv"`
 	Files        []FileRef     `json:"files"`
 	// DecisionNote — записка организации к решению (принят, отказ); её видят обе стороны.
-	DecisionNote string       `json:"decision_note"`
-	Invitations  []Invitation `json:"invitations"`
+	DecisionNote string `json:"decision_note"`
 	// Chat — переписка по отклику глазами смотрящего; null, если её нет (срез 38).
 	Chat *chat.Link `json:"chat"`
 }
@@ -152,8 +142,6 @@ type ViewerInfo struct {
 	CanWithdraw bool   `json:"can_withdraw"`
 	// Decisions — какие решения организация может поставить сейчас (accepted, rejected); у соискателя пусто.
 	Decisions []string `json:"decisions"`
-	// CanInvite — можно ли отправить приглашение; у соискателя false.
-	CanInvite bool `json:"can_invite"`
 }
 
 // Detail — карточка отклика. References зависит от того, кто смотрит: соискателю []references.Request (без писем),
@@ -193,35 +181,6 @@ type VacancyState struct {
 	Application *ApplicationRef `json:"application"`
 }
 
-// InvitationAnswer — ответ соискателя на приглашение.
-type InvitationAnswer struct {
-	ProposedAt *time.Time `json:"proposed_at"`
-	Note       string     `json:"note"`
-	Contact    string     `json:"contact"`
-	Time       string     `json:"time"`
-	AnsweredAt time.Time  `json:"answered_at"`
-}
-
-// Invitation — приглашение; обе стороны видят его целиком. Флаги can_* зависят от того, кто смотрит.
-type Invitation struct {
-	ID           uuid.UUID         `json:"id"`
-	Kind         string            `json:"kind"`
-	Status       string            `json:"status"`
-	Message      string            `json:"message"`
-	StartsAt     *time.Time        `json:"starts_at"`
-	PlaceKind    string            `json:"place_kind"`
-	Place        string            `json:"place"`
-	ContactName  string            `json:"contact_name"`
-	ContactEmail string            `json:"contact_email"`
-	ContactPhone string            `json:"contact_phone"`
-	Answer       *InvitationAnswer `json:"answer"`
-	CreatedAt    time.Time         `json:"created_at"`
-	// CanAnswer — соискатель может ответить; CanCancel и CanAcceptProposal — организация может отменить и принять предложенное время.
-	CanAnswer         bool `json:"can_answer"`
-	CanCancel         bool `json:"can_cancel"`
-	CanAcceptProposal bool `json:"can_accept_proposal"`
-}
-
 // Candidate — отклик в списке организации.
 type Candidate struct {
 	ID              uuid.UUID  `json:"id"`
@@ -234,9 +193,6 @@ type Candidate struct {
 	Vacancy         VacancyRef `json:"vacancy"`
 	UnitName        string     `json:"unit_name"`
 	References      RefsCount  `json:"references"`
-	// PendingInvitations ждут ответа соискателя, ProposedInvitations ждут решения организации.
-	PendingInvitations  int `json:"pending_invitations"`
-	ProposedInvitations int `json:"proposed_invitations"`
 	// Chat — переписка по отклику глазами организации; null, если её нет (срез 38).
 	Chat *chat.Link `json:"chat"`
 }

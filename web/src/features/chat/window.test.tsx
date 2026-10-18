@@ -10,7 +10,7 @@ import { chatHub } from './hub'
 
 // Окно переписки (срез 35): лента, системные строки, поле ввода, отправка, правка, удаление, живые события.
 
-const ID = chatHeaders.scientistInvited().id
+const ID = chatHeaders.scientistViewed().id
 const HEADER = `GET /api/chats/${ID}`
 const MESSAGES = `GET /api/chats/${ID}/messages*`
 const SEND = `POST /api/chats/${ID}/messages`
@@ -19,7 +19,7 @@ const CLIENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 
 const page = (items: Message[], more = false): MessagePage => ({ items, has_more: more })
 
-function windowApi(items: Message[], header: ChatHeader = chatHeaders.scientistInvited(), extra: Record<string, Route> = {}, more = false) {
+function windowApi(items: Message[], header: ChatHeader = chatHeaders.scientistViewed(), extra: Record<string, Route> = {}, more = false) {
   return stubApi({
     ...signedInAs(ann),
     'GET /api/notifications/unread-count': reply(200, { unread: 0 }),
@@ -120,25 +120,25 @@ describe('feed', () => {
   })
 
   it('shows a line before the first unread message', async () => {
-    const header = { ...chatHeaders.scientistInvited(), read: { mine: 1, theirs: 1 } }
+    const header = { ...chatHeaders.scientistViewed(), read: { mine: 1, theirs: 1 } }
     await open([textMessage(1), textMessage(2), textMessage(3)], header)
     expect(screen.getByText('Новые сообщения')).toBeInTheDocument()
   })
 
   it('marks the shown messages as read once and does not ask again for the same place', async () => {
-    const { calls } = await open([textMessage(1), textMessage(2), textMessage(3)], { ...chatHeaders.scientistInvited(), read: { mine: 1, theirs: 0 } })
+    const { calls } = await open([textMessage(1), textMessage(2), textMessage(3)], { ...chatHeaders.scientistViewed(), read: { mine: 1, theirs: 0 } })
     await waitFor(() => expect(calls.filter((c) => c.method === 'POST' && c.path === `/api/chats/${ID}/read`)).toHaveLength(1))
     expect(calls.find((c) => c.path === `/api/chats/${ID}/read`)?.body).toEqual({ up_to: 3 })
   })
 
   it('does not mark anything read when everything is already read', async () => {
-    const { calls } = await open([textMessage(1), textMessage(2)], { ...chatHeaders.scientistInvited(), read: { mine: 2, theirs: 0 } })
+    const { calls } = await open([textMessage(1), textMessage(2)], { ...chatHeaders.scientistViewed(), read: { mine: 2, theirs: 0 } })
     await new Promise((r) => setTimeout(r, 400))
     expect(calls.filter((c) => c.path === `/api/chats/${ID}/read`)).toHaveLength(0)
   })
 
   it('tries again later when marking read failed', async () => {
-    const { calls } = await open([textMessage(1)], { ...chatHeaders.scientistInvited(), read: { mine: 0, theirs: 0 } }, { [READ]: apiError(500, 'internal', 'Ошибка') })
+    const { calls } = await open([textMessage(1)], { ...chatHeaders.scientistViewed(), read: { mine: 0, theirs: 0 } }, { [READ]: apiError(500, 'internal', 'Ошибка') })
     await waitFor(() => expect(calls.filter((c) => c.path === `/api/chats/${ID}/read`).length).toBeGreaterThan(0))
     fireEvent.scroll(feed())
     await waitFor(() => expect(calls.filter((c) => c.path === `/api/chats/${ID}/read`).length).toBeGreaterThan(1))
@@ -151,7 +151,7 @@ describe('feed', () => {
       'GET /api/notifications/unread-count': reply(200, { unread: 0 }),
       'GET /api/chats/unread-count': reply(200, unreadCounts.none()),
       'GET /api/chats?*': reply(200, chatLists.scientistAll()),
-      [HEADER]: reply(200, { chat: chatHeaders.scientistInvited() }),
+      [HEADER]: reply(200, { chat: chatHeaders.scientistViewed() }),
       [MESSAGES]: () => (fail ? apiError(500, 'internal', 'Сервер споткнулся') : reply(200, page([textMessage(1)]))),
     })
     renderApp(`/chats/${ID}`)
@@ -583,7 +583,7 @@ describe('live updates', () => {
       'GET /api/notifications/unread-count': reply(200, { unread: 0 }),
       'GET /api/chats/unread-count': reply(200, unreadCounts.none()),
       'GET /api/chats?*': reply(200, chatLists.scientistAll()),
-      [HEADER]: reply(200, { chat: chatHeaders.scientistInvited() }),
+      [HEADER]: reply(200, { chat: chatHeaders.scientistViewed() }),
       [MESSAGES]: async (call) => {
         await gate
         return call.path.includes('after=') ? reply(200, page([])) : reply(200, page([textMessage(1)]))
@@ -677,61 +677,33 @@ describe('answers from the conversation', () => {
   })
   const created = (over: Record<string, unknown> = {}) => systemMessage(2, 'invitation.created', { application_id: 'b0000000-0000-4000-8000-000000000001', invitation: invitation(over) })
   const INV = 'f0000000-0000-4000-8000-000000000001'
-  const answerPath = `POST /api/applications/b0000000-0000-4000-8000-000000000001/invitations/${INV}/answer`
 
-  it('confirms the time from the conversation and the buttons go away', async () => {
-    const calls: string[] = []
-    const { fetch } = await open([textMessage(1), created()], undefined, {
-      [answerPath]: (call) => {
-        calls.push(JSON.stringify(call.body))
-        return reply(204)
-      },
-      [`GET /api/chats/${ID}/messages?limit=30&after=2`]: reply(
-        200,
-        page([systemMessage(3, 'invitation.answered', { application_id: 'b0000000-0000-4000-8000-000000000001', invitation_id: INV, kind: 'interview', answer: 'confirmed', proposed_at: null, note: '', contact: '', time: '' })]),
-      ),
-    })
-    expect(fetch).toBeTruthy()
-    await userEvent.click(await screen.findByRole('button', { name: 'Подтвердить время' }))
-    await waitFor(() => expect(calls).toEqual(['{"action":"confirm"}']))
-    expect(await screen.findByText('Вы подтвердили время')).toBeInTheDocument()
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Подтвердить время' })).not.toBeInTheDocument())
+  // Приглашения внутри отклика были до D-256: в старых переписках строка о нём осталась историей, без кнопок у обеих сторон.
+  it('shows an old invitation to an interview as history, without buttons on either side', async () => {
+    const answered = systemMessage(3, 'invitation.answered', { application_id: 'b0000000-0000-4000-8000-000000000001', invitation_id: INV, kind: 'interview', answer: 'confirmed', proposed_at: null, note: '', contact: '', time: '' })
+    const first = await open([textMessage(1), created(), answered])
+    expect(first.fetch).toBeTruthy()
+    expect(await screen.findByText('Приглашение: собеседование')).toBeInTheDocument()
     expect(screen.getByText('Подтверждено')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'https://telemost.yandex.ru/j/12345678901234' })).toBeInTheDocument()
+    for (const name of ['Подтвердить время', 'Предложить другое время', 'Оставить контакты', 'Принять предложенное время', 'Отменить приглашение']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
   })
 
-  it('answers with another time from the dialog of the applications page', async () => {
-    const bodies: unknown[] = []
-    await open([created()], undefined, {
-      [answerPath]: (call) => {
-        bodies.push(call.body)
-        return reply(204)
-      },
-    })
-    await userEvent.click(await screen.findByRole('button', { name: 'Предложить другое время' }))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Дата/), { target: { value: '2026-10-23' } })
-    fireEvent.change(within(dialog).getByLabelText(/Время/), { target: { value: '15:30' } })
-    await userEvent.click(within(dialog).getByRole('button', { name: /Отправить|Предложить/ }))
-    await waitFor(() => expect(bodies).toHaveLength(1))
-    expect(bodies[0]).toMatchObject({ action: 'propose', proposed_at: '2026-10-23T15:30:00+03:00' })
-  })
-
-  it('shows the organisation its own buttons: accept the proposed time and cancel', async () => {
+  it('shows the organisation the proposed time of an old invitation, and no buttons', async () => {
     const header = { ...chatHeaders.orgApplication(), id: 'c0000000-0000-4000-8000-000000000055' }
-    const proposed = created({ status: 'proposed', answer: { proposed_at: '2026-10-23T09:00:00Z', note: 'Удобнее позже', contact: '', time: '', answered_at: '2026-10-15T09:00:00Z' }, can_answer: false, can_cancel: true, can_accept_proposal: true })
-    const accept = vi.fn(() => reply(204))
-    await open([proposed], header, { [`POST /api/applications/b0000000-0000-4000-8000-000000000001/invitations/${INV}/accept-proposal`]: accept })
+    const proposed = created({ status: 'proposed', answer: { proposed_at: '2026-10-23T09:00:00Z', note: 'Удобнее позже', contact: '', time: '', answered_at: '2026-10-15T09:00:00Z' } })
+    await open([proposed], header)
     expect((await screen.findAllByText(/Предложено другое время/)).length).toBeGreaterThan(0)
-    expect(screen.queryByRole('button', { name: 'Подтвердить время' })).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Принять предложенное время' }))
-    await waitFor(() => expect(accept).toHaveBeenCalled())
-    expect(screen.getByRole('button', { name: 'Отменить приглашение' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Принять предложенное время' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отменить приглашение' })).not.toBeInTheDocument()
   })
 
   it('answers an offer to a vacancy with «Интересно» through the same form as the offer page', async () => {
     const OFFER = 'd0000000-0000-4000-8000-000000000003'
     const bodies: unknown[] = []
-    const header: ChatHeader = { ...chatHeaders.scientistInvited(), application_id: null, offer_id: OFFER, status: { source: 'offer', value: 'pending' }, needs_answer: true }
+    const header: ChatHeader = { ...chatHeaders.scientistViewed(), application_id: null, offer_id: OFFER, status: { source: 'offer', value: 'pending' }, needs_answer: true }
     await open([systemMessage(1, 'offer.created', { offer_id: OFFER, message: 'Посмотрите нашу вакансию', status: 'pending', can_answer: true })], header, {
       [`POST /api/offers/${OFFER}/answer`]: (call) => {
         bodies.push(call.body)
@@ -811,7 +783,7 @@ describe('browser behaviour', () => {
 
   it('does not read while the tab is hidden and reads when it comes back', async () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
-    const { calls } = await open([textMessage(1), textMessage(2)], { ...chatHeaders.scientistInvited(), read: { mine: 0, theirs: 0 } })
+    const { calls } = await open([textMessage(1), textMessage(2)], { ...chatHeaders.scientistViewed(), read: { mine: 0, theirs: 0 } })
     await new Promise((r) => setTimeout(r, 400))
     expect(calls.filter((c) => c.path === `/api/chats/${ID}/read`)).toHaveLength(0)
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
@@ -823,7 +795,7 @@ describe('browser behaviour', () => {
 
   it('checks again on window focus', async () => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
-    const { calls } = await open([textMessage(1)], { ...chatHeaders.scientistInvited(), read: { mine: 0, theirs: 0 } })
+    const { calls } = await open([textMessage(1)], { ...chatHeaders.scientistViewed(), read: { mine: 0, theirs: 0 } })
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
     act(() => {
       window.dispatchEvent(new Event('focus'))
@@ -856,7 +828,7 @@ describe('browser behaviour', () => {
 
   it('closes the delete question and the offer answer window without doing anything', async () => {
     const OFFER = 'd0000000-0000-4000-8000-000000000003'
-    const header: ChatHeader = { ...chatHeaders.scientistInvited(), application_id: null, offer_id: OFFER, status: { source: 'offer', value: 'pending' }, needs_answer: true }
+    const header: ChatHeader = { ...chatHeaders.scientistViewed(), application_id: null, offer_id: OFFER, status: { source: 'offer', value: 'pending' }, needs_answer: true }
     const { calls } = await open(
       [mineMessage(1, { text: 'Своё' }), systemMessage(2, 'offer.created', { offer_id: OFFER, message: 'Приглашаем', status: 'pending', can_answer: true })],
       header,

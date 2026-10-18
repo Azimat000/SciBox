@@ -4,7 +4,7 @@
   "box": ["all", "unread", "archive"],
   "counterpart_kind": ["scientist", "org"],
   "status_source": ["application", "offer"],
-  "status_value": ["sent", "viewed", "invited", "rejected", "accepted", "withdrawn", "pending", "interested", "declined", "cancelled"],
+  "status_value": ["sent", "viewed", "rejected", "accepted", "withdrawn", "pending", "interested", "declined", "cancelled"],
   "message_kind": ["text", "system"],
   "author_side": ["scientist", "org"],
   "event_type": [

@@ -12,7 +12,7 @@ import { useChatEvents } from './hub'
 // Живой поток для сайта (срез 35): правка кэша по событиям и один поток на вошедшего человека.
 
 const enc = new TextEncoder()
-const ID = chatHeaders.scientistInvited().id
+const ID = chatHeaders.scientistViewed().id
 
 afterEach(() => {
   vi.useRealTimers()
@@ -23,7 +23,7 @@ describe('applyEvent', () => {
   const setup = () => {
     const client = new QueryClient()
     const schedule = vi.fn()
-    client.setQueryData<ChatHeader>(keys.one(ann.id, ID), chatHeaders.scientistInvited())
+    client.setQueryData<ChatHeader>(keys.one(ann.id, ID), chatHeaders.scientistViewed())
     return { client, schedule }
   }
   const header = (client: QueryClient) => client.getQueryData<ChatHeader>(keys.one(ann.id, ID))!

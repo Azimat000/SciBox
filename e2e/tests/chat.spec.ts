@@ -2,8 +2,8 @@ import { expect } from '@playwright/test'
 import { registerAndConfirm, signIn, switchRole, test, uniqueEmail, watchServerErrors } from './helpers'
 
 // Срез 39: переписка двух браузеров вживую на настоящем сервере.
-// Отклик → окно переписки у обеих сторон → сообщения, галочки и «печатает» без перезагрузки → приглашение приходит в
-// переписку и подтверждается там же → отказ закрывает переписку у обеих сторон.
+// Отклик → окно переписки у обеих сторон → сообщения, галочки и «печатает» без перезагрузки → о собеседовании
+// договариваются сообщениями (приглашений внутри отклика нет, D-256) → отказ закрывает переписку у обеих сторон.
 // Организация демо: «Центр изучения Арктики», владелец Ольга Кузнецова.
 
 const owner = 'olga.kuznetsova@demo.example.ru'
@@ -76,26 +76,14 @@ test('переписка двух браузеров идёт вживую, от
     await expect(staff.getByText('около 200 м керна')).toBeVisible({ timeout: 15_000 })
   })
 
-  await test.step('приглашение на собеседование приходит в переписку', async () => {
+  await test.step('о собеседовании договариваются в переписке, кнопок приглашения нет', async () => {
+    await staff.getByRole('textbox', { name: 'Сообщение' }).fill('Приглашаем на собеседование в четверг в 12:00 по Москве, ссылка: https://telemost.example.ru/j/777')
+    await staff.getByRole('button', { name: 'Отправить' }).click()
+    await expect(page.getByText(/собеседование в четверг в 12:00/)).toBeVisible({ timeout: 15_000 })
     await staff.goto('/candidates')
     await staff.getByRole('link', { name: name }).first().click()
-    await staff.getByRole('button', { name: 'Пригласить' }).click()
-    const dialog = staff.getByRole('dialog')
-    await dialog.getByLabel('Дата').fill(inDays(3))
-    await dialog.getByLabel('Время (МСК)').fill('12:00')
-    await dialog.getByLabel('Ссылка на встречу').fill('https://telemost.example.ru/j/777')
-    await dialog.getByRole('button', { name: 'Отправить приглашение' }).click()
-    await expect(staff.getByText('Приглашение отправлено')).toBeVisible()
-    // У учёного окно переписки не перезагружалось: строка и кнопка ответа появились сами.
-    await expect(page.getByText(/Приглашение: /).first()).toBeVisible({ timeout: 15_000 })
-  })
-
-  await test.step('учёный подтверждает время прямо в переписке', async () => {
-    await page.getByRole('button', { name: 'Подтвердить время' }).click()
-    await expect(page.getByText('Вы подтвердили время')).toBeVisible()
-    await staff.goto('/chats')
-    await staff.getByRole('link', { name: new RegExp(name) }).first().click()
-    await expect(staff.getByText('Соискатель подтвердил время')).toBeVisible()
+    await expect(staff.getByRole('button', { name: 'Принять кандидата' })).toBeVisible()
+    await expect(staff.getByRole('button', { name: 'Пригласить', exact: true })).toHaveCount(0)
   })
 
   await test.step('отказ закрывает переписку у обеих сторон сразу', async () => {
@@ -117,9 +105,3 @@ test('переписка двух браузеров идёт вживую, от
   await orgSide.close()
   expect([...serverErrors, ...staffErrors]).toEqual([])
 })
-
-/** Дата через n дней в формате поля даты (ГГГГ-ММ-ДД), по Москве. */
-function inDays(n: number): string {
-  const d = new Date(Date.now() + n * 86_400_000)
-  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' })
-}

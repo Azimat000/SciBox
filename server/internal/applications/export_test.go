@@ -58,10 +58,10 @@ func TestExportFollowsRightsOfTheList(t *testing.T) {
 func TestExportFilters(t *testing.T) {
 	l := newListWorld(t)
 	owner := l.tm.Owner.User
-	l.setStatus(l.appA[0].ID, StatusInvited)
+	l.setStatus(l.appA[0].ID, StatusAccepted)
 	l.setStatus(l.appA[1].ID, StatusWithdrawn)
 	for name, f := range map[string]CandidateFilter{
-		"vacancy": {VacancyID: l.vacA.ID}, "status": {Status: StatusInvited}, "withdrawn are listed too": {Status: StatusWithdrawn},
+		"vacancy": {VacancyID: l.vacA.ID}, "status": {Status: StatusAccepted}, "withdrawn are listed too": {Status: StatusWithdrawn},
 		"vacancy and status": {Status: StatusSent, VacancyID: l.vacA.ID}, "paging is ignored": {Limit: 1, Offset: 2},
 	} {
 		list, _ := l.svc.Candidates(bg, owner, CandidateFilter{VacancyID: f.VacancyID, Status: f.Status, Limit: 50})
@@ -224,7 +224,7 @@ func TestWriteCSV(t *testing.T) {
 	hi := 14
 	rows := []ExportRow{{
 		ID: id, ApplicantName: "Мария Петрова", ContactEmail: "maria@example.ru", VacancyTitle: "Научный сотрудник; лаборатория «Катализ»",
-		OrgName: "Институт", UnitName: "Лаборатория А", Status: StatusInvited, CreatedAt: at, StatusChangedAt: at.Add(26 * time.Hour),
+		OrgName: "Институт", UnitName: "Лаборатория А", Status: StatusAccepted, CreatedAt: at, StatusChangedAt: at.Add(26 * time.Hour),
 		Degree: "candidate", AcademicTitle: "docent", Level: 2, HIndex: &hi,
 	}, {
 		ID: uuid.New(), ApplicantName: "Борис", Status: StatusWithdrawn, CreatedAt: at, StatusChangedAt: at, VacancyTitle: "Вакансия",
@@ -244,7 +244,7 @@ func TestWriteCSV(t *testing.T) {
 	if lines[0] != strings.Join(exportHeader, ";") {
 		t.Errorf("заголовок: %q", lines[0])
 	}
-	want := `Мария Петрова;maria@example.ru;"Научный сотрудник; лаборатория «Катализ»";Институт;Лаборатория А;Приглашён;` +
+	want := `Мария Петрова;maria@example.ru;"Научный сотрудник; лаборатория «Катализ»";Институт;Лаборатория А;Принят;` +
 		`14.10.2026 09:30;15.10.2026 11:30;Кандидат наук;Доцент;R2;14;https://scibox.example.ru/candidates/` + id.String()
 	if lines[1] != want {
 		t.Errorf("строка:\n%s\nожидали\n%s", lines[1], want)

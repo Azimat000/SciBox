@@ -1,50 +1,4 @@
--- Разбор откликов организацией (срез 9).
-
--- Приглашения ------------------------------------------------------------------------------------------------------
-
--- name: InsertInvitation :one
-INSERT INTO application_invitations (application_id, kind, status, message, starts_at, place_kind, place, contact_name, contact_email, contact_phone, created_by, created_at, updated_at)
-VALUES (@application_id, @kind, @status, @message, @starts_at, @place_kind, @place, @contact_name, @contact_email, @contact_phone, @created_by, @now, @now)
-RETURNING id;
-
--- name: ListInvitations :many
-SELECT * FROM application_invitations WHERE application_id = $1 ORDER BY created_at, id;
-
--- name: GetInvitation :one
-SELECT * FROM application_invitations WHERE id = @id AND application_id = @application_id;
-
--- name: CountInvitations :one
-SELECT count(*)::bigint FROM application_invitations WHERE application_id = $1;
-
--- Статус приглашения меняется только из ожидаемых: две одновременные смены не пройдут обе.
--- name: SetInvitationStatusFrom :execrows
-UPDATE application_invitations SET status = @to_status, updated_at = @now::timestamptz
-WHERE id = @id AND status = ANY(@from_statuses::text[]);
-
--- Ответ соискателя: срабатывает один раз, пока приглашение ждёт ответа.
--- name: AnswerInvitation :execrows
-UPDATE application_invitations
-SET status = @to_status, answer_at = @answer_at, answer_note = @answer_note, answer_contact = @answer_contact, answer_time = @answer_time,
-    answered_at = @now::timestamptz, updated_at = @now::timestamptz
-WHERE id = @id AND status = 'pending';
-
--- Организация принимает время, которое предложил соискатель: оно становится временем собеседования.
--- name: AcceptProposedTime :execrows
-UPDATE application_invitations SET status = 'confirmed', starts_at = answer_at, updated_at = @now::timestamptz
-WHERE id = @id AND status = 'proposed' AND answer_at > @now::timestamptz;
-
--- Все открытые приглашения отклика закрываются (отказ, отзыв отклика).
--- Возвращает закрытые приглашения: о каждом переписка дописывает строку (срез 38).
--- name: CancelOpenInvitations :many
-UPDATE application_invitations SET status = 'cancelled', updated_at = @now::timestamptz
-WHERE application_id = @application_id AND status IN ('pending', 'proposed', 'confirmed')
-RETURNING id, kind;
-
--- Новое собеседование заменяет прежние открытые.
--- name: CancelOpenInterviews :many
-UPDATE application_invitations SET status = 'cancelled', updated_at = @now::timestamptz
-WHERE application_id = @application_id AND kind = 'interview' AND status IN ('pending', 'proposed', 'confirmed')
-RETURNING id, kind;
+-- Разбор откликов организацией (срез 9). Приглашений внутри отклика нет с D-256.
 
 -- Решение организации ----------------------------------------------------------------------------------------------
 
@@ -64,9 +18,7 @@ SELECT a.id, a.status, a.created_at, a.status_changed_at, (a.anonymized_at IS NO
        COALESCE(a.profile->>'headline', '')::text AS headline,
        v.id AS vacancy_id, v.title AS vacancy_title, v.status AS vacancy_status, v.org_name, v.org_slug, v.unit_name,
        (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id)::bigint AS refs_total,
-       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received,
-       (SELECT count(*) FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'pending')::bigint AS invites_pending,
-       (SELECT count(*) FROM application_invitations i WHERE i.application_id = a.id AND i.status = 'proposed')::bigint AS invites_proposed
+       (SELECT count(*) FROM reference_requests r WHERE r.application_id = a.id AND r.status = 'received')::bigint AS refs_received
 FROM applications a
 JOIN users u ON u.id = a.user_id
 JOIN vacancy_view v ON v.id = a.vacancy_id
@@ -96,15 +48,6 @@ WHERE v.org_id = ANY(@whole_orgs::uuid[]) OR v.unit_id = ANY(@units::uuid[])
 GROUP BY v.id, v.title, v.status, v.org_name, v.org_slug
 ORDER BY max(a.created_at) DESC, v.id
 LIMIT 300;
-
--- Приглашение переводит отклик в «приглашён» (из «отправлен» и «просмотрен»; уже приглашённому только обновляет строку и тем
--- самым блокирует её до конца транзакции: решение и приглашение одновременно не пройдут). Время статуса не сдвигается,
--- если отклик уже был приглашён.
--- name: MarkApplicationInvited :execrows
-UPDATE applications
-SET status = 'invited', updated_at = @now::timestamptz,
-    status_changed_at = CASE WHEN status = 'invited' THEN status_changed_at ELSE @now::timestamptz END
-WHERE id = @id AND status = ANY(@from_statuses::text[]);
 
 -- Выгрузка откликов в файл (срез 16, D-205): те же права и отборы, что у списка откликов, но без страниц и без чисел по
 -- каждому отклику: одна строка на отклик, предел задаёт сервис (предел + 1, чтобы заметить «не поместилось»).

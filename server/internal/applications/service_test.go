@@ -633,7 +633,7 @@ func TestUnknownFileKindIsNeverServed(t *testing.T) {
 // ---- отзыв ----
 
 func TestWithdraw(t *testing.T) {
-	for status, ok := range map[string]bool{StatusSent: true, StatusViewed: true, StatusInvited: true, StatusRejected: false, StatusAccepted: false, StatusWithdrawn: false} {
+	for status, ok := range map[string]bool{StatusSent: true, StatusViewed: true, StatusRejected: false, StatusAccepted: false, StatusWithdrawn: false} {
 		t.Run(status, func(t *testing.T) {
 			w := newWorld(t)
 			me := w.Applicant("Мария Смирнова")
@@ -835,13 +835,13 @@ func TestForVacancy(t *testing.T) {
 }
 
 func TestCanWithdrawTable(t *testing.T) {
-	want := map[string]bool{StatusSent: true, StatusViewed: true, StatusInvited: true, StatusRejected: false, StatusAccepted: false, StatusWithdrawn: false, "": false, "unknown": false}
+	want := map[string]bool{StatusSent: true, StatusViewed: true, "invited": false, StatusRejected: false, StatusAccepted: false, StatusWithdrawn: false, "": false, "unknown": false}
 	for s, ok := range want {
 		if CanWithdraw(s) != ok {
 			t.Errorf("CanWithdraw(%q) = %v", s, !ok)
 		}
 	}
-	if len(Statuses) != 6 {
+	if len(Statuses) != 5 {
 		t.Errorf("%d statuses", len(Statuses))
 	}
 }

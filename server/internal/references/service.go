@@ -115,7 +115,7 @@ func (s *Service) spend(ctx context.Context, q *dbgen.Queries, user uuid.UUID) e
 // openStatus: отклик ещё живой, и рекомендательные письма по нему имеют смысл.
 func openStatus(status string) bool {
 	switch status {
-	case "sent", "viewed", "invited":
+	case "sent", "viewed":
 		return true
 	}
 	return false

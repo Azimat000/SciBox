@@ -1,4 +1,4 @@
-import type { AppList, ApplyState, Candidate, CandidateList, Detail, Invitation, Reference, StaffReference, Summary, VacancyCount } from '../features/applications/api'
+import type { AppList, ApplyState, Candidate, CandidateList, Detail, Reference, StaffReference, Summary, VacancyCount } from '../features/applications/api'
 import type { Notice, NoticeList } from '../features/notifications/api'
 import { profile } from './profile'
 import { VACANCY_ID } from './vacancies'
@@ -37,8 +37,7 @@ export const application: Detail = {
   cv: cvFile,
   files: [attachment],
   decision_note: '',
-  invitations: [],
-  viewer: { role: 'applicant', can_withdraw: true, decisions: [], can_invite: false },
+  viewer: { role: 'applicant', can_withdraw: true, decisions: [] },
   references: [pendingRef, receivedRef, declinedRef],
 }
 
@@ -50,7 +49,7 @@ export const staffFileOnly: StaffReference = { ...receivedRef, id: '99999999-000
 
 export const staffApplication: Detail = {
   ...application,
-  viewer: { role: 'staff', can_withdraw: false, decisions: ['accepted', 'rejected'], can_invite: true },
+  viewer: { role: 'staff', can_withdraw: false, decisions: ['accepted', 'rejected'] },
   references: [staffReceived, staffPending, staffDeclined],
 }
 
@@ -61,7 +60,6 @@ export const summary: Summary = {
   status_changed_at: '2026-10-03T09:00:00Z',
   vacancy: application.vacancy,
   references: { total: 3, received: 1 },
-  pending_invitations: 0,
 }
 
 export const list = (items: Summary[], total = items.length): AppList => ({ items, total })
@@ -76,60 +74,17 @@ export const notice = (over: Partial<Notice> = {}): Notice => ({
 
 export const noticeList = (items: Notice[], unread = items.filter((n) => !n.read).length, total = items.length): NoticeList => ({ items, total, unread })
 
-// ---- приглашения и список откликов организации (срез 9) ----
+// ---- список откликов организации (срез 9) ----
 
-export const INV_ID = 'a1000000-0000-4000-8000-000000000001'
-
-const inv = (over: Partial<Invitation>): Invitation => ({
-  id: INV_ID, kind: 'interview', status: 'pending', message: '', starts_at: '2026-10-15T11:00:00Z', place_kind: 'online', place: 'https://meet.example.org/room-1',
-  contact_name: '', contact_email: '', contact_phone: '', answer: null, created_at: '2026-10-03T10:00:00Z', can_answer: false, can_cancel: false, can_accept_proposal: false, ...over,
-})
-
-/** Собеседование, которое ждёт ответа: соискатель может ответить, организация отменить. */
-export const interviewForApplicant = inv({ message: 'Расскажем о проекте', can_answer: true })
-export const interviewForStaff = inv({ message: 'Расскажем о проекте', can_cancel: true })
-export const interviewOnsite = inv({ id: 'a1000000-0000-4000-8000-000000000002', place_kind: 'onsite', place: 'Новосибирск, пр. Лаврентьева, 5', can_cancel: true })
-export const interviewBadLink = inv({ id: 'a1000000-0000-4000-8000-000000000003', place: 'javascript:alert(1)' })
-export const interviewConfirmed = inv({
-  status: 'confirmed', can_cancel: true, answer: { proposed_at: null, note: 'Буду вовремя', contact: '', time: '', answered_at: '2026-10-04T08:00:00Z' },
-})
-export const interviewProposedByApplicant = inv({
-  status: 'proposed', answer: { proposed_at: '2026-10-17T12:00:00Z', note: 'Занят в этот день', contact: '', time: '', answered_at: '2026-10-04T08:00:00Z' },
-})
-export const interviewProposedForStaff = { ...interviewProposedByApplicant, can_cancel: true, can_accept_proposal: true }
-export const interviewAcceptedProposal = inv({
-  status: 'confirmed', can_cancel: true, starts_at: '2026-10-17T12:00:00Z', answer: { proposed_at: '2026-10-17T12:00:00Z', note: '', contact: '', time: '', answered_at: '2026-10-04T08:00:00Z' },
-})
-export const interviewCancelled = inv({ id: 'a1000000-0000-4000-8000-000000000004', status: 'cancelled' })
-export const contactsShared = inv({
-  id: 'a1000000-0000-4000-8000-000000000005', kind: 'contacts', status: 'shared', starts_at: null, place_kind: '', place: '',
-  contact_name: 'Ольга Кузнецова', contact_email: 'hr@example.ru', contact_phone: '+7 913 000-00-00', message: 'Пишите в любое время',
-})
-export const contactsPhoneOnly = inv({
-  id: 'a1000000-0000-4000-8000-000000000006', kind: 'contacts', status: 'shared', starts_at: null, place_kind: '', place: '', contact_phone: '+7 913 000-00-00',
-})
-export const requestForApplicant = inv({
-  id: 'a1000000-0000-4000-8000-000000000007', kind: 'request_contacts', status: 'pending', starts_at: null, place_kind: '', place: '', message: 'Оставьте телефон', can_answer: true,
-})
-export const requestAnswered = inv({
-  id: 'a1000000-0000-4000-8000-000000000008', kind: 'request_contacts', status: 'answered', starts_at: null, place_kind: '', place: '',
-  answer: { proposed_at: null, note: '', contact: '+7 913 555-66-77', time: 'после 15:00', answered_at: '2026-10-04T08:00:00Z' },
-})
-export const answeredEmpty = inv({
-  id: 'a1000000-0000-4000-8000-000000000009', kind: 'request_contacts', status: 'answered', starts_at: null, place_kind: '', place: '',
-  answer: { proposed_at: null, note: '', contact: '', time: '', answered_at: '2026-10-04T08:00:00Z' },
-})
-
-/** Отклик организации в статусе «просмотрен»: можно приглашать, принимать и отказывать. */
+/** Отклик организации в статусе «просмотрен»: можно принять и отказать. */
 export const reviewedApplication: Detail = { ...staffApplication, status: 'viewed', status_changed_at: '2026-10-03T12:00:00Z' }
 
 export const candidate: Candidate = {
   id: APP_ID, status: 'sent', created_at: '2026-10-03T09:00:00Z', status_changed_at: '2026-10-03T09:00:00Z', applicant_name: 'Анна Смирнова',
   headline: 'Научный сотрудник, лаборатория катализа', anonymized: false, vacancy: application.vacancy, unit_name: 'Лаборатория катализа', references: { total: 3, received: 1 },
-  pending_invitations: 0, proposed_invitations: 0,
 }
 
-export const counts = (over: Partial<CandidateList['counts']> = {}): CandidateList['counts'] => ({ sent: 0, viewed: 0, invited: 0, rejected: 0, accepted: 0, withdrawn: 0, ...over })
+export const counts = (over: Partial<CandidateList['counts']> = {}): CandidateList['counts'] => ({ sent: 0, viewed: 0, rejected: 0, accepted: 0, withdrawn: 0, ...over })
 
 export const candidateList = (items: Candidate[], over: Partial<CandidateList> = {}): CandidateList => ({
   items, total: items.length, counts: counts({ sent: items.length }), ...over,
