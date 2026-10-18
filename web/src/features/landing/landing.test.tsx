@@ -35,8 +35,8 @@ describe('landing page', () => {
     expect(await link('Все вакансии: 188')).toHaveAttribute('href', '/vacancies')
     expect(called('GET', '/api/vacancies?limit=6')).toHaveLength(1)
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Если вы ищете место' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Если вы набираете людей' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Ищу работу' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Нанимаю' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Устроено под науку и образование' })).toBeInTheDocument()
     expect(screen.getAllByRole('term')).toHaveLength(6)
   })
