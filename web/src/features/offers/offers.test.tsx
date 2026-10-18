@@ -256,7 +256,7 @@ describe('vacancyOpen', () => {
   const at = (iso: string) => new Date(iso)
   it('knows whether the vacancy still takes applications, by the Moscow date', () => {
     expect(vacancyOpen(offer, at('2026-10-03T12:00:00Z'))).toBe('open')
-    expect(vacancyOpen({ ...offer, vacancy: { ...offer.vacancy, status: 'archived' } })).toBe('closed')
+    expect(vacancyOpen({ ...offer, vacancy: { ...offer.vacancy, status: 'draft' } })).toBe('closed')
     const last = { ...offer, vacancy: { ...offer.vacancy, deadline: '2026-10-03' } }
     expect(vacancyOpen(last, at('2026-10-03T20:59:00Z'))).toBe('open')
     expect(vacancyOpen(last, at('2026-10-03T21:00:00Z'))).toBe('deadline')

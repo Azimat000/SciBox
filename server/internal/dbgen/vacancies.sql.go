@@ -744,8 +744,7 @@ UPDATE vacancies SET
     status = $1,
     updated_at = $2,
     published_at = CASE WHEN $1::text = 'published' AND published_at IS NULL THEN $2 ELSE published_at END,
-    closed_at = CASE WHEN $1::text = 'closed' THEN $2 ELSE closed_at END,
-    archived_at = CASE WHEN $1::text = 'archived' THEN $2 ELSE archived_at END
+    closed_at = CASE WHEN $1::text = 'closed' THEN $2 ELSE closed_at END
 WHERE id = $3 AND status = $4
 `
 

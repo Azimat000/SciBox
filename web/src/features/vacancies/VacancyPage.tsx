@@ -142,7 +142,6 @@ function Article({ vacancy: v }: { vacancy: Detail }) {
         <div className="split-main vacancy-main">
           {v.status === 'draft' && <Alert kind="info">{p.draftNotice}</Alert>}
           {v.status === 'closed' && <Alert kind="info">{p.closedNotice}</Alert>}
-          {v.status === 'archived' && <Alert kind="info">{p.archivedNotice}</Alert>}
 
           {v.summary && <p className="vacancy-lead">{typo(v.summary)}</p>}
 

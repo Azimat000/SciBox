@@ -24,7 +24,7 @@ describe('my vacancies', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Мои вакансии' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Создать вакансию' })).toHaveAttribute('href', '/my-vacancies/new')
     const tabs = within(screen.getByRole('navigation', { name: 'Статус вакансий' }))
-    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Все2', 'Черновики1', 'Опубликованные1', 'Закрытые0', 'Архив0'])
+    expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Все2', 'Черновики1', 'Опубликованные1', 'Закрытые0'])
     expect(tabs.getByRole('link', { name: /^Все/ })).toHaveAttribute('aria-current', 'page')
     const row = screen.getByRole('link', { name: card.title }).closest('.mine-row')! as HTMLElement
     expect(within(row).getByText('Опубликована')).toBeInTheDocument()

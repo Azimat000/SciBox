@@ -42,9 +42,9 @@ const (
 
 	VacancyPublished Action = "vacancy.published"
 	VacancyClosed    Action = "vacancy.closed"
-	VacancyArchived  Action = "vacancy.archived"
+	VacancyArchived  Action = "vacancy.archived" // архива нет с D-256: действие осталось только в старых записях журнала
 	VacancyReopened  Action = "vacancy.reopened" // закрытая опубликована снова
-	VacancyRestored  Action = "vacancy.restored" // из архива в закрытые
+	VacancyRestored  Action = "vacancy.restored" // из архива в закрытые; тоже только в старых записях (D-256)
 	// ApplicationsExported — отклики выгружены в файл (срез 16). target: вакансия, если выгружали одну (иначе пусто);
 	// details: rows — сколько откликов этой организации в файле, scope — vacancy|list, status — отбор по статусу.
 	ApplicationsExported Action = "vacancy.applications_exported"

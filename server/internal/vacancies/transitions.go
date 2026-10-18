@@ -4,15 +4,14 @@ import "scibox/server/internal/audit"
 
 // transitions — единственная таблица допустимых смен статуса: откуда → куда.
 //
-//	черновик → опубликована → закрыта → архив
-//	закрыта → опубликована (повторное открытие), архив → закрыта (возврат из архива)
+//	черновик → опубликована → закрыта
+//	закрыта → опубликована (повторное открытие)
 //
-// Из черновика сразу в архив нельзя (черновик удаляют); опубликованную сначала закрывают.
+// Черновик не закрывают, а удаляют. Архива нет (D-256): закрытая вакансия уже не видна в поиске и списках.
 var transitions = map[string][]string{
 	StatusDraft:     {StatusPublished},
 	StatusPublished: {StatusClosed},
-	StatusClosed:    {StatusPublished, StatusArchived},
-	StatusArchived:  {StatusClosed},
+	StatusClosed:    {StatusPublished},
 }
 
 // CanTransition отвечает, можно ли перевести вакансию из статуса from в статус to.
@@ -30,7 +29,7 @@ func NextStatuses(from string) []string {
 	return append([]string{}, transitions[from]...)
 }
 
-// PubliclyVisible — вакансию видят все: опубликованную и закрытую (по ссылке). Черновик и архив видят только те, кто ведёт вакансии.
+// PubliclyVisible — вакансию видят все: опубликованную и закрытую (по ссылке). Черновик видят только те, кто ведёт вакансии.
 func PubliclyVisible(status string) bool {
 	return status == StatusPublished || status == StatusClosed
 }
@@ -41,6 +40,4 @@ var auditAction = map[[2]string]audit.Action{
 	{StatusDraft, StatusPublished}:  audit.VacancyPublished,
 	{StatusPublished, StatusClosed}: audit.VacancyClosed,
 	{StatusClosed, StatusPublished}: audit.VacancyReopened,
-	{StatusClosed, StatusArchived}:  audit.VacancyArchived,
-	{StatusArchived, StatusClosed}:  audit.VacancyRestored,
 }

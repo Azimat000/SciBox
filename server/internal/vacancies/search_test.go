@@ -61,17 +61,11 @@ func (w *world) searchTeam() *searchTeam {
 	ckp.ContractType, ckp.ContractMonth, ckp.FundingSource, ckp.Deadline = ContractPermanent, nil, FundingOwn, "2026-10-28"
 	w.published(tm, ckp)
 
-	// Не должны находиться никогда: черновик, закрытая, архив.
+	// Не должны находиться никогда: черновик и закрытая.
 	w.create(tm, tm.owner, goodInput())
 	closed := w.published(tm, goodInput())
 	if _, err := w.svc.SetStatus(bg, tm.owner.User, closed.ID, StatusClosed); err != nil {
 		w.t.Fatal(err)
-	}
-	archived := w.published(tm, goodInput())
-	for _, to := range []string{StatusClosed, StatusArchived} {
-		if _, err := w.svc.SetStatus(bg, tm.owner.User, archived.ID, to); err != nil {
-			w.t.Fatal(err)
-		}
 	}
 	return st
 }

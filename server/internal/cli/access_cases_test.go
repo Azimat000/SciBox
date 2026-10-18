@@ -185,7 +185,6 @@ func vacancyCases() []kase {
 		{route: "GET /api/vacancies/{id}/", name: "published", kind: object, pub: true, allow: everyone, deny: missing, make: byID(vacancies.StatusPublished)},
 		{route: "GET /api/vacancies/{id}/", name: "closed", kind: object, pub: true, allow: everyone, deny: missing, make: byID(vacancies.StatusClosed)},
 		{route: "GET /api/vacancies/{id}/", name: "draft", kind: object, pub: true, allow: staffA, deny: missing, twin: []string{"id"}, make: byID(vacancies.StatusDraft)},
-		{route: "GET /api/vacancies/{id}/", name: "archived", kind: object, pub: true, allow: staffA, deny: missing, twin: []string{"id"}, make: byID(vacancies.StatusArchived)},
 		{route: "PATCH /api/vacancies/{id}/", name: "published", kind: object, allow: staffA, deny: forbidden, why: openVacancy, make: func(f *fx, _ actor) call {
 			return call{params: P{"id": f.vacancy(vacancies.StatusPublished).String()}, body: f.vacancyBody(false)}
 		}},

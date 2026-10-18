@@ -281,7 +281,7 @@ SciBox/
   - Счётчики частоты в общей `rate_events`: `org_create` (5 за сутки на человека), `org_invite` (30 за час).
 - Миграция `00004_reference.sql`: `reference_sources` (источники), `science_fields` / `science_groups` / `specialties` (номенклатура ВАК, 5 / 35 / 350), `regions` (89), `positions` (27, с типом). Данные внутри миграции (docs/REFERENCE.md). Миграция `00013_vacancy_kinds.sql` (D-134): семь видов вакансий, `positions` 33 строки.
 - Миграция `00005_vacancies.sql`:
-  - `vacancies` (id, org_id, unit_id → `ON DELETE RESTRICT`, created_by, status `draft|published|closed|archived`, title, position_code, summary, description, requirements, focus, career_level 1–4, work_format, region_code, city, housing, rate_percent, salary_from/to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline date, published_at, closed_at, archived_at, created_at, updated_at; CHECK на значения);
+  - `vacancies` (id, org_id, unit_id → `ON DELETE RESTRICT`, created_by, status `draft|published|closed` (архива нет с миграции 00034, D-256; столбец `archived_at` остался от прежних версий), title, position_code, summary, description, requirements, focus, career_level 1–4, work_format, region_code, city, housing, rate_percent, salary_from/to, contract_type, contract_months, funding_source, funding_note, degree_required, title_required, is_competition, deadline date, published_at, closed_at, archived_at, created_at, updated_at; CHECK на значения);
   - `vacancy_specialties` (vacancy_id, specialty_code);
   - представление `vacancy_view` (в срезе 16 расширено условиями, `00028`) (вакансия + названия должности, региона, организации, подразделения; при добавлении колонок в `vacancies` пересоздать).
   - Счётчик частоты `vacancy_create` (100 в сутки на человека) в общей `rate_events`.
@@ -367,7 +367,7 @@ SciBox/
 | `GET /api/reference` | публично, кеш 10 мин на сервере и час у браузера (`ETag`): `{science:[область → группы → специальности], regions, positions:[{code,type,name}], sources}` |
 | `GET /api/vacancies?q=&field=&region=&format=&type=&level=&degree=&org_kind=&rate=&term=&salary_min=&housing=&competition=&deadline=&sort=&org=&unit=&limit=&offset=` | публичный поиск: опубликованные вакансии без прошедшего срока: `{items:[карточка], total, capped, fuzzy}` (первые 1000 результатов: при `capped: true` найдено больше, `total` равен 1000, дальше листать нельзя, срез 24); все параметры необязательны, повторяющиеся (`field`, `format`, `type`, `level`, `degree`, `org_kind`, `rate`, `term`) значат «или»; фильтра `funding` нет с D-256 (старое значение в адресе или сохранённом поиске отбрасывается); неизвестное значение 422 с `fields`; `limit` до 100, по умолчанию 50 |
 | `POST /api/vacancies` `{organization: slug, …поля}` | 201 `{vacancy}`: черновик; ведущий вакансии этого подразделения; 422 с полями; 429 после 100 в сутки |
-| `GET /api/vacancies/{id}` | опубликованную и закрытую видят все; черновик и архив только ведущие вакансии (остальным 404); в ответе `viewer:{can_manage, transitions}` |
+| `GET /api/vacancies/{id}` | опубликованную и закрытую видят все; черновик только ведущие вакансии (остальным 404); в ответе `viewer:{can_manage, transitions}` |
 | `PATCH /api/vacancies/{id}` | правка (черновик проверяется мягко, остальное строго); перенос в другое подразделение нужно право на оба |
 | `POST /api/vacancies/{id}/status` `{status}` | смена статуса по таблице переходов; публикация проверяет готовность; 409 `invalid_status_change`, `vacancy_changed` |
 | `DELETE /api/vacancies/{id}` | только черновик; иначе 409 `vacancy_not_draft` |
@@ -429,7 +429,7 @@ SciBox/
 | `POST /api/chats/{id}/read` `{up_to}`, `/archive`, `/unarchive`, `/typing` | 204; отметка только растёт и не уходит дальше последнего; «печатает» пока только проверяет права и закрытие (409 `chat_closed`), рассылка в срезе 39 |
 | `GET /api/favorites?limit=&offset=&sort=` | вошедший: `{items:[{vacancy: карточка, added_at, state: open|expired|closed, application_id}], total}`: сначала открытые, внутри групп новые добавления сверху, а при `sort=deadline` ближайший срок подачи первым и вакансии без срока в конце (бывшая страница «Сроки», D-256); архивные не показываются; `limit` до 50, по умолчанию 20 |
 | `GET /api/favorites/ids` | `{ids:[…]}`: номера всех избранных вакансий (для закладок в списках) |
-| `PUT /api/favorites/{vacancyId}` | 204; повтор ничего не меняет; черновик, архив и неизвестная вакансия 404; 409 `too_many_favorites` (предел 200) |
+| `PUT /api/favorites/{vacancyId}` | 204; повтор ничего не меняет; черновик и неизвестная вакансия 404; 409 `too_many_favorites` (предел 200) |
 | `DELETE /api/favorites/{vacancyId}` | 204, даже если вакансии в избранном не было |
 | `GET /api/saved-searches` | `{items:[{id,name,query,frequency,created_at,last_sent_at}]}`: свои, новые сверху |
 | `POST /api/saved-searches` `{name, query, frequency}` | 201 `{search}`; `query` — строка запроса страницы поиска (проверяется и записывается в каноническом виде); 422 по полям `name`, `frequency`, `query` (в том числе «условий нет»); 409 `too_many_searches` (предел 20) |

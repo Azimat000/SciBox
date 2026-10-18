@@ -127,7 +127,7 @@ func cardsFrom(ctx context.Context, q *dbgen.Queries, rows []dbgen.VacancyView) 
 	return out, nil
 }
 
-// Get собирает страницу вакансии. Черновик и архив видят только те, кто ведёт вакансии этого подразделения; остальным их «нет».
+// Get собирает страницу вакансии. Черновик видят только те, кто ведёт вакансии этого подразделения; остальным их «нет».
 func (s *Service) Get(ctx context.Context, id uuid.UUID, viewer *auth.User) (Detail, error) {
 	v, err := s.q.GetVacancyView(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {

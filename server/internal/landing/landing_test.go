@@ -25,7 +25,7 @@ func silent() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil
 // clean убирает следы прошлых тестов: числа считаются по всей базе, а тест должен видеть только своё.
 func clean(t *testing.T) {
 	t.Helper()
-	for _, q := range []string{`UPDATE vacancies SET status = 'archived'`, `UPDATE profiles SET visibility = 'hidden'`} {
+	for _, q := range []string{`UPDATE vacancies SET status = 'closed'`, `UPDATE profiles SET visibility = 'hidden'`} {
 		if _, err := testkit.Pool.Exec(bg, q); err != nil {
 			t.Fatal(err)
 		}
@@ -77,9 +77,6 @@ func TestOpenVacancies(t *testing.T) {
 	}
 	closed := tm.Published(nil)
 	tm.Status(closed.ID, "closed")
-	archived := tm.Published(nil)
-	tm.Status(archived.ID, "closed")
-	tm.Status(archived.ID, "archived")
 	expired := other.Published(nil)
 	exec(t, `UPDATE vacancies SET deadline = '2020-01-01' WHERE id = $1`, expired.ID)
 
@@ -118,9 +115,8 @@ func TestByFieldAndType(t *testing.T) {
 	d := tm.Published(nil)
 	exec(t, `DELETE FROM vacancy_specialties WHERE vacancy_id = $1`, d.ID)
 	exec(t, `INSERT INTO vacancy_specialties (vacancy_id, specialty_code) VALUES ($1, '5.1.1')`, d.ID)
-	e := tm.Published(nil) // 1.4.4, но уже в архиве
+	e := tm.Published(nil) // 1.4.4, но уже закрыта
 	tm.Status(e.ID, "closed")
-	tm.Status(e.ID, "archived")
 	exec(t, `UPDATE vacancies SET position_code = 'phd_student' WHERE id = $1`, a.ID)
 	exec(t, `UPDATE vacancies SET position_code = 'professor' WHERE id IN ($1, $2)`, b.ID, c.ID)
 	exec(t, `UPDATE vacancies SET position_code = 'dean' WHERE id = $1`, d.ID)

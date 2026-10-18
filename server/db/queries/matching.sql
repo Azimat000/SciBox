@@ -25,7 +25,6 @@ SELECT vacancy_id FROM favorites WHERE user_id = $1 ORDER BY created_at DESC, va
 
 -- Список избранного: сначала те, на что ещё можно откликнуться, внутри групп новые добавления сверху.
 -- by_deadline: внутри групп ближайший срок подачи первым, вакансии без срока в конце (бывшая вкладка «Сроки», D-256).
--- Архивные вакансии не показываются (открыть их нельзя).
 -- name: ListFavorites :many
 SELECT sqlc.embed(v), f.created_at AS added_at, a.id AS application_id, count(*) OVER () AS total
 FROM favorites f

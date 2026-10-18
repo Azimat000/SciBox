@@ -330,7 +330,6 @@ type ListFavoritesRow struct {
 
 // Список избранного: сначала те, на что ещё можно откликнуться, внутри групп новые добавления сверху.
 // by_deadline: внутри групп ближайший срок подачи первым, вакансии без срока в конце (бывшая вкладка «Сроки», D-256).
-// Архивные вакансии не показываются (открыть их нельзя).
 func (q *Queries) ListFavorites(ctx context.Context, arg ListFavoritesParams) ([]ListFavoritesRow, error) {
 	rows, err := q.db.Query(ctx, listFavorites,
 		arg.UserID,

@@ -2,7 +2,7 @@ import { useQuery, type QueryClient } from '@tanstack/react-query'
 import { apiGet, apiSend } from '../../api/client'
 import { useMe } from '../auth/api'
 
-export const statuses = ['draft', 'published', 'closed', 'archived'] as const
+export const statuses = ['draft', 'published', 'closed'] as const
 export type Status = (typeof statuses)[number]
 
 export const positionTypes = ['research', 'teaching', 'admin', 'phd', 'masters', 'project', 'internship'] as const

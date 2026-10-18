@@ -186,9 +186,6 @@ func TestRemindersSkipWhoShouldNotGetThem(t *testing.T) {
 	r.apply(r.who, withdrawn.ID, "withdrawn")
 	closed := r.favorite(r.who, oct(12), long)
 	r.setStatus(closed.ID, vacancies.StatusClosed)
-	archived := r.favorite(r.who, oct(12), long)
-	r.setStatus(archived.ID, vacancies.StatusClosed)
-	r.setStatus(archived.ID, vacancies.StatusArchived)
 	gone := r.favorite(r.who, oct(6), long)
 	_ = gone
 	noDeadline := r.favorite(r.who, nil, long)

@@ -83,8 +83,7 @@ func (f *fx) vacancy(status string) uuid.UUID {
 	}
 	steps := map[string][]string{
 		vacancies.StatusDraft: nil, vacancies.StatusPublished: {vacancies.StatusPublished},
-		vacancies.StatusClosed:   {vacancies.StatusPublished, vacancies.StatusClosed},
-		vacancies.StatusArchived: {vacancies.StatusPublished, vacancies.StatusClosed, vacancies.StatusArchived},
+		vacancies.StatusClosed: {vacancies.StatusPublished, vacancies.StatusClosed},
 	}
 	for _, to := range steps[status] {
 		if _, err := k.Vac.SetStatus(bgctx, f.w.fixer.User, d.ID, to); err != nil {

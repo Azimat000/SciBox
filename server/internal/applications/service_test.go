@@ -251,9 +251,6 @@ func TestApplyDeniedWhereItMakesNoSense(t *testing.T) {
 	mk := func(unit *uuid.UUID) vacancies.Detail { return w.tm.Published(unit) }
 	closed := mk(&w.tm.UnitA.ID)
 	w.tm.Status(closed.ID, vacancies.StatusClosed)
-	archived := mk(&w.tm.UnitA.ID)
-	w.tm.Status(archived.ID, vacancies.StatusClosed)
-	w.tm.Status(archived.ID, vacancies.StatusArchived)
 	draft, err := w.Vac.Create(bg, w.tm.Owner.User, w.tm.Slug, testkit.VacancyInput(&w.tm.UnitA.ID))
 	if err != nil {
 		t.Fatal(err)
@@ -262,10 +259,9 @@ func TestApplyDeniedWhereItMakesNoSense(t *testing.T) {
 		id   uuid.UUID
 		want error
 	}{
-		"closed":   {closed.ID, ErrVacancyClosed},
-		"archived": {archived.ID, ErrNotFound},
-		"draft":    {draft.ID, ErrNotFound},
-		"unknown":  {uuid.New(), ErrNotFound},
+		"closed":  {closed.ID, ErrVacancyClosed},
+		"draft":   {draft.ID, ErrNotFound},
+		"unknown": {uuid.New(), ErrNotFound},
 	} {
 		_, err := w.apply(me, func(in *Input) { in.VacancyID = c.id })
 		if !errors.Is(err, c.want) {

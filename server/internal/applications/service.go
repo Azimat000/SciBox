@@ -180,7 +180,7 @@ func validate(user auth.User, in Input, ups []files.Stored) (contact, cover stri
 	return contact, cover, refs, errs
 }
 
-// checkVacancy: на вакансию можно откликаться. Черновик и архив «не существуют» для откликающегося.
+// checkVacancy: на вакансию можно откликаться. Черновик «не существует» для откликающегося.
 func (s *Service) checkVacancy(v dbgen.GetVacancyForApplyRow) error {
 	switch v.Status {
 	case "published":
@@ -641,7 +641,7 @@ func (s *Service) ForVacancy(ctx context.Context, user auth.User, vacancyID uuid
 	if err != nil {
 		return VacancyState{}, fmt.Errorf("applications: load vacancy: %w", err)
 	}
-	if v.Status == "draft" || v.Status == "archived" {
+	if v.Status == "draft" {
 		return VacancyState{}, ErrNotFound
 	}
 	app, err := s.q.GetActiveApplicationForVacancy(ctx, dbgen.GetActiveApplicationForVacancyParams{VacancyID: v.ID, UserID: user.ID})

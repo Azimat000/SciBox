@@ -101,19 +101,14 @@ describe('favorite button', () => {
     expect(screen.queryByRole('link', { name: 'Откликнуться' })).not.toBeInTheDocument()
   })
 
-  it('is not on a vacancy that the person manages, nor on a draft or an archived one', async () => {
-    for (const status of ['published', 'draft', 'archived']) {
+  it('is not on a vacancy that the person manages, nor on a draft', async () => {
+    for (const status of ['published', 'draft']) {
       stubApi(signedIn({ [`GET /api/vacancies/${detail.id}`]: reply(200, { vacancy: { ...detail, status, viewer: { can_manage: true, transitions: [] } } }) }))
       const view = renderApp(`/vacancies/${detail.id}`)
       await screen.findByRole('heading', { level: 1, name: detail.title })
       expect(screen.queryByRole('button', { name: /в избранное/i })).not.toBeInTheDocument()
       view.unmount()
     }
-    // Черновик без прав управления сервер не отдаёт; но и на архивной вакансии закладки нет, даже если её увидели.
-    stubApi(signedIn({ [`GET /api/vacancies/${detail.id}`]: reply(200, { vacancy: { ...detail, status: 'archived' } }) }))
-    renderApp(`/vacancies/${detail.id}`)
-    await screen.findByRole('heading', { level: 1, name: detail.title })
-    expect(screen.queryByRole('button', { name: /в избранное/i })).not.toBeInTheDocument()
   })
 })
 

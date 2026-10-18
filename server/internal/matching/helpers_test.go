@@ -52,12 +52,12 @@ func testConfig() Config {
 
 func silent() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
-// newWorld собирает сервисы на общей базе. Все вакансии, которые остались от прошлых тестов, убираются в архив: подбор и
+// newWorld собирает сервисы на общей базе. Все вакансии, которые остались от прошлых тестов, закрываются: подбор и
 // списки в этом пакете считают всё, что есть в базе, а тесты должны видеть только своё.
 func newWorld(t *testing.T) *world {
 	t.Helper()
 	// Поиски прошлых тестов тоже убираем: фоновый проход берёт все поиски, до которых дошла очередь.
-	for _, q := range []string{`UPDATE vacancies SET status = 'archived'`, `DELETE FROM saved_searches`} {
+	for _, q := range []string{`UPDATE vacancies SET status = 'closed'`, `DELETE FROM saved_searches`} {
 		if _, err := testkit.Pool.Exec(bg, q); err != nil {
 			t.Fatal(err)
 		}

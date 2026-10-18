@@ -168,14 +168,15 @@ func TestHTTPFullCycle(t *testing.T) {
 		t.Errorf("targets: %d %s", r.Code, r.Raw)
 	}
 
-	// Закрыть, вернуть, убрать: и удалить черновик.
-	for _, to := range []string{"closed", "archived"} {
-		if r := a.do(&tm.hr, "POST", "/api/vacancies/"+id+"/status", map[string]string{"status": to}); r.Code != http.StatusOK {
-			t.Fatalf("→ %s: %d %s", to, r.Code, r.Raw)
-		}
+	// Закрыть (архива нет, D-256) и удалить черновик.
+	if r := a.do(&tm.hr, "POST", "/api/vacancies/"+id+"/status", map[string]string{"status": "closed"}); r.Code != http.StatusOK {
+		t.Fatalf("→ closed: %d %s", r.Code, r.Raw)
 	}
-	if r := a.do(nil, "GET", "/api/vacancies/"+id, nil); r.Code != http.StatusNotFound {
-		t.Errorf("archived is hidden from the public: %d", r.Code)
+	if r := a.do(&tm.hr, "POST", "/api/vacancies/"+id+"/status", map[string]string{"status": "archived"}); r.Code != http.StatusConflict {
+		t.Errorf("→ archived must be refused: %d %s", r.Code, r.Raw)
+	}
+	if r := a.do(nil, "GET", "/api/vacancies/"+id, nil); r.Code != http.StatusOK {
+		t.Errorf("a closed vacancy stays open by link: %d", r.Code)
 	}
 	dr := a.do(&tm.owner, "POST", "/api/vacancies", goodBody(tm.slug))
 	if r := a.do(&tm.owner, "DELETE", "/api/vacancies/"+dr.vacancy(t)["id"].(string), nil); r.Code != http.StatusNoContent {

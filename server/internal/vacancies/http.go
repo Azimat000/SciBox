@@ -119,7 +119,7 @@ func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrBadTransition):
 		apierr.WriteError(w, http.StatusConflict, CodeBadTransition, "Так менять статус вакансии нельзя")
 	case errors.Is(err, ErrNotDraft):
-		apierr.WriteError(w, http.StatusConflict, CodeNotDraft, "Удалить можно только черновик. Опубликованную вакансию закройте и уберите в архив")
+		apierr.WriteError(w, http.StatusConflict, CodeNotDraft, "Удалить можно только черновик. Опубликованную вакансию закройте")
 	case errors.Is(err, ErrChanged):
 		apierr.WriteError(w, http.StatusConflict, CodeChanged, "Вакансию только что изменил кто-то другой. Обновите страницу")
 	default:

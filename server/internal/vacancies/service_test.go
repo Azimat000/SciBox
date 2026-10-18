@@ -56,10 +56,12 @@ func TestLifecycle(t *testing.T) {
 		t.Errorf("published_at must keep the first publication time, got %v", re.PublishedAt)
 	}
 	step(StatusClosed, StatusClosed)
-	step(StatusArchived, StatusArchived)
-	step(StatusClosed, StatusClosed) // возврат из архива
-	if got := countRows(t, `SELECT count(*) FROM vacancies WHERE id = $1 AND closed_at IS NOT NULL AND archived_at IS NOT NULL`, d.ID); got != 1 {
-		t.Errorf("closed_at and archived_at must be recorded, got %d", got)
+	if got := countRows(t, `SELECT count(*) FROM vacancies WHERE id = $1 AND closed_at IS NOT NULL AND archived_at IS NULL`, d.ID); got != 1 {
+		t.Errorf("closed_at must be recorded and archived_at never written (D-256), got %d", got)
+	}
+	// Архива нет (D-256): база сама не принимает такой статус.
+	if _, err := sharedPool.Exec(bg, `UPDATE vacancies SET status = 'archived' WHERE id = $1`, d.ID); err == nil {
+		t.Error("the database must refuse the archived status")
 	}
 }
 
@@ -71,7 +73,6 @@ func TestForbiddenTransitionsChangeNothing(t *testing.T) {
 		StatusDraft:     {},
 		StatusPublished: {StatusPublished},
 		StatusClosed:    {StatusPublished, StatusClosed},
-		StatusArchived:  {StatusPublished, StatusClosed, StatusArchived},
 	}
 	for from, steps := range paths {
 		d := w.create(tm, tm.owner, goodInput())
@@ -164,15 +165,13 @@ func TestUpdateRules(t *testing.T) {
 	if _, err := w.svc.Update(bg, tm.owner.User, pub.ID, ok); err != nil {
 		t.Errorf("editing a published vacancy with a past deadline: %v", err)
 	}
-	// Архивную вакансию править можно (иначе её не перенести в другое подразделение).
-	for _, to := range []string{StatusClosed, StatusArchived} {
-		if _, err := w.svc.SetStatus(bg, tm.owner.User, pub.ID, to); err != nil {
-			t.Fatal(err)
-		}
+	// Закрытую вакансию править можно (иначе её не перенести в другое подразделение).
+	if _, err := w.svc.SetStatus(bg, tm.owner.User, pub.ID, StatusClosed); err != nil {
+		t.Fatal(err)
 	}
 	ok.UnitID = nil
 	if _, err := w.svc.Update(bg, tm.owner.User, pub.ID, ok); err != nil {
-		t.Errorf("editing an archived vacancy: %v", err)
+		t.Errorf("editing a closed vacancy: %v", err)
 	}
 	// Черновик сохраняется неполным.
 	dr := w.create(tm, tm.owner, goodInput())
@@ -337,13 +336,6 @@ func TestWhoSeesWhat(t *testing.T) {
 		t.Fatal(err)
 	}
 	byStatus[StatusClosed] = closed
-	arch := w.published(tm, in)
-	for _, to := range []string{StatusClosed, StatusArchived} {
-		if _, err := w.svc.SetStatus(bg, tm.owner.User, arch.ID, to); err != nil {
-			t.Fatal(err)
-		}
-	}
-	byStatus[StatusArchived] = arch
 
 	viewers := []struct {
 		name string

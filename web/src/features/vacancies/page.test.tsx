@@ -158,16 +158,10 @@ describe('vacancy page for a visitor', () => {
     expect(screen.queryByText(/Заявки до/)).not.toBeInTheDocument()
   })
 
-  it('says that it is only visible to staff when a draft or archived one is opened by them', async () => {
+  it('says that it is only visible to staff when a draft is opened by them', async () => {
     stubApi(staff(vacancyRoute(withViewer({ status: 'draft' }, true, ['published']))))
     renderApp(path)
     expect(await screen.findByText(/Это черновик/)).toBeInTheDocument()
-  })
-
-  it('explains an archived vacancy', async () => {
-    stubApi(staff(vacancyRoute(withViewer({ status: 'archived' }, true, ['closed']))))
-    renderApp(path)
-    expect(await screen.findByText(/Вакансия в архиве/)).toBeInTheDocument()
   })
 
   it('says the vacancy does not exist (also for a hidden draft)', async () => {
@@ -211,12 +205,12 @@ describe('managing a vacancy from its page', () => {
     expect(screen.queryByRole('button', { name: 'Удалить черновик' })).not.toBeInTheDocument()
   })
 
-  it('offers reopening and archiving for a closed vacancy, and restoring for an archived one', async () => {
-    stubApi(staff(vacancyRoute(withViewer({ status: 'closed' }, true, ['published', 'archived']))))
+  it('offers reopening for a closed vacancy and no archive', async () => {
+    stubApi(staff(vacancyRoute(withViewer({ status: 'closed' }, true, ['published']))))
     renderApp(path)
     const bar = within(await screen.findByRole('region', { name: 'Управление вакансией' }))
     expect(bar.getByRole('button', { name: 'Открыть снова' })).toBeInTheDocument()
-    expect(bar.getByRole('button', { name: 'В архив' })).toBeInTheDocument()
+    expect(bar.queryByRole('button', { name: 'В архив' })).not.toBeInTheDocument()
     expect(bar.queryByRole('button', { name: 'Удалить черновик' })).not.toBeInTheDocument()
   })
 
@@ -249,7 +243,7 @@ describe('managing a vacancy from its page', () => {
       staff({
         ...vacancyRoute(withViewer({ status: 'draft' }, true, ['published'])),
         [`DELETE /api/vacancies/${VACANCY_ID}`]: reply(204),
-        'GET /api/my/vacancies?limit=50&offset=0': reply(200, { items: [], total: 0, counts: { draft: 0, published: 0, closed: 0, archived: 0 } }),
+        'GET /api/my/vacancies?limit=50&offset=0': reply(200, { items: [], total: 0, counts: { draft: 0, published: 0, closed: 0 } }),
         'GET /api/my/vacancy-targets': reply(200, { targets: [] }),
       }),
     )

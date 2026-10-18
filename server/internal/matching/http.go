@@ -204,4 +204,3 @@ func (h *Handler) matches(w http.ResponseWriter, r *http.Request) {
 	}
 	apierr.WriteJSON(w, http.StatusOK, out)
 }
-

@@ -389,7 +389,7 @@ describe('new vacancy form', () => {
   })
 
   it('goes back to the list on cancel', async () => {
-    stubApi({ ...base(), 'GET /api/my/vacancies?limit=50&offset=0': reply(200, { items: [], total: 0, counts: { draft: 0, published: 0, closed: 0, archived: 0 } }) })
+    stubApi({ ...base(), 'GET /api/my/vacancies?limit=50&offset=0': reply(200, { items: [], total: 0, counts: { draft: 0, published: 0, closed: 0 } }) })
     const { router } = renderApp('/my-vacancies/new')
     await click('Отмена')
     await waitFor(() => expect(router.state.location.pathname).toBe('/my-vacancies'))

@@ -1,4 +1,4 @@
-// Package vacancies — вакансии: черновик, публикация, закрытие, архив, списки и страницы (срез 5).
+// Package vacancies — вакансии: черновик, публикация, закрытие, списки и страницы (срез 5).
 //
 // Критичная зона (docs/TESTING.md): здесь решается, кто и какую вакансию видит и меняет. Права решает пакет access
 // (ManageVacancies); этот пакет собирает сведения о человеке через orgs.ActorOf и спрашивает access.
@@ -14,12 +14,11 @@ import (
 const (
 	StatusDraft     = "draft"     // черновик: видят только те, кто ведёт вакансии
 	StatusPublished = "published" // опубликована: видна всем, принимает отклики
-	StatusClosed    = "closed"    // закрыта: набор закончен, страница остаётся по ссылке
-	StatusArchived  = "archived"  // в архиве: убрана из списков, видят только те, кто ведёт вакансии
+	StatusClosed    = "closed"    // закрыта: набор закончен, страница остаётся по ссылке; статуса «в архиве» нет (D-256)
 )
 
 // Statuses — все статусы в порядке жизненного цикла.
-var Statuses = []string{StatusDraft, StatusPublished, StatusClosed, StatusArchived}
+var Statuses = []string{StatusDraft, StatusPublished, StatusClosed}
 
 // Виды вакансий (D-006, D-134). Вид определяет должность из справочника positions.
 const (

@@ -76,14 +76,11 @@ func TestFavoritesOnlyPublicVacancies(t *testing.T) {
 	w := newWorld(t)
 	p := w.User("Анна")
 	draft := w.create(vacancyOpts{})
-	archived := w.publish(vacancyOpts{})
-	w.setStatus(archived.ID, vacancies.StatusClosed)
-	w.setStatus(archived.ID, vacancies.StatusArchived)
 	closed := w.publish(vacancyOpts{})
 	w.setStatus(closed.ID, vacancies.StatusClosed)
 	open := w.publish(vacancyOpts{})
 
-	for name, id := range map[string]uuid.UUID{"черновик": draft.ID, "архив": archived.ID, "несуществующая": uuid.New()} {
+	for name, id := range map[string]uuid.UUID{"черновик": draft.ID, "несуществующая": uuid.New()} {
 		if err := w.svc.AddFavorite(bg, p.User, id); !errors.Is(err, ErrNotFound) {
 			t.Errorf("%s: ожидали ErrNotFound, получили %v", name, err)
 		}
@@ -97,29 +94,6 @@ func TestFavoritesOnlyPublicVacancies(t *testing.T) {
 	if list.Items[0].State != StateOpen || list.Items[1].State != StateClosed {
 		t.Errorf("состояния: %s, %s", list.Items[0].State, list.Items[1].State)
 	}
-}
-
-// Вакансия, ставшая архивной, не показывается в списке, но остаётся избранной и возвращается, когда её открывают снова.
-func TestArchivedFavoriteIsHiddenAndComesBack(t *testing.T) {
-	w := newWorld(t)
-	p := w.User("Анна")
-	v := w.publish(vacancyOpts{})
-	w.addFavorite(p, v.ID)
-
-	w.setStatus(v.ID, vacancies.StatusClosed)
-	w.setStatus(v.ID, vacancies.StatusArchived)
-	list, _ := w.svc.Favorites(bg, p.User, 20, 0, false)
-	if len(list.Items) != 0 || list.Total != 0 {
-		t.Errorf("архивная вакансия в списке: %+v", list)
-	}
-	if got, _ := w.svc.FavoriteIDs(bg, p.User); len(got) != 1 {
-		t.Errorf("номер должен остаться: %v", got)
-	}
-
-	w.setStatus(v.ID, vacancies.StatusClosed)
-	w.setStatus(v.ID, vacancies.StatusPublished)
-	list, _ = w.svc.Favorites(bg, p.User, 20, 0, false)
-	sameIDs(t, "после возвращения", ids(list.Items), v.ID)
 }
 
 func TestFavoritesAreOwn(t *testing.T) {

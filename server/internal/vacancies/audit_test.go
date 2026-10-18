@@ -42,7 +42,6 @@ func TestAuditTrailOfStatusChanges(t *testing.T) {
 		to  string
 	}{
 		{tm.headA, StatusPublished}, {tm.hr, StatusClosed}, {tm.owner, StatusPublished}, {tm.owner, StatusClosed},
-		{tm.owner, StatusArchived}, {tm.owner, StatusClosed},
 	} {
 		if _, err := w.svc.SetStatus(ctx, step.who.User, d.ID, step.to); err != nil {
 			t.Fatalf("%s: %v", step.to, err)
@@ -50,11 +49,11 @@ func TestAuditTrailOfStatusChanges(t *testing.T) {
 	}
 	// team() уже назначил руководителей подразделений, эти записи здесь не нужны.
 	rows := testaudit.Rows(t, sharedPool, `org_id = $1 AND action LIKE 'vacancy.%'`, tm.orgID)
-	want := []string{"vacancy.published", "vacancy.closed", "vacancy.reopened", "vacancy.closed", "vacancy.archived", "vacancy.restored"}
+	want := []string{"vacancy.published", "vacancy.closed", "vacancy.reopened", "vacancy.closed"}
 	if got := testaudit.Actions(rows); !slices.Equal(got, want) {
 		t.Fatalf("journal = %v, want %v", got, want)
 	}
-	wantActor := []person{tm.headA, tm.hr, tm.owner, tm.owner, tm.owner, tm.owner}
+	wantActor := []person{tm.headA, tm.hr, tm.owner, tm.owner}
 	for i, r := range rows {
 		if *r.Actor != wantActor[i].ID || r.TargetKind != "vacancy" || *r.TargetID != d.ID || r.TargetLabel != d.Title || r.Subject != nil {
 			t.Errorf("entry %d: %+v", i, r)
@@ -77,7 +76,7 @@ func TestRefusedStatusChangesLeaveNoTrace(t *testing.T) {
 	for name, do := range map[string]func() error{
 		"outsider publishes a draft":    func() error { _, err := w.svc.SetStatus(bg, tm.out.User, draft.ID, StatusPublished); return err },
 		"head of another unit closes":   func() error { _, err := w.svc.SetStatus(bg, tm.headB.User, pub.ID, StatusClosed); return err },
-		"impossible transition":         func() error { _, err := w.svc.SetStatus(bg, tm.owner.User, draft.ID, StatusArchived); return err },
+		"impossible transition":         func() error { _, err := w.svc.SetStatus(bg, tm.owner.User, draft.ID, StatusClosed); return err },
 		"unknown status":                func() error { _, err := w.svc.SetStatus(bg, tm.owner.User, draft.ID, "exploded"); return err },
 		"incomplete vacancy is refused": func() error { return errors.New("replaced below") },
 		"outsider closes a published":   func() error { _, err := w.svc.SetStatus(bg, tm.out.User, pub.ID, StatusClosed); return err },

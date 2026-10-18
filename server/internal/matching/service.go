@@ -202,7 +202,6 @@ func (s *Service) FavoriteIDs(ctx context.Context, user auth.User) ([]uuid.UUID,
 
 // Favorites — «Избранное»: сначала вакансии, на которые ещё можно откликнуться, внутри групп новые добавления сверху
 // или, если byDeadline, ближайший срок подачи первым (вакансии без срока в конце группы).
-// Вакансии в архиве не показываются (открыть их нельзя), но из избранного не пропадают.
 func (s *Service) Favorites(ctx context.Context, user auth.User, limit, offset int, byDeadline bool) (FavoriteList, error) {
 	lim, off := pageOf(limit, offset)
 	today := s.today()

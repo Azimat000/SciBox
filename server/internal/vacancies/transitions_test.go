@@ -2,14 +2,12 @@ package vacancies
 
 import "testing"
 
-// Все 16 пар «из какого статуса → в какой» проверены явно.
+// Все 9 пар «из какого статуса → в какой» проверены явно.
 func TestTransitionTable(t *testing.T) {
 	allowed := map[[2]string]bool{
 		{StatusDraft, StatusPublished}:  true,
 		{StatusPublished, StatusClosed}: true,
 		{StatusClosed, StatusPublished}: true,
-		{StatusClosed, StatusArchived}:  true,
-		{StatusArchived, StatusClosed}:  true,
 	}
 	for _, from := range Statuses {
 		for _, to := range Statuses {
@@ -25,7 +23,7 @@ func TestTransitionTable(t *testing.T) {
 
 func TestNextStatusesIsACopy(t *testing.T) {
 	next := NextStatuses(StatusClosed)
-	if len(next) != 2 {
+	if len(next) != 1 {
 		t.Fatalf("closed → %v", next)
 	}
 	next[0] = "changed"
@@ -38,7 +36,7 @@ func TestNextStatusesIsACopy(t *testing.T) {
 }
 
 func TestPubliclyVisible(t *testing.T) {
-	want := map[string]bool{StatusDraft: false, StatusPublished: true, StatusClosed: true, StatusArchived: false}
+	want := map[string]bool{StatusDraft: false, StatusPublished: true, StatusClosed: true, "archived": false}
 	for st, v := range want {
 		if PubliclyVisible(st) != v {
 			t.Errorf("%s: want %v", st, v)

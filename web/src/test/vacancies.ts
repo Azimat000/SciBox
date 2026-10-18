@@ -105,7 +105,7 @@ export const orgVacancies = (items: Card[] = [], unit?: string): Record<string, 
   [`GET /api/vacancies?org=${SLUG}${unit ? `&unit=${unit}` : ''}`]: reply(200, { items, total: items.length }),
 })
 
-export const emptyCounts = { draft: 0, published: 0, closed: 0, archived: 0 }
+export const emptyCounts = { draft: 0, published: 0, closed: 0 }
 
 export const mineList = (items: Card[], counts: Partial<MineList['counts']> = {}, total = items.length): MineList => ({
   items,

@@ -143,7 +143,7 @@ func canManage(ctx context.Context, q *dbgen.Queries, orgID uuid.UUID, unit *uui
 }
 
 // authorize берёт вакансию под блокировку и проверяет, что человек может её вести. Тем, кто вести её не может,
-// черновик и архив «не существуют», а опубликованная и закрытая вакансии отвечают отказом (она публична, прятать нечего).
+// черновик «не существует», а опубликованная и закрытая вакансии отвечают отказом (она публична, прятать нечего).
 func (s *Service) authorize(ctx context.Context, q *dbgen.Queries, id uuid.UUID, user auth.User) (dbgen.Vacancy, access.Actor, error) {
 	v, err := q.LockVacancy(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -284,7 +284,7 @@ func (s *Service) setSpecialties(ctx context.Context, q *dbgen.Queries, id uuid.
 	return nil
 }
 
-// Update меняет вакансию. Черновик можно сохранять неполным; опубликованная, закрытая и архивная должны оставаться готовыми к показу.
+// Update меняет вакансию. Черновик можно сохранять неполным; опубликованная и закрытая должны оставаться готовыми к показу.
 // Перенести вакансию в другое подразделение может тот, кто ведёт вакансии и старого, и нового.
 func (s *Service) Update(ctx context.Context, user auth.User, id uuid.UUID, in Input) (Detail, error) {
 	err := s.inTx(ctx, func(q *dbgen.Queries) error {
@@ -388,7 +388,7 @@ func (s *Service) SetStatus(ctx context.Context, user auth.User, id uuid.UUID, t
 	return s.Get(ctx, id, &user)
 }
 
-// Delete удаляет черновик. Опубликованные вакансии не удаляются: их закрывают и убирают в архив.
+// Delete удаляет черновик. Опубликованные вакансии не удаляются: их закрывают.
 func (s *Service) Delete(ctx context.Context, user auth.User, id uuid.UUID) error {
 	return s.inTx(ctx, func(q *dbgen.Queries) error {
 		v, _, err := s.authorize(ctx, q, id, user)

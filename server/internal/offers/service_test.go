@@ -151,11 +151,8 @@ func TestInviteVacancyMustBeOpen(t *testing.T) {
 	}
 	closed := w.tm.Published(&w.tm.UnitA.ID)
 	w.tm.Status(closed.ID, vacancies.StatusClosed)
-	archived := w.tm.Published(&w.tm.UnitA.ID)
-	w.tm.Status(archived.ID, vacancies.StatusClosed)
-	w.tm.Status(archived.ID, vacancies.StatusArchived)
 
-	for name, id := range map[string]uuid.UUID{"черновик": draft.ID, "закрытая": closed.ID, "архивная": archived.ID} {
+	for name, id := range map[string]uuid.UUID{"черновик": draft.ID, "закрытая": closed.ID} {
 		t.Run(name, func(t *testing.T) {
 			sci, profile := w.scientist("Учёный", "public")
 			before := w.snap(id, sci, w.tm.HR)

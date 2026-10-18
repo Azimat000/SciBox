@@ -26,7 +26,7 @@ func TestSearchRowFollowsTheStatus(t *testing.T) {
 	steps := []struct {
 		to   string
 		open bool
-	}{{StatusPublished, true}, {StatusClosed, false}, {StatusPublished, true}, {StatusClosed, false}, {StatusArchived, false}}
+	}{{StatusPublished, true}, {StatusClosed, false}, {StatusPublished, true}, {StatusClosed, false}}
 	for _, st := range steps {
 		w.clock.Advance(time.Hour)
 		if _, err := w.svc.SetStatus(bg, tm.owner.User, d.ID, st.to); err != nil {

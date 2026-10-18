@@ -35,8 +35,7 @@ UPDATE vacancies SET
     status = @to_status,
     updated_at = @now,
     published_at = CASE WHEN @to_status::text = 'published' AND published_at IS NULL THEN @now ELSE published_at END,
-    closed_at = CASE WHEN @to_status::text = 'closed' THEN @now ELSE closed_at END,
-    archived_at = CASE WHEN @to_status::text = 'archived' THEN @now ELSE archived_at END
+    closed_at = CASE WHEN @to_status::text = 'closed' THEN @now ELSE closed_at END
 WHERE id = @id AND status = @from_status;
 
 -- name: DeleteDraftVacancy :execrows
