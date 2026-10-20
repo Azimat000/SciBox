@@ -157,6 +157,24 @@
       "skillPath": "skills/golang-troubleshooting/SKILL.md",
       "computedHash": "5e754f70758a1096b9e0fd6c0b24cc2200e2808b4f0285ea8dcf2e6c4981fd2a"
     },
+    "market-sizing": {
+      "source": "OneWave-AI/claude-skills",
+      "sourceType": "github",
+      "skillPath": "market-sizing/SKILL.md",
+      "computedHash": "286144cdd308d7cf1f2174a763028571d2b0dd437b28bde3e3c043933f783486"
+    },
+    "pitch-deck-reviewer": {
+      "source": "OneWave-AI/claude-skills",
+      "sourceType": "github",
+      "skillPath": "pitch-deck-reviewer/SKILL.md",
+      "computedHash": "bd61df7983b9980e5a5b0bcaf001bb2a3dd67848656aae4b78d6937f5694d48f"
+    },
+    "pricing-strategy": {
+      "source": "OneWave-AI/claude-skills",
+      "sourceType": "github",
+      "skillPath": "pricing-strategy/SKILL.md",
+      "computedHash": "6b03a60659016c7f898cef6fdb7fec3e2f040475b850f0f28c857560575a2936"
+    },
     "property-based-testing": {
       "source": "trailofbits/skills",
       "sourceType": "github",
@@ -186,6 +204,30 @@
       "sourceType": "github",
       "skillPath": "plugins/sharp-edges/skills/sharp-edges/SKILL.md",
       "computedHash": "63318ab9403b975a63fc0310540a14b632079f63f61414b711305860337a54b6"
+    },
+    "startup-competitors": {
+      "source": "ferdinandobons/startup-skill",
+      "sourceType": "github",
+      "skillPath": "startup-competitors/SKILL.md",
+      "computedHash": "7797b1a481020c7bf8cf8d842e5879e4e83b53310b28c262039a94d057643d38"
+    },
+    "startup-design": {
+      "source": "ferdinandobons/startup-skill",
+      "sourceType": "github",
+      "skillPath": "startup-design/SKILL.md",
+      "computedHash": "b3d7ee6bdd4c331642b47e94cda52607fce30b94aee860a50d784ea5b996f201"
+    },
+    "startup-pitch": {
+      "source": "ferdinandobons/startup-skill",
+      "sourceType": "github",
+      "skillPath": "startup-pitch/SKILL.md",
+      "computedHash": "f47e9612678d262190d642f49fe47cf1092e37f411ad3f9c1f2125b6e5883993"
+    },
+    "startup-positioning": {
+      "source": "ferdinandobons/startup-skill",
+      "sourceType": "github",
+      "skillPath": "startup-positioning/SKILL.md",
+      "computedHash": "d95b9864bd1edb84c1688e97988a58d662f08784e465194c22036d0c351552a9"
     },
     "use-modern-go": {
       "source": "JetBrains/go-modern-guidelines",
