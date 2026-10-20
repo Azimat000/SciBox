@@ -123,12 +123,12 @@ async function main() {
     // команда
     const ty = 5.25
     const people = [
-      { img: fs.existsSync(A('marat.jpg')) ? 'marat.jpg' : null, ini: 'ММ', name: 'Марат Мухамедьяров', role: 'д.м.н., профессор, Казанский ГМУ' },
+      { img: fs.existsSync(A('marat-sq.jpg')) ? 'marat-sq.jpg' : null, ini: 'ММ', name: 'Марат Мухамедьяров', role: 'д.м.н., профессор, Казанский ГМУ' },
       { img: 'azamat-sq.jpg', ini: 'АС', name: 'Азамат Сибгатуллин', role: 'разработчик платформы' },
     ]
     people.forEach((p, i) => {
       const x = M + i * 3.6
-      if (p.img) s.addImage({ path: A(p.img), x, y: ty, w: 0.78, h: 0.78, rounding: true, sizing: { type: 'cover', w: 0.78, h: 0.78 } })
+      if (p.img) { s.addImage({ path: A(p.img), x, y: ty, w: 0.78, h: 0.78, rounding: true, sizing: { type: 'cover', w: 0.78, h: 0.78 } }); s.addShape(pres.shapes.OVAL, { x, y: ty, w: 0.78, h: 0.78, fill: { type: 'none' }, line: { color: K.line, width: 1.25 } }) }
       else { circle(s, x, ty, 0.78, K.blueW); T(s, p.ini, { x, y: ty, w: 0.78, h: 0.78, fontFace: HEAD, fontSize: 18, bold: true, color: K.navy, align: 'center', valign: 'middle' }) }
       T(s, p.name, { x: x + 0.95, y: ty + 0.08, w: 2.55, h: 0.32, fontSize: 14, bold: true, color: K.ink })
       T(s, p.role, { x: x + 0.95, y: ty + 0.4, w: 2.55, h: 0.32, fontSize: 12, color: K.soft })
